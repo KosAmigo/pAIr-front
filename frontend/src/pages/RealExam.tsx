@@ -136,6 +136,7 @@ function ChatPanel({
   maxChars: number
 }) {
   const [draft, setDraft] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
   const count = draft.length
   const over = count > maxChars
   const listRef = useRef<HTMLOListElement>(null)
@@ -193,11 +194,16 @@ function ChatPanel({
           AI에게 질문
         </label>
         <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-signal')}>
-          <div className="flex items-center justify-end px-3 pt-1.5">
+          <div className="flex items-center gap-2 px-3 pt-1.5">
+            {notice && (
+              <span role="status" className="truncate text-[12px] text-caution">
+                {notice}
+              </span>
+            )}
             <span
               className={cx(
-                'tnum font-mono text-[12px]',
-                over ? 'text-alert' : count >= maxChars * 0.9 ? 'text-caution' : 'text-text-faint',
+                'ml-auto tnum font-mono text-[12px]',
+                count >= maxChars ? 'text-alert' : count >= maxChars * 0.9 ? 'text-caution' : 'text-text-faint',
               )}
               aria-live="polite"
             >
@@ -210,7 +216,24 @@ function ChatPanel({
             rows={4}
             disabled={disabled}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            maxLength={maxChars}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setNotice(null)
+            }}
+            onPaste={(e) => {
+              // 붙여 넣기가 한도를 넘으면 들어갈 만큼만 넣고, 잘린 글자 수를 알려 준다
+              const el = e.currentTarget
+              const paste = e.clipboardData.getData('text')
+              const { selectionStart: st, selectionEnd: en, value } = el
+              const room = maxChars - (value.length - (en - st))
+              if (paste.length <= room) return
+              e.preventDefault()
+              const part = paste.slice(0, Math.max(0, room))
+              setDraft(value.slice(0, st) + part + value.slice(en))
+              setNotice(`붙여 넣은 내용 중 ${(paste.length - part.length).toLocaleString()}자가 잘렸습니다 (최대 ${maxChars.toLocaleString()}자)`)
+              requestAnimationFrame(() => el.setSelectionRange(st + part.length, st + part.length))
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault()
