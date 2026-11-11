@@ -103,7 +103,7 @@ public class ScoringService {
 
     /**
      * @param status DEDUCTED(감점), PASSED(통과), SKIPPED(적용 안 함), NO_EVIDENCE(걸렸다고 했지만 근거가 없어 감점 안 함),
-     *               SPLIT(판정 엇갈림: 두 채점 모델 중 한쪽만 걸렸다고 봄, 감점 안 함)
+     *               SPLIT(판정 엇갈림: 두 채점 모델 중 한쪽만 걸렸다고 봄, 두 모델 감점의 평균만큼 감점)
      * @param judges 판정 체크에서 채점 모델별 판정 (자동 체크는 빈 목록)
      */
     public record CheckResult(String code, String label, String method, int points, int deducted,
@@ -141,6 +141,9 @@ public class ScoringService {
 
         // ── 자동: AI 사용 여부 (U0) ─────────
         results.put("U0", auto("U0", dev, usedAi ? 0 : 25, usedAi ? null : "AI 대화 기록이 없습니다."));
+        // AI를 안 쓰면 AI 통제력과 재현성도 볼 수 없으므로 0점 (AI를 안 쓴 응시가 두 항목을 공짜로 만점 받는 것을 막는다)
+        results.put("C0", auto("C0", dev, usedAi ? 0 : 15, usedAi ? null : "AI를 쓰지 않았습니다."));
+        results.put("R0", auto("R0", dev, usedAi ? 0 : 15, usedAi ? null : "AI를 쓰지 않았습니다."));
 
         // ── 자동: 숨은 테스트 (D0~D4 개발) ─────────
         if (dev) {
@@ -190,20 +193,16 @@ public class ScoringService {
                 : String.format("첫 유효 결과까지 %.1f분 (%s)", firstValidMin,
                         dev ? "src 코드를 고친 뒤 테스트가 전부 통과한 첫 실행" : "필수 제목을 모두 채운 첫 저장")));
 
-        // ── 자동: 다시 실행 (R1), 결과물 반영률 (R4) ─────────
+        // ── 자동: 다시 실행 (R1) ─────────
         List<KeyTurn> keyTurns = new ArrayList<>();
         if (!usedAi) {
             results.put("R1", skipped("R1", dev, "AI를 쓰지 않아 적용하지 않음"));
-            results.put("R4", skipped("R4", dev, "AI를 쓰지 않아 적용하지 않음"));
         } else {
             Set<String> finalGrams = grams(String.join("\n", files.values()));
             Map<Integer, Double> adoption = new HashMap<>();
             for (ChatTurn t : aiTurns) adoption.put(t.turn(), adoptionRatio(t.text(), finalGrams));
             List<ChatTurn> ranked = new ArrayList<>(aiTurns);
             ranked.sort(Comparator.comparingDouble((ChatTurn t) -> adoption.get(t.turn())).reversed());
-            double best = adoption.get(ranked.get(0).turn());
-            results.put("R4", auto("R4", dev, best < 0.05 ? 2 : 0,
-                    String.format("AI 답변이 최종 결과물에 남은 비율 최고 %.0f%% (#T%s)", best * 100, pad(ranked.get(0).turn()))));
             List<ChatTurn> chosen = ranked.stream().filter(t -> adoption.get(t.turn()) >= 0.05)
                     .limit(props.r2().maxKeyTurns()).toList();
             if (chosen.isEmpty()) chosen = List.of(ranked.get(0));
@@ -241,11 +240,11 @@ public class ScoringService {
         // ── 판정: 채점 모델 ─────────
         List<Check> judgeChecks = Rubric.checksFor(dev).stream()
                 .filter(c -> c.method() == Method.JUDGE)
-                .filter(c -> usedAi || !c.item().equals("usage"))
+                .filter(c -> usedAi || !NEEDS_AI.contains(c.item()))
                 .toList();
         if (!usedAi) {
-            Rubric.checksFor(dev).stream().filter(c -> c.item().equals("usage") && c.method() == Method.JUDGE)
-                    .forEach(c -> results.put(c.code(), skipped(c.code(), dev, "U0 적용으로 판정하지 않음")));
+            Rubric.checksFor(dev).stream().filter(c -> NEEDS_AI.contains(c.item()) && c.method() == Method.JUDGE)
+                    .forEach(c -> results.put(c.code(), skipped(c.code(), dev, "AI를 쓰지 않아 판정하지 않음 (U0, C0, R0)")));
         }
         String prefix = judgePrefix(task, judgeChecks);
         String body = judgeBody(task, judgeChecks, transcript(turns, a.startedAt()), files, a.followUpAnswers(), eventSummary(events, a.startedAt()));
@@ -291,7 +290,7 @@ public class ScoringService {
 
         notes.add("채점 기준: docs/evaluation/채점_기준표.md (감점식, 총점 " + Rubric.total() + "점)");
         notes.add("이중 채점: 판정 체크는 두 채점 모델(" + String.join(", ", judges.stream().map(Judge::model).toList())
-                + ")이 모두 근거(대화 턴, 파일)를 대고 걸렸다고 할 때만 감점함. 한쪽만 걸렸다고 하면 '판정 엇갈림'으로 감점하지 않음");
+                + ")의 감점을 평균함. 근거(대화 턴, 파일) 없이 걸렸다고 한 판정은 감점하지 않음. 한쪽만 걸렸다고 하면 '판정 엇갈림'으로 절반만 감점(소수점 버림)");
         notes.add("파일럿 단순화: 다시 실행(R1)은 다시 나온 답변을 채점 모델이 원래 답변과 같은 해결책인지 판정해 비교함");
 
         Map<String, Object> report = new LinkedHashMap<>();
@@ -462,10 +461,13 @@ public class ScoringService {
         return null;
     }
 
+    /** AI를 써야 판정할 수 있는 항목. AI를 안 쓰면 판정 체크를 하지 않고 U0, C0, R0 으로 0점 처리한다. */
+    static final Set<String> NEEDS_AI = Set.of("usage", "control", "reproducibility");
+
     /**
-     * 두 채점 모델의 판정을 합친다. 둘 다 근거를 대고 걸렸다고 하면 감점(D1 개수는 둘 중 작은 값),
-     * 한쪽만 그렇다고 하면 판정 엇갈림(감점 없음). 한쪽 모델만 살아 있으면 그 모델 판정만 쓴다.
-     * 판정이 빠진 모델은 "안 걸림"으로 본다(애매하면 응시자에게 유리하게).
+     * 두 채점 모델의 판정을 합친다. 모델마다 감점을 정하고(근거를 대고 걸렸다고 하면 배점, D1은 개수 × 배점) 평균을 낸다(소수점 버림).
+     * 둘 다 걸렸다고 하면 감점, 한쪽만 그렇다고 하면 판정 엇갈림(절반 감점). 한쪽 모델만 살아 있으면 그 모델 판정만 쓴다.
+     * 판정이 빠진 모델은 "안 걸림"(감점 0)으로 본다.
      */
     static CheckResult combine(Check c, Map<? extends Judge, Map<String, CheckVerdict>> byJudge) {
         List<JudgeView> views = new ArrayList<>();
@@ -479,24 +481,25 @@ public class ScoringService {
             return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "SKIPPED", List.of(), "채점 모델이 판정하지 않음", views);
         }
         List<JudgeView> withEvidence = views.stream().filter(v -> v.violated() && !v.evidence().isEmpty()).toList();
+        int sum = 0;
+        for (JudgeView v : withEvidence) sum += c.code().equals("D1") ? Math.min(20, Math.max(1, v.count()) * c.points()) : c.points();
+        int deducted = sum / byJudge.size();
+        List<String> ev = withEvidence.stream().flatMap(v -> v.evidence().stream()).distinct().toList();
         if (withEvidence.size() == byJudge.size()) {
-            int count = withEvidence.stream().mapToInt(v -> Math.max(1, v.count())).min().orElse(1);
-            int deducted = c.code().equals("D1") ? Math.min(20, count * c.points()) : c.points();
-            List<String> ev = withEvidence.stream().flatMap(v -> v.evidence().stream()).distinct().toList();
             return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), deducted, "DEDUCTED", ev, withEvidence.get(0).reason(), views);
         }
         if (!withEvidence.isEmpty()) {
             JudgeView v = withEvidence.get(0);
-            return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "SPLIT", v.evidence(),
-                    "판정 엇갈림: " + v.model() + "만 걸렸다고 봐서 감점하지 않음. " + v.reason(), views);
+            return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), deducted, "SPLIT", ev,
+                    "판정 엇갈림: " + v.model() + "만 걸렸다고 봐서 절반(" + deducted + "점) 감점. " + v.reason(), views);
         }
         var noEvidence = views.stream().filter(JudgeView::violated).findFirst();
         if (noEvidence.isPresent()) {
             return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "NO_EVIDENCE", List.of(),
                     "근거가 없어 감점하지 않음: " + noEvidence.get().reason(), views);
         }
-        List<String> ev = views.stream().flatMap(v -> v.evidence().stream()).distinct().toList();
-        return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "PASSED", ev, views.get(0).reason(), views);
+        List<String> pev = views.stream().flatMap(v -> v.evidence().stream()).distinct().toList();
+        return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "PASSED", pev, views.get(0).reason(), views);
     }
 
     private static void addTokens(Map<String, long[]> acc, Judge j, Judge.Result<?> r) {

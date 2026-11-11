@@ -49,10 +49,12 @@ class DualJudgeTest {
     }
 
     @Test
-    void onlyOneViolated_isSplitWithoutDeduction() {
+    void onlyOneViolated_isSplitWithHalfDeduction() {
         var r = ScoringService.combine(C4, both(v("C4", true, 0, "#T03"), v("C4", false, 0)));
         assertEquals("SPLIT", r.status());
-        assertEquals(0, r.deducted());
+        assertEquals(1, r.deducted()); // 2점의 절반
+        var odd = Rubric.checksFor(true).stream().filter(c -> c.code().equals("U2")).findFirst().orElseThrow();
+        assertEquals(2, ScoringService.combine(odd, both(v("U2", true, 0, "#T01"), v("U2", false, 0))).deducted()); // 5점 → 2 (버림)
     }
 
     @Test
@@ -76,9 +78,11 @@ class DualJudgeTest {
     }
 
     @Test
-    void perUnitUsesSmallerCount() {
+    void perUnitAveragesCounts() {
         var r = ScoringService.combine(D1, both(v("D1", true, 3, "기획안.md"), v("D1", true, 1, "기획안.md")));
-        assertEquals(5, r.deducted());
+        assertEquals(10, r.deducted()); // (15 + 5) / 2
+        r = ScoringService.combine(D1, both(v("D1", true, 2, "기획안.md"), v("D1", false, 0)));
+        assertEquals(5, r.deducted()); // (10 + 0) / 2
     }
 
     @Test

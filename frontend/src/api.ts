@@ -71,7 +71,7 @@ export type CheckResult = {
   method: 'AUTO' | 'JUDGE'
   points: number
   deducted: number
-  /** DEDUCTED 감점, PASSED 통과, SKIPPED 적용 안 함, NO_EVIDENCE 걸렸지만 근거가 없어 감점 안 함, SPLIT 두 채점 모델 판정이 엇갈려 감점 안 함 */
+  /** DEDUCTED 감점, PASSED 통과, SKIPPED 적용 안 함, NO_EVIDENCE 걸렸지만 근거가 없어 감점 안 함, SPLIT 두 채점 모델 판정이 엇갈려 절반 감점 */
   status: 'DEDUCTED' | 'PASSED' | 'SKIPPED' | 'NO_EVIDENCE' | 'SPLIT'
   evidence: string[]
   reason: string | null
