@@ -19,8 +19,8 @@ public record ChatTurn(
         Long outputTokens,
         Long latencyMs) {
 
-    /** 어시스턴트에 보낸 요청 원문. */
-    public record AssistantRequest(String model, long maxOutputTokens, String systemPrompt, List<Message> messages) {}
+    /** 어시스턴트에 보낸 요청 원문. reasoningEffort 는 2026-11-11 이후 요청에만 있다(이전 요청은 null = 모델 기본값). */
+    public record AssistantRequest(String model, long maxOutputTokens, String reasoningEffort, String systemPrompt, List<Message> messages) {}
 
     public record Message(String role, String content) {}
 }

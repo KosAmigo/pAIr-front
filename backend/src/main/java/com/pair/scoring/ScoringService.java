@@ -115,7 +115,10 @@ public class ScoringService {
         Map<String, CheckResult> results = new LinkedHashMap<>();
         List<String> notes = new ArrayList<>();
         Map<String, Object> extras = new LinkedHashMap<>();
-        List<ChatTurn> aiTurns = turns.stream().filter(t -> "ai".equals(t.role()) && t.request() != null).toList();
+        // 빈 AI 답변은 시스템 오류(추론 모델이 한도 안에서 답을 끝내지 못함)라 채점에서 뺀다
+        List<ChatTurn> aiTurns = turns.stream().filter(t -> "ai".equals(t.role()) && t.request() != null && !t.text().isBlank()).toList();
+        long emptyAi = turns.stream().filter(t -> "ai".equals(t.role()) && t.text().isBlank()).count();
+        if (emptyAi > 0) notes.add("시스템 오류로 비어 있는 AI 답변 " + emptyAi + "건은 응시자 책임으로 보지 않음");
         boolean usedAi = !aiTurns.isEmpty();
 
         // ── 자동: AI 사용 여부 (U0) ─────────
@@ -146,14 +149,12 @@ public class ScoringService {
             }
             int originalTests = countTests(tasks.visibleFiles(task.id()));
             int nowTests = countTests(files);
-            boolean notesFilled = notesFilled(files.getOrDefault("NOTES.md", ""));
             results.put("D0", auto("D0", dev, hr.compiled() ? 0 : 30, hr.compiled() ? null : "숨은 테스트를 붙여 컴파일하지 못했습니다."));
             results.put("D1", auto("D1", dev, Math.min(20, reqFail * 5),
                     "숨은 필수 테스트 " + (reqTotal - reqFail) + "/" + reqTotal + " 통과" + (reqFail > 0 ? " (실패 " + reqFail + "개 × 5점)" : "")));
             results.put("D2", auto("D2", dev, optFail ? 2 : 0, optFail ? "숨은 선택 테스트(여러 스레드 동시 주문) 실패" : "숨은 선택 테스트 통과"));
             results.put("D3", auto("D3", dev, nowTests > originalTests ? 0 : 3,
                     "테스트 " + originalTests + "개 → " + nowTests + "개"));
-            results.put("D4", auto("D4", dev, notesFilled ? 0 : 2, notesFilled ? "NOTES.md 작성됨" : "NOTES.md가 비어 있음"));
             List<Map<String, Object>> hidden = new ArrayList<>();
             for (CodeRunner.TestCase tc : hr.tests()) {
                 hidden.add(Map.of("name", tc.name().replaceFirst("^shop\\.HiddenOrderTest\\.", ""), "passed", tc.passed()));
@@ -162,13 +163,14 @@ public class ScoringService {
         }
 
         // ── 자동: 첫 유효 결과 시간 (D5) ─────────
-        Double firstValidMin = a.firstValidAt() == null ? null
-                : Duration.between(a.startedAt(), a.firstValidAt()).toSeconds() / 60.0;
+        Instant firstValidAt = dev ? firstValidFromEvents(events) : a.firstValidAt();
+        Double firstValidMin = firstValidAt == null ? null
+                : Duration.between(a.startedAt(), firstValidAt).toSeconds() / 60.0;
         int d5 = firstValidMin == null ? 4 : firstValidMin > D5_LATE_MINUTES ? 2 : 0;
         results.put("D5", auto("D5", dev, d5, firstValidMin == null
                 ? "첫 유효 결과에 도달하지 못함"
                 : String.format("첫 유효 결과까지 %.1f분 (%s)", firstValidMin,
-                        dev ? "테스트를 추가하고 전부 통과한 첫 실행" : "필수 제목을 모두 채운 첫 저장")));
+                        dev ? "src 코드를 고친 뒤 테스트가 전부 통과한 첫 실행" : "필수 제목을 모두 채운 첫 저장")));
 
         // ── 자동: 다시 실행 (R1), 결과물 반영률 (R4) ─────────
         List<KeyTurn> keyTurns = new ArrayList<>();
@@ -187,15 +189,20 @@ public class ScoringService {
             List<ChatTurn> chosen = ranked.stream().filter(t -> adoption.get(t.turn()) >= 0.05)
                     .limit(props.r2().maxKeyTurns()).toList();
             if (chosen.isEmpty()) chosen = List.of(ranked.get(0));
-            int same = 0, total = 0;
+            int same = 0, total = 0, replayFailed = 0;
             for (ChatTurn t : chosen) {
                 List<String> replays = new ArrayList<>();
                 for (int i = 0; i < props.r2().replaysPerTurn(); i++) {
                     AssistantClient.Reply rep = assistant.send(t.request());
                     replayIn += rep.inputTokens();
                     replayOut += rep.outputTokens();
+                    if (rep.text().isBlank()) {
+                        replayFailed++; // 다시 실행에서 빈 답이 오면 비교에서 뺀다
+                        continue;
+                    }
                     replays.add(rep.text());
                 }
+                if (replays.isEmpty()) continue;
                 JudgeClient.Result<ReplayJudgement> rj = judge.judge(REPLAY_SYSTEM, replayPrompt(t, replays), ReplayJudgement.class);
                 judgeIn += rj.inputTokens();
                 judgeOut += rj.outputTokens();
@@ -209,7 +216,8 @@ public class ScoringService {
             int r1 = (int) Math.round(diffRate * 8);
             List<String> ev = keyTurns.stream().map(k -> "#T" + pad(k.turn())).toList();
             results.put("R1", new CheckResult("R1", check("R1", dev).label(), "AUTO", 8, r1, r1 > 0 ? "DEDUCTED" : "PASSED", ev,
-                    String.format("핵심 턴 %d개를 %d번씩 다시 실행, 다른 해결책 %d/%d", chosen.size(), props.r2().replaysPerTurn(), total - same, total)));
+                    String.format("핵심 턴 %d개를 %d번씩 다시 실행, 다른 해결책 %d/%d", chosen.size(), props.r2().replaysPerTurn(), total - same, total)
+                            + (replayFailed > 0 ? " (빈 답 " + replayFailed + "건은 비교에서 제외)" : "")));
             extras.put("r2KeyTurns", keyTurns);
         }
 
@@ -313,6 +321,7 @@ public class ScoringService {
             - count 는 '1개당 감점' 항목(D1)에서만 미충족 개수를 넣고, 나머지는 0 입니다.
             - reason 은 응시자에게 보여 줄 한국어 한 문장입니다. 걸리지 않았으면 무엇을 잘했는지 짧게 씁니다.
             - AI 답변이 길거나 정중하다고 유리하게 보지 않습니다. 응시자가 무엇을 지시하고, 검증하고, 결과물에 남겼는지를 봅니다.
+            - 대화 기록에서 "[시스템 오류]"로 표시된 AI 답변은 시스템 문제로 비어 있던 것입니다. 이 턴, 그리고 그 때문에 응시자가 짧게 다시 묻거나 재촉한 질문("?", "다시", "그래서?")은 감점 근거로 쓰지 않습니다.
             """;
 
     private static final String REPLAY_SYSTEM = """
@@ -329,6 +338,10 @@ public class ScoringService {
         task.description().forEach(d -> sb.append(d).append("\n"));
         sb.append("\n## 요구사항\n");
         task.requirements().forEach(r -> sb.append("- ").append(r).append("\n"));
+        if (task.isDev()) {
+            sb.append("\n## 숨은 정답 설명 (응시자는 보지 못함)\n")
+              .append(tasks.hiddenFiles(task.id()).getOrDefault("answer.md", "")).append("\n");
+        }
         if (!task.isDev()) {
             sb.append("\n## 숨은 체크리스트 (응시자는 보지 못함)\n")
               .append(tasks.hiddenFiles(task.id()).getOrDefault("checklist.md", "")).append("\n");
@@ -397,6 +410,27 @@ public class ScoringService {
         return sb.isEmpty() ? "(기록 없음)\n" : sb.toString();
     }
 
+    /**
+     * 개발 과제의 첫 유효 결과: src/ 파일을 처음 저장한 뒤, 컴파일되고 테스트가 전부 통과한 첫 실행 시각.
+     * 테스트를 추가했는지와는 따로 본다(테스트 추가는 D3 에서만 감점).
+     */
+    static Instant firstValidFromEvents(List<JsonNode> events) {
+        boolean srcChanged = false;
+        for (JsonNode e : events) {
+            String type = e.path("type").asString();
+            if (type.equals("save") && e.path("path").asString().startsWith("src/")) srcChanged = true;
+            if (type.equals("run") && srcChanged && e.path("compiled").asBoolean() && e.path("failed").asInt() == 0
+                    && e.path("passed").asInt() > 0) {
+                try {
+                    return Instant.parse(e.path("at").asString());
+                } catch (RuntimeException ex) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
     // ── 보조 함수 ─────────────────────
 
     private static Check check(String code, boolean dev) {
@@ -416,8 +450,11 @@ public class ScoringService {
     static String transcript(List<ChatTurn> turns, Instant start) {
         StringBuilder sb = new StringBuilder();
         for (ChatTurn t : turns) {
+            String text = "ai".equals(t.role()) && t.text().isBlank()
+                    ? "[시스템 오류] AI 답변이 비어 있음 (추론 모델이 출력 한도 안에서 답을 끝내지 못함. 응시자 책임 아님)"
+                    : t.text();
             sb.append("#T").append(pad(t.turn())).append(" ").append("user".equals(t.role()) ? "응시자" : "AI")
-              .append(" ").append(clock(start, t.at())).append("\n").append(t.text()).append("\n\n");
+              .append(" ").append(clock(start, t.at())).append("\n").append(text).append("\n\n");
         }
         return sb.isEmpty() ? "(대화 없음)\n" : sb.toString();
     }

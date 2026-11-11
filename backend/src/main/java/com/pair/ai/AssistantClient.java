@@ -7,6 +7,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.errors.OpenAIServiceException;
 import com.openai.errors.RateLimitException;
 import com.openai.errors.UnauthorizedException;
+import com.openai.models.ReasoningEffort;
 import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.pair.attempt.ChatTurn.AssistantRequest;
@@ -16,7 +17,8 @@ import com.pair.attempt.ChatTurn.Message;
 @Component
 public class AssistantClient {
 
-    public record Reply(String text, String model, long inputTokens, long outputTokens, long latencyMs) {}
+    /** finishReason: stop, length(한도에 걸려 잘림) 등. reasoningTokens: 추론에 쓴 토큰(출력 토큰에 포함, 출력 가격으로 과금). */
+    public record Reply(String text, String model, long inputTokens, long outputTokens, long reasoningTokens, String finishReason, long latencyMs) {}
 
     private volatile OpenAIClient client;
 
@@ -40,6 +42,9 @@ public class AssistantClient {
                 .model(req.model())
                 .maxCompletionTokens(req.maxOutputTokens())
                 .addSystemMessage(req.systemPrompt());
+        if (req.reasoningEffort() != null && !req.reasoningEffort().isBlank()) {
+            b.reasoningEffort(ReasoningEffort.of(req.reasoningEffort()));
+        }
         for (Message m : req.messages()) {
             if ("user".equals(m.role())) b.addUserMessage(m.content());
             else b.addAssistantMessage(m.content());
@@ -54,7 +59,9 @@ public class AssistantClient {
                             .orElse("");
             long in = res.usage().map(u -> u.promptTokens()).orElse(0L);
             long out = res.usage().map(u -> u.completionTokens()).orElse(0L);
-            return new Reply(text, res.model(), in, out, ms);
+            long reasoning = res.usage().flatMap(u -> u.completionTokensDetails()).flatMap(d -> d.reasoningTokens()).orElse(0L);
+            String finish = res.choices().isEmpty() ? "none" : res.choices().get(0).finishReason().toString();
+            return new Reply(text, res.model(), in, out, reasoning, finish, ms);
         } catch (UnauthorizedException e) {
             throw new AiUnavailableException("OpenAI API 키가 올바르지 않습니다 (401).");
         } catch (RateLimitException e) {
