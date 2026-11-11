@@ -305,7 +305,9 @@ SCORE                ← label
   - 입력 상자 안 **위쪽 오른쪽**에 글자 수 `123 / 1,000`(mono 12px `text-faint`). 90% 이상이면 `caution`, 한도에 닿으면 `alert`.
   - 한도는 질문 1회 1,000자이며 백엔드 설정(`pair.assistant.max-input-chars`)과 같은 값을 쓴다. 제한은 세 겹이다: 입력창이 한도 이상 입력을 막고(`maxLength`), 넘친 상태에서는 전송을 막고, 백엔드도 초과 질문을 거절한다.
   - 붙여 넣기가 한도를 넘으면 들어갈 만큼만 넣고, 같은 줄 왼쪽에 `caution` 12px로 "붙여 넣은 내용 중 N자가 잘렸습니다 (최대 1,000자)"를 띄운다. 말없이 잘리지 않게 하기 위해서다. 다음 입력 때 사라진다.
-  - 입력 상자 안 아래 줄: 왼쪽 `CTRL + ENTER`(`label`), 오른쪽 끝에 **AI 모델 이름**(mono 12px `text-faint`, 예: `gpt-6.1-terra`)과 전송 아이콘 버튼.
+  - 입력 상자 안 아래 줄: 왼쪽 `CTRL + ENTER`(`label`), 오른쪽에 **AI 모델 이름**(mono 12px `text-faint`, 예: `gpt-6-luna`), 모델 이름과 전송 버튼 사이 12px.
+  - **전송 버튼은 엔터 키 모양 키캡**(`components/SendKey.tsx`): 높이 32px, 최소 폭 44px, `radius-sm`, 1px 테두리에 아래 테두리만 3px(키캡 두께감), 아이콘 CornerDownLeft(↵) 18px. 누르면 1px 내려가고 아래 테두리가 얇아진다.
+    - 보낼 내용이 있으면 테두리와 아이콘 `signal`, 배경 `signal` 12%. 비어 있으면 테두리 `line-strong`, 아이콘 `text-faint`. 응답 대기, 글자 수 초과, 읽기 전용이면 비활성(opacity 40%).
 
 ### 6.9 Code Editor / File Explorer / Output
 
