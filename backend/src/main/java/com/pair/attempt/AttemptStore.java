@@ -114,6 +114,22 @@ public class AttemptStore {
         }
     }
 
+    /** AI 수정 제안으로 새 파일을 만들 때. 작업 폴더 안의 .java, .md 파일만 허용하고 logs/, 자료/ 아래는 막는다. */
+    public synchronized void createWorkspaceFile(String id, String rel) {
+        try {
+            Path ws = workspace(id);
+            Path target = ws.resolve(rel).normalize();
+            boolean allowed = target.startsWith(ws) && (rel.endsWith(".java") || rel.endsWith(".md"))
+                    && !rel.startsWith("logs/") && !rel.startsWith("자료/") && !rel.contains("..");
+            if (!allowed) throw new IllegalArgumentException("이 경로에는 파일을 만들 수 없습니다: " + rel);
+            if (Files.exists(target)) return;
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, "", StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private static void writeFile(Path ws, String rel, String content) throws IOException {
         Path target = ws.resolve(rel).normalize();
         if (!target.startsWith(ws)) throw new IllegalArgumentException(rel);

@@ -6,9 +6,12 @@ import { markdown } from '@codemirror/lang-markdown'
 import { bracketMatching, HighlightStyle, indentOnInput, LanguageSupport, syntaxHighlighting } from '@codemirror/language'
 import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
-import { EditorState, type Extension } from '@codemirror/state'
+import { Annotation, EditorState, type Extension } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { styleTags, tags as t } from '@lezer/highlight'
+
+/** 밖에서 넣은 내용 변경 표시 (사용자 입력과 구분) */
+const External = Annotation.define<boolean>()
 
 // DESIGN.md §6.9 Code Editor: CodeMirror 6 + DESIGN 토큰 테마
 
@@ -145,7 +148,8 @@ export function CodeEditor({
         theme,
         EditorView.contentAttributes.of({ 'aria-label': `${path} 편집기` }),
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) onChangeRef.current?.(u.state.doc.toString())
+          // 밖에서 내용을 바꾼 경우(AI 수정 적용 등)는 사용자 입력이 아니므로 알리지 않는다
+          if (u.docChanged && !u.transactions.some((t) => t.annotation(External))) onChangeRef.current?.(u.state.doc.toString())
         }),
       ],
     })
@@ -163,7 +167,7 @@ export function CodeEditor({
   useEffect(() => {
     const ed = view.current
     if (ed && ed.state.doc.toString() !== value) {
-      ed.dispatch({ changes: { from: 0, to: ed.state.doc.length, insert: value } })
+      ed.dispatch({ changes: { from: 0, to: ed.state.doc.length, insert: value }, annotations: External.of(true) })
     }
   }, [value])
 
