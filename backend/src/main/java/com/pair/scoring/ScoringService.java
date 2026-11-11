@@ -341,6 +341,7 @@ public class ScoringService {
             - count 는 '1개당 감점' 항목(D1)에서만 미충족 개수를 넣고, 나머지는 0 입니다.
             - reason 은 응시자에게 보여 줄 한국어 한 문장입니다. 걸리지 않았으면 무엇을 잘했는지 짧게 씁니다.
             - AI 답변이 길거나 정중하다고 유리하게 보지 않습니다. 응시자가 무엇을 지시하고, 검증하고, 결과물에 남겼는지를 봅니다.
+            - AI 답변의 ```edit 블록은 파일 수정 제안입니다. 응시자가 [적용]을 누르면 파일에 반영되고, 이벤트 요약에 "aiEdit ... 적용/거절"로 남습니다. 적용한 제안은 응시자가 결과물에 넣은 것으로 보고, 거절한 제안은 채택하지 않은 제안으로 봅니다.
             - 대화 기록에서 "[시스템 오류]"로 표시된 AI 답변은 시스템 문제로 비어 있던 것입니다. 이 턴, 그리고 그 때문에 응시자가 짧게 다시 묻거나 재촉한 질문("?", "다시", "그래서?")은 감점 근거로 쓰지 않습니다.
             """;
 
@@ -420,7 +421,8 @@ public class ScoringService {
         StringBuilder sb = new StringBuilder();
         for (JsonNode e : events) {
             String type = e.path("type").asString();
-            if (!type.equals("run") && !type.equals("build") && !type.equals("save") && !type.equals("firstValid") && !type.equals("submit")) continue;
+            if (!type.equals("run") && !type.equals("build") && !type.equals("save") && !type.equals("firstValid") && !type.equals("submit")
+                    && !type.equals("aiEdit")) continue;
             String at;
             try {
                 at = clock(start, Instant.parse(e.path("at").asString()));
@@ -432,6 +434,8 @@ public class ScoringService {
                     .append(" compiled=").append(e.path("compiled").asBoolean());
             if (type.equals("build")) sb.append(" compiled=").append(e.path("compiled").asBoolean());
             if (type.equals("save")) sb.append(" ").append(e.path("path").asString());
+            if (type.equals("aiEdit")) sb.append(" #T").append(pad(e.path("turn").asInt())).append(" 수정 제안 ")
+                    .append(e.path("action").asString().equals("apply") ? "적용" : "거절").append(" ").append(e.path("path").asString());
             sb.append("\n");
         }
         return sb.isEmpty() ? "(기록 없음)\n" : sb.toString();

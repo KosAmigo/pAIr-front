@@ -28,7 +28,19 @@ export type Attempt = {
   error: string | null
 }
 
-export type Turn = { turn: number; role: 'user' | 'ai'; time: string; text: string }
+/** AI 답변 속 파일 수정 제안. status: PENDING 결정 전, APPLIED 적용, REJECTED 거절. applicable: 지금 파일에 적용할 수 있는지 */
+export type EditProposal = {
+  index: number
+  path: string
+  hunks: { search: string; replace: string }[]
+  newFile: boolean
+  status: 'PENDING' | 'APPLIED' | 'REJECTED'
+  applicable: boolean
+}
+
+export type Turn = { turn: number; role: 'user' | 'ai'; time: string; text: string; edits?: EditProposal[] }
+
+export type EditDecision = { status: 'APPLIED' | 'REJECTED'; path: string; content: string | null }
 
 export type AttemptView = {
   attempt: Attempt
@@ -140,6 +152,8 @@ export const api = {
   build: (id: string) => call<BuildResult>('POST', `/api/attempts/${enc(id)}/build`),
   run: (id: string) => call<RunResult>('POST', `/api/attempts/${enc(id)}/run`),
   chat: (id: string, message: string) => call<Turn[]>('POST', `/api/attempts/${enc(id)}/chat`, { message }),
+  decideEdit: (id: string, turn: number, index: number, action: 'apply' | 'reject') =>
+    call<EditDecision>('POST', `/api/attempts/${enc(id)}/edits`, { turn, index, action }),
   submit: (id: string) => call<Attempt>('POST', `/api/attempts/${enc(id)}/submit`),
   followUps: (id: string, answers: string[]) => call<Attempt>('POST', `/api/attempts/${enc(id)}/followups`, { answers }),
   rescore: (id: string) => call<Attempt>('POST', `/api/attempts/${enc(id)}/rescore`),

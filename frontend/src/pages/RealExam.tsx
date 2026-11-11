@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Bot, ChevronDown, ChevronRight, FileText, Folder, Hammer, Loader2, Lock, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
 import { SendKey } from '../components/SendKey'
 import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
-import { api, ApiError, type AttemptView, type CompileDiagnostic, type Task, type Turn } from '../api'
+import { api, ApiError, type AttemptView, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
+import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
+import { splitReply } from '../lib/edits'
 
 // 실제 응시 화면: 백엔드 API 에 연결된 버전. 레이아웃은 DESIGN.md §7-3 응시 화면을 따른다.
 
@@ -128,6 +130,9 @@ function ChatPanel({
   onSend,
   model,
   maxChars,
+  editBusy,
+  onEdit,
+  onViewEdit,
 }: {
   turns: Turn[]
   disabled: boolean
@@ -136,12 +141,27 @@ function ChatPanel({
   onSend: (t: string) => Promise<boolean>
   model: string
   maxChars: number
+  editBusy: boolean
+  onEdit: (turn: number, e: EditProposal, a: EditAction) => void
+  onViewEdit: (turn: number, e: EditProposal) => void
 }) {
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const count = draft.length
   const over = count > maxChars
   const listRef = useRef<HTMLOListElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  // 입력이 길어지면 입력창이 위로 늘어난다. 최대 높이(화면의 40%, 최대 360px)를 넘으면 안에서 스크롤한다.
+  useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    const min = 96
+    const max = Math.min(360, Math.round(window.innerHeight * 0.4))
+    el.style.height = 'auto'
+    const want = Math.max(min, el.scrollHeight)
+    el.style.height = `${Math.min(want, max)}px`
+    el.style.overflowY = want > max ? 'auto' : 'hidden'
+  }, [draft])
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [turns.length, busy])
@@ -177,7 +197,29 @@ function ChatPanel({
                 <span>#T{String(m.turn).padStart(2, '0')}</span>
                 <span>{m.time}</span>
               </span>
-              <p className="text-[15px] leading-6 whitespace-pre-wrap text-text">{m.text}</p>
+              {splitReply(m.text).map((seg, i) => {
+                if (seg.kind === 'text')
+                  return (
+                    <p key={i} className="text-[15px] leading-6 whitespace-pre-wrap text-text">
+                      {seg.text}
+                    </p>
+                  )
+                const e = m.edits?.find((x) => x.index === seg.index)
+                return e ? (
+                  <EditCard
+                    key={i}
+                    edit={e}
+                    busy={editBusy}
+                    disabled={disabled}
+                    onAction={(a) => onEdit(m.turn, e, a)}
+                    onView={() => onViewEdit(m.turn, e)}
+                  />
+                ) : (
+                  <p key={i} className="font-mono text-[12px] text-text-faint">
+                    (형식이 맞지 않아 적용할 수 없는 수정 제안: {seg.path})
+                  </p>
+                )
+              })}
             </li>
           ),
         )}
@@ -196,24 +238,13 @@ function ChatPanel({
           AI에게 질문
         </label>
         <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-signal')}>
-          <div className="flex items-center gap-2 px-3 pt-1.5">
-            {notice && (
-              <span role="status" className="truncate text-[12px] text-caution">
-                {notice}
-              </span>
-            )}
-            <span
-              className={cx(
-                'ml-auto tnum font-mono text-[12px]',
-                count >= maxChars ? 'text-alert' : count >= maxChars * 0.9 ? 'text-caution' : 'text-text-faint',
-              )}
-              aria-live="polite"
-            >
-              {over && '글자 수 초과 '}
-              {count.toLocaleString()} / {maxChars.toLocaleString()}
-            </span>
-          </div>
+          {notice && (
+            <p role="status" className="truncate px-3 pt-1.5 text-[12px] text-caution">
+              {notice}
+            </p>
+          )}
           <textarea
+            ref={inputRef}
             id="chat-input"
             rows={4}
             disabled={disabled}
@@ -244,12 +275,23 @@ function ChatPanel({
             }}
             placeholder="맥락을 충분히 담아 질문하세요"
             aria-describedby="chat-limit"
-            className="block w-full resize-none bg-transparent px-3 pt-1 font-sans text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
+            className="block w-full resize-none bg-transparent px-3 pt-2 font-sans text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
           />
           <div className="flex items-center gap-2 px-2 pb-2">
             <span className="label pl-1 text-text-faint">CTRL + ENTER</span>
-            <span className="ml-auto mr-3 truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
+            <span className="ml-auto min-w-0 truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
               {model}
+            </span>
+            <span
+              className={cx(
+                'tnum ml-1 mr-1 shrink-0 font-mono text-[12px]',
+                count >= maxChars ? 'text-alert' : count >= maxChars * 0.9 ? 'text-caution' : 'text-text-faint',
+              )}
+              aria-live="polite"
+              title={`질문은 한 번에 ${maxChars.toLocaleString()}자까지`}
+            >
+              {over && '초과 '}
+              {count.toLocaleString()}/{maxChars.toLocaleString()}
             </span>
             <SendKey ready={draft.trim().length > 0} disabled={disabled || busy || over} onClick={() => void send()} />
           </div>
@@ -378,6 +420,8 @@ export default function RealExam() {
   const [turns, setTurns] = useState<Turn[]>([])
   const [chatBusy, setChatBusy] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+  const [editBusy, setEditBusy] = useState(false)
+  const [viewing, setViewing] = useState<{ turn: number; index: number } | null>(null)
   // 빌드(컴파일만) 또는 테스트 실행 결과. 마지막으로 누른 쪽을 보여 준다.
   const [run, setRun] = useState<{
     kind: 'build' | 'test'
@@ -548,6 +592,39 @@ export default function RealExam() {
       setChatBusy(false)
     }
   }
+
+  /** AI 수정 제안 적용/거절. 적용하면 서버가 파일을 고치고, 그 파일을 편집기에 열어 보여 준다. */
+  const decideEdit = async (turn: number, e: EditProposal, action: EditAction) => {
+    setEditBusy(true)
+    setChatError(null)
+    try {
+      if (action === 'apply' && dirty.has(e.path)) await saveFiles([e.path])
+      const r = await api.decideEdit(sessionId, turn, e.index, action)
+      const v = await api.attempt(sessionId)
+      setTurns(v.turns)
+      setView((old) => (old ? { ...old, files: v.files } : v))
+      if (r.status === 'APPLIED' && r.content != null) {
+        const content = r.content
+        setContents((m) => ({ ...m, [r.path]: content }))
+        setDirty((d) => {
+          const n = new Set(d)
+          n.delete(r.path)
+          return n
+        })
+        setOpen((o) => (o.includes(r.path) ? o : [...o, r.path]))
+        setActive(r.path)
+        setViewing(null)
+        flash(`적용했습니다: ${r.path}`)
+      } else {
+        setViewing(null)
+      }
+    } catch (er) {
+      setChatError((er as ApiError).message)
+    } finally {
+      setEditBusy(false)
+    }
+  }
+  const viewingEdit = viewing ? turns.find((t) => t.turn === viewing.turn)?.edits?.find((x) => x.index === viewing.index) : undefined
 
   const doSubmit = async () => {
     setBusy(true)
@@ -820,7 +897,11 @@ export default function RealExam() {
         <div className="relative min-h-0">
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
-              <ChatPanel turns={turns} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000} />
+              <ChatPanel turns={turns} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000}
+                editBusy={editBusy}
+                onEdit={(t, e, a) => void decideEdit(t, e, a)}
+                onViewEdit={(t, e) => setViewing({ turn: t, index: e.index })}
+              />
             </div>
           </div>
           {locked && (
@@ -833,6 +914,16 @@ export default function RealExam() {
       </div>
 
       {confirm && <ConfirmModal busy={busy} onCancel={() => setConfirm(false)} onConfirm={() => void doSubmit()} />}
+      {viewing && viewingEdit && (
+        <EditModal
+          edit={viewingEdit}
+          turn={viewing.turn}
+          busy={editBusy}
+          disabled={locked}
+          onAction={(a) => void decideEdit(viewing.turn, viewingEdit, a)}
+          onClose={() => setViewing(null)}
+        />
+      )}
 
       {toast && (
         <div role="status" className="fade-in fixed bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-md border border-line bg-panel-raised px-4 py-2 text-[14px] shadow-modal">

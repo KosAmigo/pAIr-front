@@ -49,7 +49,9 @@ public class ApiController {
 
     public record FollowUpRequest(List<String> answers) {}
 
-    public record TurnView(int turn, String role, String time, String text) {}
+    public record TurnView(int turn, String role, String time, String text, List<AttemptService.EditView> edits) {}
+
+    public record EditRequest(int turn, int index, String action) {}
 
     @GetMapping("/tasks/{taskId}")
     public TaskDef task(@PathVariable String taskId) {
@@ -110,7 +112,8 @@ public class ApiController {
         m.put("attempt", a);
         m.put("task", tasks.get(a.taskId()));
         m.put("files", store.readFiles(id).keySet());
-        m.put("turns", store.turns(id).stream().map(t -> view(a, t)).toList());
+        var edits = attempts.edits(id);
+        m.put("turns", store.turns(id).stream().map(t -> view(a, t, edits.getOrDefault(t.turn(), List.of()))).toList());
         m.put("chatMaxChars", props.assistant().maxInputChars());
         m.put("elapsedSeconds", Duration.between(a.startedAt(), a.submittedAt() != null ? a.submittedAt() : Instant.now()).toSeconds());
         return m;
@@ -143,7 +146,16 @@ public class ApiController {
     public List<TurnView> chat(@PathVariable String id, @RequestBody ChatRequest req) {
         if (req.message() == null || req.message().isBlank()) throw new IllegalArgumentException("메시지가 비어 있습니다.");
         Attempt a = store.load(id);
-        return attempts.chat(id, req.message()).stream().map(t -> view(a, t)).toList();
+        List<ChatTurn> added = attempts.chat(id, req.message());
+        var edits = attempts.edits(id);
+        return added.stream().map(t -> view(a, t, edits.getOrDefault(t.turn(), List.of()))).toList();
+    }
+
+    /** AI 수정 제안 적용(apply) 또는 거절(reject). */
+    @PostMapping("/attempts/{id}/edits")
+    public AttemptService.EditDecision decideEdit(@PathVariable String id, @RequestBody EditRequest req) {
+        if (!"apply".equals(req.action()) && !"reject".equals(req.action())) throw new IllegalArgumentException("action 은 apply 또는 reject 입니다.");
+        return attempts.decideEdit(id, req.turn(), req.index(), "apply".equals(req.action()));
     }
 
     @PostMapping("/attempts/{id}/submit")
@@ -172,8 +184,8 @@ public class ApiController {
         return m;
     }
 
-    private static TurnView view(Attempt a, ChatTurn t) {
+    private static TurnView view(Attempt a, ChatTurn t, List<AttemptService.EditView> edits) {
         long s = Math.max(0, Duration.between(a.startedAt(), t.at()).toSeconds());
-        return new TurnView(t.turn(), t.role(), String.format("%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60), t.text());
+        return new TurnView(t.turn(), t.role(), String.format("%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60), t.text(), edits);
     }
 }

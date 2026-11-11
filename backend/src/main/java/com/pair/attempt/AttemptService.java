@@ -5,8 +5,11 @@ import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.TreeSet;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.stereotype.Service;
@@ -20,6 +23,8 @@ import com.pair.run.CodeRunner;
 import com.pair.scoring.ScoringService;
 import com.pair.task.TaskDef;
 import com.pair.task.TaskRepository;
+
+import tools.jackson.databind.JsonNode;
 
 @Service
 public class AttemptService {
@@ -109,8 +114,9 @@ public class AttemptService {
         List<Message> msgs = new ArrayList<>();
         for (ChatTurn t : history) msgs.add(new Message("user".equals(t.role()) ? "user" : "assistant", t.text()));
         msgs.add(new Message("user", message));
+        String system = props.assistant().systemPrompt() + editGuide(new TreeSet<>(store.readFiles(id).keySet()));
         AssistantRequest req = new AssistantRequest(a.model(), props.assistant().maxOutputTokens(),
-                props.assistant().reasoningEffort(), props.assistant().systemPrompt(), List.copyOf(msgs));
+                props.assistant().reasoningEffort(), system, List.copyOf(msgs));
         Instant askedAt = Instant.now();
         AssistantClient.Reply reply = assistant.send(req); // 실패하면 예외 → 질문도 저장하지 않는다
         if (reply.text().isBlank()) {
@@ -127,6 +133,87 @@ public class AttemptService {
         store.appendTurn(id, ai);
         store.appendEvent(id, "chat", Map.of("turn", ai.turn(), "inputTokens", reply.inputTokens(), "outputTokens", reply.outputTokens()));
         return List.of(user, ai);
+    }
+
+    // ── AI 수정 제안 ─────────────────────
+
+    /** 어시스턴트에 알려 주는 파일 목록과 수정 제안 형식. 요청 원문(systemPrompt)에 함께 남아 다시 실행(R1)에도 그대로 쓰인다. */
+    static String editGuide(java.util.Collection<String> files) {
+        return "\n\n" + EDIT_GUIDE + "\n응시자 작업 폴더의 파일: " + String.join(", ", files);
+    }
+
+    static final String EDIT_GUIDE = """
+            파일을 고치거나 새로 만들자고 제안할 때는 설명 뒤에 아래 형식의 수정 블록을 붙이세요. 응시자가 [적용]을 누르면 파일에 반영되고, [거절]하면 반영되지 않습니다.
+            ```edit path=파일 경로
+            <<<<<<< SEARCH
+            바꿀 원래 내용
+            =======
+            새 내용
+            >>>>>>> REPLACE
+            ```
+            - SEARCH 에는 응시자가 대화에 붙여 넣은 내용 중 바꿀 줄을 한 글자도 바꾸지 말고 그대로 적습니다. 보지 못한 내용은 지어내지 마세요.
+            - 한 블록에 SEARCH/REPLACE 쌍을 여러 개 넣을 수 있습니다. 새 파일을 만들 때는 SEARCH 를 비워 둡니다.
+            - 코드를 보여 주기만 할 때는 일반 코드 블록을 씁니다.""";
+
+    /** 화면에 보여 줄 수정 제안. status: PENDING(결정 전), APPLIED(적용), REJECTED(거절). applicable: 지금 파일에 적용할 수 있는지. */
+    public record EditView(int index, String path, List<EditProposals.Hunk> hunks, boolean newFile, String status, boolean applicable) {}
+
+    /** 턴 번호별 수정 제안 목록. */
+    public Map<Integer, List<EditView>> edits(String id) {
+        Map<String, String> files = store.readFiles(id);
+        Map<String, String> decided = decisions(store.events(id));
+        Map<Integer, List<EditView>> out = new LinkedHashMap<>();
+        for (ChatTurn t : store.turns(id)) {
+            if (!"ai".equals(t.role())) continue;
+            List<EditView> list = new ArrayList<>();
+            for (EditProposals.Proposal p : EditProposals.parse(t.text())) {
+                String status = decided.getOrDefault(t.turn() + ":" + p.index(), "PENDING");
+                boolean ok = !status.equals("APPLIED") && EditProposals.apply(p, files.get(p.path())).isPresent();
+                list.add(new EditView(p.index(), p.path(), p.hunks(), p.newFile(), status, ok));
+            }
+            if (!list.isEmpty()) out.put(t.turn(), list);
+        }
+        return out;
+    }
+
+    /** 결과: 적용했으면 바뀐 파일 내용을 함께 돌려준다. */
+    public record EditDecision(String status, String path, String content) {}
+
+    public synchronized EditDecision decideEdit(String id, int turn, int index, boolean apply) {
+        requireStatus(id, Attempt.Status.SOLVING);
+        ChatTurn t = store.turns(id).stream().filter(x -> x.turn() == turn && "ai".equals(x.role())).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("AI 답변 #T" + turn + " 이 없습니다."));
+        EditProposals.Proposal p = EditProposals.parse(t.text()).stream().filter(x -> x.index() == index).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("수정 제안을 찾을 수 없습니다."));
+        String key = turn + ":" + index;
+        String prev = decisions(store.events(id)).get(key);
+        if ("APPLIED".equals(prev)) throw new IllegalStateException("이미 적용한 제안입니다.");
+        if (!apply) {
+            store.appendEvent(id, "aiEdit", Map.of("turn", turn, "index", index, "path", p.path(), "action", "reject"));
+            return new EditDecision("REJECTED", p.path(), null);
+        }
+        Map<String, String> files = store.readFiles(id);
+        Optional<String> next = EditProposals.apply(p, files.get(p.path()));
+        if (next.isEmpty()) {
+            throw new IllegalStateException("지금 파일에서 바꿀 부분을 찾지 못해 적용할 수 없습니다. 코드 보기로 내용을 확인하고 직접 고쳐 주세요.");
+        }
+        if (!files.containsKey(p.path())) store.createWorkspaceFile(id, p.path());
+        store.appendEvent(id, "aiEdit", Map.of("turn", turn, "index", index, "path", p.path(), "action", "apply",
+                "newFile", !files.containsKey(p.path())));
+        saveFile(id, p.path(), next.get());
+        return new EditDecision("APPLIED", p.path(), next.get());
+    }
+
+    /** 이벤트에서 "턴:번호" → APPLIED/REJECTED. 거절한 뒤 적용하면 적용으로 본다. */
+    static Map<String, String> decisions(List<JsonNode> events) {
+        Map<String, String> m = new HashMap<>();
+        for (JsonNode e : events) {
+            if (!"aiEdit".equals(e.path("type").asString())) continue;
+            String key = e.path("turn").asInt() + ":" + e.path("index").asInt();
+            if ("APPLIED".equals(m.get(key))) continue;
+            m.put(key, "apply".equals(e.path("action").asString()) ? "APPLIED" : "REJECTED");
+        }
+        return m;
     }
 
     public Attempt submit(String id) {
