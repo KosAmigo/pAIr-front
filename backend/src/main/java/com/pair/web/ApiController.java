@@ -85,6 +85,9 @@ public class ApiController {
                 if (a.status() == Attempt.Status.DONE) {
                     JsonNode r = store.readReport(a.id());
                     if (r != null) {
+                        // version 2(감점식)만 총점이 있다. 이전 형식은 다시 채점해야 한다.
+                        m.put("total", r.path("version").asInt() >= 2 ? r.path("total").asInt() : null);
+                        m.put("legacyReport", r.path("version").asInt() < 2);
                         for (JsonNode it : r.path("items")) {
                             JsonNode sc = it.path("score");
                             m.put(it.path("key").asString(), sc.isNumber() ? sc.asDouble() : null);

@@ -66,7 +66,7 @@ export default function History() {
             <table className="w-full text-[14px]">
               <thead>
                 <tr className="border-b border-line">
-                  {['DATE', 'TASK', 'TYPE', 'STATUS', '재현성', '도출력', ''].map((h) => (
+                  {['DATE', 'TASK', 'TYPE', 'STATUS', 'TOTAL', ''].map((h) => (
                     <th key={h} className={th}>
                       {h}
                     </th>
@@ -83,10 +83,11 @@ export default function History() {
                       <StatusDot status={statusLabel[r.status].s} label={statusLabel[r.status].t} />
                     </td>
                     <td className="px-4">
-                      <Score v={r.reproducibility} />
-                    </td>
-                    <td className="px-4">
-                      <Score v={r.delivery} />
+                      {r.legacyReport ? (
+                        <span className="text-[13px] text-text-faint" title="이전 채점 방식입니다. 리포트에서 다시 채점하세요.">이전 방식</span>
+                      ) : (
+                        <Score v={r.total} />
+                      )}
                     </td>
                     <td className="px-4">
                       <div className="flex justify-end gap-1">

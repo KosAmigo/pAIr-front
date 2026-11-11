@@ -52,18 +52,26 @@ export type RunResult = {
 
 export type BuildResult = { compiled: boolean; lines: string[]; diagnostics: CompileDiagnostic[]; millis: number }
 
-export type SubScore = {
+/** 감점표의 체크 항목 하나 (docs/evaluation/채점_기준표.md) */
+export type CheckResult = {
   code: string
-  name: string
-  weight: number
-  score: number | null
-  note: string
+  label: string
+  method: 'AUTO' | 'JUDGE'
+  points: number
+  deducted: number
+  /** DEDUCTED 감점, PASSED 통과, SKIPPED 적용 안 함, NO_EVIDENCE 걸렸지만 근거가 없어 감점 안 함 */
+  status: 'DEDUCTED' | 'PASSED' | 'SKIPPED' | 'NO_EVIDENCE'
   evidence: string[]
+  reason: string | null
 }
 
-export type ReportItem = { key: string; name: string; score: number | null; sub: SubScore[] }
+export type ReportItem = { key: string; name: string; max: number; score: number; checks: CheckResult[] }
 
 export type Report = {
+  /** 2 = 감점식. 그 아래는 이전 형식이라 다시 채점해야 한다. */
+  version?: number
+  total: number
+  max: number
   attemptId: string
   taskId: string
   taskTitle: string
@@ -113,8 +121,8 @@ export type AttemptSummary = {
   taskType: TaskType
   startedAt: string
   status: AttemptStatus
-  reproducibility?: number | null
-  delivery?: number | null
+  total?: number | null
+  legacyReport?: boolean
 }
 
 export const api = {
