@@ -24,7 +24,7 @@ import com.pair.scoring.ScoringService;
 import com.pair.task.TaskDef;
 import com.pair.task.TaskRepository;
 
-import tools.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonNode;
 
 @Service
 public class AttemptService {
@@ -208,10 +208,10 @@ public class AttemptService {
     static Map<String, String> decisions(List<JsonNode> events) {
         Map<String, String> m = new HashMap<>();
         for (JsonNode e : events) {
-            if (!"aiEdit".equals(e.path("type").asString())) continue;
+            if (!"aiEdit".equals(e.path("type").asText())) continue;
             String key = e.path("turn").asInt() + ":" + e.path("index").asInt();
             if ("APPLIED".equals(m.get(key))) continue;
-            m.put(key, "apply".equals(e.path("action").asString()) ? "APPLIED" : "REJECTED");
+            m.put(key, "apply".equals(e.path("action").asText()) ? "APPLIED" : "REJECTED");
         }
         return m;
     }

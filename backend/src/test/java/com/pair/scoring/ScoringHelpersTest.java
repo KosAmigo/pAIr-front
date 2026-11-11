@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import com.pair.task.TaskRepository;
 
-import tools.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 
 class ScoringHelpersTest {
 
@@ -62,7 +62,7 @@ class ScoringHelpersTest {
 
     @Test
     void taskLoader_doesNotExposeHiddenFiles() {
-        TaskRepository tasks = new TaskRepository(JsonMapper.builder().build());
+        TaskRepository tasks = new TaskRepository(JsonMapper.builder().findAndAddModules().disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build());
         Map<String, String> visible = tasks.visibleFiles("order-deadlock");
         assertTrue(visible.containsKey("src/shop/OrderService.java"));
         assertTrue(visible.keySet().stream().noneMatch(k -> k.contains("Hidden")));

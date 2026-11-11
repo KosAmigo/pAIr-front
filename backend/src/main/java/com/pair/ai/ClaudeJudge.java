@@ -1,33 +1,36 @@
 package com.pair.ai;
 
 import java.util.List;
-import java.util.Optional;
 
+import org.springframework.ai.anthropic.AnthropicChatModel;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.anthropic.api.AnthropicApi;
+import org.springframework.ai.anthropic.api.AnthropicCacheOptions;
+import org.springframework.ai.anthropic.api.AnthropicCacheStrategy;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Component;
 
-import com.anthropic.client.AnthropicClient;
-import com.anthropic.client.okhttp.AnthropicOkHttpClient;
-import com.anthropic.errors.AnthropicServiceException;
-import com.anthropic.errors.RateLimitException;
-import com.anthropic.errors.UnauthorizedException;
-import com.anthropic.models.messages.CacheControlEphemeral;
-import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.OutputConfig;
-import com.anthropic.models.messages.StructuredMessage;
-import com.anthropic.models.messages.StructuredMessageCreateParams;
-import com.anthropic.models.messages.StructuredOutputConfig;
-import com.anthropic.models.messages.TextBlockParam;
+import com.pair.config.AiKeys;
 import com.pair.config.PairProperties;
 
-/** 채점 모델 (Anthropic). 구조화 출력(JSON 스키마)과 추론 강도(effort)를 쓰고, 앞부분은 프롬프트 캐시로 둔다. */
+/**
+ * 채점 모델 (Spring AI Anthropic). 구조화 출력(JSON 스키마)을 쓰고, 시스템 프롬프트(채점 규칙 + 과제, 정답, 체크 항목)는 프롬프트 캐시로 둔다.
+ * 추론 강도(effort)는 Spring AI 1.1 에 옵션이 없어 요청에 직접 넣는다 (AnthropicEffortInterceptor).
+ */
 @Component
 public class ClaudeJudge implements Judge {
 
     private final PairProperties.Model cfg;
-    private volatile AnthropicClient client;
+    private final AiKeys keys;
+    private volatile AnthropicChatModel chatModel;
 
-    public ClaudeJudge(PairProperties props) {
+    public ClaudeJudge(PairProperties props, AiKeys keys) {
         this.cfg = props.judge().claude();
+        this.keys = keys;
     }
 
     @Override
@@ -40,54 +43,50 @@ public class ClaudeJudge implements Judge {
         return cfg.model();
     }
 
-    private AnthropicClient client() {
-        if (client == null) {
+    private AnthropicChatModel chatModel() {
+        if (chatModel == null) {
             synchronized (this) {
-                if (client == null) client = AnthropicOkHttpClient.fromEnv();
+                if (chatModel == null) {
+                    if (!keys.hasAnthropic()) {
+                        throw new AiUnavailableException("Anthropic API 키(spring.ai.anthropic.api-key, 환경 변수 ANTHROPIC_API_KEY)가 없어 Claude 채점을 할 수 없습니다.");
+                    }
+                    chatModel = SpringAi.anthropic(keys.anthropic(), cfg.effort());
+                }
             }
         }
-        return client;
+        return chatModel;
     }
 
     @Override
     public <T> Result<T> judge(String system, String cachedPrefix, String user, Class<T> type) {
-        StructuredOutputConfig.Builder<T> out = StructuredOutputConfig.<T>builder().format(type);
-        if (cfg.effort() != null && !cfg.effort().isBlank()) out.effort(OutputConfig.Effort.of(cfg.effort()));
-        // 시스템 블록 두 개: 채점 규칙 + (과제, 정답, 체크 항목). 두 번째 블록 끝에 캐시 지점을 둔다.
-        // (빈 텍스트 블록은 API 가 거절하므로 앞부분이 없으면 규칙 블록 하나만 보낸다)
-        List<TextBlockParam> systemBlocks = cachedPrefix == null || cachedPrefix.isBlank()
-                ? List.of(TextBlockParam.builder().text(system).build())
-                : List.of(
-                        TextBlockParam.builder().text(system).build(),
-                        TextBlockParam.builder().text(cachedPrefix)
-                                .cacheControl(CacheControlEphemeral.builder().build()).build());
-        StructuredMessageCreateParams<T> params = MessageCreateParams.builder()
+        BeanOutputConverter<T> converter = new BeanOutputConverter<>(type);
+        AnthropicChatOptions options = AnthropicChatOptions.builder()
                 .model(cfg.model())
-                .maxTokens(cfg.maxTokens())
-                .systemOfTextBlockParams(systemBlocks)
-                .outputConfig(out.build())
-                .addUserMessage(user)
+                .maxTokens((int) cfg.maxTokens())
+                .outputSchema(converter.getJsonSchema())
+                .cacheOptions(AnthropicCacheOptions.builder().strategy(AnthropicCacheStrategy.SYSTEM_ONLY).build())
                 .build();
+        String sys = cachedPrefix == null || cachedPrefix.isBlank() ? system : system + "\n\n" + cachedPrefix;
+        Prompt prompt = new Prompt(List.of(new SystemMessage(sys), new UserMessage(user)), options);
+        ChatResponse res = SpringAi.call("Claude 채점", () -> chatModel().call(prompt));
+        String finish = SpringAi.finishReason(res);
+        if (finish.contains("refusal")) throw new AiUnavailableException("Claude 채점 모델이 요청을 거절했습니다(refusal).");
+        String text = SpringAi.text(res);
+        if (text.isBlank()) throw new AiUnavailableException("Claude 채점 모델 응답에 결과가 없습니다 (finish=" + finish + ").");
+        T value;
         try {
-            StructuredMessage<T> res = client().messages().create(params);
-            if (res.stopReason().map(r -> r.toString().equals("refusal")).orElse(false)) {
-                throw new AiUnavailableException("Claude 채점 모델이 요청을 거절했습니다(refusal).");
-            }
-            Optional<T> value = res.content().stream().flatMap(cb -> cb.text().stream()).map(t -> t.text()).findFirst();
-            T v = value.orElseThrow(() -> new AiUnavailableException("Claude 채점 모델 응답에 결과가 없습니다."));
-            var u = res.usage();
-            long cacheRead = u.cacheReadInputTokens().orElse(0L);
-            long cacheWrite = u.cacheCreationInputTokens().orElse(0L);
-            // Anthropic 의 input_tokens 는 캐시 부분을 뺀 나머지라서 합쳐서 전체 입력으로 기록한다
-            return new Result<>(v, u.inputTokens() + cacheRead + cacheWrite, u.outputTokens(), cacheRead);
-        } catch (UnauthorizedException e) {
-            throw new AiUnavailableException("Anthropic API 키가 올바르지 않습니다 (401).");
-        } catch (RateLimitException e) {
-            throw new AiUnavailableException("Anthropic 요청 한도에 걸렸습니다 (429).");
-        } catch (AnthropicServiceException e) {
-            throw new AiUnavailableException("Anthropic 호출 실패 (" + e.statusCode() + "): " + e.getMessage());
-        } catch (IllegalStateException e) {
-            throw new AiUnavailableException("ANTHROPIC_API_KEY 환경 변수가 설정되지 않아 채점을 할 수 없습니다. (" + e.getMessage() + ")");
+            value = converter.convert(text);
+        } catch (RuntimeException e) {
+            throw new AiUnavailableException("Claude 채점 결과를 읽지 못했습니다: " + e.getMessage());
         }
+        AnthropicApi.Usage u = res.getMetadata().getUsage().getNativeUsage() instanceof AnthropicApi.Usage x ? x : null;
+        if (u == null) {
+            return new Result<>(value, SpringAi.n(res.getMetadata().getUsage().getPromptTokens()),
+                    SpringAi.n(res.getMetadata().getUsage().getCompletionTokens()), 0);
+        }
+        long cacheRead = SpringAi.n(u.cacheReadInputTokens());
+        long cacheWrite = SpringAi.n(u.cacheCreationInputTokens());
+        // Anthropic 의 input_tokens 는 캐시 부분을 뺀 나머지라서 합쳐서 전체 입력으로 기록한다
+        return new Result<>(value, SpringAi.n(u.inputTokens()) + cacheRead + cacheWrite, SpringAi.n(u.outputTokens()), cacheRead);
     }
 }
