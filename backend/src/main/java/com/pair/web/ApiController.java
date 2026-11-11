@@ -126,6 +126,11 @@ public class ApiController {
         return Map.of("saved", true);
     }
 
+    @PostMapping("/attempts/{id}/build")
+    public CodeRunner.BuildResult build(@PathVariable String id) {
+        return attempts.build(id);
+    }
+
     @PostMapping("/attempts/{id}/run")
     public CodeRunner.RunResult run(@PathVariable String id) {
         return attempts.run(id);

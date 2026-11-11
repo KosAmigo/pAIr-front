@@ -39,13 +39,18 @@ export type AttemptView = {
   chatMaxChars?: number
 }
 
+export type CompileDiagnostic = { file: string; line: number; column: number; severity: 'error' | 'warning'; message: string }
+
 export type RunResult = {
   compiled: boolean
   lines: string[]
   passed: number
   failed: number
+  diagnostics?: CompileDiagnostic[]
   millis: number
 }
+
+export type BuildResult = { compiled: boolean; lines: string[]; diagnostics: CompileDiagnostic[]; millis: number }
 
 export type SubScore = {
   code: string
@@ -119,6 +124,7 @@ export const api = {
   attempt: (id: string) => call<AttemptView>('GET', `/api/attempts/${enc(id)}`),
   file: (id: string, path: string) => call<{ path: string; content: string }>('GET', `/api/attempts/${enc(id)}/file?path=${enc(path)}`),
   save: (id: string, path: string, content: string) => call<{ saved: boolean }>('PUT', `/api/attempts/${enc(id)}/file?path=${enc(path)}`, { content }),
+  build: (id: string) => call<BuildResult>('POST', `/api/attempts/${enc(id)}/build`),
   run: (id: string) => call<RunResult>('POST', `/api/attempts/${enc(id)}/run`),
   chat: (id: string, message: string) => call<Turn[]>('POST', `/api/attempts/${enc(id)}/chat`, { message }),
   submit: (id: string) => call<Attempt>('POST', `/api/attempts/${enc(id)}/submit`),

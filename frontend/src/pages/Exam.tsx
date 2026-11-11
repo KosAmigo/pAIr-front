@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
+import { CodeEditor } from '../components/CodeEditor'
 import {
   bizDoc,
   bizFiles,
@@ -166,56 +167,6 @@ function FileTree({ nodes, depth = 0, active, onOpen }: { nodes: FileNode[]; dep
         ),
       )}
     </ul>
-  )
-}
-
-// ── 6.9 Code Editor: 간단한 구문 강조 ───────
-// Java(Spring Boot) + TypeScript(React) 키워드
-const KW =
-  /^(public|private|protected|class|interface|extends|implements|static|final|void|new|return|if|else|for|while|throw|throws|try|catch|import|package|export|function|const|let|async|await|type|true|false|null)$/
-// 주석: Java/TS는 //, YAML·Markdown은 줄 맨 앞 #
-// (URL 안의 // 는 주석이 아니므로 줄 맨 앞이나 공백 뒤의 // 만 주석으로 본다)
-const COMMENT = /^(\s*#.*|.*?)((?:^|\s)\/\/.*)?$/
-function highlight(line: string) {
-  const out: { t: string; c?: string }[] = []
-  const [, code, comment] = (line.match(COMMENT) ?? [line, line]) as [string, string, string | undefined]
-  if (/^\s*#/.test(code)) return [{ t: code, c: 'text-text-faint' }]
-  const re = /('[^']*'|"[^"]*")|(@[A-Za-z]\w*)|(\b\d+L?\b)|([A-Za-z_]\w*)(?=\()|([A-Za-z_]\w*)|(\s+)|(.)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(code))) {
-    if (m[1]) out.push({ t: m[1], c: 'text-branch-1' })
-    else if (m[2]) out.push({ t: m[2], c: 'text-branch-4' })
-    else if (m[3]) out.push({ t: m[3], c: 'text-branch-4' })
-    else if (m[4]) out.push({ t: m[4], c: 'text-branch-2' })
-    else if (m[5]) out.push({ t: m[5], c: KW.test(m[5]) ? 'text-branch-3' : undefined })
-    else out.push({ t: m[0] })
-  }
-  if (comment) out.push({ t: comment, c: 'text-text-faint' })
-  return out
-}
-
-function CodeView({ source, readOnly }: { source: string; readOnly?: boolean }) {
-  const [cur, setCur] = useState(0)
-  const lines = source.replace(/\n$/, '').split('\n')
-  return (
-    <div className={cx('h-full overflow-auto bg-panel-sunken py-3 font-mono text-code', readOnly && 'opacity-50')}>
-      {lines.map((l, i) => (
-        <div
-          key={i}
-          onClick={() => setCur(i)}
-          className={cx('flex min-h-5 cursor-text', i === cur && !readOnly && 'bg-panel-raised')}
-        >
-          <span className="tnum w-12 shrink-0 pr-4 text-right text-text-faint select-none">{i + 1}</span>
-          <span className="pr-4 whitespace-pre text-text">
-            {highlight(l).map((tk, j) => (
-              <span key={j} className={tk.c}>
-                {tk.t}
-              </span>
-            ))}
-          </span>
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -569,7 +520,7 @@ export default function Exam() {
                     className="block h-full w-full resize-none bg-panel-sunken px-12 py-8 text-body text-text outline-none"
                   />
                 ) : open.length ? (
-                  <CodeView source={source} />
+                  <CodeEditor path={active} value={source} />
                 ) : (
                   <div className="flex h-full items-center justify-center bg-panel-sunken text-[15px] text-text-muted">파일 탐색기에서 파일을 여세요</div>
                 )}

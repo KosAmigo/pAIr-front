@@ -42,8 +42,13 @@ public class CodeRunner {
 
     public record TestCase(String name, boolean passed, String message) {}
 
+    /** 컴파일 오류/경고 한 건. file 은 응시 작업 폴더 기준 상대 경로. */
+    public record CompileDiagnostic(String file, long line, long column, String severity, String message) {}
+
+    public record BuildResult(boolean compiled, List<String> lines, List<CompileDiagnostic> diagnostics, long millis) {}
+
     public record RunResult(boolean compiled, List<String> lines, int passed, int failed,
-                            List<TestCase> tests, long millis) {
+                            List<TestCase> tests, List<CompileDiagnostic> diagnostics, long millis) {
         public boolean allPassed() {
             return compiled && failed == 0 && passed > 0;
         }
@@ -70,10 +75,11 @@ public class CodeRunner {
                 files.add(p);
             }
             List<String> lines = new ArrayList<>();
+            List<CompileDiagnostic> diags = new ArrayList<>();
             lines.add("$ javac (" + files.size() + " files)");
             String junitJar = junitConsoleJar();
-            if (!compile(files, out, junitJar, lines)) {
-                return new RunResult(false, lines, 0, 0, List.of(), elapsed(started));
+            if (!compile(files, src, out, junitJar, lines, diags)) {
+                return new RunResult(false, lines, 0, 0, List.of(), diags, elapsed(started));
             }
             lines.add("$ junit execute --scan-class-path");
             String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
@@ -109,13 +115,13 @@ public class CodeRunner {
                 lines.add("[TIMEOUT] " + timeoutSeconds + "초 안에 끝나지 않아 실행을 중단했습니다. 교착 상태일 수 있습니다.");
                 List<TestCase> tests = parseReports(reports);
                 long passed = tests.stream().filter(TestCase::passed).count();
-                return new RunResult(true, lines, (int) passed, Math.max(1, tests.size() - (int) passed), tests, elapsed(started));
+                return new RunResult(true, lines, (int) passed, Math.max(1, tests.size() - (int) passed), tests, diags, elapsed(started));
             }
             reader.join(2000);
             List<TestCase> tests = parseReports(reports);
             int passed = (int) tests.stream().filter(TestCase::passed).count();
             int failed = tests.size() - passed;
-            return new RunResult(true, lines, passed, failed, tests, elapsed(started));
+            return new RunResult(true, lines, passed, failed, tests, diags, elapsed(started));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } catch (InterruptedException e) {
@@ -126,25 +132,68 @@ public class CodeRunner {
         }
     }
 
-    private boolean compile(List<Path> files, Path out, String classpath, List<String> lines) throws IOException {
+    /** 컴파일만 한다 (빌드 버튼). 테스트는 돌리지 않는다. */
+    public BuildResult build(Map<String, String> sources) {
+        long started = System.nanoTime();
+        Path work = null;
+        try {
+            work = Files.createTempDirectory("pair-build-");
+            Path src = work.resolve("src");
+            Path out = work.resolve("classes");
+            Files.createDirectories(out);
+            List<Path> files = new ArrayList<>();
+            for (Map.Entry<String, String> e : sources.entrySet()) {
+                if (!e.getKey().endsWith(".java")) continue;
+                Path p = src.resolve(e.getKey()).normalize();
+                Files.createDirectories(p.getParent());
+                Files.writeString(p, e.getValue(), StandardCharsets.UTF_8);
+                files.add(p);
+            }
+            List<String> lines = new ArrayList<>();
+            List<CompileDiagnostic> diags = new ArrayList<>();
+            lines.add("$ javac (" + files.size() + " files)");
+            boolean ok = compile(files, src, out, junitConsoleJar(), lines, diags);
+            if (ok) lines.add("BUILD SUCCESSFUL" + (diags.isEmpty() ? "" : " (경고 " + diags.size() + "건)"));
+            return new BuildResult(ok, lines, diags, elapsed(started));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } finally {
+            deleteQuietly(work);
+        }
+    }
+
+    private boolean compile(List<Path> files, Path srcRoot, Path out, String classpath, List<String> lines,
+                            List<CompileDiagnostic> diags) throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
             lines.add("[ERROR] JDK 컴파일러를 찾을 수 없습니다. JRE 가 아니라 JDK 로 백엔드를 실행하세요.");
             return false;
         }
-        DiagnosticCollector<JavaFileObject> diags = new DiagnosticCollector<>();
-        try (StandardJavaFileManager fm = compiler.getStandardFileManager(diags, null, StandardCharsets.UTF_8)) {
+        DiagnosticCollector<JavaFileObject> diags_ = new DiagnosticCollector<>();
+        try (StandardJavaFileManager fm = compiler.getStandardFileManager(diags_, null, StandardCharsets.UTF_8)) {
             StringWriter w = new StringWriter();
-            boolean ok = compiler.getTask(w, fm, diags,
+            boolean ok = compiler.getTask(w, fm, diags_,
                     List.of("-encoding", "UTF-8", "-d", out.toString(), "-cp", classpath, "-proc:none"),
                     null, fm.getJavaFileObjectsFromPaths(files)).call();
-            diags.getDiagnostics().forEach(d -> {
-                String file = d.getSource() == null ? "" : Path.of(d.getSource().toUri()).getFileName().toString();
-                lines.add("[" + d.getKind() + "] " + file + ":" + d.getLineNumber() + " " + d.getMessage(null));
-            });
+            diagnosticsOf(diags_, srcRoot, lines, diags);
             if (!ok) lines.add("[ERROR] 컴파일에 실패했습니다.");
             return ok;
         }
+    }
+
+    private static void diagnosticsOf(DiagnosticCollector<JavaFileObject> collector, Path srcRoot,
+                                      List<String> lines, List<CompileDiagnostic> out) {
+        collector.getDiagnostics().forEach(d -> {
+            String file = "";
+            if (d.getSource() != null) {
+                Path p = Path.of(d.getSource().toUri());
+                file = p.startsWith(srcRoot) ? srcRoot.relativize(p).toString().replace(java.io.File.separatorChar, '/') : p.getFileName().toString();
+            }
+            String severity = d.getKind() == javax.tools.Diagnostic.Kind.ERROR ? "error" : "warning";
+            String msg = d.getMessage(java.util.Locale.KOREAN);
+            lines.add("[" + severity.toUpperCase() + "] " + file + ":" + d.getLineNumber() + ":" + d.getColumnNumber() + " " + msg);
+            out.add(new CompileDiagnostic(file, d.getLineNumber(), d.getColumnNumber(), severity, msg));
+        });
     }
 
     private List<TestCase> parseReports(Path reports) {

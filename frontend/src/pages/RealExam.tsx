@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bot, ChevronDown, ChevronRight, FileText, Folder, Loader2, Lock, Play, Save, Send, X } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, FileText, Folder, Hammer, Loader2, Lock, Play, Save, Send, X } from 'lucide-react'
+import { CodeEditor } from '../components/CodeEditor'
 import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
-import { api, ApiError, type AttemptView, type RunResult, type Task, type Turn } from '../api'
+import { api, ApiError, type AttemptView, type CompileDiagnostic, type Task, type Turn } from '../api'
 
 // 실제 응시 화면: 백엔드 API 에 연결된 버전. 레이아웃은 DESIGN.md §7-3 응시 화면을 따른다.
 
@@ -378,8 +379,17 @@ export default function RealExam() {
   const [turns, setTurns] = useState<Turn[]>([])
   const [chatBusy, setChatBusy] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
-  const [run, setRun] = useState<RunResult | null>(null)
-  const [running, setRunning] = useState(false)
+  // 빌드(컴파일만) 또는 테스트 실행 결과. 마지막으로 누른 쪽을 보여 준다.
+  const [run, setRun] = useState<{
+    kind: 'build' | 'test'
+    compiled: boolean
+    lines: string[]
+    passed?: number
+    failed?: number
+    diagnostics: CompileDiagnostic[]
+  } | null>(null)
+  const [busyTask, setBusyTask] = useState<'build' | 'test' | null>(null)
+  const running = busyTask !== null
   const [confirm, setConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -502,18 +512,28 @@ export default function RealExam() {
     setDirty((d) => new Set(d).add(active))
   }
 
-  const doRun = async () => {
-    setRunning(true)
+  const doRun = async (kind: 'build' | 'test') => {
+    setBusyTask(kind)
     setActionError(null)
+    setShowOutput(true)
     try {
       await saveFiles()
-      setRun(await api.run(sessionId))
+      if (kind === 'build') {
+        const r = await api.build(sessionId)
+        setRun({ kind, compiled: r.compiled, lines: r.lines, diagnostics: r.diagnostics })
+      } else {
+        const r = await api.run(sessionId)
+        setRun({ kind, compiled: r.compiled, lines: r.lines, passed: r.passed, failed: r.failed, diagnostics: r.diagnostics ?? [] })
+      }
     } catch (e) {
       setActionError((e as ApiError).message)
     } finally {
-      setRunning(false)
+      setBusyTask(null)
     }
   }
+  const activeDiagnostics = (run?.diagnostics ?? [])
+    .filter((d) => d.file === active)
+    .map((d) => ({ line: d.line, column: d.column, message: d.message, severity: d.severity }))
 
   const sendChat = async (text: string) => {
     setChatBusy(true)
@@ -686,19 +706,29 @@ export default function RealExam() {
                       <Lock size={12} aria-hidden /> READ ONLY
                     </span>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => saveFiles().then((n) => flash(n ? '저장했습니다' : '변경 사항이 없습니다'))}>
-                    <Save size={16} aria-hidden /> 저장
-                  </Button>
                   {dev && (
-                    <Button variant="primary" size="sm" onClick={() => void doRun()} disabled={running}>
-                      {running ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Play size={16} aria-hidden />} 실행
-                    </Button>
+                    <>
+                      <Button variant="secondary" size="sm" onClick={() => void doRun('build')} disabled={running} title="컴파일만 합니다">
+                        {busyTask === 'build' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Hammer size={16} aria-hidden />} 빌드
+                      </Button>
+                      <Button variant="primary" size="sm" onClick={() => void doRun('test')} disabled={running} title="컴파일하고 test 폴더의 JUnit 테스트를 실행합니다">
+                        {busyTask === 'test' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Play size={16} aria-hidden />} 테스트 실행
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
 
               <div className="min-h-0 flex-1">
-                {active ? (
+                {active && !isDoc ? (
+                  <CodeEditor
+                    path={active}
+                    value={contents[active] ?? ''}
+                    readOnly={readOnlyPath(active)}
+                    onChange={edit}
+                    diagnostics={activeDiagnostics}
+                  />
+                ) : active ? (
                   <textarea
                     aria-label={`${active} 편집기`}
                     value={contents[active] ?? ''}
@@ -730,8 +760,17 @@ export default function RealExam() {
                 <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
                   <span className="label">{dev ? 'OUTPUT' : 'CHECK'}</span>
                   {dev && run && (
-                    <span className={cx('font-mono text-[13px]', run.compiled && run.failed === 0 ? 'text-signal' : 'text-alert')}>
-                      {run.compiled ? `${run.passed} passed, ${run.failed} failed` : 'compile error'}
+                    <span
+                      className={cx(
+                        'font-mono text-[13px]',
+                        run.compiled && (run.kind === 'build' || run.failed === 0) ? 'text-signal' : 'text-alert',
+                      )}
+                    >
+                      {!run.compiled
+                        ? `build failed, ${run.diagnostics.filter((d) => d.severity === 'error').length} errors`
+                        : run.kind === 'build'
+                          ? 'build successful'
+                          : `${run.passed} passed, ${run.failed} failed`}
                     </span>
                   )}
                 </header>
@@ -739,9 +778,23 @@ export default function RealExam() {
                   {!dev ? (
                     <DocChecks task={task} doc={contents[task.editableFile ?? ''] ?? ''} />
                   ) : running ? (
-                    <span className="text-text-faint">$ 컴파일하고 테스트를 실행하고 있습니다...</span>
+                    <span className="text-text-faint">
+                      {busyTask === 'build' ? '$ 컴파일하고 있습니다...' : '$ 컴파일하고 테스트를 실행하고 있습니다...'}
+                    </span>
                   ) : run ? (
-                    run.lines.map((l, i) => (
+                    run.lines.map((l, i) => {
+                      const m = /^\[(ERROR|WARNING)\] (\S+\.java):(\d+)/.exec(l)
+                      return m ? (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => void openFile(m[2])}
+                          title={`${m[2]} ${m[3]}번째 줄 열기`}
+                          className={cx('block w-full text-left whitespace-pre-wrap hover:underline', m[1] === 'ERROR' ? 'text-alert' : 'text-caution')}
+                        >
+                          {l}
+                        </button>
+                      ) : (
                       <div
                         key={i}
                         className={cx(
@@ -753,9 +806,10 @@ export default function RealExam() {
                       >
                         {l}
                       </div>
-                    ))
+                      )
+                    })
                   ) : (
-                    <span className="text-text-faint">$ 실행 버튼을 누르면 test 폴더의 JUnit 테스트 결과가 여기에 표시됩니다</span>
+                    <span className="text-text-faint">$ 빌드는 컴파일만, 테스트 실행은 컴파일 후 test 폴더의 JUnit 테스트까지 돌립니다</span>
                   )}
                 </div>
               </section>
