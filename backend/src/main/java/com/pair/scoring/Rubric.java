@@ -1,76 +1,103 @@
 package com.pair.scoring;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * 재현성 / AI 결과 도출력 하위 기준과 점수 기준.
- * 출처: docs/evaluation/재현성_AI결과도출력.md, 채점 시트 기준표 탭.
+ * 감점식 채점 기준표. 출처: docs/evaluation/채점_기준표.md
+ * 5개 항목(총 100점). 각 항목은 배점에서 시작해 체크 항목에 걸릴 때마다 감점한다.
  */
 public final class Rubric {
 
     private Rubric() {
     }
 
-    public record Criterion(String code, String item, String name, int weight, String what,
-                            String a90, String a70, String a50, String a25) {}
+    public record Item(String key, String name, int max) {}
 
-    public static final List<Criterion> ALL = List.of(
-            new Criterion("R1", "reproducibility", "지시 명세성", 35,
-                    "핵심 턴의 지시에 목표, 입력 맥락, 제약, 출력 형식, 완료 조건이 담겼는가. 길이가 아니라 필요한 정보를 덮었는지 본다.",
-                    "핵심 턴 대부분이 5요소를 모두 담음", "핵심 턴이 4요소를 담음",
-                    "2~3요소만 담음. 의도는 보이나 조건이 빠짐", "1요소 이하, 또는 무관한 내용이 대부분인 장문"),
-            new Criterion("R2", "reproducibility", "출력 안정성", 40,
-                    "핵심 턴을 같은 회사, 모델, 요청 설정으로 다시 실행했을 때 같은 해결책이 나오는가.",
-                    "", "", "", ""),
-            new Criterion("R3", "reproducibility", "과정 일관성", 25,
-                    "같은 종류의 요청에 같은 방식을 쓰는가. 후속 질문에서 설명한 절차가 실제 대화 기록과 맞는가.",
-                    "요청 방식이 일관되고, 설명한 절차가 로그 순서와 일치", "대체로 일관. 설명과 로그가 1곳 어긋남",
-                    "요청 방식이 매번 다르거나, 설명과 로그가 2곳 이상 어긋남", "설명한 절차가 로그와 맞지 않거나 설명하지 못함"),
-            new Criterion("D1", "delivery", "요구사항 충족", 35,
-                    "필수 요구사항을 만족하는가. 개발은 숨은 테스트, 비개발은 필수 항목 체크리스트.",
-                    "필수 100% + 선택 대부분 충족", "필수 100% 충족",
-                    "필수 일부 누락 (70% 이상 충족)", "필수 70% 미만 충족 또는 동작하지 않음"),
-            new Criterion("D2", "delivery", "결과물 완성도", 20,
-                    "엣지 케이스, 구조, 가독성, 실무에 바로 쓸 수 있는지.",
-                    "엣지 케이스까지 처리, 구조가 명확해 바로 쓸 수 있음", "주요 경로는 탄탄하나 엣지 케이스 일부 누락",
-                    "동작은 하나 구조나 가독성 문제로 손봐야 함", "실무에 쓰기 어려움"),
-            new Criterion("D3", "delivery", "AI 산출물 통합력", 20,
-                    "AI 출력을 골라서 맥락에 맞게 고쳐 넣었는가. AI 오답이 최종본에 남았는가. 채택률 자체로 채점하지 않는다.",
-                    "AI 제안을 골라 고쳐 넣었고 AI 오류가 남지 않음", "대부분 고쳐 넣었으나 사소한 AI 오류 1개 남음",
-                    "AI 출력을 거의 그대로 붙임. 오류는 일부 걸러짐", "AI 오답이 최종본에 그대로 남음"),
-            new Criterion("D4", "delivery", "도출 효율", 15,
-                    "첫 유효 결과까지 걸린 시간. 과제별 목표 시간 구간으로 환산. D1이 40점 미만이면 0점.",
-                    "", "", "", ""),
-            new Criterion("D5", "delivery", "결과 설명력", 10,
-                    "결과물과 채택하지 않은 AI 제안을 자기 말로 설명하는가. 후속 질문 답변으로 본다.",
-                    "결과와 버린 AI 제안을 근거와 함께 자기 말로 설명", "결과는 설명하나 버린 제안의 이유가 약함",
-                    "AI 답변을 반복하는 수준의 설명", "설명하지 못함"));
+    /** 판정 방식: AUTO = 시스템 기록으로 판정, JUDGE = 채점 모델이 근거와 함께 판정 */
+    public enum Method { AUTO, JUDGE }
 
-    public static Criterion get(String code) {
-        return ALL.stream().filter(c -> c.code().equals(code)).findFirst().orElseThrow();
+    /** 적용 과제: ALL, DEV(개발), BIZ(비개발) */
+    public enum Track { ALL, DEV, BIZ }
+
+    /**
+     * @param points 걸렸을 때 감점(양수). 단위 감점이면 1개당 감점.
+     * @param judgeHint 채점 모델에 줄 판정 기준 설명 (JUDGE 만)
+     */
+    public record Check(String code, String item, Track track, Method method, int points, String label, String judgeHint) {}
+
+    public static final List<Item> ITEMS = List.of(
+            new Item("usage", "AI 활용력", 25),
+            new Item("control", "AI 통제력", 15),
+            new Item("reproducibility", "재현성", 15),
+            new Item("delivery", "AI 결과 도출력", 30),
+            new Item("potential", "성과 잠재력", 15));
+
+    public static final List<Check> CHECKS = List.of(
+            // ── AI 활용력 (25) ──
+            new Check("U0", "usage", Track.ALL, Method.AUTO, 25, "AI에게 한 번도 질문하지 않음 (이 항목 0점)", null),
+            new Check("U1", "usage", Track.ALL, Method.JUDGE, 4, "첫 질문에서 무엇을 하려는지(목표)를 밝히지 않음",
+                    "응시자의 첫 질문(#T01)에 해결하려는 목표가 드러나지 않으면 걸림."),
+            new Check("U2", "usage", Track.ALL, Method.JUDGE, 5, "필요한 코드, 로그, 자료를 붙이지 않아 AI가 추측해서 답하게 함",
+                    "AI는 대화창에 붙인 내용만 볼 수 있다. 판단에 필요한 코드, 로그, 자료 수치를 붙이지 않고 질문해서 AI가 일반론이나 추측으로 답한 경우가 핵심 질문에 있으면 걸림."),
+            new Check("U3", "usage", Track.ALL, Method.JUDGE, 3, "대부분의 질문에서 원하는 출력 형식이나 범위를 정하지 않음",
+                    "질문의 절반 넘게 원하는 답의 형식(예: 3줄, 코드만, 표)이나 범위를 정하지 않았으면 걸림."),
+            new Check("U4", "usage", Track.ALL, Method.JUDGE, 5, "큰 문제를 한 번에 통째로 맡기고 단계를 나누지 않음",
+                    "\"이 과제 전부 풀어줘\"처럼 과제 전체를 한 번에 맡기고, 원인 파악, 수정, 검증 같은 단계를 나눠 진행하지 않았으면 걸림."),
+            new Check("U5", "usage", Track.ALL, Method.JUDGE, 3, "막혔을 때 거의 같은 질문을 3번 이상 반복하고 전략을 바꾸지 않음",
+                    "거의 같은 내용의 질문을 3번 이상 반복했으면 걸림."),
+            new Check("U6", "usage", Track.ALL, Method.JUDGE, 3, "AI 답변을 받은 뒤 이어서 확인하거나 좁혀 묻는 질문이 없음",
+                    "모든 질문이 서로 독립된 단발 질문이고, 앞 답변을 바탕으로 확인하거나 좁혀 묻는 질문이 한 번도 없으면 걸림. 질문이 1번뿐이어도 걸림."),
+            // ── AI 통제력 (15) ──
+            new Check("C1", "control", Track.ALL, Method.JUDGE, 5, "AI가 준 코드나 수치를 실행, 테스트, 자료 대조 없이 최종본에 넣음",
+                    "최종본에 들어간 AI 코드나 수치를 응시자가 테스트 실행, 직접 확인 질문, 자료 대조로 검증한 흔적이 없으면 걸림. 이벤트 요약의 테스트 실행 기록도 참고한다."),
+            new Check("C2", "control", Track.ALL, Method.JUDGE, 5, "AI의 오답이나 근거 없는 수치가 최종본에 남음",
+                    "AI 답변에 있던 틀린 내용이나 제공 자료에 없는 수치가 최종 파일에 그대로 남아 있으면 걸림. 비개발 과제는 문서의 수치가 자료와 맞는지 확인한다."),
+            new Check("C3", "control", Track.ALL, Method.JUDGE, 3, "증상만 가리는 제안(타임아웃 늘리기, 전체 잠금 등)이나 근거 없는 주장을 따져 보지 않고 받아들임",
+                    "AI가 근본 원인 대신 증상 완화책(타임아웃, 풀 크기 늘리기, 메서드 전체 synchronized 등)이나 근거 없는 주장을 냈는데 응시자가 따져 보지 않고 받아들였으면 걸림."),
+            new Check("C4", "control", Track.ALL, Method.JUDGE, 2, "AI 답변의 근거나 이유를 한 번도 확인하지 않음",
+                    "\"왜?\", \"근거는?\", \"확실해?\"처럼 AI 답변의 근거를 묻거나 반박한 적이 한 번도 없으면 걸림."),
+            // ── 재현성 (15) ──
+            new Check("R1", "reproducibility", Track.ALL, Method.AUTO, 8, "핵심 AI 답변을 같은 요청으로 다시 실행하면 다른 해결책이 나옴 (다른 비율 × 8)", null),
+            new Check("R2", "reproducibility", Track.ALL, Method.JUDGE, 2, "핵심 지시가 앞 대화 없이는 뜻이 통하지 않음",
+                    "결과물에 쓰인 핵심 지시가 \"그거 다시 해줘\", \"아까 거\"처럼 앞 대화를 모르면 무엇을 원하는지 알 수 없으면 걸림."),
+            new Check("R3", "reproducibility", Track.ALL, Method.JUDGE, 3, "후속 질문에서 설명한 절차가 실제 대화 기록과 다름",
+                    "후속 질문 답변에서 설명한 AI 사용 절차(어떤 지시를 어떤 순서로 줬는지)가 실제 대화 기록과 다르면 걸림. 무응답도 걸림."),
+            new Check("R4", "reproducibility", Track.ALL, Method.AUTO, 2, "AI를 썼지만 최종 결과물에 AI 답변이 거의 남지 않아 같은 지시로 재현할 수 없음", null),
+            // ── AI 결과 도출력 (30) ──
+            new Check("D0", "delivery", Track.DEV, Method.AUTO, 30, "제출 코드가 컴파일되지 않음 (이 항목 0점)", null),
+            new Check("D1", "delivery", Track.DEV, Method.AUTO, 5, "숨은 필수 테스트 실패 (1개당)", null),
+            new Check("D1", "delivery", Track.BIZ, Method.JUDGE, 5, "필수 체크리스트 미충족 (1개당)",
+                    "숨은 체크리스트의 필수 항목 1~4(결론, 근거 3개, 잠식 효과, 리스크와 대응) 중 충족하지 못한 개수를 count 에 넣는다. 하나라도 미충족이면 걸림."),
+            new Check("D2", "delivery", Track.DEV, Method.AUTO, 2, "엣지 케이스 누락 (숨은 선택 테스트 실패)", null),
+            new Check("D2", "delivery", Track.BIZ, Method.JUDGE, 2, "설문 의향을 실제 전환율로 보정하지 않음",
+                    "설문의 '바꾸겠다', '유지했을 것' 같은 의향 수치를 실제 전환율(자료의 50~60%)로 보정하지 않고 그대로 계산에 썼으면 걸림."),
+            new Check("D3", "delivery", Track.DEV, Method.AUTO, 3, "수정을 확인하는 테스트를 추가하지 않음", null),
+            new Check("D3", "delivery", Track.BIZ, Method.JUDGE, 3, "근거 수치에 출처(어느 자료인지)를 밝히지 않음",
+                    "기획안의 근거 수치가 어느 자료(설문 요약, 매출 CSV)에서 왔는지 밝히지 않았으면 걸림."),
+            new Check("D4", "delivery", Track.DEV, Method.AUTO, 2, "NOTES.md에 원인과 근거를 쓰지 않음", null),
+            new Check("D4", "delivery", Track.BIZ, Method.JUDGE, 2, "결론과 근거가 서로 맞지 않음",
+                    "근거가 가리키는 방향과 결론(찬성, 반대, 조건부)이 서로 맞지 않으면 걸림."),
+            new Check("D5", "delivery", Track.ALL, Method.AUTO, 4, "첫 유효 결과가 30분을 넘김(-2) 또는 도달하지 못함(-4)", null),
+            // ── 성과 잠재력 (15) ──
+            new Check("P1", "potential", Track.ALL, Method.JUDGE, 5, "후속 질문 답변이 근거 없이 한두 마디에 그침",
+                    "후속 질문 답변 대부분이 근거 없는 한두 마디이거나 무응답이면 걸림."),
+            new Check("P2", "potential", Track.ALL, Method.JUDGE, 4, "채택하지 않은 AI 제안과 그 이유를 설명하지 못함",
+                    "후속 질문에서 채택하지 않은 AI 제안과 이유를 구체적으로 말하지 못했거나, 말한 내용이 대화 기록과 맞지 않으면 걸림."),
+            new Check("P3", "potential", Track.ALL, Method.JUDGE, 3, "오류나 테스트 실패에서 원인을 확인하지 않고 같은 시도를 반복함",
+                    "이벤트 요약과 대화에서, 실패 뒤 원인을 확인하지 않고 같은 실행이나 같은 요청을 반복한 흐름이 보이면 걸림. 실패가 없었으면 걸리지 않음."),
+            new Check("P4", "potential", Track.ALL, Method.JUDGE, 3, "결과의 한계나 남은 위험을 전혀 언급하지 않음",
+                    "후속 답변, NOTES.md, 기획안 어디에도 결과의 한계, 남은 위험, 추가로 확인할 것을 언급하지 않았으면 걸림."));
+
+    public static Item item(String key) {
+        return ITEMS.stream().filter(i -> i.key().equals(key)).findFirst().orElseThrow();
     }
 
-    public static final Map<String, String> ITEM_NAMES = new LinkedHashMap<>();
-
-    static {
-        ITEM_NAMES.put("reproducibility", "재현성");
-        ITEM_NAMES.put("delivery", "AI 결과 도출력");
+    /** 과제 유형(dev/biz)에 적용되는 체크 항목. */
+    public static List<Check> checksFor(boolean dev) {
+        return CHECKS.stream().filter(c -> c.track() == Track.ALL || (dev ? c.track() == Track.DEV : c.track() == Track.BIZ)).toList();
     }
 
-    /** 채점 모델에 줄 점수 기준 텍스트. */
-    public static String anchorsText(List<String> codes) {
-        StringBuilder sb = new StringBuilder();
-        for (String code : codes) {
-            Criterion c = get(code);
-            sb.append("### ").append(c.code()).append(" ").append(c.name()).append("\n")
-              .append("무엇을 보나: ").append(c.what()).append("\n")
-              .append("- 90점: ").append(c.a90()).append("\n")
-              .append("- 70점: ").append(c.a70()).append("\n")
-              .append("- 50점: ").append(c.a50()).append("\n")
-              .append("- 25점: ").append(c.a25()).append("\n\n");
-        }
-        return sb.toString();
+    public static int total() {
+        return ITEMS.stream().mapToInt(Item::max).sum();
     }
 }

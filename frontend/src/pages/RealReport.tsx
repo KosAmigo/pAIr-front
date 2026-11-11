@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Bot, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
+import { Bot, ChevronDown, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { Button, ButtonLink, cx, Panel, Sep } from '../components/ui'
 import { COMPETENCIES } from '../data/mock'
-import { api, ApiError, type Report, type ReportResponse, type SubScore, type Turn } from '../api'
+import { api, ApiError, type CheckResult, type Report, type ReportResponse, type Turn } from '../api'
 
-// 실제 응시 결과 리포트. 재현성, AI 결과 도출력 두 항목만 채점한다 (파일럿 범위).
-
-const MEASURED = new Set(['reproducibility', 'delivery'])
+// 실제 응시 결과 리포트. 감점식 채점(docs/evaluation/채점_기준표.md): 5개 항목, 총점 100점.
 
 function fmtDuration(sec: number | null) {
   if (sec == null) return '-'
@@ -37,23 +35,29 @@ function Quote({ m, selected }: { m: Turn; selected: boolean }) {
   )
 }
 
-function SubRow({ s, color, onEvidence }: { s: SubScore; color: string; onEvidence: (turn: number) => void }) {
+const statusView: Record<CheckResult['status'], { text: string; cls: string }> = {
+  DEDUCTED: { text: '감점', cls: 'text-alert' },
+  PASSED: { text: '통과', cls: 'text-signal' },
+  SKIPPED: { text: '적용 안 함', cls: 'text-text-faint' },
+  NO_EVIDENCE: { text: '근거 없음', cls: 'text-caution' },
+}
+
+function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number) => void }) {
+  const s = statusView[c.status]
+  const deducted = c.status === 'DEDUCTED'
   return (
-    <li className="grid grid-cols-[180px_220px_48px_1fr] items-start gap-6 px-4 py-3">
-      <span className="flex items-baseline gap-2 pl-3 text-[14px]">
-        <span className="font-mono text-[12px] text-text-muted">{s.code}</span>
-        {s.name}
-        <span className="tnum font-mono text-[12px] text-text-faint">{s.weight}%</span>
-      </span>
-      <div className="mt-2 h-1 rounded-full bg-panel-raised">
-        {s.score != null && <div className="h-full rounded-full opacity-80" style={{ width: `${s.score}%`, background: color }} />}
-      </div>
-      <span className="tnum text-right font-mono text-[15px] font-semibold">{s.score ?? '-'}</span>
-      <div className="min-w-0">
-        <p className="text-[14px] leading-6 text-text-muted">{s.note}</p>
-        {s.evidence.length > 0 && (
+    <tr className="border-t border-line align-top">
+      <td className="py-2.5 pr-3 pl-7 font-mono text-[12px] text-text-muted">{c.code}</td>
+      <td className={cx('py-2.5 pr-4 text-[14px] leading-6', deducted ? 'text-text' : 'text-text-muted')}>{c.label}</td>
+      <td className="py-2.5 pr-4 font-mono text-[12px] text-text-faint">{c.method === 'AUTO' ? '자동' : '판정'}</td>
+      <td className="tnum py-2.5 pr-4 text-right font-mono text-[14px] whitespace-nowrap">
+        {deducted ? <span className="font-semibold text-alert">-{c.deducted}</span> : <span className={s.cls}>{s.text}</span>}
+      </td>
+      <td className="py-2.5 pr-4">
+        {c.reason && <p className="text-[14px] leading-6 text-text-muted">{c.reason}</p>}
+        {c.evidence.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
-            {s.evidence.map((e) => {
+            {c.evidence.map((e) => {
               const m = /^#T(\d+)$/.exec(e.trim())
               return m ? (
                 <button
@@ -72,13 +76,14 @@ function SubRow({ s, color, onEvidence }: { s: SubScore; color: string; onEviden
             })}
           </div>
         )}
-      </div>
-    </li>
+      </td>
+    </tr>
   )
 }
 
 function Done({ r }: { r: Report }) {
   const [selected, setSelected] = useState<number | null>(null)
+  const [open, setOpen] = useState<Set<string>>(() => new Set(r.items.map((i) => i.key)))
   const showTurn = (t: number) => {
     setSelected(t)
     document.getElementById(`turn-${t}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -103,47 +108,72 @@ function Done({ r }: { r: Report }) {
             <span>채점 {r.judgeModel}</span>
           </div>
         </div>
-        {['reproducibility', 'delivery'].map((k) => (
-          <div key={k} className="flex flex-col items-end">
-            <span className="label">{k === 'reproducibility' ? 'REPRODUCIBILITY' : 'DELIVERY'}</span>
-            <div className="flex items-baseline gap-2">
-              <span className="tnum font-mono text-display font-semibold">{items[k]?.score ?? '-'}</span>
-              <span className="font-mono text-[16px] text-text-muted">/100</span>
-            </div>
-            <span className="text-[14px] text-text-muted">{items[k]?.name}</span>
+        <div className="flex flex-col items-end">
+          <span className="label">TOTAL SCORE</span>
+          <div className="flex items-baseline gap-2">
+            <span className="tnum font-mono text-display font-semibold">{r.total}</span>
+            <span className="font-mono text-[16px] text-text-muted">/{r.max}</span>
           </div>
-        ))}
+          <span className="text-[14px] text-text-muted">감점식, 5개 항목</span>
+        </div>
       </section>
 
-      <Panel label="BREAKDOWN" title="항목별 점수" className="col-span-12" flush>
+      <Panel label="BREAKDOWN" title="항목별 점수와 감점 내역" className="col-span-12" flush>
         <ul className="divide-y divide-line">
           {COMPETENCIES.map((c) => {
             const it = items[c.key]
-            if (!MEASURED.has(c.key) || !it) {
-              return (
-                <li key={c.key} className="grid grid-cols-[180px_220px_48px_1fr] items-center gap-6 px-4 py-3 opacity-60">
-                  <span className="text-[15px] font-medium">{c.name}</span>
-                  <div className="h-1.5 rounded-full bg-panel-raised" />
-                  <span className="text-right font-mono text-[16px] text-text-faint">-</span>
-                  <span className="text-[14px] text-text-muted">이번 파일럿 범위 아님</span>
-                </li>
-              )
-            }
+            if (!it) return null
+            const lost = it.checks.filter((k) => k.status === 'DEDUCTED')
+            const isOpen = open.has(c.key)
             return (
               <li key={c.key}>
-                <div className="grid grid-cols-[180px_220px_48px_1fr] items-center gap-6 px-4 py-3">
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() =>
+                    setOpen((o) => {
+                      const n = new Set(o)
+                      if (n.has(c.key)) n.delete(c.key)
+                      else n.add(c.key)
+                      return n
+                    })
+                  }
+                  className="grid w-full grid-cols-[180px_280px_96px_1fr_24px] items-center gap-6 px-4 py-3 text-left hover:bg-panel-raised"
+                >
                   <span className="text-[15px] font-medium">{c.name}</span>
                   <div className="h-1.5 rounded-full bg-panel-raised">
-                    {it.score != null && <div className="h-full rounded-full" style={{ width: `${it.score}%`, background: c.color }} />}
+                    <div className="h-full rounded-full" style={{ width: `${(it.score / it.max) * 100}%`, background: c.color }} />
                   </div>
-                  <span className="tnum text-right font-mono text-[16px] font-semibold">{it.score ?? '-'}</span>
-                  <span className="text-[14px] text-text-muted">하위 기준 {it.sub.length}개, 가중 평균</span>
-                </div>
-                <ul className="border-t border-line bg-panel-sunken">
-                  {it.sub.map((s) => (
-                    <SubRow key={s.code} s={s} color={c.color} onEvidence={showTurn} />
-                  ))}
-                </ul>
+                  <span className="tnum text-right font-mono text-[16px]">
+                    <span className="font-semibold">{it.score}</span>
+                    <span className="text-text-muted"> / {it.max}</span>
+                  </span>
+                  <span className="text-[14px] text-text-muted">{lost.length === 0 ? '감점 없음' : `감점 ${lost.length}건, -${it.max - it.score}점`}</span>
+                  <ChevronDown size={16} className={cx('text-text-muted transition-transform duration-[180ms]', isOpen && 'rotate-180')} aria-hidden />
+                </button>
+                {isOpen && (
+                  <div className="bg-panel-sunken pb-1">
+                    <table className="w-full">
+                      <thead>
+                        <tr>
+                          {['CODE', '체크 항목', '판정', '결과', '이유와 근거'].map((h, i) => (
+                            <th
+                              key={h}
+                              className={cx('label h-8 pr-4 text-left font-medium', i === 0 && 'w-16 pl-7', i === 2 && 'w-14', i === 3 && 'w-24 text-right')}
+                            >
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {it.checks.map((k) => (
+                          <CheckRow key={k.code} c={k} onEvidence={showTurn} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </li>
             )
           })}
@@ -160,7 +190,7 @@ function Done({ r }: { r: Report }) {
 
       <div className="col-span-5 flex flex-col gap-2">
         {r.r2KeyTurns && r.r2KeyTurns.length > 0 && (
-          <Panel label="R2 REPLAY" title="출력 안정성 다시 실행">
+          <Panel label="R1 REPLAY" title="재현성: 다시 실행 판정">
             <ul className="space-y-3">
               {r.r2KeyTurns.map((k) => (
                 <li key={k.turn}>
@@ -214,7 +244,7 @@ function Done({ r }: { r: Report }) {
                 <tbody>
                   {tokens.map(([k, v]) => (
                     <tr key={k} className="text-text-muted">
-                      <td className="py-0.5">{k === 'assistant' ? '어시스턴트' : k === 'r2Replay' ? 'R2 다시 실행' : '채점'}</td>
+                      <td className="py-0.5">{k === 'assistant' ? '어시스턴트' : k === 'r2Replay' ? '다시 실행(R1)' : '채점'}</td>
                       <td className="tnum text-right">in {v.input.toLocaleString()}</td>
                       <td className="tnum text-right">out {v.output.toLocaleString()}</td>
                     </tr>
@@ -281,7 +311,19 @@ export default function RealReport() {
           <Loader2 size={18} className="animate-spin" aria-hidden /> 불러오는 중
         </p>
       )}
-      {data && data.status === 'DONE' && data.report && <Done r={data.report} />}
+      {data && data.status === 'DONE' && data.report && (data.report.version ?? 1) >= 2 && <Done r={data.report} />}
+      {data && data.status === 'DONE' && data.report && (data.report.version ?? 1) < 2 && (
+        <div className="mx-auto mt-16 max-w-[640px] rounded-md border border-line bg-panel p-8">
+          <span className="label">LEGACY REPORT</span>
+          <h2 className="mt-2 text-h2 font-semibold">이전 채점 방식으로 만든 리포트입니다</h2>
+          <p className="mt-3 text-[15px] leading-6 text-text-muted">
+            채점 기준이 감점식(5개 항목, 총점 100점)으로 바뀌었습니다. 같은 응시 기록으로 다시 채점하면 새 리포트를 볼 수 있습니다.
+          </p>
+          <Button variant="primary" className="mt-6" onClick={() => void rescore()}>
+            <RotateCcw size={18} aria-hidden /> 새 기준으로 다시 채점
+          </Button>
+        </div>
+      )}
       {data && (data.status === 'SCORING' || data.status === 'FOLLOWUP' || data.status === 'SOLVING') && (
         <div className="mx-auto mt-16 max-w-[640px] rounded-md border border-line bg-panel p-8">
           <span className="label">SCORING</span>
@@ -291,7 +333,7 @@ export default function RealReport() {
           <ul className="mt-4 space-y-1 text-[15px] leading-6 text-text-muted">
             <li>숨은 테스트 실행 (개발 과제)</li>
             <li>핵심 AI 답변을 같은 모델로 다시 실행해 출력 안정성 측정</li>
-            <li>채점 모델이 대화 기록, 결과물, 후속 답변을 기준표로 채점</li>
+            <li>채점 모델이 대화 기록, 결과물, 후속 답변을 보고 감점표의 체크 항목을 판정</li>
           </ul>
           <p className="mt-4 text-[14px] text-text-faint">보통 1~3분 걸립니다. 이 화면은 2초마다 자동으로 새로 고칩니다.</p>
         </div>

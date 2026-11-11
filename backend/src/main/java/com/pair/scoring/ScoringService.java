@@ -24,19 +24,24 @@ import com.pair.attempt.AttemptStore;
 import com.pair.attempt.ChatTurn;
 import com.pair.config.PairProperties;
 import com.pair.run.CodeRunner;
+import com.pair.scoring.Rubric.Check;
+import com.pair.scoring.Rubric.Method;
 import com.pair.task.TaskDef;
 import com.pair.task.TaskRepository;
 
 import jakarta.annotation.PreDestroy;
+import tools.jackson.databind.JsonNode;
 
 /**
- * 제출된 응시를 채점한다: D1(숨은 테스트/체크리스트), D4(시간), R2(핵심 턴 다시 실행), 나머지는 채점 LLM.
+ * 감점식 채점 (docs/evaluation/채점_기준표.md).
+ * 자동 체크는 기록(숨은 테스트, 이벤트, 다시 실행 결과)으로, 판정 체크는 채점 모델이 근거와 함께 판정한다.
  * 결과는 report.json 과 콘솔 요약으로 남긴다.
  */
 @Service
 public class ScoringService {
 
     private static final Logger log = LoggerFactory.getLogger(ScoringService.class);
+    static final int D5_LATE_MINUTES = 30;
 
     private final AttemptStore store;
     private final TaskRepository tasks;
@@ -78,9 +83,10 @@ public class ScoringService {
 
     // ── 채점 모델 응답 형식 ──────────────
 
-    public record CriterionScore(String code, int score, List<String> evidence, String reason) {}
+    /** 판정 체크 하나의 결과. count 는 '1개당 감점' 체크(D1 비개발)에서만 쓴다. */
+    public record CheckVerdict(String code, boolean violated, int count, List<String> evidence, String reason) {}
 
-    public record RubricResult(List<CriterionScore> scores) {}
+    public record JudgeResult(List<CheckVerdict> verdicts) {}
 
     public record ReplayVerdict(int replay, boolean same, String reason) {}
 
@@ -88,57 +94,66 @@ public class ScoringService {
 
     // ── 리포트 형식 ───────────────────
 
-    public record SubScore(String code, String name, int weight, Integer score, String note, List<String> evidence) {}
+    /**
+     * @param status DEDUCTED(감점), PASSED(통과), SKIPPED(적용 안 함), NO_EVIDENCE(걸렸다고 했지만 근거가 없어 감점 안 함)
+     */
+    public record CheckResult(String code, String label, String method, int points, int deducted,
+                              String status, List<String> evidence, String reason) {}
 
-    public record Item(String key, String name, Double score, List<SubScore> sub) {}
+    public record ItemResult(String key, String name, int max, int score, List<CheckResult> checks) {}
 
     public record KeyTurn(int turn, double adoption, List<String> replays, List<ReplayVerdict> verdicts) {}
 
     public void score(String attemptId) {
         Attempt a = store.load(attemptId);
         TaskDef task = tasks.get(a.taskId());
+        boolean dev = task.isDev();
         List<ChatTurn> turns = store.turns(attemptId);
         Map<String, String> files = store.readFiles(attemptId);
+        List<JsonNode> events = store.events(attemptId);
         long judgeIn = 0, judgeOut = 0, replayIn = 0, replayOut = 0;
-        Map<String, SubScore> subs = new LinkedHashMap<>();
+        Map<String, CheckResult> results = new LinkedHashMap<>();
         List<String> notes = new ArrayList<>();
         Map<String, Object> extras = new LinkedHashMap<>();
+        List<ChatTurn> aiTurns = turns.stream().filter(t -> "ai".equals(t.role()) && t.request() != null).toList();
+        boolean usedAi = !aiTurns.isEmpty();
 
-        // ── D1 (개발: 숨은 테스트) ─────────
-        Integer d1 = null;
-        if (task.isDev()) {
+        // ── 자동: AI 사용 여부 (U0) ─────────
+        results.put("U0", auto("U0", dev, usedAi ? 0 : 25, usedAi ? null : "AI 대화 기록이 없습니다."));
+
+        // ── 자동: 숨은 테스트 (D0~D4 개발) ─────────
+        if (dev) {
             Map<String, String> sources = new HashMap<>();
             files.forEach((k, v) -> {
                 if (k.startsWith("src/") && k.endsWith(".java")) sources.put(k, v);
             });
             tasks.hiddenFiles(task.id()).forEach((k, v) -> sources.put("hidden/" + k, v));
             CodeRunner.RunResult hr = runner.run(sources);
-            int reqTotal = 0, reqPass = 0;
-            boolean optPass = false;
+            int reqTotal = 0, reqFail = 0;
+            boolean optFail = false;
             for (CodeRunner.TestCase tc : hr.tests()) {
                 if (tc.name().contains("required_")) {
                     reqTotal++;
-                    if (tc.passed()) reqPass++;
-                } else if (tc.name().contains("optional_") && tc.passed()) {
-                    optPass = true;
+                    if (!tc.passed()) reqFail++;
+                } else if (tc.name().contains("optional_") && !tc.passed()) {
+                    optFail = true;
                 }
             }
-            if (reqTotal == 0) reqTotal = 4;
+            if (!hr.compiled()) {
+                reqTotal = 4;
+                reqFail = 4;
+                optFail = true;
+            }
             int originalTests = countTests(tasks.visibleFiles(task.id()));
             int nowTests = countTests(files);
-            boolean addedTest = nowTests > originalTests;
             boolean notesFilled = notesFilled(files.getOrDefault("NOTES.md", ""));
-            int extrasCount = (optPass ? 1 : 0) + (addedTest ? 1 : 0) + (notesFilled ? 1 : 0);
-            if (!hr.compiled()) d1 = 10;
-            else if (reqPass == reqTotal) d1 = extrasCount == 3 ? 95 : extrasCount == 2 ? 88 : 72;
-            else if (reqPass * 4 >= reqTotal * 3) d1 = 50;
-            else if (reqPass * 2 >= reqTotal) d1 = 35;
-            else d1 = 20;
-            String note = (hr.compiled() ? "" : "컴파일 실패. ") + "숨은 필수 테스트 " + reqPass + "/" + reqTotal + " 통과"
-                    + ", 선택 테스트 " + (optPass ? "통과" : "실패")
-                    + ", 테스트 추가 " + (addedTest ? "함(" + originalTests + "→" + nowTests + "개)" : "안 함")
-                    + ", NOTES.md " + (notesFilled ? "작성" : "미작성");
-            subs.put("D1", sub("D1", d1, note, List.of("숨은 테스트")));
+            results.put("D0", auto("D0", dev, hr.compiled() ? 0 : 30, hr.compiled() ? null : "숨은 테스트를 붙여 컴파일하지 못했습니다."));
+            results.put("D1", auto("D1", dev, Math.min(20, reqFail * 5),
+                    "숨은 필수 테스트 " + (reqTotal - reqFail) + "/" + reqTotal + " 통과" + (reqFail > 0 ? " (실패 " + reqFail + "개 × 5점)" : "")));
+            results.put("D2", auto("D2", dev, optFail ? 2 : 0, optFail ? "숨은 선택 테스트(여러 스레드 동시 주문) 실패" : "숨은 선택 테스트 통과"));
+            results.put("D3", auto("D3", dev, nowTests > originalTests ? 0 : 3,
+                    "테스트 " + originalTests + "개 → " + nowTests + "개"));
+            results.put("D4", auto("D4", dev, notesFilled ? 0 : 2, notesFilled ? "NOTES.md 작성됨" : "NOTES.md가 비어 있음"));
             List<Map<String, Object>> hidden = new ArrayList<>();
             for (CodeRunner.TestCase tc : hr.tests()) {
                 hidden.add(Map.of("name", tc.name().replaceFirst("^shop\\.HiddenOrderTest\\.", ""), "passed", tc.passed()));
@@ -146,69 +161,32 @@ public class ScoringService {
             extras.put("hiddenTests", hidden);
         }
 
-        // ── 채점 LLM: R1, R3, D2, D3, D5 (+ 비개발 D1) ────────
-        List<String> codes = new ArrayList<>(List.of("R1", "R3", "D2", "D3", "D5"));
-        if (!task.isDev()) codes.add(3, "D1");
-        String transcript = transcript(turns, a.startedAt());
-        String rubricUser = rubricPrompt(task, codes, transcript, files, a.followUpAnswers());
-        JudgeClient.Result<RubricResult> rr = judge.judge(JUDGE_SYSTEM, rubricUser, RubricResult.class);
-        judgeIn += rr.inputTokens();
-        judgeOut += rr.outputTokens();
-        for (CriterionScore cs : rr.value().scores()) {
-            if (!codes.contains(cs.code())) continue;
-            boolean hasEvidence = cs.evidence() != null && !cs.evidence().isEmpty();
-            Integer s = hasEvidence ? Math.max(0, Math.min(100, cs.score())) : null;
-            String note = hasEvidence ? cs.reason() : "근거가 없어 무효 처리: " + cs.reason();
-            subs.put(cs.code(), sub(cs.code(), s, note, hasEvidence ? cs.evidence() : List.of()));
-            if (cs.code().equals("D1")) d1 = s;
-        }
-
-        // ── D4 ─────────
-        Integer d4;
-        String d4Note;
+        // ── 자동: 첫 유효 결과 시간 (D5) ─────────
         Double firstValidMin = a.firstValidAt() == null ? null
                 : Duration.between(a.startedAt(), a.firstValidAt()).toSeconds() / 60.0;
-        if (firstValidMin == null) {
-            d4 = 20;
-            d4Note = "첫 유효 결과에 도달하지 못함";
-        } else {
-            List<Integer> bands = task.d4Minutes();
-            int[] pts = {100, 85, 70, 55};
-            int s = 40;
-            for (int i = 0; i < bands.size() && i < pts.length; i++) {
-                if (firstValidMin <= bands.get(i)) {
-                    s = pts[i];
-                    break;
-                }
-            }
-            d4 = s;
-            d4Note = String.format("첫 유효 결과까지 %.1f분 (%s)", firstValidMin,
-                    task.isDev() ? "보이는 테스트 첫 전체 통과" : "기획안 필수 제목을 처음 모두 갖춘 저장");
-        }
-        if (d1 != null && d1 < 40) {
-            d4 = 0;
-            d4Note = d4Note + ". D1이 40점 미만이라 0점 처리";
-        }
-        subs.put("D4", sub("D4", d4, d4Note, List.of("응시 이벤트 기록")));
+        int d5 = firstValidMin == null ? 4 : firstValidMin > D5_LATE_MINUTES ? 2 : 0;
+        results.put("D5", auto("D5", dev, d5, firstValidMin == null
+                ? "첫 유효 결과에 도달하지 못함"
+                : String.format("첫 유효 결과까지 %.1f분 (%s)", firstValidMin,
+                        dev ? "테스트를 추가하고 전부 통과한 첫 실행" : "필수 제목을 모두 채운 첫 저장")));
 
-        // ── R2: 핵심 턴 다시 실행 ─────────
+        // ── 자동: 다시 실행 (R1), 결과물 반영률 (R4) ─────────
         List<KeyTurn> keyTurns = new ArrayList<>();
-        List<ChatTurn> aiTurns = turns.stream().filter(t -> "ai".equals(t.role()) && t.request() != null).toList();
-        if (aiTurns.isEmpty()) {
-            subs.put("R2", sub("R2", null, "AI 어시스턴트를 쓰지 않아 측정할 수 없음", List.of()));
+        if (!usedAi) {
+            results.put("R1", skipped("R1", dev, "AI를 쓰지 않아 적용하지 않음"));
+            results.put("R4", skipped("R4", dev, "AI를 쓰지 않아 적용하지 않음"));
         } else {
-            String finalText = String.join("\n", files.values());
-            Set<String> finalGrams = grams(finalText);
-            List<ChatTurn> ranked = new ArrayList<>(aiTurns);
+            Set<String> finalGrams = grams(String.join("\n", files.values()));
             Map<Integer, Double> adoption = new HashMap<>();
             for (ChatTurn t : aiTurns) adoption.put(t.turn(), adoptionRatio(t.text(), finalGrams));
+            List<ChatTurn> ranked = new ArrayList<>(aiTurns);
             ranked.sort(Comparator.comparingDouble((ChatTurn t) -> adoption.get(t.turn())).reversed());
+            double best = adoption.get(ranked.get(0).turn());
+            results.put("R4", auto("R4", dev, best < 0.05 ? 2 : 0,
+                    String.format("AI 답변이 최종 결과물에 남은 비율 최고 %.0f%% (#T%s)", best * 100, pad(ranked.get(0).turn()))));
             List<ChatTurn> chosen = ranked.stream().filter(t -> adoption.get(t.turn()) >= 0.05)
                     .limit(props.r2().maxKeyTurns()).toList();
-            if (chosen.isEmpty()) {
-                chosen = List.of(ranked.get(0));
-                notes.add("최종 결과물에 AI 답변이 거의 남지 않아, 채택률이 가장 높은 AI 턴 1개로 R2를 측정함");
-            }
+            if (chosen.isEmpty()) chosen = List.of(ranked.get(0));
             int same = 0, total = 0;
             for (ChatTurn t : chosen) {
                 List<String> replays = new ArrayList<>();
@@ -218,8 +196,7 @@ public class ScoringService {
                     replayOut += rep.outputTokens();
                     replays.add(rep.text());
                 }
-                JudgeClient.Result<ReplayJudgement> rj = judge.judge(REPLAY_SYSTEM,
-                        replayPrompt(t, replays), ReplayJudgement.class);
+                JudgeClient.Result<ReplayJudgement> rj = judge.judge(REPLAY_SYSTEM, replayPrompt(t, replays), ReplayJudgement.class);
                 judgeIn += rj.inputTokens();
                 judgeOut += rj.outputTokens();
                 for (ReplayVerdict v : rj.value().verdicts()) {
@@ -228,37 +205,74 @@ public class ScoringService {
                 }
                 keyTurns.add(new KeyTurn(t.turn(), round(adoption.get(t.turn())), replays, rj.value().verdicts()));
             }
-            double agreement = total == 0 ? 0 : (double) same / total;
-            int r2 = agreement >= 0.95 ? 95 : agreement >= 0.8 ? 85 : agreement >= 0.5 ? 65 : agreement >= 0.3 ? 45 : 25;
+            double diffRate = total == 0 ? 0 : (double) (total - same) / total;
+            int r1 = (int) Math.round(diffRate * 8);
             List<String> ev = keyTurns.stream().map(k -> "#T" + pad(k.turn())).toList();
-            subs.put("R2", sub("R2", r2, String.format("핵심 턴 %d개를 %d번씩 다시 실행, 같은 해결책 %d/%d (%.0f%%)",
-                    chosen.size(), props.r2().replaysPerTurn(), same, total, agreement * 100), ev));
+            results.put("R1", new CheckResult("R1", check("R1", dev).label(), "AUTO", 8, r1, r1 > 0 ? "DEDUCTED" : "PASSED", ev,
+                    String.format("핵심 턴 %d개를 %d번씩 다시 실행, 다른 해결책 %d/%d", chosen.size(), props.r2().replaysPerTurn(), total - same, total)));
             extras.put("r2KeyTurns", keyTurns);
         }
 
-        // ── 항목 점수 ─────────
-        List<Item> items = new ArrayList<>();
-        for (String key : Rubric.ITEM_NAMES.keySet()) {
-            List<SubScore> list = new ArrayList<>();
-            double sum = 0, weights = 0;
-            for (Rubric.Criterion c : Rubric.ALL) {
-                if (!c.item().equals(key)) continue;
-                SubScore s = subs.getOrDefault(c.code(), sub(c.code(), null, "채점 결과 없음", List.of()));
-                list.add(s);
-                if (s.score() != null) {
-                    sum += s.score() * c.weight();
-                    weights += c.weight();
-                }
+        // ── 판정: 채점 모델 ─────────
+        List<Check> judgeChecks = Rubric.checksFor(dev).stream()
+                .filter(c -> c.method() == Method.JUDGE)
+                .filter(c -> usedAi || !c.item().equals("usage"))
+                .toList();
+        if (!usedAi) {
+            Rubric.checksFor(dev).stream().filter(c -> c.item().equals("usage") && c.method() == Method.JUDGE)
+                    .forEach(c -> results.put(c.code(), skipped(c.code(), dev, "U0 적용으로 판정하지 않음")));
+        }
+        JudgeClient.Result<JudgeResult> jr = judge.judge(JUDGE_SYSTEM,
+                judgePrompt(task, judgeChecks, transcript(turns, a.startedAt()), files, a.followUpAnswers(), eventSummary(events, a.startedAt())),
+                JudgeResult.class);
+        judgeIn += jr.inputTokens();
+        judgeOut += jr.outputTokens();
+        Map<String, CheckVerdict> verdicts = new HashMap<>();
+        for (CheckVerdict v : jr.value().verdicts()) verdicts.put(v.code(), v);
+        for (Check c : judgeChecks) {
+            CheckVerdict v = verdicts.get(c.code());
+            if (v == null) {
+                results.put(c.code(), new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "SKIPPED", List.of(), "채점 모델이 판정하지 않음"));
+                continue;
             }
-            Double score = weights == 0 ? null : round1(sum / weights);
-            if (weights > 0 && weights < 100) notes.add(Rubric.ITEM_NAMES.get(key) + ": 측정하지 못한 하위 기준을 빼고 나머지 가중치로 계산함");
-            items.add(new Item(key, Rubric.ITEM_NAMES.get(key), score, list));
+            boolean hasEvidence = v.evidence() != null && !v.evidence().isEmpty();
+            if (!v.violated()) {
+                results.put(c.code(), new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "PASSED",
+                        hasEvidence ? v.evidence() : List.of(), v.reason()));
+            } else if (!hasEvidence) {
+                results.put(c.code(), new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "NO_EVIDENCE", List.of(),
+                        "근거가 없어 감점하지 않음: " + v.reason()));
+            } else {
+                boolean perUnit = c.code().equals("D1");
+                int deducted = perUnit ? Math.min(20, Math.max(1, v.count()) * c.points()) : c.points();
+                results.put(c.code(), new CheckResult(c.code(), c.label(), "JUDGE", c.points(), deducted, "DEDUCTED", v.evidence(), v.reason()));
+            }
         }
 
-        notes.add("파일럿 단순화: R2는 다시 나온 답변을 채점 LLM이 원래 답변과 같은 해결책인지 판정해 비교함(숨은 테스트 적용 아님)");
-        notes.add("파일럿 단순화: D4는 응시자 분포 대신 과제별 목표 시간 구간(" + task.d4Minutes() + "분)으로 환산함");
+        // ── 항목 점수 ─────────
+        List<ItemResult> items = new ArrayList<>();
+        int total = 0;
+        for (Rubric.Item item : Rubric.ITEMS) {
+            List<CheckResult> list = new ArrayList<>();
+            int deducted = 0;
+            for (Check c : Rubric.checksFor(dev)) {
+                if (!c.item().equals(item.key())) continue;
+                CheckResult r = results.get(c.code());
+                if (r == null) continue;
+                list.add(r);
+                deducted += r.deducted();
+            }
+            int score = Math.max(0, item.max() - deducted);
+            total += score;
+            items.add(new ItemResult(item.key(), item.name(), item.max(), score, list));
+        }
+
+        notes.add("채점 기준: docs/evaluation/채점_기준표.md (감점식, 총점 " + Rubric.total() + "점)");
+        notes.add("판정 체크는 채점 모델이 근거(대화 턴, 파일)를 댄 경우에만 감점함");
+        notes.add("파일럿 단순화: 다시 실행(R1)은 다시 나온 답변을 채점 모델이 원래 답변과 같은 해결책인지 판정해 비교함");
 
         Map<String, Object> report = new LinkedHashMap<>();
+        report.put("version", 2);
         report.put("attemptId", a.id());
         report.put("taskId", task.id());
         report.put("taskTitle", task.title());
@@ -270,6 +284,8 @@ public class ScoringService {
         report.put("durationSec", a.submittedAt() == null ? null : Duration.between(a.startedAt(), a.submittedAt()).toSeconds());
         report.put("chatTurns", turns.size());
         report.put("firstValidMinutes", firstValidMin == null ? null : round1(firstValidMin));
+        report.put("total", total);
+        report.put("max", Rubric.total());
         report.put("items", items);
         report.put("notes", notes);
         report.putAll(extras);
@@ -283,19 +299,20 @@ public class ScoringService {
                 "turn", t.turn(), "role", t.role(), "time", clock(a.startedAt(), t.at()), "text", t.text())).toList());
         store.writeReport(a.id(), report);
         store.save(store.load(a.id()).withStatus(Attempt.Status.DONE));
-        logSummary(a, task, items);
+        logSummary(a, task, total, items);
     }
 
     // ── 프롬프트 ───────────────────────
 
     private static final String JUDGE_SYSTEM = """
             당신은 AI 활용 역량 평가의 채점자입니다. 응시자가 AI 어시스턴트와 함께 과제를 푼 기록을 보고,
-            주어진 점수 기준에 따라 하위 기준별 점수(0~100 정수)를 매깁니다.
+            감점표의 체크 항목마다 응시자가 그 항목에 "걸렸는지(violated)"를 판정합니다. 점수를 직접 매기지 않습니다.
             규칙:
-            - 점수 기준의 90/70/50/25점 설명을 기준점으로 삼고, 사이 값도 쓸 수 있습니다.
-            - evidence 에는 근거가 된 대화 턴 번호(예: "#T03")나 파일 이름(예: "NOTES.md")을 1개 이상 넣습니다. 근거를 댈 수 없으면 빈 배열로 둡니다.
-            - reason 은 한국어 한두 문장으로, 응시자에게 보여 줄 피드백입니다.
-            - AI 답변이 길거나 정중하다고 점수를 주지 않습니다. 응시자가 무엇을 지시하고, 무엇을 검증하고, 무엇을 결과물에 남겼는지를 봅니다.
+            - 체크 항목의 판정 기준을 글자 그대로 적용합니다. 애매하면 걸리지 않은 것으로 봅니다(응시자에게 유리하게).
+            - violated=true 이면 evidence 에 근거가 된 대화 턴 번호(예: "#T03")나 파일 이름(예: "NOTES.md", "Q2" 같은 후속 질문 번호)을 1개 이상 넣습니다.
+            - count 는 '1개당 감점' 항목(D1)에서만 미충족 개수를 넣고, 나머지는 0 입니다.
+            - reason 은 응시자에게 보여 줄 한국어 한 문장입니다. 걸리지 않았으면 무엇을 잘했는지 짧게 씁니다.
+            - AI 답변이 길거나 정중하다고 유리하게 보지 않습니다. 응시자가 무엇을 지시하고, 검증하고, 결과물에 남겼는지를 봅니다.
             """;
 
     private static final String REPLAY_SYSTEM = """
@@ -305,20 +322,23 @@ public class ScoringService {
             reason 은 한국어 한 문장입니다.
             """;
 
-    private String rubricPrompt(TaskDef task, List<String> codes, String transcript,
-                                Map<String, String> files, List<String> answers) {
+    private String judgePrompt(TaskDef task, List<Check> checks, String transcript, Map<String, String> files,
+                               List<String> answers, String events) {
         StringBuilder sb = new StringBuilder();
         sb.append("# 과제\n").append(task.title()).append(" (").append(task.isDev() ? "개발" : "비개발").append(")\n");
         task.description().forEach(d -> sb.append(d).append("\n"));
         sb.append("\n## 요구사항\n");
         task.requirements().forEach(r -> sb.append("- ").append(r).append("\n"));
         if (!task.isDev()) {
-            sb.append("\n## D1 채점용 숨은 체크리스트 (응시자는 보지 못함)\n")
+            sb.append("\n## 숨은 체크리스트 (응시자는 보지 못함)\n")
               .append(tasks.hiddenFiles(task.id()).getOrDefault("checklist.md", "")).append("\n");
         }
-        sb.append("\n# 채점할 하위 기준: ").append(String.join(", ", codes)).append("\n\n");
-        sb.append(Rubric.anchorsText(codes));
-        sb.append("# 대화 기록 (응시자는 AI가 대화창에 붙여 넣은 내용만 볼 수 있다는 것을 안내받았음)\n").append(transcript).append("\n");
+        sb.append("\n# 판정할 체크 항목\n");
+        for (Check c : checks) {
+            sb.append("- ").append(c.code()).append(": ").append(c.label()).append("\n  판정 기준: ").append(c.judgeHint()).append("\n");
+        }
+        sb.append("\n# 대화 기록 (응시자는 AI가 대화창에 붙여 넣은 내용만 볼 수 있다는 것을 안내받았음)\n").append(transcript).append("\n");
+        sb.append("# 응시 이벤트 요약 (저장, 빌드, 테스트 실행)\n").append(events).append("\n");
         sb.append("# 최종 제출 파일\n");
         Map<String, String> original = tasks.visibleFiles(task.id());
         files.forEach((path, content) -> {
@@ -326,12 +346,19 @@ public class ScoringService {
             boolean changed = !content.equals(original.get(path));
             sb.append("## ").append(path).append(changed ? " (수정됨)" : " (원본 그대로)").append("\n```\n").append(content).append("\n```\n");
         });
+        if (!task.isDev()) {
+            sb.append("\n# 제공 자료 (수치 대조용)\n");
+            files.forEach((path, content) -> {
+                if (path.startsWith("자료/")) sb.append("## ").append(path).append("\n```\n").append(content).append("\n```\n");
+            });
+        }
         sb.append("\n# 후속 질문 답변\n");
         for (int i = 0; i < task.followUps().size(); i++) {
             String ans = answers != null && i < answers.size() ? answers.get(i) : "";
             sb.append("Q").append(i + 1).append(". ").append(task.followUps().get(i)).append("\nA. ").append(ans.isBlank() ? "(무응답)" : ans).append("\n\n");
         }
-        sb.append("\n각 하위 기준(").append(String.join(", ", codes)).append(")에 대해 code, score, evidence, reason 을 채워 scores 배열로 답하세요.");
+        sb.append("\n체크 항목마다(").append(String.join(", ", checks.stream().map(Check::code).toList()))
+          .append(") code, violated, count, evidence, reason 을 채워 verdicts 배열로 답하세요.");
         return sb.toString();
     }
 
@@ -348,11 +375,42 @@ public class ScoringService {
         return sb.toString();
     }
 
+    /** 채점 모델이 검증 흐름(C1, P3)을 볼 수 있게 이벤트를 짧게 요약한다. */
+    static String eventSummary(List<JsonNode> events, Instant start) {
+        StringBuilder sb = new StringBuilder();
+        for (JsonNode e : events) {
+            String type = e.path("type").asString();
+            if (!type.equals("run") && !type.equals("build") && !type.equals("save") && !type.equals("firstValid") && !type.equals("submit")) continue;
+            String at;
+            try {
+                at = clock(start, Instant.parse(e.path("at").asString()));
+            } catch (RuntimeException ex) {
+                at = "?";
+            }
+            sb.append(at).append(" ").append(type);
+            if (type.equals("run")) sb.append(" passed=").append(e.path("passed").asInt()).append(" failed=").append(e.path("failed").asInt())
+                    .append(" compiled=").append(e.path("compiled").asBoolean());
+            if (type.equals("build")) sb.append(" compiled=").append(e.path("compiled").asBoolean());
+            if (type.equals("save")) sb.append(" ").append(e.path("path").asString());
+            sb.append("\n");
+        }
+        return sb.isEmpty() ? "(기록 없음)\n" : sb.toString();
+    }
+
     // ── 보조 함수 ─────────────────────
 
-    private static SubScore sub(String code, Integer score, String note, List<String> evidence) {
-        Rubric.Criterion c = Rubric.get(code);
-        return new SubScore(code, c.name(), c.weight(), score, note, evidence);
+    private static Check check(String code, boolean dev) {
+        return Rubric.checksFor(dev).stream().filter(c -> c.code().equals(code)).findFirst().orElseThrow();
+    }
+
+    private static CheckResult auto(String code, boolean dev, int deducted, String reason) {
+        Check c = check(code, dev);
+        return new CheckResult(code, c.label(), "AUTO", c.points(), deducted, deducted > 0 ? "DEDUCTED" : "PASSED", List.of(), reason);
+    }
+
+    private static CheckResult skipped(String code, boolean dev, String reason) {
+        Check c = check(code, dev);
+        return new CheckResult(code, c.label(), c.method().name(), c.points(), 0, "SKIPPED", List.of(), reason);
     }
 
     static String transcript(List<ChatTurn> turns, Instant start) {
@@ -413,13 +471,14 @@ public class ScoringService {
         return Math.round(v * 10) / 10.0;
     }
 
-    private void logSummary(Attempt a, TaskDef task, List<Item> items) {
+    private void logSummary(Attempt a, TaskDef task, int total, List<ItemResult> items) {
         StringBuilder sb = new StringBuilder("\n========== pAIr 채점 결과 ==========\n");
         sb.append("응시 ").append(a.id()).append(" | ").append(task.title()).append("\n");
-        for (Item it : items) {
-            sb.append(String.format("%-10s %s%n", it.name(), it.score() == null ? "-" : it.score()));
-            for (SubScore s : it.sub()) {
-                sb.append(String.format("  %s %-10s %4s  %s%n", s.code(), s.name(), s.score() == null ? "-" : s.score(), s.note()));
+        sb.append("총점 ").append(total).append(" / ").append(Rubric.total()).append("\n");
+        for (ItemResult it : items) {
+            sb.append(String.format("%s %d / %d%n", it.name(), it.score(), it.max()));
+            for (CheckResult c : it.checks()) {
+                if (c.deducted() > 0) sb.append(String.format("  %s -%d  %s%n", c.code(), c.deducted(), c.reason()));
             }
         }
         sb.append("리포트 파일: ").append(store.dir(a.id()).resolve("report.json")).append("\n");

@@ -1,10 +1,9 @@
 // 모든 데이터는 목업이다. API 호출 없음.
 
-export type CompetencyKey = 'literacy' | 'usage' | 'control' | 'reproducibility' | 'delivery' | 'potential'
+export type CompetencyKey = 'usage' | 'control' | 'reproducibility' | 'delivery' | 'potential'
 
-// DESIGN.md §1.4 — 고정 순서, 고정 색 (프로그래머스 AI 역량평가 6개 항목 벤치마킹)
+// DESIGN.md §1.4 — 고정 순서, 고정 색 (프로그래머스 AI 역량평가에서 AI 기초 이해력을 뺀 5개 항목)
 export const COMPETENCIES: { key: CompetencyKey; name: string; color: string }[] = [
-  { key: 'literacy', name: 'AI 기초 이해력', color: 'var(--color-branch-1)' },
   { key: 'usage', name: 'AI 활용력', color: 'var(--color-branch-2)' },
   { key: 'control', name: 'AI 통제력', color: 'var(--color-branch-3)' },
   { key: 'reproducibility', name: '재현성', color: 'var(--color-branch-4)' },
@@ -17,12 +16,12 @@ export type Scores = Record<CompetencyKey, number>
 export const user = { name: '김지원', track: '개발' }
 
 export const trend: { date: string; scores: Scores }[] = [
-  { date: '09.02', scores: { literacy: 60, usage: 52, control: 44, reproducibility: 42, delivery: 55, potential: 50 } },
-  { date: '09.16', scores: { literacy: 63, usage: 58, control: 49, reproducibility: 47, delivery: 59, potential: 54 } },
-  { date: '09.30', scores: { literacy: 66, usage: 63, control: 54, reproducibility: 53, delivery: 64, potential: 58 } },
-  { date: '10.14', scores: { literacy: 70, usage: 70, control: 58, reproducibility: 60, delivery: 69, potential: 64 } },
-  { date: '10.28', scores: { literacy: 74, usage: 74, control: 64, reproducibility: 66, delivery: 75, potential: 70 } },
-  { date: '11.07', scores: { literacy: 78, usage: 81, control: 70, reproducibility: 72, delivery: 79, potential: 76 } },
+  { date: '09.02', scores: { usage: 52, control: 44, reproducibility: 42, delivery: 55, potential: 50 } },
+  { date: '09.16', scores: { usage: 58, control: 49, reproducibility: 47, delivery: 59, potential: 54 } },
+  { date: '09.30', scores: { usage: 63, control: 54, reproducibility: 53, delivery: 64, potential: 58 } },
+  { date: '10.14', scores: { usage: 70, control: 58, reproducibility: 60, delivery: 69, potential: 64 } },
+  { date: '10.28', scores: { usage: 74, control: 64, reproducibility: 66, delivery: 75, potential: 70 } },
+  { date: '11.07', scores: { usage: 81, control: 70, reproducibility: 72, delivery: 79, potential: 76 } },
 ]
 
 export const attempts = [
@@ -271,7 +270,6 @@ export const report = {
   total: 76,
   delta: 5,
   scores: [
-    { key: 'literacy', score: 78, note: '잠금과 커넥션 풀의 관계를 이해하고 질문 범위를 스스로 좁혔습니다.' },
     { key: 'usage', score: 81, note: '로그와 파일 위치를 함께 제공해 첫 답변의 정확도를 높였습니다.' },
     { key: 'control', score: 70, note: '커넥션 풀 증설 제안은 걸러냈지만, 정렬 코드는 검증 없이 적용했습니다.' },
     {
@@ -400,7 +398,7 @@ export const branches: Branch[] = [
     id: 'main',
     name: 'main',
     total: 76,
-    scores: { literacy: 78, usage: 81, control: 70, reproducibility: 72, delivery: 79, potential: 76 },
+    scores: { usage: 81, control: 70, reproducibility: 72, delivery: 79, potential: 76 },
     summary: ['AI 정렬 코드를 그대로 적용', '테스트 실패 후 8분 디버깅', '동시성 테스트로 최종 확인'],
   },
   {
@@ -409,7 +407,7 @@ export const branches: Branch[] = [
     parent: 0,
     forkFromRow: 4,
     total: 84,
-    scores: { literacy: 82, usage: 81, control: 84, reproducibility: 83, delivery: 86, potential: 88 },
+    scores: { usage: 81, control: 84, reproducibility: 83, delivery: 86, potential: 88 },
     summary: ['정렬 코드에 중복 상품 케이스를 직접 질문', '적용 전 단위 테스트 먼저 작성', '디버깅 없이 22분 단축'],
   },
   {
@@ -418,7 +416,7 @@ export const branches: Branch[] = [
     parent: 0,
     forkFromRow: 2,
     total: 61,
-    scores: { literacy: 76, usage: 80, control: 52, reproducibility: 55, delivery: 50, potential: 53 },
+    scores: { usage: 80, control: 52, reproducibility: 55, delivery: 50, potential: 53 },
     summary: ['커넥션 풀 증설안을 채택', '응답 시간은 개선됐으나 교착은 남음', '근본 원인 미해결로 제출'],
   },
   {
@@ -427,7 +425,7 @@ export const branches: Branch[] = [
     parent: 1,
     forkFromRow: 7,
     total: 88,
-    scores: { literacy: 85, usage: 84, control: 88, reproducibility: 90, delivery: 91, potential: 90 },
+    scores: { usage: 84, control: 88, reproducibility: 90, delivery: 91, potential: 90 },
     summary: ['b2에서 이어서 NOTES.md 근거 보강', '재고 부족 예외 테스트 추가', '최고 점수 분기'],
   },
 ]

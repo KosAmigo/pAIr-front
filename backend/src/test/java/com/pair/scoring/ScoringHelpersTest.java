@@ -17,11 +17,21 @@ import tools.jackson.databind.json.JsonMapper;
 class ScoringHelpersTest {
 
     @Test
-    void rubricWeights_sumTo100PerItem() {
-        int r = Rubric.ALL.stream().filter(c -> c.item().equals("reproducibility")).mapToInt(Rubric.Criterion::weight).sum();
-        int d = Rubric.ALL.stream().filter(c -> c.item().equals("delivery")).mapToInt(Rubric.Criterion::weight).sum();
-        assertEquals(100, r);
-        assertEquals(100, d);
+    void rubric_fiveItemsTotal100() {
+        assertEquals(5, Rubric.ITEMS.size());
+        assertEquals(100, Rubric.total());
+        assertTrue(Rubric.ITEMS.stream().noneMatch(i -> i.key().equals("literacy")));
+    }
+
+    @Test
+    void rubric_checksForTrack_haveUniqueCodes() {
+        for (boolean dev : new boolean[] {true, false}) {
+            var codes = Rubric.checksFor(dev).stream().map(Rubric.Check::code).toList();
+            assertEquals(codes.size(), new java.util.HashSet<>(codes).size());
+            assertTrue(codes.containsAll(List.of("U0", "C1", "R1", "D1", "D5", "P1")));
+        }
+        assertTrue(Rubric.checksFor(true).stream().anyMatch(c -> c.code().equals("D0")));
+        assertTrue(Rubric.checksFor(false).stream().noneMatch(c -> c.code().equals("D0")));
     }
 
     @Test
