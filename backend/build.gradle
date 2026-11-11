@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.1.2'
+    id 'org.springframework.boot' version '3.5.8'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -18,16 +18,27 @@ repositories {
     mavenCentral()
 }
 
+ext {
+    // Spring Boot 3.5 를 지원하는 Spring AI 1.1 계열의 최신 패치 (2026-06 릴리스)
+    springAiVersion = '1.1.8'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
+}
+
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
-    // AI 어시스턴트 (OpenAI) 와 채점 (Anthropic)
-    implementation 'com.openai:openai-java:4.101.0'
-    implementation 'com.anthropic:anthropic-java:3.8.0'
+    // AI 어시스턴트와 OpenAI 채점 (Spring AI OpenAI), Claude 채점 (Spring AI Anthropic)
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    implementation 'org.springframework.ai:spring-ai-starter-model-anthropic'
 
-    // 응시자 코드의 JUnit 테스트를 별도 JVM에서 실행할 때 쓰는 콘솔 런처 (Boot 관리 JUnit 버전과 맞춤)
-    implementation 'org.junit.platform:junit-platform-console-standalone:6.0.3'
+    // 응시자 코드의 JUnit 테스트를 별도 JVM에서 실행할 때 쓰는 콘솔 런처 (Boot 가 관리하는 JUnit 과 버전을 맞춤)
+    implementation 'org.junit.platform:junit-platform-console-standalone:1.12.2' // Boot 3.5.8 의 JUnit Jupiter 5.12.2 와 짝
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

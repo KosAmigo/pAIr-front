@@ -15,12 +15,12 @@ import org.junit.jupiter.api.Test;
 import com.pair.config.PairProperties;
 import com.pair.task.TaskRepository;
 
-import tools.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 
 /** 개발 과제 검증: 원본 코드는 숨은 필수 테스트에서 실패하고, 정답 코드는 모두 통과해야 한다. */
 class CodeRunnerTaskTest {
 
-    private final TaskRepository tasks = new TaskRepository(JsonMapper.builder().build());
+    private final TaskRepository tasks = new TaskRepository(JsonMapper.builder().findAndAddModules().disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build());
     private final CodeRunner runner = new CodeRunner(new PairProperties(null, null, null, null,
             new PairProperties.Run(60), null));
 

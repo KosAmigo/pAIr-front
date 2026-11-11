@@ -13,17 +13,17 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
 
-import tools.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** classpath:tasks/{id}/ 아래의 과제 정의와 파일을 읽는다. */
 @Component
 public class TaskRepository {
 
-    private final JsonMapper json;
+    private final ObjectMapper json;
     private final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
     private final Map<String, TaskDef> tasks = new LinkedHashMap<>();
 
-    public TaskRepository(JsonMapper json) {
+    public TaskRepository(ObjectMapper json) {
         this.json = json;
         for (String id : new String[] {"order-deadlock", "pricing-plan"}) {
             Resource r = resolver.getResource("classpath:tasks/" + id + "/task.json");

@@ -19,7 +19,7 @@ public record PairProperties(
      */
     public record Judge(Model claude, Model openai, String replayCompare) {}
 
-    /** effort: Claude 는 low/medium/high/..., OpenAI 는 reasoning_effort(none/minimal/low/medium/high) */
+    /** effort: OpenAI 는 reasoning_effort(none/minimal/low/medium/high). Claude 는 output_config.effort(low/medium/high/xhigh/max). */
     public record Model(String model, String effort, long maxTokens) {}
 
     public record Run(int timeoutSeconds) {}

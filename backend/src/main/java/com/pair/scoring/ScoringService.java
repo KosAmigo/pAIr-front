@@ -35,7 +35,7 @@ import com.pair.task.TaskDef;
 import com.pair.task.TaskRepository;
 
 import jakarta.annotation.PreDestroy;
-import tools.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * 감점식 채점 (docs/evaluation/채점_기준표.md).
@@ -420,12 +420,12 @@ public class ScoringService {
     static String eventSummary(List<JsonNode> events, Instant start) {
         StringBuilder sb = new StringBuilder();
         for (JsonNode e : events) {
-            String type = e.path("type").asString();
+            String type = e.path("type").asText();
             if (!type.equals("run") && !type.equals("build") && !type.equals("save") && !type.equals("firstValid") && !type.equals("submit")
                     && !type.equals("aiEdit")) continue;
             String at;
             try {
-                at = clock(start, Instant.parse(e.path("at").asString()));
+                at = clock(start, Instant.parse(e.path("at").asText()));
             } catch (RuntimeException ex) {
                 at = "?";
             }
@@ -433,9 +433,9 @@ public class ScoringService {
             if (type.equals("run")) sb.append(" passed=").append(e.path("passed").asInt()).append(" failed=").append(e.path("failed").asInt())
                     .append(" compiled=").append(e.path("compiled").asBoolean());
             if (type.equals("build")) sb.append(" compiled=").append(e.path("compiled").asBoolean());
-            if (type.equals("save")) sb.append(" ").append(e.path("path").asString());
+            if (type.equals("save")) sb.append(" ").append(e.path("path").asText());
             if (type.equals("aiEdit")) sb.append(" #T").append(pad(e.path("turn").asInt())).append(" 수정 제안 ")
-                    .append(e.path("action").asString().equals("apply") ? "적용" : "거절").append(" ").append(e.path("path").asString());
+                    .append(e.path("action").asText().equals("apply") ? "적용" : "거절").append(" ").append(e.path("path").asText());
             sb.append("\n");
         }
         return sb.isEmpty() ? "(기록 없음)\n" : sb.toString();
@@ -448,12 +448,12 @@ public class ScoringService {
     static Instant firstValidFromEvents(List<JsonNode> events) {
         boolean srcChanged = false;
         for (JsonNode e : events) {
-            String type = e.path("type").asString();
-            if (type.equals("save") && e.path("path").asString().startsWith("src/")) srcChanged = true;
+            String type = e.path("type").asText();
+            if (type.equals("save") && e.path("path").asText().startsWith("src/")) srcChanged = true;
             if (type.equals("run") && srcChanged && e.path("compiled").asBoolean() && e.path("failed").asInt() == 0
                     && e.path("passed").asInt() > 0) {
                 try {
-                    return Instant.parse(e.path("at").asString());
+                    return Instant.parse(e.path("at").asText());
                 } catch (RuntimeException ex) {
                     return null;
                 }

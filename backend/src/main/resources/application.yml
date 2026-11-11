@@ -4,6 +4,23 @@ server:
 spring:
   application:
     name: pair-backend
+  ai:
+    # API 키: 값은 여기 쓰지 않는다. 시스템 환경 변수를 가리키기만 한다.
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+    # Spring AI 자동 설정 모델은 쓰지 않는다. 자동 설정은 기본 temperature(0.7, 0.8)를 넣는데
+    # 최신 추론 모델은 temperature 를 받지 않아서, 모델은 코드(com.pair.ai.SpringAi)에서 빌더로 만든다.
+    # 키가 없을 때 서버가 아예 안 켜지는 것도 막는다(키가 없으면 그 기능을 쓸 때만 오류).
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
 
 pair:
   # 응시 기록을 쌓는 폴더 (bootRun 은 저장소 루트에서 실행되므로 pAIr/pilot-data)
@@ -30,7 +47,7 @@ pair:
   judge:
     claude:
       model: claude-haiku-5-5      # 비용 우선. 더 정확하게 보려면 claude-sonnet-5-5
-      effort: medium
+      effort: medium               # Spring AI 1.1 에 옵션이 없어 요청에 직접 넣음 (AnthropicEffortInterceptor)
       max-tokens: 16000
     openai:
       model: gpt-6.1-terra

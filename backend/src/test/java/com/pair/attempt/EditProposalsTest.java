@@ -7,8 +7,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 
 class EditProposalsTest {
 
@@ -72,8 +72,8 @@ class EditProposalsTest {
     }
 
     @Test
-    void decisions_applyWinsOverEarlierReject() {
-        JsonMapper m = JsonMapper.builder().build();
+    void decisions_applyWinsOverEarlierReject() throws Exception {
+        JsonMapper m = JsonMapper.builder().findAndAddModules().disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
         List<JsonNode> ev = List.of(
                 m.readTree("{\"type\":\"aiEdit\",\"turn\":2,\"index\":0,\"action\":\"reject\"}"),
                 m.readTree("{\"type\":\"aiEdit\",\"turn\":2,\"index\":0,\"action\":\"apply\"}"),

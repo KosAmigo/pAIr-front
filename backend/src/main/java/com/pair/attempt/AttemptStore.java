@@ -18,9 +18,10 @@ import org.springframework.stereotype.Component;
 
 import com.pair.config.PairProperties;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.SerializationFeature;
-import tools.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * 응시 기록을 JSON 파일로 저장한다.
@@ -30,13 +31,13 @@ import tools.jackson.databind.json.JsonMapper;
 public class AttemptStore {
 
     private final Path root;
-    private final JsonMapper json;
-    private final JsonMapper pretty;
+    private final ObjectMapper json;
+    private final ObjectMapper pretty;
 
-    public AttemptStore(PairProperties props, JsonMapper json) {
+    public AttemptStore(PairProperties props, ObjectMapper json) {
         this.root = Path.of(props.dataDir(), "attempts").toAbsolutePath();
         this.json = json;
-        this.pretty = json.rebuild().enable(SerializationFeature.INDENT_OUTPUT).build();
+        this.pretty = json.copy().enable(SerializationFeature.INDENT_OUTPUT);
         try {
             Files.createDirectories(root);
         } catch (IOException e) {
@@ -77,7 +78,7 @@ public class AttemptStore {
         if (!Files.exists(p)) throw new NoSuchElementException("없는 응시입니다: " + id);
         try {
             return json.readValue(p.toFile(), Attempt.class);
-        } catch (RuntimeException e) {
+        } catch (IOException | RuntimeException e) {
             throw new IllegalStateException("응시 기록을 읽지 못했습니다: " + id, e);
         }
     }
@@ -140,7 +141,7 @@ public class AttemptStore {
     // ── 대화 턴, 이벤트 ─────────────────
 
     public synchronized void appendTurn(String id, ChatTurn turn) {
-        appendLine(dir(id).resolve("turns.jsonl"), json.writeValueAsString(turn));
+        appendLine(dir(id).resolve("turns.jsonl"), toJson(turn));
     }
 
     public List<ChatTurn> turns(String id) {
@@ -151,7 +152,7 @@ public class AttemptStore {
         Map<String, Object> e = new TreeMap<>(data);
         e.put("type", type);
         e.put("at", Instant.now().toString());
-        appendLine(dir(id).resolve("events.jsonl"), json.writeValueAsString(e));
+        appendLine(dir(id).resolve("events.jsonl"), toJson(e));
     }
 
     public List<JsonNode> events(String id) {
@@ -167,7 +168,11 @@ public class AttemptStore {
     public JsonNode readReport(String id) {
         Path p = dir(id).resolve("report.json");
         if (!Files.exists(p)) return null;
-        return json.readTree(p.toFile());
+        try {
+            return json.readTree(p.toFile());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /** 채점 중간 산출물(R2 다시 실행 결과 등)을 남긴다. */
@@ -182,6 +187,14 @@ public class AttemptStore {
             Files.createDirectories(p.getParent());
             Files.writeString(p, pretty.writeValueAsString(v), StandardCharsets.UTF_8);
         } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private String toJson(Object v) {
+        try {
+            return json.writeValueAsString(v);
+        } catch (JsonProcessingException e) {
             throw new UncheckedIOException(e);
         }
     }

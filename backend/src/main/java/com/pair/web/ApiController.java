@@ -23,7 +23,7 @@ import com.pair.run.CodeRunner;
 import com.pair.task.TaskDef;
 import com.pair.task.TaskRepository;
 
-import tools.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonNode;
 
 @RestController
 @RequestMapping("/api")
@@ -92,7 +92,7 @@ public class ApiController {
                         m.put("legacyReport", r.path("version").asInt() < 2);
                         for (JsonNode it : r.path("items")) {
                             JsonNode sc = it.path("score");
-                            m.put(it.path("key").asString(), sc.isNumber() ? sc.asDouble() : null);
+                            m.put(it.path("key").asText(), sc.isNumber() ? sc.asDouble() : null);
                         }
                     }
                 }
