@@ -52,7 +52,15 @@ function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number
       <td className={cx('py-2.5 pr-4 text-[14px] leading-6', deducted ? 'text-text' : 'text-text-muted')}>{c.label}</td>
       <td className="py-2.5 pr-4 font-mono text-[12px] text-text-faint">{c.method === 'AUTO' ? '자동' : '판정'}</td>
       <td className="tnum py-2.5 pr-4 text-right font-mono text-[14px] whitespace-nowrap">
-        {deducted ? <span className="font-semibold text-alert">-{c.deducted}</span> : <span className={s.cls}>{s.text}</span>}
+        {deducted ? (
+          <span className="font-semibold text-alert">-{c.deducted}</span>
+        ) : c.status === 'SPLIT' && c.deducted > 0 ? (
+          <span className="text-caution">
+            <span className="font-semibold">-{c.deducted}</span> 엇갈림
+          </span>
+        ) : (
+          <span className={s.cls}>{s.text}</span>
+        )}
       </td>
       <td className="py-2.5 pr-4">
         {c.reason && <p className="text-[14px] leading-6 text-text-muted">{c.reason}</p>}

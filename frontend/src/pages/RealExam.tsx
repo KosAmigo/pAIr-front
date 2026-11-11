@@ -302,12 +302,29 @@ function ChatPanel({
 }
 
 // ── 후속 질문 ───────────────────────────
-function FollowUp({ questions, busy, error, onDone }: { questions: string[]; busy: boolean; error: string | null; onDone: (a: string[]) => void }) {
-  const [i, setI] = useState(0)
-  const [answers, setAnswers] = useState<string[]>(questions.map(() => ''))
+// 답변 상태는 부모가 가진다(아래 참고 패널에서 "#T03" 같은 턴 번호를 답변에 넣을 수 있게).
+function FollowUp({
+  questions,
+  i,
+  onIndex,
+  answers,
+  onAnswers,
+  busy,
+  error,
+  onDone,
+}: {
+  questions: string[]
+  i: number
+  onIndex: (i: number) => void
+  answers: string[]
+  onAnswers: (a: string[]) => void
+  busy: boolean
+  error: string | null
+  onDone: (a: string[]) => void
+}) {
   const last = i === questions.length - 1
   return (
-    <section key={i} className="fade-in flex h-full flex-col bg-panel">
+    <section className="flex h-full min-h-0 flex-col bg-panel">
       <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
         <span className="label">FOLLOW-UP</span>
         <span className="text-[16px] font-semibold">후속 질문</span>
@@ -320,33 +337,107 @@ function FollowUp({ questions, busy, error, onDone }: { questions: string[]; bus
           <span key={j} className={cx('h-0.5 flex-1 rounded-full', j <= i ? 'bg-signal' : 'bg-line')} />
         ))}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col p-8">
+      <div key={i} className="fade-in flex min-h-0 flex-1 flex-col px-6 pt-4 pb-4">
         <span className="label">QUESTION {String(i + 1).padStart(2, '0')}</span>
-        <h2 className="mt-2 text-h2 font-semibold">{questions[i]}</h2>
-        <p className="mt-2 text-[14px] text-text-muted">제출한 풀이와 AI 대화를 근거로 답하세요. 에디터와 AI는 읽기 전용입니다.</p>
+        <h2 className="mt-1.5 text-[18px] leading-7 font-semibold">{questions[i]}</h2>
+        <p className="mt-1 text-[14px] text-text-muted">아래 참고 패널에서 내 질문과 제출한 파일을 볼 수 있습니다. [답변에 넣기]로 턴 번호를 근거로 붙이세요.</p>
         <label htmlFor="answer" className="sr-only">
           답변
         </label>
         <textarea
           id="answer"
           value={answers[i]}
-          onChange={(e) => setAnswers(answers.map((a, j) => (j === i ? e.target.value : a)))}
-          className="mt-6 min-h-0 flex-1 resize-none rounded-md border border-line-strong bg-panel-raised p-4 text-body text-text outline-none focus:border-signal"
+          onChange={(e) => onAnswers(answers.map((a, j) => (j === i ? e.target.value : a)))}
+          className="mt-3 min-h-0 flex-1 resize-none rounded-md border border-line-strong bg-panel-raised p-4 text-body text-text outline-none focus:border-signal"
           placeholder="답변을 입력하세요"
         />
         {error && <p className="mt-3 text-[14px] text-alert">{error}</p>}
-        <div className="mt-4 flex items-center">
+        <div className="mt-3 flex items-center">
           <span className="tnum font-mono text-[13px] text-text-faint">{answers[i].length} chars</span>
           {i > 0 && (
-            <Button variant="ghost" className="ml-auto" onClick={() => setI(i - 1)}>
+            <Button variant="ghost" className="ml-auto" onClick={() => onIndex(i - 1)}>
               이전
             </Button>
           )}
-          <Button variant="primary" className={i > 0 ? 'ml-2' : 'ml-auto'} disabled={busy} onClick={() => (last ? onDone(answers) : setI(i + 1))}>
+          <Button variant="primary" className={i > 0 ? 'ml-2' : 'ml-auto'} disabled={busy} onClick={() => (last ? onDone(answers) : onIndex(i + 1))}>
             {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
             {last ? '완료하고 채점하기' : '다음'}
           </Button>
         </div>
+      </div>
+    </section>
+  )
+}
+
+/** 후속 질문 단계의 참고 패널: 내가 AI에게 보낸 질문 목록과, 제출한 파일(읽기 전용). */
+function FollowUpReference({
+  turns,
+  tab,
+  onTab,
+  file,
+  content,
+  onInsert,
+}: {
+  turns: Turn[]
+  tab: 'prompts' | 'file'
+  onTab: (t: 'prompts' | 'file') => void
+  file: string
+  content: string
+  onInsert: (ref: string) => void
+}) {
+  const prompts = turns.filter((t) => t.role === 'user')
+  const tabCls = (on: boolean) =>
+    cx('relative flex items-center px-3 text-[14px]', on ? 'bg-panel-sunken text-text' : 'text-text-muted hover:text-text')
+  return (
+    <section className="flex min-h-0 flex-col border-t border-line bg-panel">
+      <div className="flex h-10 shrink-0 items-stretch border-b border-line" role="tablist" aria-label="참고 자료">
+        <button type="button" role="tab" aria-selected={tab === 'prompts'} onClick={() => onTab('prompts')} className={tabCls(tab === 'prompts')}>
+          {tab === 'prompts' && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
+          내 질문 <span className="tnum ml-1.5 font-mono text-[12px] text-text-faint">{prompts.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'file'}
+          onClick={() => onTab('file')}
+          className={cx(tabCls(tab === 'file'), 'border-l border-line font-mono')}
+          title={file}
+        >
+          {tab === 'file' && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
+          {file ? fileName(file) : '파일'}
+        </button>
+        <span className="ml-auto flex items-center gap-1 px-3 font-mono text-[12px] text-text-faint">
+          <Lock size={12} aria-hidden /> READ ONLY
+        </span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto bg-panel-sunken">
+        {tab === 'prompts' ? (
+          prompts.length === 0 ? (
+            <p className="p-4 text-[14px] text-text-muted">AI에게 보낸 질문이 없습니다.</p>
+          ) : (
+            <ol className="divide-y divide-line">
+              {prompts.map((t) => {
+                const ref = `#T${String(t.turn).padStart(2, '0')}`
+                return (
+                  <li key={t.turn} className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-sm bg-info/12 px-1.5 font-mono text-[12px] text-info">{ref}</span>
+                      <span className="tnum font-mono text-[12px] text-text-faint">{t.time}</span>
+                      <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onInsert(ref)}>
+                        답변에 넣기
+                      </Button>
+                    </div>
+                    <p className="mt-1.5 text-[14px] leading-6 whitespace-pre-wrap text-text">{t.text}</p>
+                  </li>
+                )
+              })}
+            </ol>
+          )
+        ) : file ? (
+          <pre className="px-4 py-3 font-mono text-code whitespace-pre text-text">{content}</pre>
+        ) : (
+          <p className="p-4 text-[14px] text-text-muted">왼쪽 파일 탐색기에서 파일을 여세요.</p>
+        )}
       </div>
     </section>
   )
@@ -437,6 +528,9 @@ export default function RealExam() {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [fuIndex, setFuIndex] = useState(0)
+  const [fuAnswers, setFuAnswers] = useState<string[] | null>(null)
+  const [refTab, setRefTab] = useState<'prompts' | 'file'>('prompts')
 
   // 처음 불러오기
   useEffect(() => {
@@ -528,6 +622,7 @@ export default function RealExam() {
   const dev = task.type === 'dev'
   const left = task.minutes * 60 - elapsed
   const locked = stage === 'followup'
+  const fuList = fuAnswers ?? task.followUps.map(() => '')
   const tone = locked ? 'text-text' : left <= 180 ? 'text-alert' : left <= 600 ? 'text-caution' : 'text-text'
   const isDoc = !dev && active === task.editableFile
 
@@ -705,7 +800,7 @@ export default function RealExam() {
         />
         {/* 사이드 패널: 과제 / 파일 */}
         {side && (
-        <aside className={cx('flex min-h-0 flex-col border-r border-line bg-panel', locked && 'opacity-50')}>
+        <aside className="flex min-h-0 flex-col border-r border-line bg-panel">
           <header className="flex h-10 shrink-0 items-center border-b border-line px-4">
             <span className="label">{side === 'task' ? 'TASK' : 'EXPLORER'}</span>
           </header>
@@ -738,7 +833,14 @@ export default function RealExam() {
             </div>
           ) : (
             <nav className="fade-in min-h-0 flex-1 overflow-auto py-2" aria-label="파일 탐색기">
-              <PathTree nodes={tree} active={active} onOpen={(p) => void openFile(p)} />
+              <PathTree
+                nodes={tree}
+                active={active}
+                onOpen={(p) => {
+                  void openFile(p)
+                  if (locked) setRefTab('file')
+                }}
+              />
             </nav>
           )}
         </aside>
@@ -747,7 +849,28 @@ export default function RealExam() {
         {/* 가운데: 에디터 + 출력 | 후속 질문 */}
         <div className="flex min-h-0 min-w-0 flex-col">
           {locked ? (
-            <FollowUp questions={task.followUps} busy={busy} error={actionError} onDone={(a) => void doFollowUps(a)} />
+            <div className="grid h-full min-h-0 min-w-0" style={{ gridTemplateRows: 'minmax(0,11fr) minmax(0,9fr)', gridTemplateColumns: 'minmax(0,1fr)' }}>
+              <FollowUp
+                questions={task.followUps}
+                i={fuIndex}
+                onIndex={setFuIndex}
+                answers={fuList}
+                onAnswers={setFuAnswers}
+                busy={busy}
+                error={actionError}
+                onDone={(a) => void doFollowUps(a)}
+              />
+              <FollowUpReference
+                turns={turns}
+                tab={refTab}
+                onTab={setRefTab}
+                file={active}
+                content={contents[active] ?? ''}
+                onInsert={(ref) =>
+                  setFuAnswers(fuList.map((a, j) => (j === fuIndex ? (a && !/\s$/.test(a) ? a + ' ' : a) + ref : a)))
+                }
+              />
+            </div>
           ) : (
             <>
               <div className="flex h-10 shrink-0 items-stretch border-b border-line bg-panel">
