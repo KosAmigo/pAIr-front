@@ -340,7 +340,7 @@ function FollowUp({
       <div key={i} className="fade-in flex min-h-0 flex-1 flex-col px-6 pt-4 pb-4">
         <span className="label">QUESTION {String(i + 1).padStart(2, '0')}</span>
         <h2 className="mt-1.5 text-[18px] leading-7 font-semibold">{questions[i]}</h2>
-        <p className="mt-1 text-[14px] text-text-muted">아래 참고 패널에서 내 질문과 제출한 파일을 볼 수 있습니다. [답변에 넣기]로 턴 번호를 근거로 붙이세요.</p>
+        <p className="mt-1 text-[14px] text-text-muted">위 [내 질문] 탭과 파일 탭에서 내 질문과 제출한 파일을 볼 수 있습니다. [답변에 넣기]로 턴 번호를 근거로 붙이세요.</p>
         <label htmlFor="answer" className="sr-only">
           답변
         </label>
@@ -369,77 +369,28 @@ function FollowUp({
   )
 }
 
-/** 후속 질문 단계의 참고 패널: 내가 AI에게 보낸 질문 목록과, 제출한 파일(읽기 전용). */
-function FollowUpReference({
-  turns,
-  tab,
-  onTab,
-  file,
-  content,
-  onInsert,
-}: {
-  turns: Turn[]
-  tab: 'prompts' | 'file'
-  onTab: (t: 'prompts' | 'file') => void
-  file: string
-  content: string
-  onInsert: (ref: string) => void
-}) {
+/** 후속 질문 단계: 응시자가 AI에게 보낸 질문만 모아 보여 준다. [답변에 넣기]로 턴 번호를 지금 답변에 붙인다. */
+function PromptList({ turns, onInsert }: { turns: Turn[]; onInsert: (ref: string) => void }) {
   const prompts = turns.filter((t) => t.role === 'user')
-  const tabCls = (on: boolean) =>
-    cx('relative flex items-center px-3 text-[14px]', on ? 'bg-panel-sunken text-text' : 'text-text-muted hover:text-text')
+  if (prompts.length === 0) return <p className="p-4 text-[14px] text-text-muted">AI에게 보낸 질문이 없습니다.</p>
   return (
-    <section className="flex min-h-0 flex-col border-t border-line bg-panel">
-      <div className="flex h-10 shrink-0 items-stretch border-b border-line" role="tablist" aria-label="참고 자료">
-        <button type="button" role="tab" aria-selected={tab === 'prompts'} onClick={() => onTab('prompts')} className={tabCls(tab === 'prompts')}>
-          {tab === 'prompts' && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
-          내 질문 <span className="tnum ml-1.5 font-mono text-[12px] text-text-faint">{prompts.length}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'file'}
-          onClick={() => onTab('file')}
-          className={cx(tabCls(tab === 'file'), 'border-l border-line font-mono')}
-          title={file}
-        >
-          {tab === 'file' && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
-          {file ? fileName(file) : '파일'}
-        </button>
-        <span className="ml-auto flex items-center gap-1 px-3 font-mono text-[12px] text-text-faint">
-          <Lock size={12} aria-hidden /> READ ONLY
-        </span>
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto bg-panel-sunken">
-        {tab === 'prompts' ? (
-          prompts.length === 0 ? (
-            <p className="p-4 text-[14px] text-text-muted">AI에게 보낸 질문이 없습니다.</p>
-          ) : (
-            <ol className="divide-y divide-line">
-              {prompts.map((t) => {
-                const ref = `#T${String(t.turn).padStart(2, '0')}`
-                return (
-                  <li key={t.turn} className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-sm bg-info/12 px-1.5 font-mono text-[12px] text-info">{ref}</span>
-                      <span className="tnum font-mono text-[12px] text-text-faint">{t.time}</span>
-                      <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onInsert(ref)}>
-                        답변에 넣기
-                      </Button>
-                    </div>
-                    <p className="mt-1.5 text-[14px] leading-6 whitespace-pre-wrap text-text">{t.text}</p>
-                  </li>
-                )
-              })}
-            </ol>
-          )
-        ) : file ? (
-          <pre className="px-4 py-3 font-mono text-code whitespace-pre text-text">{content}</pre>
-        ) : (
-          <p className="p-4 text-[14px] text-text-muted">왼쪽 파일 탐색기에서 파일을 여세요.</p>
-        )}
-      </div>
-    </section>
+    <ol className="h-full divide-y divide-line overflow-auto bg-panel-sunken">
+      {prompts.map((t) => {
+        const ref = `#T${String(t.turn).padStart(2, '0')}`
+        return (
+          <li key={t.turn} className="px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="rounded-sm bg-info/12 px-1.5 font-mono text-[12px] text-info">{ref}</span>
+              <span className="tnum font-mono text-[12px] text-text-faint">{t.time}</span>
+              <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onInsert(ref)}>
+                답변에 넣기
+              </Button>
+            </div>
+            <p className="mt-1.5 text-[14px] leading-6 whitespace-pre-wrap text-text">{t.text}</p>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
@@ -623,6 +574,7 @@ export default function RealExam() {
   const left = task.minutes * 60 - elapsed
   const locked = stage === 'followup'
   const fuList = fuAnswers ?? task.followUps.map(() => '')
+  const showPrompts = locked && refTab === 'prompts'
   const tone = locked ? 'text-text' : left <= 180 ? 'text-alert' : left <= 600 ? 'text-caution' : 'text-text'
   const isDoc = !dev && active === task.editableFile
 
@@ -848,58 +800,60 @@ export default function RealExam() {
 
         {/* 가운데: 에디터 + 출력 | 후속 질문 */}
         <div className="flex min-h-0 min-w-0 flex-col">
-          {locked ? (
-            <div className="grid h-full min-h-0 min-w-0" style={{ gridTemplateRows: 'minmax(0,11fr) minmax(0,9fr)', gridTemplateColumns: 'minmax(0,1fr)' }}>
-              <FollowUp
-                questions={task.followUps}
-                i={fuIndex}
-                onIndex={setFuIndex}
-                answers={fuList}
-                onAnswers={setFuAnswers}
-                busy={busy}
-                error={actionError}
-                onDone={(a) => void doFollowUps(a)}
-              />
-              <FollowUpReference
-                turns={turns}
-                tab={refTab}
-                onTab={setRefTab}
-                file={active}
-                content={contents[active] ?? ''}
-                onInsert={(ref) =>
-                  setFuAnswers(fuList.map((a, j) => (j === fuIndex ? (a && !/\s$/.test(a) ? a + ' ' : a) + ref : a)))
-                }
-              />
-            </div>
-          ) : (
-            <>
+          <>
               <div className="flex h-10 shrink-0 items-stretch border-b border-line bg-panel">
                 <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto" role="tablist" aria-label="열린 파일">
+                  {locked && (
+                    <button
+                      role="tab"
+                      type="button"
+                      aria-selected={showPrompts}
+                      onClick={() => setRefTab('prompts')}
+                      className={cx(
+                        'relative flex shrink-0 items-center border-r border-line px-3 text-[14px]',
+                        showPrompts ? 'bg-panel-sunken text-text' : 'text-text-muted hover:text-text',
+                      )}
+                    >
+                      {showPrompts && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
+                      내 질문 <span className="tnum ml-1.5 font-mono text-[12px] text-text-faint">{turns.filter((t) => t.role === 'user').length}</span>
+                    </button>
+                  )}
                   {open.map((f) => (
                     <div
                       key={f}
                       className={cx(
                         'group relative flex shrink-0 items-center gap-1 border-r border-line pr-1 pl-3',
-                        active === f ? 'bg-panel-sunken text-text' : 'text-text-muted hover:text-text',
+                        active === f && !showPrompts ? 'bg-panel-sunken text-text' : 'text-text-muted hover:text-text',
+                        locked && 'pr-3',
                       )}
                     >
-                      {active === f && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
-                      <button role="tab" aria-selected={active === f} type="button" onClick={() => setActive(f)} className="font-mono text-[14px]" title={f}>
+                      {active === f && !showPrompts && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
+                      <button
+                        role="tab"
+                        aria-selected={active === f && !showPrompts}
+                        type="button"
+                        onClick={() => {
+                          setActive(f)
+                          setRefTab('file')
+                        }}
+                        className="font-mono text-[14px]"
+                        title={f}
+                      >
                         {fileName(f)}
                         {dirty.has(f) && <span className="ml-1 text-caution">●</span>}
                       </button>
-                      <button
+                      {!locked && <button
                         type="button"
                         aria-label={`${fileName(f)} 닫기`}
                         onClick={() => closeFile(f)}
                         className="inline-flex size-6 items-center justify-center rounded-sm text-text-faint hover:bg-panel-raised hover:text-text"
                       >
                         <X size={14} aria-hidden />
-                      </button>
+                      </button>}
                     </div>
                   ))}
                 </div>
-                {readOnlyPath(active) && (
+                {(locked || readOnlyPath(active)) && (
                   <span className="flex items-center gap-1 px-3 font-mono text-[12px] text-text-faint">
                     <Lock size={12} aria-hidden /> READ ONLY
                   </span>
@@ -907,11 +861,18 @@ export default function RealExam() {
               </div>
 
               <div className="min-h-0 flex-1">
-                {active && !isDoc ? (
+                {showPrompts ? (
+                  <PromptList
+                    turns={turns}
+                    onInsert={(ref) =>
+                      setFuAnswers(fuList.map((a, j) => (j === fuIndex ? (a && !/\s$/.test(a) ? a + ' ' : a) + ref : a)))
+                    }
+                  />
+                ) : active && !isDoc ? (
                   <CodeEditor
                     path={active}
                     value={contents[active] ?? ''}
-                    readOnly={readOnlyPath(active)}
+                    readOnly={locked || readOnlyPath(active)}
                     onChange={edit}
                     diagnostics={activeDiagnostics}
                   />
@@ -919,7 +880,7 @@ export default function RealExam() {
                   <textarea
                     aria-label={`${active} 편집기`}
                     value={contents[active] ?? ''}
-                    readOnly={readOnlyPath(active)}
+                    readOnly={locked || readOnlyPath(active)}
                     spellCheck={false}
                     onChange={(e) => edit(e.target.value)}
                     onKeyDown={(e) => {
@@ -942,6 +903,20 @@ export default function RealExam() {
                 )}
               </div>
 
+              {locked ? (
+                <div className="h-[48%] min-h-[300px] shrink-0 border-t border-line">
+                  <FollowUp
+                    questions={task.followUps}
+                    i={fuIndex}
+                    onIndex={setFuIndex}
+                    answers={fuList}
+                    onAnswers={setFuAnswers}
+                    busy={busy}
+                    error={actionError}
+                    onDone={(a) => void doFollowUps(a)}
+                  />
+                </div>
+              ) : (
               <section className={cx('flex shrink-0 flex-col border-t border-line bg-panel', showOutput ? 'h-60' : 'h-10')}>
                 <header className={cx('flex h-10 shrink-0 items-center gap-3 px-4', showOutput && 'border-b border-line')}>
                   <span className="label">{dev ? 'OUTPUT' : 'CHECK'}</span>
@@ -1011,8 +986,8 @@ export default function RealExam() {
                 </div>
                 )}
               </section>
+              )}
             </>
-          )}
         </div>
 
         {/* 오른쪽: AI */}
