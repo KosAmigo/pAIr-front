@@ -32,11 +32,13 @@ public class ApiController {
     private final TaskRepository tasks;
     private final AttemptService attempts;
     private final AttemptStore store;
+    private final com.pair.config.PairProperties props;
 
-    public ApiController(TaskRepository tasks, AttemptService attempts, AttemptStore store) {
+    public ApiController(TaskRepository tasks, AttemptService attempts, AttemptStore store, com.pair.config.PairProperties props) {
         this.tasks = tasks;
         this.attempts = attempts;
         this.store = store;
+        this.props = props;
     }
 
     public record StartRequest(String taskId) {}
@@ -106,6 +108,7 @@ public class ApiController {
         m.put("task", tasks.get(a.taskId()));
         m.put("files", store.readFiles(id).keySet());
         m.put("turns", store.turns(id).stream().map(t -> view(a, t)).toList());
+        m.put("chatMaxChars", props.assistant().maxInputChars());
         m.put("elapsedSeconds", Duration.between(a.startedAt(), a.submittedAt() != null ? a.submittedAt() : Instant.now()).toSeconds());
         return m;
     }

@@ -292,7 +292,10 @@ SCORE                ← label
 - 응시자 메시지: 오른쪽 정렬, 배경 `panel-raised`, `radius-md`.
 - AI 메시지: 왼쪽 정렬, 배경 없음, 왼쪽에 `info` 2px 세로선과 AI 아이콘.
 - 메시지마다 모노 턴 번호 `#T07`(text-faint)을 붙인다. 리포트의 근거 인용과 같은 번호다.
-- 입력창: 하단 고정, 여러 줄 입력, `Ctrl+Enter` 전송 안내를 `label`로 표시.
+- 입력창: 하단 고정, 여러 줄 입력.
+  - 입력 상자 안 **위쪽 오른쪽**에 글자 수 `123 / 1,000`(mono 12px `text-faint`). 90% 이상이면 `caution`, 한도를 넘으면 `alert`로 "글자 수 초과"를 붙이고 상자 테두리도 `alert`, 전송 버튼은 비활성.
+  - 한도는 질문 1회 1,000자이며 백엔드 설정(`pair.assistant.max-input-chars`)과 같은 값을 쓴다. 붙여 넣기로 넘쳐도 잘라 내지 않고 사용자가 줄이게 둔다.
+  - 입력 상자 안 아래 줄: 왼쪽 `CTRL + ENTER`(`label`), 오른쪽 끝에 **AI 모델 이름**(mono 12px `text-faint`, 예: `gpt-6.1-terra`)과 전송 아이콘 버튼.
 
 ### 6.9 Code Editor / File Explorer / Output
 

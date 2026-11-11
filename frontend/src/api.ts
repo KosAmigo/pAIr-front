@@ -36,6 +36,7 @@ export type AttemptView = {
   files: string[]
   turns: Turn[]
   elapsedSeconds: number
+  chatMaxChars?: number
 }
 
 export type RunResult = {

@@ -85,6 +85,10 @@ public class AttemptService {
 
     public synchronized List<ChatTurn> chat(String id, String message) {
         Attempt a = requireStatus(id, Attempt.Status.SOLVING);
+        int limit = props.assistant().maxInputChars();
+        if (limit > 0 && message.length() > limit) {
+            throw new IllegalArgumentException("질문은 " + limit + "자 이하로 입력하세요. (현재 " + message.length() + "자)");
+        }
         List<ChatTurn> history = store.turns(id);
         if (history.size() / 2 >= props.assistant().maxTurns()) {
             throw new IllegalStateException("응시당 AI 질문 한도(" + props.assistant().maxTurns() + "회)에 도달했습니다.");
