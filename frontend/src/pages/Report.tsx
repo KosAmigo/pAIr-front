@@ -1,5 +1,7 @@
 import { useState, type CSSProperties } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import { isRealAttempt } from '../api'
+import RealReport from './RealReport'
 import { Bot, ChevronDown, CircleAlert, CircleCheck, GitBranch, RotateCcw, User } from 'lucide-react'
 import { PageHeader, RailShell } from '../components/RailShell'
 import { Button, ButtonLink, cx, Delta, Panel, Sep } from '../components/ui'
@@ -123,7 +125,13 @@ function Quote({ m }: { m: ChatMsg }) {
   )
 }
 
+// 실제 응시(att-...)는 백엔드 리포트, 그 밖의 ID는 목업 리포트
 export default function Report() {
+  const { attemptId } = useParams()
+  return isRealAttempt(attemptId) ? <RealReport /> : <MockReport />
+}
+
+function MockReport() {
   const [sel, setSel] = useState(moments[0].id)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const navigate = useNavigate()

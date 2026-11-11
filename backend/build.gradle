@@ -1,0 +1,43 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.2'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.pair'
+version = '0.0.1-SNAPSHOT'
+description = 'pAIr pilot backend'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // AI 어시스턴트 (OpenAI) 와 채점 (Anthropic)
+    implementation 'com.openai:openai-java:4.101.0'
+    implementation 'com.anthropic:anthropic-java:3.8.0'
+
+    // 응시자 코드의 JUnit 테스트를 별도 JVM에서 실행할 때 쓰는 콘솔 런처 (Boot 관리 JUnit 버전과 맞춤)
+    implementation 'org.junit.platform:junit-platform-console-standalone:6.0.3'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.named('bootRun') {
+    // 응시 데이터는 저장소 루트의 pilot-data/ 에 쌓는다 (.gitignore 처리됨)
+    workingDir = rootProject.projectDir.parentFile
+}
