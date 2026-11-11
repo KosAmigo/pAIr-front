@@ -167,9 +167,14 @@ export default function Dashboard() {
     <RailShell
       header={
         <PageHeader label="SELF-CHECK DASHBOARD" title={`${user.name}님의 역량 현황`}>
-          <ButtonLink to="/exam/t-order-api?mode=self" variant="primary">
-            <Play size={18} aria-hidden /> 새 자가진단 시작
-          </ButtonLink>
+          <div className="flex gap-2">
+            <ButtonLink to="/exam/new?track=biz" variant="secondary">
+              <Play size={18} aria-hidden /> 비개발 과제 응시
+            </ButtonLink>
+            <ButtonLink to="/exam/new?track=dev" variant="primary">
+              <Play size={18} aria-hidden /> 개발 과제 응시
+            </ButtonLink>
+          </div>
         </PageHeader>
       }
     >

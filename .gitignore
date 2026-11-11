@@ -32,3 +32,9 @@ desktop.ini
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Java / Gradle / IntelliJ
+backend/.gradle/
+backend/build/
+.idea/
+*.iml

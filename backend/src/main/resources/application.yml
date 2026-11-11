@@ -1,0 +1,38 @@
+server:
+  port: 8180
+
+spring:
+  application:
+    name: pair-backend
+
+pair:
+  # 응시 기록을 쌓는 폴더 (bootRun 은 저장소 루트에서 실행되므로 pAIr/pilot-data)
+  data-dir: pilot-data
+
+  # 응시자가 쓰는 AI 어시스턴트. R2 다시 실행도 같은 설정을 쓴다.
+  assistant:
+    provider: openai
+    model: gpt-6.1-terra
+    max-output-tokens: 2000
+    max-turns: 40
+    system-prompt: >-
+      당신은 개발 및 기획 과제를 돕는 AI 어시스턴트입니다.
+      사용자가 대화에 직접 붙여 넣은 내용만 볼 수 있습니다.
+      한국어로 간결하고 정확하게 답하세요.
+
+  # 채점용 LLM (Anthropic). 어시스턴트와 다른 회사 모델을 써서 자기 답변에 후한 채점을 줄인다.
+  judge:
+    model: claude-sonnet-5-5
+    max-tokens: 16000
+
+  # (예비) Claude 를 어시스턴트로 쓸 때의 모델. 이번 파일럿에서는 쓰지 않는다.
+  claude-assistant-model: claude-haiku-5-5
+
+  # 응시자 코드 테스트 실행
+  run:
+    timeout-seconds: 30
+
+  # 출력 안정성(R2): 핵심 턴 최대 개수와 턴마다 다시 실행할 횟수
+  r2:
+    max-key-turns: 3
+    replays-per-turn: 2
