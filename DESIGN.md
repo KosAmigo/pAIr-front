@@ -75,6 +75,15 @@
 
 - 재현성과 AI 결과 도출력의 하위 기준(R1–R3, D1–D5)은 `docs/evaluation/재현성_AI결과도출력.md`를 따른다. 리포트의 항목별 점수 행에서 펼침으로 보여준다.
 
+### 1.4a 코드 편집기 전용 색 (2026-11-11)
+
+| 토큰 | HEX | 용도 |
+|---|---|---|
+| `code-type` | `#4DD4E6` | 클래스, 인터페이스, 타입 이름 (선언과 사용 모두) |
+| `code-field` | `#9CDCFE` | 필드 선언, `this.x` 같은 점 접근 |
+
+코드 편집기 안에서만 쓴다. 다른 화면에서 이 두 색을 상태나 분기 표시에 쓰지 않는다.
+
 ### 1.5 대비 점검 (WCAG AA)
 
 | 전경 / 배경 | 대비 | 판정 |
@@ -300,8 +309,24 @@ SCORE                ← label
 
 ### 6.9 Code Editor / File Explorer / Output
 
-- 에디터 배경 `panel-sunken`, 줄 번호 `text-faint`, 현재 줄 `panel-raised`.
-- 구문 색은 분기 팔레트를 재사용한다: 키워드 `branch-3`, 문자열 `branch-1`, 숫자와 어노테이션(`@Service` 등) `branch-4`, 함수 `branch-2`, 주석 `text-faint`.
+- 편집기는 **CodeMirror 6**(`components/CodeEditor.tsx`)을 쓴다. 줄 번호, 현재 줄 강조, 괄호 짝, 자동 괄호 닫기, 자동 들여쓰기(4칸), Tab 들여쓰기, 찾기(Ctrl+F), 되돌리기를 기본으로 켠다.
+- 에디터 배경 `panel-sunken`, 글꼴 JetBrains Mono 14/22, 줄 번호 `text-faint`(현재 줄은 `text-muted`), 현재 줄 배경 `panel-raised`, 커서 `signal` 2px.
+- **Java 구문 색** (VS Code 다크 테마 느낌, 문법 파싱 기반):
+
+| 요소 | 색 |
+|---|---|
+| 키워드, 제어문, 접근 제어자, `this`, `null` | `branch-3` |
+| 문자열, 문자 | `branch-1` |
+| 숫자, `true/false`, 어노테이션(`@Test`) | `branch-4` |
+| 클래스, 인터페이스, 타입 이름 | `code-type` |
+| 메서드 선언과 호출 | `branch-2` |
+| 필드 선언, `this.x` 같은 점 접근 | `code-field` |
+| 지역 변수, 매개변수 | `text` |
+| 주석 | `text-faint` 기울임 |
+
+  - 한계: 필드를 `this` 없이 이름만으로 쓰면 지역 변수와 같은 색이다. 둘을 완전히 가르려면 언어 서버가 필요하다.
+- 비개발 과제의 문서 편집기(`기획안.md`)는 CodeMirror가 아니라 Pretendard 본문 입력창을 쓴다. 그 밖의 `.md` 파일은 CodeMirror Markdown 모드로 보여 준다.
+- `logs/`, `자료/` 아래 파일은 읽기 전용이며 툴바에 `READ ONLY`를 표시한다.
 - 개발 과제의 기본 스택은 **Spring Boot(Java) 백엔드 + React(TypeScript) 프론트엔드**다. 목업 파일, 실행 명령(`./gradlew test`), 테스트 결과(JUnit)도 이 스택에 맞춘다.
 - 파일 탐색기: 행 높이 28px, 선택 행은 `panel-raised`에 왼쪽 2px `signal`.
 - 실행 결과: 모노 13px. 성공 줄은 `signal`, 오류 줄은 `alert`, 프롬프트 기호는 `text-faint`.
@@ -437,7 +462,13 @@ VS Code의 activity bar 문법을 따른 응시 화면 맨 왼쪽 아이콘 레�
 
 - 맨 왼쪽은 Activity Rail(6.14)이다. 사이드 패널(`과제` / `파일`)은 레일로 전환하고, 같은 아이콘을 다시 누르면 접힌다. 실행 결과 창과 AI 채팅 창도 레일 하단 토글로 숨길 수 있다.
 - 사이드 패널 상단은 40px 헤더에 오버라인 `TASK` 또는 `EXPLORER`.
-- 가운데 상단 툴바에 `실행` 버튼(primary, sm)이 있고, 실행하면 목업 결과를 표시한다.
+- 가운데 상단 툴바(개발 과제): `빌드`(secondary, Hammer 아이콘), `테스트 실행`(primary, Play 아이콘). 모두 sm. **저장 버튼은 두지 않는다.**
+  - 저장은 자동이다: 입력을 멈추고 2초 뒤, 파일 탭을 닫을 때, 빌드와 테스트 실행 직전, 제출 직전에 바뀐 파일을 서버에 저장한다. `Ctrl+S`로 바로 저장할 수도 있다(토스트로 알림).
+  - 저장되지 않은 파일은 탭 이름 옆에 `caution` 점으로 표시한다.
+  - `빌드`: 저장 후 `src/`, `test/`의 Java 파일을 컴파일만 한다. 결과 창에 `build successful` 또는 `build failed, N errors`.
+  - `테스트 실행`: 저장 후 컴파일하고 `test/`의 JUnit 테스트를 돌린다. 결과 창 헤더에 `N passed, M failed`.
+  - 컴파일 오류는 결과 창에 `[ERROR] src/shop/OrderService.java:12:5 메시지`로 보이고, 누르면 그 파일을 연다. 편집기에서는 해당 줄에 `alert` 물결 밑줄과 마우스를 올리면 보이는 메시지로 표시한다.
+  - 빌드나 테스트 실행을 누르면 숨겨 둔 결과 창이 자동으로 열린다.
 - 자가진단 모드에서는 상태바에 `체크포인트 저장` ghost 버튼이 보인다. 실전 모드에서는 숨긴다.
 - **제출 후 후속 질문 단계:** 3열 레이아웃을 그대로 두고 가운데 영역을 "후속 질문" 패널로 교체한다. 질문 1/3 진행 표시, 답변 입력창, `다음`·`완료` 버튼으로 구성한다. 에디터와 AI 패널은 읽기 전용으로 흐리게(opacity 50%) 둔다.
 - 완료 후 자가진단은 리포트로, 실전은 제출 완료 안내로 이동한다.

@@ -1,7 +1,8 @@
 @import 'tailwindcss';
 
-/* DESIGN.md §1–§4 토큰. 컴포넌트에서는 이 토큰 클래스만 사용한다. */
-@theme {
+/* DESIGN.md §1–§4 토큰. 컴포넌트에서는 이 토큰 클래스만 사용한다.
+   static: 클래스에서 안 쓰는 토큰도 CSS 변수로 내보낸다 (인라인 style 과 CodeMirror 테마가 var() 로 참조). */
+@theme static {
   /* 1.1 Surface & Text */
   --color-bg: #0b0f17;
   --color-panel: #121826;
@@ -27,6 +28,10 @@
   --color-branch-5: #ff6b8b;
   /* 1.4 역량 항목 6번째 (성과 잠재력) 전용 */
   --color-comp-6: #4dd4e6;
+
+  /* 6.9 코드 편집기 전용: 클래스와 타입, 필드 */
+  --color-code-type: #4dd4e6;
+  --color-code-field: #9cdcfe;
 
   /* 2.1 Fonts */
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', sans-serif;

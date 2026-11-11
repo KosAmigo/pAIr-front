@@ -83,6 +83,18 @@ public class AttemptService {
         return r;
     }
 
+    /** 빌드 버튼: 응시자 코드를 컴파일만 한다. */
+    public CodeRunner.BuildResult build(String id) {
+        requireStatus(id, Attempt.Status.SOLVING);
+        Map<String, String> sources = new HashMap<>();
+        store.readFiles(id).forEach((k, v) -> {
+            if ((k.startsWith("src/") || k.startsWith("test/")) && k.endsWith(".java")) sources.put(k, v);
+        });
+        CodeRunner.BuildResult r = runner.build(sources);
+        store.appendEvent(id, "build", Map.of("compiled", r.compiled(), "diagnostics", r.diagnostics().size(), "millis", r.millis()));
+        return r;
+    }
+
     public synchronized List<ChatTurn> chat(String id, String message) {
         Attempt a = requireStatus(id, Attempt.Status.SOLVING);
         int limit = props.assistant().maxInputChars();
