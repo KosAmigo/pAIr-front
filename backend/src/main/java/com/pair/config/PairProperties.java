@@ -11,7 +11,7 @@ public record PairProperties(
         Run run,
         R2 r2) {
 
-    public record Assistant(String provider, String model, long maxOutputTokens, int maxTurns, int maxInputChars, String systemPrompt) {}
+    public record Assistant(String provider, String model, long maxOutputTokens, String reasoningEffort, int maxTurns, int maxInputChars, String systemPrompt) {}
 
     public record Judge(String model, long maxTokens) {}
 

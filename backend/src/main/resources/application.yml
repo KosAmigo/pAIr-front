@@ -13,7 +13,10 @@ pair:
   assistant:
     provider: openai
     model: gpt-6-luna
-    max-output-tokens: 2000
+    # 추론(reasoning) 모델은 생각에 쓰는 토큰도 이 한도에 포함된다. 너무 작으면 답이 비어서 온다.
+    max-output-tokens: 8000
+    # 추론 강도: none, minimal, low, medium, high. 낮을수록 빠르고 싸며 한도에 덜 걸린다.
+    reasoning-effort: low
     max-turns: 40
     # 응시자 질문 한 번의 최대 글자 수 (프론트 입력창 글자 수 표시와 같은 값)
     max-input-chars: 1000

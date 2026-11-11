@@ -11,6 +11,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.stereotype.Service;
 
+import com.pair.ai.AiUnavailableException;
 import com.pair.ai.AssistantClient;
 import com.pair.attempt.ChatTurn.AssistantRequest;
 import com.pair.attempt.ChatTurn.Message;
@@ -74,12 +75,12 @@ public class AttemptService {
         CodeRunner.RunResult r = runner.run(sources);
         Map<String, Object> ev = new HashMap<>(CodeRunner.summary(r));
         store.appendEvent(id, "run", ev);
-        // 첫 유효 결과: 응시자가 테스트를 추가했고(원본 테스트 수보다 많고) 모두 통과한 첫 실행.
-        // 원본 코드는 보이는 테스트 1개를 이미 통과하므로, 통과만으로는 유효 결과로 보지 않는다.
-        int originalTests = (int) tasks.visibleFiles(a.taskId()).entrySet().stream()
-                .filter(e -> e.getKey().startsWith("test/"))
-                .mapToLong(e -> e.getValue().split("@Test", -1).length - 1).sum();
-        if (r.allPassed() && r.passed() > originalTests) markFirstValid(a);
+        // 첫 유효 결과: src 코드를 원본에서 고친 뒤 테스트가 전부 통과한 첫 실행.
+        // (원본 코드도 보이는 테스트 1개는 통과하므로 src 변경을 함께 본다. 테스트 추가 여부는 따지지 않는다.)
+        Map<String, String> original = tasks.visibleFiles(a.taskId());
+        boolean srcChanged = sources.entrySet().stream()
+                .anyMatch(e -> e.getKey().startsWith("src/") && !e.getValue().equals(original.get(e.getKey())));
+        if (r.allPassed() && srcChanged) markFirstValid(a);
         return r;
     }
 
@@ -109,9 +110,15 @@ public class AttemptService {
         for (ChatTurn t : history) msgs.add(new Message("user".equals(t.role()) ? "user" : "assistant", t.text()));
         msgs.add(new Message("user", message));
         AssistantRequest req = new AssistantRequest(a.model(), props.assistant().maxOutputTokens(),
-                props.assistant().systemPrompt(), List.copyOf(msgs));
+                props.assistant().reasoningEffort(), props.assistant().systemPrompt(), List.copyOf(msgs));
         Instant askedAt = Instant.now();
         AssistantClient.Reply reply = assistant.send(req); // 실패하면 예외 → 질문도 저장하지 않는다
+        if (reply.text().isBlank()) {
+            // 추론 모델이 한도 안에서 답을 끝내지 못하면 빈 답이 온다. 저장하지 않고 다시 보내게 한다.
+            store.appendEvent(id, "chatEmpty", Map.of("finishReason", reply.finishReason(), "outputTokens", reply.outputTokens()));
+            throw new AiUnavailableException("AI가 답변을 끝내지 못했습니다(" + reply.finishReason()
+                    + "). 질문을 조금 나누거나 범위를 좁혀 다시 보내 주세요. 이 실패는 채점에 반영되지 않습니다.");
+        }
         int n = history.size();
         ChatTurn user = new ChatTurn(n + 1, "user", askedAt, message, null, null, null, null, null, null);
         ChatTurn ai = new ChatTurn(n + 2, "ai", Instant.now(), reply.text(), a.provider(), reply.model(), req,
