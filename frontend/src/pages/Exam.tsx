@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  Hammer,
   Folder,
   Lock,
   MonitorUp,
@@ -500,13 +501,6 @@ export default function Exam() {
                     </div>
                   ))}
                 </div>
-                {!biz && (
-                  <div className="flex items-center px-3">
-                    <Button variant="primary" size="sm" onClick={() => setRan(true)}>
-                      <Play size={16} aria-hidden /> 실행
-                    </Button>
-                  </div>
-                )}
               </div>
 
               <div className="min-h-0 flex-1">
@@ -524,12 +518,22 @@ export default function Exam() {
                 )}
               </div>
 
-              {showOutput && (
-              <section className="flex h-60 shrink-0 flex-col border-t border-line bg-panel">
-                <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
+              <section className={cx('flex shrink-0 flex-col border-t border-line bg-panel', showOutput ? 'h-60' : 'h-10')}>
+                <header className={cx('flex h-10 shrink-0 items-center gap-3 px-4', showOutput && 'border-b border-line')}>
                   <span className="label">{biz ? 'CHECK' : 'OUTPUT'}</span>
                   {!biz && ran && <span className="font-mono text-[13px] text-alert">1 failed</span>}
+                  {!biz && (
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={() => setRan(true)}>
+                        <Hammer size={16} aria-hidden /> 빌드
+                      </Button>
+                      <Button variant="primary" size="sm" onClick={() => setRan(true)}>
+                        <Play size={16} aria-hidden /> 테스트 실행
+                      </Button>
+                    </div>
+                  )}
                 </header>
+                {showOutput && (
                 <div className="min-h-0 flex-1 overflow-auto bg-panel-sunken p-4 font-mono text-code">
                   {biz ? (
                     <ul className="space-y-1 font-sans text-[14px]">
@@ -562,8 +566,8 @@ export default function Exam() {
                     <span className="text-text-faint">$ 실행 버튼을 누르면 결과가 여기에 표시됩니다</span>
                   )}
                 </div>
+                )}
               </section>
-              )}
             </>
           )}
         </div>

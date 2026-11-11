@@ -699,23 +699,11 @@ export default function RealExam() {
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 px-3">
-                  {readOnlyPath(active) && (
-                    <span className="flex items-center gap-1 font-mono text-[12px] text-text-faint">
-                      <Lock size={12} aria-hidden /> READ ONLY
-                    </span>
-                  )}
-                  {dev && (
-                    <>
-                      <Button variant="secondary" size="sm" onClick={() => void doRun('build')} disabled={running} title="컴파일만 합니다">
-                        {busyTask === 'build' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Hammer size={16} aria-hidden />} 빌드
-                      </Button>
-                      <Button variant="primary" size="sm" onClick={() => void doRun('test')} disabled={running} title="컴파일하고 test 폴더의 JUnit 테스트를 실행합니다">
-                        {busyTask === 'test' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Play size={16} aria-hidden />} 테스트 실행
-                      </Button>
-                    </>
-                  )}
-                </div>
+                {readOnlyPath(active) && (
+                  <span className="flex items-center gap-1 px-3 font-mono text-[12px] text-text-faint">
+                    <Lock size={12} aria-hidden /> READ ONLY
+                  </span>
+                )}
               </div>
 
               <div className="min-h-0 flex-1">
@@ -754,9 +742,8 @@ export default function RealExam() {
                 )}
               </div>
 
-              {showOutput && (
-              <section className="flex h-56 shrink-0 flex-col border-t border-line bg-panel">
-                <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
+              <section className={cx('flex shrink-0 flex-col border-t border-line bg-panel', showOutput ? 'h-60' : 'h-10')}>
+                <header className={cx('flex h-10 shrink-0 items-center gap-3 px-4', showOutput && 'border-b border-line')}>
                   <span className="label">{dev ? 'OUTPUT' : 'CHECK'}</span>
                   {dev && run && (
                     <span
@@ -772,7 +759,18 @@ export default function RealExam() {
                           : `${run.passed} passed, ${run.failed} failed`}
                     </span>
                   )}
+                  {dev && (
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={() => void doRun('build')} disabled={running} title="컴파일만 합니다">
+                        {busyTask === 'build' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Hammer size={16} aria-hidden />} 빌드
+                      </Button>
+                      <Button variant="primary" size="sm" onClick={() => void doRun('test')} disabled={running} title="컴파일하고 test 폴더의 JUnit 테스트를 실행합니다">
+                        {busyTask === 'test' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Play size={16} aria-hidden />} 테스트 실행
+                      </Button>
+                    </div>
+                  )}
                 </header>
+                {showOutput && (
                 <div className="min-h-0 flex-1 overflow-auto bg-panel-sunken p-4 font-mono text-code">
                   {!dev ? (
                     <DocChecks task={task} doc={contents[task.editableFile ?? ''] ?? ''} />
@@ -811,8 +809,8 @@ export default function RealExam() {
                     <span className="text-text-faint">$ 빌드는 컴파일만, 테스트 실행은 컴파일 후 test 폴더의 JUnit 테스트까지 돌립니다</span>
                   )}
                 </div>
+                )}
               </section>
-              )}
             </>
           )}
         </div>
