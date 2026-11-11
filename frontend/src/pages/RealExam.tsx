@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bot, ChevronDown, ChevronRight, FileText, Folder, Hammer, Loader2, Lock, Play, Save, Send, X } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, FileText, Folder, Hammer, Loader2, Lock, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
+import { SendKey } from '../components/SendKey'
 import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { api, ApiError, type AttemptView, type CompileDiagnostic, type Task, type Turn } from '../api'
@@ -247,12 +248,10 @@ function ChatPanel({
           />
           <div className="flex items-center gap-2 px-2 pb-2">
             <span className="label pl-1 text-text-faint">CTRL + ENTER</span>
-            <span className="ml-auto truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
+            <span className="ml-auto mr-3 truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
               {model}
             </span>
-            <IconButton label="전송" className="text-signal hover:text-signal disabled:opacity-40" onClick={() => void send()} disabled={disabled || busy || over}>
-              <Send size={18} aria-hidden />
-            </IconButton>
+            <SendKey ready={draft.trim().length > 0} disabled={disabled || busy || over} onClick={() => void send()} />
           </div>
         </div>
       </div>

@@ -11,12 +11,12 @@ import {
   MonitorUp,
   Play,
   Save,
-  Send,
   X,
 } from 'lucide-react'
 import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { CodeEditor } from '../components/CodeEditor'
+import { SendKey } from '../components/SendKey'
 import {
   bizDoc,
   bizFiles,
@@ -172,7 +172,7 @@ function FileTree({ nodes, depth = 0, active, onOpen }: { nodes: FileNode[]; dep
 
 // ── 6.8 AI Chat ─────────────────────────────
 // 목업 화면용 값. 실제 응시 화면은 백엔드 설정(application.yml)의 모델과 글자 수 제한을 쓴다.
-const CHAT_MODEL = 'gpt-6.1-terra'
+const CHAT_MODEL = 'gpt-6-luna'
 const CHAT_MAX_CHARS = 1000
 function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[] }) {
   const [msgs, setMsgs] = useState<ChatMsg[]>(initial)
@@ -272,12 +272,10 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
           />
           <div className="flex items-center gap-2 px-2 pb-2">
             <span className="label pl-1 text-text-faint">CTRL + ENTER</span>
-            <span className="ml-auto truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
+            <span className="ml-auto mr-3 truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
               {CHAT_MODEL}
             </span>
-            <IconButton label="전송" className="text-signal hover:text-signal disabled:opacity-40" onClick={send} disabled={disabled || over}>
-              <Send size={18} aria-hidden />
-            </IconButton>
+            <SendKey ready={draft.trim().length > 0} disabled={disabled || over} onClick={send} />
           </div>
         </div>
       </div>
