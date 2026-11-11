@@ -40,6 +40,7 @@ const statusView: Record<CheckResult['status'], { text: string; cls: string }> =
   PASSED: { text: '통과', cls: 'text-signal' },
   SKIPPED: { text: '적용 안 함', cls: 'text-text-faint' },
   NO_EVIDENCE: { text: '근거 없음', cls: 'text-caution' },
+  SPLIT: { text: '판정 엇갈림', cls: 'text-caution' },
 }
 
 function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number) => void }) {
@@ -75,6 +76,17 @@ function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number
               )
             })}
           </div>
+        )}
+        {c.judges && c.judges.length > 1 && (c.status === 'SPLIT' || c.status === 'DEDUCTED' || c.status === 'NO_EVIDENCE') && (
+          <ul className="mt-1.5 space-y-0.5 border-l border-line pl-2.5">
+            {c.judges.map((j) => (
+              <li key={j.judge} className="text-[13px] leading-5 text-text-faint">
+                <span className="font-mono">{j.model}</span>{' '}
+                <span className={j.violated ? 'text-alert' : 'text-signal'}>{j.violated ? '걸림' : '안 걸림'}</span>
+                {j.reason && <> · {j.reason}</>}
+              </li>
+            ))}
+          </ul>
         )}
       </td>
     </tr>
@@ -244,8 +256,13 @@ function Done({ r }: { r: Report }) {
                 <tbody>
                   {tokens.map(([k, v]) => (
                     <tr key={k} className="text-text-muted">
-                      <td className="py-0.5">{k === 'assistant' ? '어시스턴트' : k === 'r2Replay' ? '다시 실행(R1)' : '채점'}</td>
-                      <td className="tnum text-right">in {v.input.toLocaleString()}</td>
+                      <td className="py-0.5">
+                        {k === 'assistant' ? '어시스턴트' : k === 'r2Replay' ? '다시 실행(R1)' : v.model ? `채점 ${v.model}` : '채점'}
+                      </td>
+                      <td className="tnum text-right">
+                        in {v.input.toLocaleString()}
+                        {v.cachedInput ? <span className="text-text-faint"> (캐시 {v.cachedInput.toLocaleString()})</span> : null}
+                      </td>
                       <td className="tnum text-right">out {v.output.toLocaleString()}</td>
                     </tr>
                   ))}

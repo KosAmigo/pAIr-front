@@ -59,11 +59,15 @@ export type CheckResult = {
   method: 'AUTO' | 'JUDGE'
   points: number
   deducted: number
-  /** DEDUCTED 감점, PASSED 통과, SKIPPED 적용 안 함, NO_EVIDENCE 걸렸지만 근거가 없어 감점 안 함 */
-  status: 'DEDUCTED' | 'PASSED' | 'SKIPPED' | 'NO_EVIDENCE'
+  /** DEDUCTED 감점, PASSED 통과, SKIPPED 적용 안 함, NO_EVIDENCE 걸렸지만 근거가 없어 감점 안 함, SPLIT 두 채점 모델 판정이 엇갈려 감점 안 함 */
+  status: 'DEDUCTED' | 'PASSED' | 'SKIPPED' | 'NO_EVIDENCE' | 'SPLIT'
   evidence: string[]
   reason: string | null
+  /** 이중 채점에서 채점 모델별 판정 (이전 리포트에는 없음) */
+  judges?: JudgeView[]
 }
+
+export type JudgeView = { judge: string; model: string; violated: boolean; count: number; evidence: string[]; reason: string }
 
 export type ReportItem = { key: string; name: string; max: number; score: number; checks: CheckResult[] }
 
@@ -87,7 +91,8 @@ export type Report = {
   notes: string[]
   hiddenTests?: { name: string; passed: boolean }[]
   r2KeyTurns?: { turn: number; adoption: number; verdicts: { replay: number; same: boolean; reason: string }[] }[]
-  tokens: Record<string, { input: number; output: number }>
+  /** judge_claude, judge_openai 는 model, cachedInput 도 있음 */
+  tokens: Record<string, { input: number; output: number; model?: string; cachedInput?: number }>
   transcript: Turn[]
 }
 

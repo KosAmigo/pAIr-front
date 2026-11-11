@@ -10,6 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -18,7 +20,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.pair.ai.AssistantClient;
-import com.pair.ai.JudgeClient;
+import com.pair.ai.AiUnavailableException;
+import com.pair.ai.ClaudeJudge;
+import com.pair.ai.Judge;
+import com.pair.ai.OpenAiJudge;
 import com.pair.attempt.Attempt;
 import com.pair.attempt.AttemptStore;
 import com.pair.attempt.ChatTurn;
@@ -47,7 +52,8 @@ public class ScoringService {
     private final TaskRepository tasks;
     private final CodeRunner runner;
     private final AssistantClient assistant;
-    private final JudgeClient judge;
+    private final List<Judge> judges;
+    private final Judge replayJudge;
     private final PairProperties props;
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "scoring");
@@ -56,12 +62,13 @@ public class ScoringService {
     });
 
     public ScoringService(AttemptStore store, TaskRepository tasks, CodeRunner runner,
-                          AssistantClient assistant, JudgeClient judge, PairProperties props) {
+                          AssistantClient assistant, ClaudeJudge claudeJudge, OpenAiJudge openAiJudge, PairProperties props) {
         this.store = store;
         this.tasks = tasks;
         this.runner = runner;
         this.assistant = assistant;
-        this.judge = judge;
+        this.judges = List.of(claudeJudge, openAiJudge);
+        this.replayJudge = "claude".equals(props.judge().replayCompare()) ? claudeJudge : openAiJudge;
         this.props = props;
     }
 
@@ -95,10 +102,19 @@ public class ScoringService {
     // ── 리포트 형식 ───────────────────
 
     /**
-     * @param status DEDUCTED(감점), PASSED(통과), SKIPPED(적용 안 함), NO_EVIDENCE(걸렸다고 했지만 근거가 없어 감점 안 함)
+     * @param status DEDUCTED(감점), PASSED(통과), SKIPPED(적용 안 함), NO_EVIDENCE(걸렸다고 했지만 근거가 없어 감점 안 함),
+     *               SPLIT(판정 엇갈림: 두 채점 모델 중 한쪽만 걸렸다고 봄, 감점 안 함)
+     * @param judges 판정 체크에서 채점 모델별 판정 (자동 체크는 빈 목록)
      */
     public record CheckResult(String code, String label, String method, int points, int deducted,
-                              String status, List<String> evidence, String reason) {}
+                              String status, List<String> evidence, String reason, List<JudgeView> judges) {
+        CheckResult(String code, String label, String method, int points, int deducted, String status, List<String> evidence, String reason) {
+            this(code, label, method, points, deducted, status, evidence, reason, List.of());
+        }
+    }
+
+    /** 채점 모델 하나의 판정. */
+    public record JudgeView(String judge, String model, boolean violated, int count, List<String> evidence, String reason) {}
 
     public record ItemResult(String key, String name, int max, int score, List<CheckResult> checks) {}
 
@@ -111,7 +127,9 @@ public class ScoringService {
         List<ChatTurn> turns = store.turns(attemptId);
         Map<String, String> files = store.readFiles(attemptId);
         List<JsonNode> events = store.events(attemptId);
-        long judgeIn = 0, judgeOut = 0, replayIn = 0, replayOut = 0;
+        long replayIn = 0, replayOut = 0;
+        Map<String, long[]> judgeTokens = new LinkedHashMap<>(); // 모델별 {입력, 출력, 캐시 입력}
+        for (Judge j : judges) judgeTokens.put(j.name(), new long[3]);
         Map<String, CheckResult> results = new LinkedHashMap<>();
         List<String> notes = new ArrayList<>();
         Map<String, Object> extras = new LinkedHashMap<>();
@@ -203,9 +221,8 @@ public class ScoringService {
                     replays.add(rep.text());
                 }
                 if (replays.isEmpty()) continue;
-                JudgeClient.Result<ReplayJudgement> rj = judge.judge(REPLAY_SYSTEM, replayPrompt(t, replays), ReplayJudgement.class);
-                judgeIn += rj.inputTokens();
-                judgeOut += rj.outputTokens();
+                Judge.Result<ReplayJudgement> rj = replayJudge.judge(REPLAY_SYSTEM, "", replayPrompt(t, replays), ReplayJudgement.class);
+                addTokens(judgeTokens, replayJudge, rj);
                 for (ReplayVerdict v : rj.value().verdicts()) {
                     total++;
                     if (v.same()) same++;
@@ -230,32 +247,29 @@ public class ScoringService {
             Rubric.checksFor(dev).stream().filter(c -> c.item().equals("usage") && c.method() == Method.JUDGE)
                     .forEach(c -> results.put(c.code(), skipped(c.code(), dev, "U0 적용으로 판정하지 않음")));
         }
-        JudgeClient.Result<JudgeResult> jr = judge.judge(JUDGE_SYSTEM,
-                judgePrompt(task, judgeChecks, transcript(turns, a.startedAt()), files, a.followUpAnswers(), eventSummary(events, a.startedAt())),
-                JudgeResult.class);
-        judgeIn += jr.inputTokens();
-        judgeOut += jr.outputTokens();
-        Map<String, CheckVerdict> verdicts = new HashMap<>();
-        for (CheckVerdict v : jr.value().verdicts()) verdicts.put(v.code(), v);
-        for (Check c : judgeChecks) {
-            CheckVerdict v = verdicts.get(c.code());
-            if (v == null) {
-                results.put(c.code(), new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "SKIPPED", List.of(), "채점 모델이 판정하지 않음"));
-                continue;
-            }
-            boolean hasEvidence = v.evidence() != null && !v.evidence().isEmpty();
-            if (!v.violated()) {
-                results.put(c.code(), new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "PASSED",
-                        hasEvidence ? v.evidence() : List.of(), v.reason()));
-            } else if (!hasEvidence) {
-                results.put(c.code(), new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "NO_EVIDENCE", List.of(),
-                        "근거가 없어 감점하지 않음: " + v.reason()));
-            } else {
-                boolean perUnit = c.code().equals("D1");
-                int deducted = perUnit ? Math.min(20, Math.max(1, v.count()) * c.points()) : c.points();
-                results.put(c.code(), new CheckResult(c.code(), c.label(), "JUDGE", c.points(), deducted, "DEDUCTED", v.evidence(), v.reason()));
+        String prefix = judgePrefix(task, judgeChecks);
+        String body = judgeBody(task, judgeChecks, transcript(turns, a.startedAt()), files, a.followUpAnswers(), eventSummary(events, a.startedAt()));
+        // 두 채점 모델을 동시에 부른다. 한쪽이 실패하면 남은 한쪽으로만 판정한다.
+        Map<Judge, CompletableFuture<Judge.Result<JudgeResult>>> calls = new LinkedHashMap<>();
+        for (Judge j : judges) calls.put(j, CompletableFuture.supplyAsync(() -> j.judge(JUDGE_SYSTEM, prefix, body, JudgeResult.class)));
+        Map<Judge, Map<String, CheckVerdict>> byJudge = new LinkedHashMap<>();
+        List<String> failures = new ArrayList<>();
+        for (var e : calls.entrySet()) {
+            try {
+                Judge.Result<JudgeResult> jr = e.getValue().join();
+                addTokens(judgeTokens, e.getKey(), jr);
+                Map<String, CheckVerdict> m = new HashMap<>();
+                for (CheckVerdict v : jr.value().verdicts()) m.put(v.code(), v);
+                byJudge.put(e.getKey(), m);
+            } catch (CompletionException ex) {
+                Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+                log.warn("채점 모델 {} 실패: {}", e.getKey().model(), cause.getMessage());
+                failures.add(e.getKey().model() + ": " + cause.getMessage());
             }
         }
+        if (byJudge.isEmpty()) throw new AiUnavailableException("채점 모델 두 개가 모두 실패했습니다. " + String.join(" / ", failures));
+        if (!failures.isEmpty()) notes.add("채점 모델 한쪽이 실패해 남은 모델로만 판정함 (" + String.join(" / ", failures) + ")");
+        for (Check c : judgeChecks) results.put(c.code(), combine(c, byJudge));
 
         // ── 항목 점수 ─────────
         List<ItemResult> items = new ArrayList<>();
@@ -276,7 +290,8 @@ public class ScoringService {
         }
 
         notes.add("채점 기준: docs/evaluation/채점_기준표.md (감점식, 총점 " + Rubric.total() + "점)");
-        notes.add("판정 체크는 채점 모델이 근거(대화 턴, 파일)를 댄 경우에만 감점함");
+        notes.add("이중 채점: 판정 체크는 두 채점 모델(" + String.join(", ", judges.stream().map(Judge::model).toList())
+                + ")이 모두 근거(대화 턴, 파일)를 대고 걸렸다고 할 때만 감점함. 한쪽만 걸렸다고 하면 '판정 엇갈림'으로 감점하지 않음");
         notes.add("파일럿 단순화: 다시 실행(R1)은 다시 나온 답변을 채점 모델이 원래 답변과 같은 해결책인지 판정해 비교함");
 
         Map<String, Object> report = new LinkedHashMap<>();
@@ -286,7 +301,8 @@ public class ScoringService {
         report.put("taskTitle", task.title());
         report.put("taskType", task.type());
         report.put("assistant", a.provider() + " / " + a.model());
-        report.put("judgeModel", props.judge().model());
+        report.put("judgeModel", String.join(" + ", judges.stream().map(Judge::model).toList()));
+        report.put("replayJudge", replayJudge.model());
         report.put("startedAt", a.startedAt());
         report.put("submittedAt", a.submittedAt());
         report.put("durationSec", a.submittedAt() == null ? null : Duration.between(a.startedAt(), a.submittedAt()).toSeconds());
@@ -299,10 +315,14 @@ public class ScoringService {
         report.putAll(extras);
         long assistantIn = turns.stream().filter(t -> t.inputTokens() != null).mapToLong(ChatTurn::inputTokens).sum();
         long assistantOut = turns.stream().filter(t -> t.outputTokens() != null).mapToLong(ChatTurn::outputTokens).sum();
-        report.put("tokens", Map.of(
-                "assistant", Map.of("input", assistantIn, "output", assistantOut),
-                "r2Replay", Map.of("input", replayIn, "output", replayOut),
-                "judge", Map.of("input", judgeIn, "output", judgeOut)));
+        Map<String, Object> tokens = new LinkedHashMap<>();
+        tokens.put("assistant", Map.of("input", assistantIn, "output", assistantOut));
+        tokens.put("r2Replay", Map.of("input", replayIn, "output", replayOut));
+        for (Judge j : judges) {
+            long[] t = judgeTokens.get(j.name());
+            tokens.put("judge_" + j.name(), Map.of("model", j.model(), "input", t[0], "output", t[1], "cachedInput", t[2]));
+        }
+        report.put("tokens", tokens);
         report.put("transcript", turns.stream().map(t -> Map.of(
                 "turn", t.turn(), "role", t.role(), "time", clock(a.startedAt(), t.at()), "text", t.text())).toList());
         store.writeReport(a.id(), report);
@@ -331,8 +351,8 @@ public class ScoringService {
             reason 은 한국어 한 문장입니다.
             """;
 
-    private String judgePrompt(TaskDef task, List<Check> checks, String transcript, Map<String, String> files,
-                               List<String> answers, String events) {
+    /** 응시와 관계없이 같은 앞부분(과제, 숨은 정답, 체크 항목). 프롬프트 캐시로 재사용된다. */
+    private String judgePrefix(TaskDef task, List<Check> checks) {
         StringBuilder sb = new StringBuilder();
         sb.append("# 과제\n").append(task.title()).append(" (").append(task.isDev() ? "개발" : "비개발").append(")\n");
         task.description().forEach(d -> sb.append(d).append("\n"));
@@ -350,6 +370,13 @@ public class ScoringService {
         for (Check c : checks) {
             sb.append("- ").append(c.code()).append(": ").append(c.label()).append("\n  판정 기준: ").append(c.judgeHint()).append("\n");
         }
+        return sb.toString();
+    }
+
+    /** 응시마다 다른 뒷부분(대화, 이벤트, 파일, 후속 답변). */
+    private String judgeBody(TaskDef task, List<Check> checks, String transcript, Map<String, String> files,
+                             List<String> answers, String events) {
+        StringBuilder sb = new StringBuilder();
         sb.append("\n# 대화 기록 (응시자는 AI가 대화창에 붙여 넣은 내용만 볼 수 있다는 것을 안내받았음)\n").append(transcript).append("\n");
         sb.append("# 응시 이벤트 요약 (저장, 빌드, 테스트 실행)\n").append(events).append("\n");
         sb.append("# 최종 제출 파일\n");
@@ -429,6 +456,50 @@ public class ScoringService {
             }
         }
         return null;
+    }
+
+    /**
+     * 두 채점 모델의 판정을 합친다. 둘 다 근거를 대고 걸렸다고 하면 감점(D1 개수는 둘 중 작은 값),
+     * 한쪽만 그렇다고 하면 판정 엇갈림(감점 없음). 한쪽 모델만 살아 있으면 그 모델 판정만 쓴다.
+     * 판정이 빠진 모델은 "안 걸림"으로 본다(애매하면 응시자에게 유리하게).
+     */
+    static CheckResult combine(Check c, Map<? extends Judge, Map<String, CheckVerdict>> byJudge) {
+        List<JudgeView> views = new ArrayList<>();
+        for (var e : byJudge.entrySet()) {
+            CheckVerdict v = e.getValue().get(c.code());
+            if (v == null) continue;
+            views.add(new JudgeView(e.getKey().name(), e.getKey().model(), v.violated(), v.count(),
+                    v.evidence() == null ? List.of() : v.evidence(), v.reason()));
+        }
+        if (views.isEmpty()) {
+            return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "SKIPPED", List.of(), "채점 모델이 판정하지 않음", views);
+        }
+        List<JudgeView> withEvidence = views.stream().filter(v -> v.violated() && !v.evidence().isEmpty()).toList();
+        if (withEvidence.size() == byJudge.size()) {
+            int count = withEvidence.stream().mapToInt(v -> Math.max(1, v.count())).min().orElse(1);
+            int deducted = c.code().equals("D1") ? Math.min(20, count * c.points()) : c.points();
+            List<String> ev = withEvidence.stream().flatMap(v -> v.evidence().stream()).distinct().toList();
+            return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), deducted, "DEDUCTED", ev, withEvidence.get(0).reason(), views);
+        }
+        if (!withEvidence.isEmpty()) {
+            JudgeView v = withEvidence.get(0);
+            return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "SPLIT", v.evidence(),
+                    "판정 엇갈림: " + v.model() + "만 걸렸다고 봐서 감점하지 않음. " + v.reason(), views);
+        }
+        var noEvidence = views.stream().filter(JudgeView::violated).findFirst();
+        if (noEvidence.isPresent()) {
+            return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "NO_EVIDENCE", List.of(),
+                    "근거가 없어 감점하지 않음: " + noEvidence.get().reason(), views);
+        }
+        List<String> ev = views.stream().flatMap(v -> v.evidence().stream()).distinct().toList();
+        return new CheckResult(c.code(), c.label(), "JUDGE", c.points(), 0, "PASSED", ev, views.get(0).reason(), views);
+    }
+
+    private static void addTokens(Map<String, long[]> acc, Judge j, Judge.Result<?> r) {
+        long[] t = acc.get(j.name());
+        t[0] += r.inputTokens();
+        t[1] += r.outputTokens();
+        t[2] += r.cachedInputTokens();
     }
 
     // ── 보조 함수 ─────────────────────
