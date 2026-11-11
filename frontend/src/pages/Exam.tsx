@@ -226,6 +226,7 @@ const CHAT_MAX_CHARS = 1000
 function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[] }) {
   const [msgs, setMsgs] = useState<ChatMsg[]>(initial)
   const [draft, setDraft] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
   const count = draft.length
   const over = count > CHAT_MAX_CHARS
   const send = () => {
@@ -278,8 +279,13 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
           AI에게 질문
         </label>
         <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-signal')}>
-          <div className="flex items-center justify-end px-3 pt-1.5">
-            <span className={cx('tnum font-mono text-[12px]', over ? 'text-alert' : count >= CHAT_MAX_CHARS * 0.9 ? 'text-caution' : 'text-text-faint')} aria-live="polite">
+          <div className="flex items-center gap-2 px-3 pt-1.5">
+            {notice && (
+              <span role="status" className="truncate text-[12px] text-caution">
+                {notice}
+              </span>
+            )}
+            <span className={cx('ml-auto tnum font-mono text-[12px]', count >= CHAT_MAX_CHARS ? 'text-alert' : count >= CHAT_MAX_CHARS * 0.9 ? 'text-caution' : 'text-text-faint')} aria-live="polite">
               {over && '글자 수 초과 '}
               {count.toLocaleString()} / {CHAT_MAX_CHARS.toLocaleString()}
             </span>
@@ -289,7 +295,24 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
             rows={3}
             disabled={disabled}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            maxLength={CHAT_MAX_CHARS}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setNotice(null)
+            }}
+            onPaste={(e) => {
+              // 붙여 넣기가 한도를 넘으면 들어갈 만큼만 넣고, 잘린 글자 수를 알려 준다
+              const el = e.currentTarget
+              const paste = e.clipboardData.getData('text')
+              const { selectionStart: st, selectionEnd: en, value } = el
+              const room = CHAT_MAX_CHARS - (value.length - (en - st))
+              if (paste.length <= room) return
+              e.preventDefault()
+              const part = paste.slice(0, Math.max(0, room))
+              setDraft(value.slice(0, st) + part + value.slice(en))
+              setNotice(`붙여 넣은 내용 중 ${(paste.length - part.length).toLocaleString()}자가 잘렸습니다 (최대 ${CHAT_MAX_CHARS.toLocaleString()}자)`)
+              requestAnimationFrame(() => el.setSelectionRange(st + part.length, st + part.length))
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send()
             }}
