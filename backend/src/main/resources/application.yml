@@ -25,10 +25,19 @@ pair:
       사용자가 대화에 직접 붙여 넣은 내용만 볼 수 있습니다.
       한국어로 간결하고 정확하게 답하세요.
 
-  # 채점용 LLM (Anthropic). 어시스턴트와 다른 회사 모델을 써서 자기 답변에 후한 채점을 줄인다.
+  # 채점: 서로 다른 회사 모델 두 개로 이중 채점한다.
+  # 판정 체크는 두 모델이 모두 "걸림"이라고 할 때만 감점한다(한쪽만 걸림이면 '판정 엇갈림', 감점 없음).
   judge:
-    model: claude-sonnet-5-5
-    max-tokens: 16000
+    claude:
+      model: claude-haiku-5-5      # 비용 우선. 더 정확하게 보려면 claude-sonnet-5-5
+      effort: medium
+      max-tokens: 16000
+    openai:
+      model: gpt-6.1-terra
+      effort: medium
+      max-tokens: 16000
+    # 다시 실행(R1) 결과 비교에 쓸 모델
+    replay-compare: openai
 
   # (예비) Claude 를 어시스턴트로 쓸 때의 모델. 이번 파일럿에서는 쓰지 않는다.
   claude-assistant-model: claude-haiku-5-5
@@ -40,4 +49,4 @@ pair:
   # 출력 안정성(R2): 핵심 턴 최대 개수와 턴마다 다시 실행할 횟수
   r2:
     max-key-turns: 3
-    replays-per-turn: 2
+    replays-per-turn: 3
