@@ -14,7 +14,8 @@ import {
   Send,
   X,
 } from 'lucide-react'
-import { Button, cx, IconButton, Logo, ModeBadge, StatusDot, Tabs } from '../components/ui'
+import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
+import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import {
   bizDoc,
   bizFiles,
@@ -389,7 +390,9 @@ export default function Exam() {
   const [stage, setStage] = useState<'solve' | 'followup'>('solve')
   const [confirm, setConfirm] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
-  const [sideTab, setSideTab] = useState<'task' | 'files'>('task')
+  const [side, setSide] = useState<SidePanel>('task')
+  const [showOutput, setShowOutput] = useState(true)
+  const [showChat, setShowChat] = useState(true)
   const firstFile = biz ? '기획안.md' : 'OrderService.java'
   const [open, setOpen] = useState<string[]>(biz ? [firstFile] : [firstFile, 'InventoryService.java'])
   const [active, setActive] = useState(firstFile)
@@ -426,20 +429,26 @@ export default function Exam() {
         onTimerDemo={timerDemo}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr_360px]">
-        {/* 왼쪽: 과제 / 파일 */}
+      <div
+        className="grid min-h-0 flex-1"
+        style={{ gridTemplateColumns: `48px ${side ? '280px ' : ''}minmax(0,1fr)${showChat ? ' 360px' : ''}` }}
+      >
+        <ActivityRail
+          side={side}
+          onSide={setSide}
+          showOutput={showOutput}
+          onToggleOutput={() => setShowOutput((v) => !v)}
+          outputLabel={biz ? '체크리스트' : '실행 결과'}
+          showChat={showChat}
+          onToggleChat={() => setShowChat((v) => !v)}
+        />
+        {/* 사이드 패널: 과제 / 파일 */}
+        {side && (
         <aside className={cx('flex min-h-0 flex-col border-r border-line bg-panel', locked && 'opacity-50')}>
-          <div className="shrink-0 border-b border-line px-4">
-            <Tabs
-              value={sideTab}
-              onChange={setSideTab}
-              tabs={[
-                { value: 'task', label: '과제' },
-                { value: 'files', label: '파일' },
-              ]}
-            />
-          </div>
-          {sideTab === 'task' ? (
+          <header className="flex h-10 shrink-0 items-center border-b border-line px-4">
+            <span className="label">{side === 'task' ? 'TASK' : 'EXPLORER'}</span>
+          </header>
+          {side === 'task' ? (
             <div className="fade-in min-h-0 flex-1 overflow-auto p-4">
               <span className="label">{task.type === '개발' ? 'DEV' : 'BIZ'} TASK</span>
               <h2 className="mt-1 text-h3 font-semibold">{task.title}</h2>
@@ -468,11 +477,11 @@ export default function Exam() {
             </div>
           ) : (
             <nav className="fade-in min-h-0 flex-1 overflow-auto py-2" aria-label="파일 탐색기">
-              <span className="label block px-4 pb-2">EXPLORER</span>
               <FileTree nodes={tree} active={active} onOpen={openFile} />
             </nav>
           )}
         </aside>
+        )}
 
         {/* 가운데: 에디터 + 출력  |  후속 질문 */}
         <div className="flex min-h-0 min-w-0 flex-col">
@@ -529,6 +538,7 @@ export default function Exam() {
                 )}
               </div>
 
+              {showOutput && (
               <section className="flex h-60 shrink-0 flex-col border-t border-line bg-panel">
                 <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
                   <span className="label">{biz ? 'CHECK' : 'OUTPUT'}</span>
@@ -567,11 +577,13 @@ export default function Exam() {
                   )}
                 </div>
               </section>
+              )}
             </>
           )}
         </div>
 
         {/* 오른쪽: AI */}
+        {showChat && (
         <div className="relative min-h-0">
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
@@ -584,6 +596,7 @@ export default function Exam() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {confirm && (

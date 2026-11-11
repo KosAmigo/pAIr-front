@@ -100,7 +100,19 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 const enc = encodeURIComponent
 
+export type AttemptSummary = {
+  id: string
+  taskId: string
+  taskTitle: string
+  taskType: TaskType
+  startedAt: string
+  status: AttemptStatus
+  reproducibility?: number | null
+  delivery?: number | null
+}
+
 export const api = {
+  list: () => call<AttemptSummary[]>('GET', '/api/attempts'),
   taskIdFor: (track: TaskType) => (track === 'biz' ? 'pricing-plan' : 'order-deadlock'),
   start: (taskId: string) => call<{ attemptId: string }>('POST', '/api/attempts', { taskId }),
   attempt: (id: string) => call<AttemptView>('GET', `/api/attempts/${enc(id)}`),

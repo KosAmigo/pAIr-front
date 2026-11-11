@@ -7,6 +7,8 @@ import Report from './pages/Report'
 import Replay from './pages/Replay'
 import Entry from './pages/Entry'
 import Submitted from './pages/Submitted'
+import Tasks from './pages/Tasks'
+import History from './pages/History'
 import { isRealAttempt } from './api'
 
 // 실제 응시 ID(att-...)는 백엔드에 연결된 응시 화면, 그 밖의 ID는 기존 목업 화면
@@ -20,7 +22,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/tasks" element={<Tasks />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/history" element={<History />} />
         <Route path="/exam/new" element={<NewExam />} />
         <Route path="/exam/:sessionId" element={<ExamRoute />} />
         <Route path="/exam/:sessionId/submitted" element={<Submitted />} />

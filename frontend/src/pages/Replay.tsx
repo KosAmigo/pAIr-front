@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileBarChart2, GitBranch, GitCompareArrows, RotateCcw, X } from 'lucide-react'
-import { PageHeader, RailShell } from '../components/RailShell'
+import { PageHeader, SelfShell } from '../components/SelfShell'
 import { Button, ButtonLink, cx, IconButton, ScoreChip } from '../components/ui'
 import { branches, COMPETENCIES, treeNodes, type TreeNode } from '../data/mock'
 
@@ -297,7 +297,7 @@ export default function Replay() {
   }
 
   return (
-    <RailShell
+    <SelfShell
       header={
         <PageHeader label="SELF-CHECK REPLAY" title="주문 API 장애 원인 분석 — 복기 트리">
           <ButtonLink to="/exam/t-order-api?mode=self" variant="primary">
@@ -365,6 +365,6 @@ export default function Replay() {
           </section>
         </div>
       </div>
-    </RailShell>
+    </SelfShell>
   )
 }

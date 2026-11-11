@@ -5,7 +5,7 @@ import { cx, Logo, Sep } from '../components/ui'
 // DESIGN.md §7-1 초기화면
 const tiles = [
   {
-    to: '/dashboard',
+    to: '/tasks',
     over: 'SELF-CHECK',
     overCls: 'text-info',
     hover: 'hover:border-info focus-visible:border-info',

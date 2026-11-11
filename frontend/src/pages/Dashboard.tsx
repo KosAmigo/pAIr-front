@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Clock, FileBarChart2, GitBranch, Play } from 'lucide-react'
-import { PageHeader, RailShell } from '../components/RailShell'
+import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ButtonLink, cx, MetricTile, Panel, ScoreChip, Sep, Tabs } from '../components/ui'
 import { attempts, COMPETENCIES, recommended, trend, user, type CompetencyKey } from '../data/mock'
 
@@ -164,17 +164,12 @@ export default function Dashboard() {
   const weakest = sorted[sorted.length - 1]
 
   return (
-    <RailShell
+    <SelfShell
       header={
         <PageHeader label="SELF-CHECK DASHBOARD" title={`${user.name}님의 역량 현황`}>
-          <div className="flex gap-2">
-            <ButtonLink to="/exam/new?track=biz" variant="secondary">
-              <Play size={18} aria-hidden /> 비개발 과제 응시
-            </ButtonLink>
-            <ButtonLink to="/exam/new?track=dev" variant="primary">
-              <Play size={18} aria-hidden /> 개발 과제 응시
-            </ButtonLink>
-          </div>
+          <ButtonLink to="/tasks" variant="primary">
+            <Play size={18} aria-hidden /> 새 과제 응시
+          </ButtonLink>
         </PageHeader>
       }
     >
@@ -265,7 +260,7 @@ export default function Dashboard() {
             {recommended[track].map((r) => (
               <li key={r.title}>
                 <Link
-                  to={`/exam/t-order-api?mode=self${track === '비개발' ? '&track=biz' : ''}`}
+                  to="/tasks"
                   className="group flex items-center gap-3 px-4 py-2 hover:bg-panel-raised"
                 >
                   <div className="min-w-0 flex-1">
@@ -288,6 +283,6 @@ export default function Dashboard() {
           </ul>
         </Panel>
       </div>
-    </RailShell>
+    </SelfShell>
   )
 }

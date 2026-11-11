@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { isRealAttempt } from '../api'
 import RealReport from './RealReport'
 import { Bot, ChevronDown, CircleAlert, CircleCheck, GitBranch, RotateCcw, User } from 'lucide-react'
-import { PageHeader, RailShell } from '../components/RailShell'
+import { PageHeader, SelfShell } from '../components/SelfShell'
 import { Button, ButtonLink, cx, Delta, Panel, Sep } from '../components/ui'
 import { COMPETENCIES, density, moments, report, timelineEvents, type ChatMsg } from '../data/mock'
 
@@ -139,7 +139,7 @@ function MockReport() {
   const comp = COMPETENCIES.find((c) => c.key === m.competency)!
 
   return (
-    <RailShell
+    <SelfShell
       header={
         <PageHeader label="SELF-CHECK REPORT" title="결과 리포트">
           <ButtonLink to="/replay/t-order-api" variant="primary">
@@ -292,6 +292,6 @@ function MockReport() {
           </div>
         </Panel>
       </div>
-    </RailShell>
+    </SelfShell>
   )
 }
