@@ -118,15 +118,33 @@ function PathTree({ nodes, depth = 0, active, onOpen }: { nodes: TreeNode[]; dep
 }
 
 // ── AI 채팅 ─────────────────────────────
-function ChatPanel({ turns, disabled, busy, error, onSend }: { turns: Turn[]; disabled: boolean; busy: boolean; error: string | null; onSend: (t: string) => Promise<boolean> }) {
+function ChatPanel({
+  turns,
+  disabled,
+  busy,
+  error,
+  onSend,
+  model,
+  maxChars,
+}: {
+  turns: Turn[]
+  disabled: boolean
+  busy: boolean
+  error: string | null
+  onSend: (t: string) => Promise<boolean>
+  model: string
+  maxChars: number
+}) {
   const [draft, setDraft] = useState('')
+  const count = draft.length
+  const over = count > maxChars
   const listRef = useRef<HTMLOListElement>(null)
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [turns.length, busy])
   const send = async () => {
     const text = draft.trim()
-    if (!text || busy || disabled) return
+    if (!text || busy || disabled || over) return
     if (await onSend(text)) setDraft('')
   }
   return (
@@ -167,11 +185,26 @@ function ChatPanel({ turns, disabled, busy, error, onSend }: { turns: Turn[]; di
         )}
       </ol>
       {error && <p className="shrink-0 border-t border-alert/40 bg-alert/10 px-4 py-2 text-[14px] text-alert">{error}</p>}
+      <p id="chat-limit" className="sr-only">
+        질문은 한 번에 {maxChars}자까지 보낼 수 있습니다.
+      </p>
       <div className="shrink-0 border-t border-line p-3">
         <label htmlFor="chat-input" className="sr-only">
           AI에게 질문
         </label>
-        <div className="rounded-md border border-line-strong bg-panel-raised focus-within:border-signal">
+        <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-signal')}>
+          <div className="flex items-center justify-end px-3 pt-1.5">
+            <span
+              className={cx(
+                'tnum font-mono text-[12px]',
+                over ? 'text-alert' : count >= maxChars * 0.9 ? 'text-caution' : 'text-text-faint',
+              )}
+              aria-live="polite"
+            >
+              {over && '글자 수 초과 '}
+              {count.toLocaleString()} / {maxChars.toLocaleString()}
+            </span>
+          </div>
           <textarea
             id="chat-input"
             rows={4}
@@ -185,11 +218,15 @@ function ChatPanel({ turns, disabled, busy, error, onSend }: { turns: Turn[]; di
               }
             }}
             placeholder="맥락을 충분히 담아 질문하세요"
-            className="block w-full resize-none bg-transparent px-3 pt-2 font-sans text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
+            aria-describedby="chat-limit"
+            className="block w-full resize-none bg-transparent px-3 pt-1 font-sans text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
           />
-          <div className="flex items-center px-2 pb-2">
+          <div className="flex items-center gap-2 px-2 pb-2">
             <span className="label pl-1 text-text-faint">CTRL + ENTER</span>
-            <IconButton label="전송" className="ml-auto text-signal hover:text-signal" onClick={() => void send()} disabled={disabled || busy}>
+            <span className="ml-auto truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
+              {model}
+            </span>
+            <IconButton label="전송" className="text-signal hover:text-signal disabled:opacity-40" onClick={() => void send()} disabled={disabled || busy || over}>
               <Send size={18} aria-hidden />
             </IconButton>
           </div>
@@ -709,7 +746,7 @@ export default function RealExam() {
         <div className="relative min-h-0">
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
-              <ChatPanel turns={turns} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} />
+              <ChatPanel turns={turns} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000} />
             </div>
           </div>
           {locked && (

@@ -220,12 +220,17 @@ function CodeView({ source, readOnly }: { source: string; readOnly?: boolean }) 
 }
 
 // ── 6.8 AI Chat ─────────────────────────────
+// 목업 화면용 값. 실제 응시 화면은 백엔드 설정(application.yml)의 모델과 글자 수 제한을 쓴다.
+const CHAT_MODEL = 'gpt-6.1-terra'
+const CHAT_MAX_CHARS = 1000
 function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[] }) {
   const [msgs, setMsgs] = useState<ChatMsg[]>(initial)
   const [draft, setDraft] = useState('')
+  const count = draft.length
+  const over = count > CHAT_MAX_CHARS
   const send = () => {
     const text = draft.trim()
-    if (!text) return
+    if (!text || over) return
     const turn = msgs.length + 1
     setMsgs([
       ...msgs,
@@ -272,7 +277,13 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
         <label htmlFor="chat-input" className="sr-only">
           AI에게 질문
         </label>
-        <div className="rounded-md border border-line-strong bg-panel-raised focus-within:border-signal">
+        <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-signal')}>
+          <div className="flex items-center justify-end px-3 pt-1.5">
+            <span className={cx('tnum font-mono text-[12px]', over ? 'text-alert' : count >= CHAT_MAX_CHARS * 0.9 ? 'text-caution' : 'text-text-faint')} aria-live="polite">
+              {over && '글자 수 초과 '}
+              {count.toLocaleString()} / {CHAT_MAX_CHARS.toLocaleString()}
+            </span>
+          </div>
           <textarea
             id="chat-input"
             rows={3}
@@ -285,9 +296,12 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
             placeholder="맥락을 충분히 담아 질문하세요"
             className="block w-full resize-none bg-transparent px-3 pt-2 text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
           />
-          <div className="flex items-center px-2 pb-2">
+          <div className="flex items-center gap-2 px-2 pb-2">
             <span className="label pl-1 text-text-faint">CTRL + ENTER</span>
-            <IconButton label="전송" className="ml-auto text-signal hover:text-signal" onClick={send} disabled={disabled}>
+            <span className="ml-auto truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
+              {CHAT_MODEL}
+            </span>
+            <IconButton label="전송" className="text-signal hover:text-signal disabled:opacity-40" onClick={send} disabled={disabled || over}>
               <Send size={18} aria-hidden />
             </IconButton>
           </div>
