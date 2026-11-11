@@ -58,11 +58,13 @@ function StepPanel({
   title,
   children,
   footer,
+  center,
 }: {
   label: string
   title: string
   children: ReactNode
   footer: ReactNode
+  center?: boolean
 }) {
   return (
     <section className="step-in w-[640px] rounded-md border border-line bg-panel">
@@ -70,7 +72,7 @@ function StepPanel({
         <span className="label">{label}</span>
       </header>
       <div className="p-8">
-        <h1 className="text-h1 font-bold">{title}</h1>
+        <h1 className={cx('text-h1 font-bold', center && 'text-center')}>{title}</h1>
         <div className="mt-6">{children}</div>
       </div>
       <footer className="flex items-center gap-2 border-t border-line px-8 py-4">{footer}</footer>
@@ -111,6 +113,7 @@ function CodeStep({ onNext, onLink }: { onNext: () => void; onLink: () => void }
     <StepPanel
       label="STEP 01 / 05"
       title="입장 코드를 입력하세요"
+      center
       footer={
         <>
           <button
@@ -129,10 +132,10 @@ function CodeStep({ onNext, onLink }: { onNext: () => void; onLink: () => void }
         </>
       }
     >
-      <label htmlFor="code-0" className="mb-2 block text-[14px] font-medium text-text-muted">
+      <label htmlFor="code-0" className="mb-3 block text-center text-[14px] font-medium text-text-muted">
         기업에서 받은 6자리 입장 코드
       </label>
-      <div className="flex gap-2" onPaste={(e) => {
+      <div className="flex justify-center gap-2" onPaste={(e) => {
         const p = e.clipboardData.getData('text').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6)
         if (p) {
           e.preventDefault()
@@ -162,11 +165,11 @@ function CodeStep({ onNext, onLink }: { onNext: () => void; onLink: () => void }
         ))}
       </div>
       {error ? (
-        <p className="mt-2 text-[14px] text-alert" role="alert">
+        <p className="mt-3 text-center text-[14px] text-alert" role="alert">
           유효하지 않은 입장 코드입니다. 영문과 숫자를 다시 확인하세요.
         </p>
       ) : (
-        <p className="mt-2 text-[14px] text-text-muted">입장 코드는 시험 안내 메일에 있습니다. 시작 30분 전부터 입장할 수 있습니다.</p>
+        <p className="mt-3 text-center text-[14px] text-text-muted">입장 코드는 시험 안내 메일에 있습니다. 시작 30분 전부터 입장할 수 있습니다.</p>
       )}
 
       <div className="mt-8 flex items-center gap-3" aria-hidden>
@@ -463,14 +466,15 @@ export default function Entry() {
   }
   return (
     <div className="flex min-h-full flex-col border-t-2 border-alert">
-      <header className="flex h-14 shrink-0 items-center gap-6 border-b border-line px-8">
-        <Logo />
-        <span className="inline-flex h-[22px] items-center rounded-sm bg-alert/12 px-1.5 font-mono text-[12px] font-semibold tracking-[0.08em] text-alert">
-          LIVE EXAM
-        </span>
-        <div className="ml-auto">
-          <Stepper current={step} viaLink={viaLink} />
+      <header className="grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-6 border-b border-line px-8">
+        <div className="flex items-center gap-6">
+          <Logo />
+          <span className="inline-flex h-[22px] items-center rounded-sm bg-alert/12 px-1.5 font-mono text-[12px] font-semibold tracking-[0.08em] text-alert">
+            LIVE EXAM
+          </span>
         </div>
+        <Stepper current={step} viaLink={viaLink} />
+        <span aria-hidden />
       </header>
       <main className="flex flex-1 justify-center px-8 py-12">
         <div key={step}>

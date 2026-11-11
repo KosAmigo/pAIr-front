@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Bot, ChevronDown, ChevronRight, FileText, Folder, Loader2, Lock, Play, Save, Send, X } from 'lucide-react'
-import { Button, cx, IconButton, Logo, ModeBadge, StatusDot, Tabs } from '../components/ui'
+import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
+import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { api, ApiError, type AttemptView, type RunResult, type Task, type Turn } from '../api'
 
 // 실제 응시 화면: 백엔드 API 에 연결된 버전. 레이아웃은 DESIGN.md §7-3 응시 화면을 따른다.
@@ -309,7 +310,9 @@ export default function RealExam() {
   const [dirty, setDirty] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState<string[]>([])
   const [active, setActive] = useState('')
-  const [sideTab, setSideTab] = useState<'task' | 'files'>('task')
+  const [side, setSide] = useState<SidePanel>('task')
+  const [showOutput, setShowOutput] = useState(true)
+  const [showChat, setShowChat] = useState(true)
   const [stage, setStage] = useState<'solve' | 'followup'>('solve')
   const [elapsed, setElapsed] = useState(0)
   const [turns, setTurns] = useState<Turn[]>([])
@@ -531,20 +534,26 @@ export default function RealExam() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr_380px]">
-        {/* 왼쪽: 과제 / 파일 */}
+      <div
+        className="grid min-h-0 flex-1"
+        style={{ gridTemplateColumns: `48px ${side ? '280px ' : ''}minmax(0,1fr)${showChat ? ' 380px' : ''}` }}
+      >
+        <ActivityRail
+          side={side}
+          onSide={setSide}
+          showOutput={showOutput}
+          onToggleOutput={() => setShowOutput((v) => !v)}
+          outputLabel={dev ? '실행 결과' : '체크리스트'}
+          showChat={showChat}
+          onToggleChat={() => setShowChat((v) => !v)}
+        />
+        {/* 사이드 패널: 과제 / 파일 */}
+        {side && (
         <aside className={cx('flex min-h-0 flex-col border-r border-line bg-panel', locked && 'opacity-50')}>
-          <div className="shrink-0 border-b border-line px-4">
-            <Tabs
-              value={sideTab}
-              onChange={setSideTab}
-              tabs={[
-                { value: 'task', label: '과제' },
-                { value: 'files', label: '파일' },
-              ]}
-            />
-          </div>
-          {sideTab === 'task' ? (
+          <header className="flex h-10 shrink-0 items-center border-b border-line px-4">
+            <span className="label">{side === 'task' ? 'TASK' : 'EXPLORER'}</span>
+          </header>
+          {side === 'task' ? (
             <div className="fade-in min-h-0 flex-1 overflow-auto p-4">
               <span className="label">{dev ? 'DEV' : 'BIZ'} TASK</span>
               <h2 className="mt-1 text-h3 font-semibold">{task.title}</h2>
@@ -573,11 +582,11 @@ export default function RealExam() {
             </div>
           ) : (
             <nav className="fade-in min-h-0 flex-1 overflow-auto py-2" aria-label="파일 탐색기">
-              <span className="label block px-4 pb-2">EXPLORER</span>
               <PathTree nodes={tree} active={active} onOpen={(p) => void openFile(p)} />
             </nav>
           )}
         </aside>
+        )}
 
         {/* 가운데: 에디터 + 출력 | 후속 질문 */}
         <div className="flex min-h-0 min-w-0 flex-col">
@@ -656,6 +665,7 @@ export default function RealExam() {
                 )}
               </div>
 
+              {showOutput && (
               <section className="flex h-56 shrink-0 flex-col border-t border-line bg-panel">
                 <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
                   <span className="label">{dev ? 'OUTPUT' : 'CHECK'}</span>
@@ -689,11 +699,13 @@ export default function RealExam() {
                   )}
                 </div>
               </section>
+              )}
             </>
           )}
         </div>
 
         {/* 오른쪽: AI */}
+        {showChat && (
         <div className="relative min-h-0">
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
@@ -706,6 +718,7 @@ export default function RealExam() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {confirm && <ConfirmModal busy={busy} onCancel={() => setConfirm(false)} onConfirm={() => void doSubmit()} />}

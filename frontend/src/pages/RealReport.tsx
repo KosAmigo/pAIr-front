@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Bot, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
-import { PageHeader, RailShell } from '../components/RailShell'
+import { PageHeader, SelfShell } from '../components/SelfShell'
 import { Button, ButtonLink, cx, Panel, Sep } from '../components/ui'
 import { COMPETENCIES } from '../data/mock'
 import { api, ApiError, type Report, type ReportResponse, type SubScore, type Turn } from '../api'
@@ -266,11 +266,11 @@ export default function RealReport() {
   }
 
   return (
-    <RailShell
+    <SelfShell
       header={
         <PageHeader label="SELF-CHECK REPORT" title="결과 리포트">
-          <ButtonLink to="/dashboard" variant="secondary">
-            대시보드
+          <ButtonLink to="/history" variant="secondary">
+            내 기록
           </ButtonLink>
         </PageHeader>
       }
@@ -306,6 +306,6 @@ export default function RealReport() {
           </Button>
         </div>
       )}
-    </RailShell>
+    </SelfShell>
   )
 }

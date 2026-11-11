@@ -60,6 +60,44 @@ public class ApiController {
         return Map.of("attemptId", a.id());
     }
 
+    /** 내 기록: 실제 응시 목록 (최근 순). 채점이 끝난 응시는 항목 점수를 함께 준다. */
+    @GetMapping("/attempts")
+    public List<Map<String, Object>> list() {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        try (var dirs = java.nio.file.Files.list(store.root())) {
+            for (var dir : dirs.filter(java.nio.file.Files::isDirectory).toList()) {
+                Attempt a;
+                try {
+                    a = store.load(dir.getFileName().toString());
+                } catch (RuntimeException e) {
+                    continue;
+                }
+                TaskDef task = tasks.get(a.taskId());
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", a.id());
+                m.put("taskId", task.id());
+                m.put("taskTitle", task.title());
+                m.put("taskType", task.type());
+                m.put("startedAt", a.startedAt());
+                m.put("status", a.status());
+                if (a.status() == Attempt.Status.DONE) {
+                    JsonNode r = store.readReport(a.id());
+                    if (r != null) {
+                        for (JsonNode it : r.path("items")) {
+                            JsonNode sc = it.path("score");
+                            m.put(it.path("key").asString(), sc.isNumber() ? sc.asDouble() : null);
+                        }
+                    }
+                }
+                out.add(m);
+            }
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+        out.sort((x, y) -> String.valueOf(y.get("startedAt")).compareTo(String.valueOf(x.get("startedAt"))));
+        return out;
+    }
+
     @GetMapping("/attempts/{id}")
     public Map<String, Object> attempt(@PathVariable String id) {
         Attempt a = store.load(id);
