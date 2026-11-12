@@ -9,7 +9,9 @@ public record PairProperties(
         Judge judge,
         String claudeAssistantModel,
         Run run,
-        R2 r2) {
+        R2 r2,
+        Grader grader,
+        java.util.Map<String, Price> pricing) {
 
     public record Assistant(String provider, String model, long maxOutputTokens, String reasoningEffort, int maxTurns, int maxInputChars, String systemPrompt) {}
 
@@ -25,4 +27,10 @@ public record PairProperties(
     public record Run(int timeoutSeconds) {}
 
     public record R2(int maxKeyTurns, int replaysPerTurn) {}
+
+    /** 채점 툴. dir: 프롬프트 버전과 샘플 응시 폴더(git 공유). parallel: 동시에 채점할 개수. */
+    public record Grader(String dir, int parallel) {}
+
+    /** 모델 가격 ($/1M 토큰). 채점 예상 비용 계산에 쓴다. */
+    public record Price(double input, double output) {}
 }

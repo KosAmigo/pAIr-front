@@ -5,7 +5,7 @@ import { CodeEditor } from '../components/CodeEditor'
 import { SendKey } from '../components/SendKey'
 import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
-import { api, ApiError, type AttemptView, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
+import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
 import { splitReply } from '../lib/edits'
 
@@ -124,6 +124,7 @@ function PathTree({ nodes, depth = 0, active, onOpen }: { nodes: TreeNode[]; dep
 // ── AI 채팅 ─────────────────────────────
 function ChatPanel({
   turns,
+  streaming,
   disabled,
   busy,
   error,
@@ -135,6 +136,8 @@ function ChatPanel({
   onViewEdit,
 }: {
   turns: Turn[]
+  /** 보내는 중인 질문과 지금까지 받은 답변 글자 */
+  streaming: { question: string; answer: string } | null
   disabled: boolean
   busy: boolean
   error: string | null
@@ -162,14 +165,20 @@ function ChatPanel({
     el.style.height = `${Math.min(want, max)}px`
     el.style.overflowY = want > max ? 'auto' : 'hidden'
   }, [draft])
+  // 새 턴이 생기거나 답변 글자가 들어오는 동안 맨 아래로. 응시자가 위로 올려 읽는 중이면 따라가지 않는다.
+  const stick = useRef(true)
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
-  }, [turns.length, busy])
+    const el = listRef.current
+    if (el && stick.current) el.scrollTo({ top: el.scrollHeight })
+  }, [turns.length, busy, streaming?.answer.length])
   const send = async () => {
     const text = draft.trim()
     if (!text || busy || disabled || over) return
-    if (await onSend(text)) setDraft('')
+    stick.current = true
+    setDraft('') // 보낸 질문은 대화창으로 옮기고, 실패하면 입력창에 되돌린다
+    if (!(await onSend(text))) setDraft(text)
   }
+  const nextTurn = turns.length + 1
   return (
     <section className={cx('flex h-full min-h-0 flex-col border-l border-line bg-panel', disabled && 'opacity-50')}>
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-4">
@@ -177,7 +186,15 @@ function ChatPanel({
         <span className="label">AI ASSISTANT</span>
         <span className="ml-auto font-mono text-[12px] text-text-faint">{turns.length} TURNS</span>
       </header>
-      <ol ref={listRef} className="min-h-0 flex-1 space-y-4 overflow-auto p-4" aria-live="polite">
+      <ol
+        ref={listRef}
+        onScroll={(e) => {
+          const el = e.currentTarget
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+        }}
+        className="min-h-0 flex-1 space-y-4 overflow-auto p-4"
+        aria-live="polite"
+      >
         {turns.length === 0 && !busy && (
           <li className="text-[14px] leading-6 text-text-muted">AI는 이 대화창에 붙여 넣은 내용만 볼 수 있습니다. 필요한 코드, 로그, 자료를 함께 전달하세요.</li>
         )}
@@ -223,10 +240,30 @@ function ChatPanel({
             </li>
           ),
         )}
-        {busy && (
-          <li className="flex items-center gap-2 border-l-2 border-info pl-3 text-[14px] text-text-muted">
-            <Loader2 size={16} className="animate-spin text-info" aria-hidden /> AI가 답변을 작성하고 있습니다
-          </li>
+        {streaming && (
+          <>
+            <li className="ml-8 flex flex-col items-end gap-1">
+              <span className="font-mono text-[12px] text-text-faint">#T{String(nextTurn).padStart(2, '0')}</span>
+              <p className="rounded-md bg-panel-raised px-3 py-2 text-[15px] leading-6 whitespace-pre-wrap">{streaming.question}</p>
+            </li>
+            {streaming.answer ? (
+              <li className="mr-4 flex flex-col gap-1 border-l-2 border-info pl-3">
+                <span className="flex items-center gap-2 font-mono text-[12px] text-text-faint">
+                  <Bot size={14} className="text-info" aria-hidden />
+                  <span>#T{String(nextTurn + 1).padStart(2, '0')}</span>
+                  <Loader2 size={12} className="animate-spin text-info" aria-hidden />
+                </span>
+                <p className="text-[15px] leading-6 whitespace-pre-wrap text-text">
+                  {streaming.answer}
+                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-info align-middle" aria-hidden />
+                </p>
+              </li>
+            ) : (
+              <li className="flex items-center gap-2 border-l-2 border-info pl-3 text-[14px] text-text-muted">
+                <Loader2 size={16} className="animate-spin text-info" aria-hidden /> AI가 답변을 작성하고 있습니다
+              </li>
+            )}
+          </>
         )}
       </ol>
       {error && <p className="shrink-0 border-t border-alert/40 bg-alert/10 px-4 py-2 text-[14px] text-alert">{error}</p>}
@@ -461,6 +498,7 @@ export default function RealExam() {
   const [elapsed, setElapsed] = useState(0)
   const [turns, setTurns] = useState<Turn[]>([])
   const [chatBusy, setChatBusy] = useState(false)
+  const [streaming, setStreaming] = useState<{ question: string; answer: string } | null>(null)
   const [chatError, setChatError] = useState<string | null>(null)
   const [editBusy, setEditBusy] = useState(false)
   const [viewing, setViewing] = useState<{ turn: number; index: number } | null>(null)
@@ -628,14 +666,16 @@ export default function RealExam() {
   const sendChat = async (text: string) => {
     setChatBusy(true)
     setChatError(null)
+    setStreaming({ question: text, answer: '' })
     try {
-      const added = await api.chat(sessionId, text)
+      const added = await chatStream(sessionId, text, (d) => setStreaming((s) => (s ? { ...s, answer: s.answer + d } : s)))
       setTurns((t) => [...t, ...added])
       return true
     } catch (e) {
       setChatError((e as ApiError).message)
       return false
     } finally {
+      setStreaming(null)
       setChatBusy(false)
     }
   }
@@ -995,7 +1035,7 @@ export default function RealExam() {
         <div className="relative min-h-0">
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
-              <ChatPanel turns={turns} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000}
+              <ChatPanel turns={turns} streaming={streaming} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000}
                 editBusy={editBusy}
                 onEdit={(t, e, a) => void decideEdit(t, e, a)}
                 onViewEdit={(t, e) => setViewing({ turn: t, index: e.index })}

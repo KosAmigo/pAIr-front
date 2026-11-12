@@ -101,7 +101,7 @@ function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number
   )
 }
 
-function Done({ r }: { r: Report }) {
+export function ReportView({ r }: { r: Report }) {
   const [selected, setSelected] = useState<number | null>(null)
   const [open, setOpen] = useState<Set<string>>(() => new Set(r.items.map((i) => i.key)))
   const showTurn = (t: number) => {
@@ -336,7 +336,7 @@ export default function RealReport() {
           <Loader2 size={18} className="animate-spin" aria-hidden /> 불러오는 중
         </p>
       )}
-      {data && data.status === 'DONE' && data.report && (data.report.version ?? 1) >= 2 && <Done r={data.report} />}
+      {data && data.status === 'DONE' && data.report && (data.report.version ?? 1) >= 2 && <ReportView r={data.report} />}
       {data && data.status === 'DONE' && data.report && (data.report.version ?? 1) < 2 && (
         <div className="mx-auto mt-16 max-w-[640px] rounded-md border border-line bg-panel p-8">
           <span className="label">LEGACY REPORT</span>

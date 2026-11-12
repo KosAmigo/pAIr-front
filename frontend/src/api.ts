@@ -160,5 +160,167 @@ export const api = {
   report: (id: string) => call<ReportResponse>('GET', `/api/attempts/${enc(id)}/report`),
 }
 
+/**
+ * 채팅 스트리밍: 답변 글자가 오는 대로 onDelta 로 넘기고, 끝나면 저장된 새 턴 2개(질문, 답변)를 돌려준다.
+ * 서버는 Server-Sent Events(delta, done, error)로 보낸다.
+ */
+export async function chatStream(id: string, message: string, onDelta: (t: string) => void): Promise<Turn[]> {
+  let res: Response
+  try {
+    res = await fetch(`/api/attempts/${enc(id)}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({ message }),
+    })
+  } catch {
+    throw new ApiError('백엔드에 연결할 수 없습니다. backend 서버(포트 8180)가 켜져 있는지 확인하세요.')
+  }
+  if (!res.ok || !res.body) {
+    const text = await res.text()
+    let msg = `요청 실패 (${res.status})`
+    try {
+      msg = JSON.parse(text)?.message ?? msg
+    } catch {
+      // 본문이 JSON 이 아님
+    }
+    throw new ApiError(msg)
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+    let cut: number
+    while ((cut = buf.indexOf('\n\n')) >= 0) {
+      const block = buf.slice(0, cut)
+      buf = buf.slice(cut + 2)
+      let event = 'message'
+      const data: string[] = []
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''))
+      }
+      if (!data.length) continue
+      const payload = JSON.parse(data.join('\n'))
+      if (event === 'delta') onDelta(payload.t as string)
+      else if (event === 'done') return payload as Turn[]
+      else if (event === 'error') throw new ApiError(payload.message as string)
+    }
+  }
+  throw new ApiError('AI 답변을 끝까지 받지 못했습니다. 다시 보내 주세요.')
+}
+
 /** 실제 응시 ID인지 (목업 ID 'a-1107' 등과 구분) */
 export const isRealAttempt = (id: string | undefined) => !!id && id.startsWith('att-')
+
+// ── 채점 툴 (임시 기능) ─────────────────────
+
+export type GraderCheckInfo = {
+  key: string
+  code: string
+  item: string
+  itemName: string
+  track: 'all' | 'dev' | 'biz'
+  method: 'AUTO' | 'JUDGE'
+  label: string
+  defaultPoints: number
+  defaultHint: string | null
+  pointsEditable: boolean
+}
+
+export type GraderRubric = {
+  items: { key: string; name: string; max: number }[]
+  checks: GraderCheckInfo[]
+  defaults: { replays: number; judgeRepeat: number; parallel: number }
+}
+
+export type PromptVersionRow = { id: string; name: string; author: string; note: string; createdAt: string; parent: string | null; active: boolean }
+
+export type PromptVersion = {
+  id: string
+  name: string
+  author: string
+  note: string
+  createdAt: string
+  parent: string | null
+  judgeSystem: string
+  replaySystem: string
+  checks: Record<string, { hint: string | null; points: number }>
+}
+
+export type GraderSource = 'sample' | 'mine'
+export type GraderAttempt = {
+  source: GraderSource
+  id: string
+  label: string | null
+  taskId: string
+  taskTitle: string
+  taskType: TaskType
+  startedAt: string
+  total: number | null
+  chatTurns: number
+}
+export type GraderRef = { source: GraderSource; id: string }
+export type GraderRunRequest = { attempts: GraderRef[]; versionId: string; count: number; replays: number; judgeRepeat: number }
+export type GraderEstimate = {
+  scorings: number
+  usd: number
+  minutes: number
+  attempts: { source: GraderSource; id: string; usdPerScoring: number; basis: 'report' | 'task' | 'default' }[]
+}
+export type GraderRunStatus = 'RUNNING' | 'DONE' | 'CANCELLED' | 'INTERRUPTED'
+export type GraderRun = {
+  id: string
+  createdAt: string
+  finishedAt: string | null
+  author: string
+  versionId: string
+  versionName: string
+  attempts: GraderAttempt[]
+  count: number
+  replays: number
+  judgeRepeat: number
+  status: GraderRunStatus
+  done: number
+  failed: number
+  total: number
+  estimateUsd: number
+  actualUsd: number
+  errors: string[]
+}
+export type GraderCheckSummary = {
+  code: string
+  item: string
+  method: 'AUTO' | 'JUDGE'
+  points: number
+  deducted: number
+  status: CheckResult['status']
+  judges: { judge: string; model: string; violated: boolean }[]
+}
+export type GraderResult = {
+  file: string
+  source: GraderSource
+  attemptId: string
+  n: number
+  total: number
+  items: Record<string, number>
+  checks: GraderCheckSummary[]
+}
+
+export const grader = {
+  rubric: () => call<GraderRubric>('GET', '/api/grader/rubric'),
+  versions: () => call<PromptVersionRow[]>('GET', '/api/grader/versions'),
+  version: (id: string) => call<PromptVersion>('GET', `/api/grader/versions/${enc(id)}`),
+  createVersion: (v: Omit<PromptVersion, 'id' | 'createdAt'>) => call<PromptVersion>('POST', '/api/grader/versions', v),
+  setActive: (id: string) => call<{ active: string }>('PUT', '/api/grader/active', { id }),
+  attempts: () => call<GraderAttempt[]>('GET', '/api/grader/attempts'),
+  estimate: (req: GraderRunRequest) => call<GraderEstimate>('POST', '/api/grader/estimate', req),
+  start: (req: GraderRunRequest & { author: string }) => call<GraderRun>('POST', '/api/grader/runs', req),
+  runs: () => call<GraderRun[]>('GET', '/api/grader/runs'),
+  run: (id: string) => call<{ meta: GraderRun; results: GraderResult[] }>('GET', `/api/grader/runs/${enc(id)}`),
+  cancel: (id: string) => call<GraderRun>('POST', `/api/grader/runs/${enc(id)}/cancel`),
+  result: (id: string, file: string) => call<Report>('GET', `/api/grader/runs/${enc(id)}/results/${enc(file)}`),
+  exportUrl: (id: string) => `/api/grader/runs/${enc(id)}/export`,
+}

@@ -1,0 +1,22 @@
+{
+  "id": "att-261111-1842-2q",
+  "taskId": "order-deadlock",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "startedAt": "2026-11-11T09:42:08.886581300Z",
+  "submittedAt": "2026-11-11T09:42:16.156358100Z",
+  "followupsDoneAt": "2026-11-11T09:42:16.186930700Z",
+  "firstValidAt": "2026-11-11T09:42:14.911495400Z",
+  "status": "DONE",
+  "followUpAnswers": [
+    "주문이 몰려서 잠금 대기 3초가 짧았던 것이 원인입니다. 로그에 정확히 3초 뒤 LockTimeoutException이 나서 그렇게 판단했습니다.",
+    "AI가 타임아웃을 무작정 늘리는 것보다 원인 분석을 권했지만 시간이 부족해서 타임아웃 증가와 synchronized를 같이 적용했습니다.",
+    "타임아웃을 몇 초로 늘리면 되는지 묻고, synchronized를 붙이는 방법을 물어보면 됩니다."
+  ],
+  "error": null,
+  "followUpQuestions": [
+    "이 장애의 근본 원인은 무엇이었고, 어떤 근거로 그렇게 판단했나요?",
+    "AI가 제안한 내용 중 채택하지 않은 것이 있다면 무엇이고, 이유는 무엇인가요?",
+    "동료가 같은 결과를 얻으려면 AI에게 어떤 지시를 어떤 순서로 주면 되나요?"
+  ]
+}

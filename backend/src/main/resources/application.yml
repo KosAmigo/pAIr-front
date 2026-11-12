@@ -66,4 +66,18 @@ pair:
   # 출력 안정성(R2): 핵심 턴 최대 개수와 턴마다 다시 실행할 횟수
   r2:
     max-key-turns: 3
-    replays-per-turn: 3
+    replays-per-turn: 5
+
+  # 채점 툴 (메인 화면 오른쪽 위 아이콘). 프롬프트 버전과 샘플 응시는 grader/ 폴더로 git 공유.
+  grader:
+    dir: grader
+    # 동시에 채점할 개수 (실제 응시 채점과 실험 채점이 함께 씀)
+    parallel: 4
+
+  # 모델 가격 ($/1M 토큰, 입력/출력). 채점 툴의 예상 비용 계산용
+  pricing:
+    "[gpt-6-luna]": { input: 0.10, output: 0.50 }
+    "[gpt-6.1-terra]": { input: 1.0, output: 5.0 }
+    "[gpt-6.1-sol]": { input: 2.0, output: 10.0 }
+    "[claude-haiku-5-5]": { input: 0.10, output: 0.50 }
+    "[claude-sonnet-5-5]": { input: 2.0, output: 10.0 }

@@ -34,8 +34,14 @@ public class AttemptStore {
     private final ObjectMapper json;
     private final ObjectMapper pretty;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public AttemptStore(PairProperties props, ObjectMapper json) {
-        this.root = Path.of(props.dataDir(), "attempts").toAbsolutePath();
+        this(Path.of(props.dataDir(), "attempts"), json);
+    }
+
+    /** 다른 폴더의 응시 기록을 읽을 때 (채점 툴의 샘플 응시: grader/samples). */
+    public AttemptStore(Path root, ObjectMapper json) {
+        this.root = root.toAbsolutePath();
         this.json = json;
         this.pretty = json.copy().enable(SerializationFeature.INDENT_OUTPUT);
         try {
