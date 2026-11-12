@@ -38,6 +38,12 @@ function saveAuthor(v: string) {
 }
 
 const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-')
+/** 실험 목록용: "11.12 11:33" (24시간제) */
+const fmtRunDate = (s: string) => {
+  const d = new Date(s)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
 const usd = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
 const refKey = (r: GraderRef) => `${r.source}:${r.id}`
 const inputCls = 'h-9 rounded-md border border-line-strong bg-panel-raised px-3 text-[15px] text-text outline-none focus:border-signal'
@@ -686,14 +692,24 @@ function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect:
           <ul className="divide-y divide-line">
             {runs.map((r) => (
               <li key={r.id}>
-                <button type="button" onClick={() => onSelect(r.id)} className={cx('block w-full px-4 py-2.5 text-left', selected === r.id ? 'bg-panel-raised' : 'hover:bg-panel-raised/60')}>
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-[15px] font-semibold">{r.versionName}</span>
-                    <span className={cx('ml-auto font-mono text-[12px]', runStatus[r.status].cls)}>{runStatus[r.status].t}</span>
-                  </div>
-                  <div className="mt-0.5 font-mono text-[12px] text-text-faint">
-                    {fmtDate(r.createdAt)} · {r.mode === 'batch' ? '배치 · ' : ''}응시 {r.attempts.length} × {r.count}번 · {usd(r.actualUsd)}
-                  </div>
+                {/* 한 줄: 날짜시간 · 일반/배치 · 응시 수 × 회차 · 상태 */}
+                <button
+                  type="button"
+                  onClick={() => onSelect(r.id)}
+                  title={`${r.versionName} · ${usd(r.actualUsd)}`}
+                  className={cx(
+                    'flex w-full items-center gap-2 px-4 py-2.5 text-left font-mono text-[13px] whitespace-nowrap',
+                    selected === r.id ? 'bg-panel-raised text-text' : 'text-text-muted hover:bg-panel-raised/60',
+                  )}
+                >
+                  <span className="tnum">{fmtRunDate(r.createdAt)}</span>
+                  <span className={cx('rounded-sm px-1 text-[11px]', r.mode === 'batch' ? 'bg-info/12 text-info' : 'bg-panel-raised text-text-faint')}>
+                    {r.mode === 'batch' ? '배치' : '일반'}
+                  </span>
+                  <span className="tnum">
+                    {r.attempts.length}개 × {r.count}회
+                  </span>
+                  <span className={cx('ml-auto text-[12px]', runStatus[r.status].cls)}>{runStatus[r.status].t}</span>
                 </button>
               </li>
             ))}
@@ -791,12 +807,7 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
         </span>
         {m.author && <span className="text-text-faint">실행: {m.author}</span>}
       </div>
-      {m.mode === 'batch' && m.phase && (
-        <p className="border-t border-line px-4 py-2 font-mono text-[12px] leading-5 break-all text-text-muted">
-          {m.status === 'RUNNING' && <Loader2 size={12} className="mr-1.5 inline animate-spin text-caution" aria-hidden />}
-          {m.phase}
-        </p>
-      )}
+      {m.mode === 'batch' && m.phase && <BatchPhase phase={m.phase} running={m.status === 'RUNNING'} />}
       {m.status === 'RUNNING' && (
         <div className="mx-4 mb-3 h-1 overflow-hidden rounded-full bg-line">
           <div className="h-full bg-signal transition-[width] duration-500" style={{ width: `${(finished / Math.max(1, m.total)) * 100}%` }} />
@@ -810,6 +821,26 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
         </ul>
       )}
     </Box>
+  )
+}
+
+/** 배치 진행 단계: "1단계 배치 처리 중 · gpt-6-luna 완료 5/5 · ..." 를 제목과 모델별 칩으로 나눠 보여 준다. */
+function BatchPhase({ phase, running }: { phase: string; running: boolean }) {
+  const [title, ...models] = phase.split(' · ')
+  const tone = (t: string) =>
+    /완료/.test(t) ? 'border-signal/40 text-signal' : /실패|만료|취소/.test(t) ? 'border-alert/40 text-alert' : 'border-caution/40 text-caution'
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2">
+      <span className="flex items-center gap-1.5 text-[13px] text-text-muted">
+        {running && <Loader2 size={12} className="animate-spin text-caution" aria-hidden />}
+        {title}
+      </span>
+      {models.map((t) => (
+        <span key={t} className={cx('tnum rounded-sm border px-1.5 font-mono text-[12px] leading-5', tone(t))}>
+          {t}
+        </span>
+      ))}
+    </div>
   )
 }
 

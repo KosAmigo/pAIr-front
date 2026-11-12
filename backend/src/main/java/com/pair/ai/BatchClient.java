@@ -48,8 +48,26 @@ public class BatchClient {
 
     public record Req(String customId, ObjectNode body) {}
 
-    /** 배치 상태. done: 끝났는지(성공, 실패, 만료, 취소 모두). */
-    public record Status(String raw, boolean done, String resultsUrl, String outputFileId, String errorFileId) {}
+    /**
+     * 배치 상태. done: 끝났는지(성공, 실패, 만료, 취소 모두).
+     * label: 사람이 읽는 상태(완료, 처리 중 등), finished/total: 끝난 요청 수 / 전체 요청 수
+     */
+    public record Status(String raw, boolean done, String resultsUrl, String outputFileId, String errorFileId,
+                         String label, int finished, int total) {}
+
+    private static String label(String s) {
+        return switch (s) {
+            case "validating" -> "검증 중";
+            case "in_progress" -> "처리 중";
+            case "finalizing" -> "마무리 중";
+            case "completed", "ended" -> "완료";
+            case "failed" -> "실패";
+            case "expired" -> "만료";
+            case "cancelling", "canceling" -> "취소 중";
+            case "cancelled" -> "취소됨";
+            default -> s;
+        };
+    }
 
     // ── 요청 만들기 (일반 채점과 같은 내용) ─────────────
 
@@ -138,7 +156,9 @@ public class BatchClient {
         JsonNode r = call("Anthropic 배치 조회", () -> anthropic().get().uri("/v1/messages/batches/{id}", id).retrieve().body(JsonNode.class));
         String s = r.path("processing_status").asText();
         String url = r.path("results_url").isTextual() ? r.path("results_url").asText() : null;
-        return new Status(s + " " + r.path("request_counts"), "ended".equals(s), url, null, null);
+        JsonNode c = r.path("request_counts");
+        int finished = c.path("succeeded").asInt() + c.path("errored").asInt() + c.path("canceled").asInt() + c.path("expired").asInt();
+        return new Status(s + " " + c, "ended".equals(s), url, null, null, label(s), finished, finished + c.path("processing").asInt());
     }
 
     /** custom_id → result ({type: succeeded|errored|canceled|expired, message, error}) */
@@ -199,9 +219,11 @@ public class BatchClient {
         JsonNode r = call("OpenAI 배치 조회", () -> openai().get().uri("/v1/batches/{id}", id).retrieve().body(JsonNode.class));
         String s = r.path("status").asText();
         boolean done = List.of("completed", "failed", "expired", "cancelled").contains(s);
-        return new Status(s + " " + r.path("request_counts"), done, null,
+        JsonNode c = r.path("request_counts");
+        return new Status(s + " " + c, done, null,
                 r.path("output_file_id").isTextual() ? r.path("output_file_id").asText() : null,
-                r.path("error_file_id").isTextual() ? r.path("error_file_id").asText() : null);
+                r.path("error_file_id").isTextual() ? r.path("error_file_id").asText() : null,
+                label(s), c.path("completed").asInt() + c.path("failed").asInt(), c.path("total").asInt());
     }
 
     /** custom_id → 줄 전체 ({response: {status_code, body}, error}) */

@@ -456,11 +456,12 @@ public class GraderService {
                 for (var e : bs.batches().entrySet()) {
                     BatchClient.Status st = e.getKey().equals("claude") ? batch.anthropicStatus(e.getValue()) : batch.openaiStatus(e.getValue());
                     statuses.put(e.getKey(), st);
-                    states.add(e.getKey() + " " + st.raw());
+                    String model = e.getKey().equals("claude") ? props.judge().claude().model() : e.getKey().substring("openai:".length());
+                    states.add(model + " " + st.label() + (st.total() > 0 ? " " + st.finished() + "/" + st.total() : ""));
                     allDone &= st.done();
                 }
                 if (!allDone) {
-                    setPhase(s, bs.round() + "단계 배치 처리 중 · " + String.join(" / ", states));
+                    setPhase(s, bs.round() + "단계 배치 처리 중 · " + String.join(" · ", states));
                     return;
                 }
                 Map<String, BatchClient.Answer> known = new LinkedHashMap<>(bs.known());
@@ -505,7 +506,9 @@ public class GraderService {
             }
             int round = bs.round() + 1;
             writeBatch(runId, new BatchState(round, bs.units(), sent, bs.known(), bs.errors()));
-            setPhase(s, round + "단계 배치 보냄 · " + pending.size() + "건 (" + String.join(", ", sent.keySet()) + ")");
+            List<String> models = sent.keySet().stream()
+                    .map(k -> (k.equals("claude") ? props.judge().claude().model() : k.substring("openai:".length())) + " 접수").toList();
+            setPhase(s, round + "단계 배치 보냄 (" + pending.size() + "건) · " + String.join(" · ", models));
             log.info("배치 {}단계 보냄: {} {}", round, runId, sent);
         }
     }
