@@ -627,7 +627,7 @@ function NumField({ label, value, def, min, max, step = 1, hint, onChange }: { l
 const runStatus: Record<GraderRun['status'], { t: string; cls: string }> = {
   RUNNING: { t: '채점 중', cls: 'text-caution' },
   DONE: { t: '완료', cls: 'text-signal' },
-  CANCELLED: { t: '멈춤', cls: 'text-text-muted' },
+  CANCELLED: { t: '중지', cls: 'text-text-muted' },
   INTERRUPTED: { t: '중단됨', cls: 'text-alert' },
 }
 
@@ -797,7 +797,7 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
         <>
           {m.status === 'RUNNING' && (
             <Button variant="secondary" size="sm" onClick={onCancel}>
-              <Square size={14} aria-hidden /> 멈추기
+              <Square size={14} aria-hidden /> 중지
             </Button>
           )}
           <a href={grader.exportUrl(m.id)} download className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[14px] text-text-muted hover:bg-panel-raised hover:text-text">

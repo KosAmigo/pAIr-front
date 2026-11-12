@@ -409,7 +409,7 @@ public class GraderService {
                         log.warn("배치 취소 실패: {} {}", e.getValue(), ex.getMessage());
                     }
                 }
-                RunMeta m = s.meta.with("CANCELLED", s.meta.done(), s.meta.failed(), s.meta.actualUsd(), s.meta.errors(), Instant.now(), "멈춤");
+                RunMeta m = s.meta.with("CANCELLED", s.meta.done(), s.meta.failed(), s.meta.actualUsd(), s.meta.errors(), Instant.now(), "중지");
                 s.meta = m;
                 writeMeta(m);
                 running.remove(runId);
