@@ -15,12 +15,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PreDestroy;
+
+import com.pair.ai.BatchClient;
 import com.pair.attempt.Attempt;
 import com.pair.attempt.AttemptStore;
 import com.pair.config.PairProperties;
@@ -44,6 +50,8 @@ public class GraderService {
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.of("Asia/Seoul"));
     /** 예상 시간: 채점 한 번에 걸리는 대략의 시간(분). R1 다시 실행과 채점 모델을 동시에 부른 기준. */
     private static final double MINUTES_PER_SCORING = 0.8;
+    /** 배치 API 가격 (두 회사 모두 일반 가격의 50%) */
+    static final double BATCH_DISCOUNT = 0.5;
 
     public static final String SAMPLE = "sample";
     public static final String MINE = "mine";
@@ -59,9 +67,17 @@ public class GraderService {
     private final ObjectMapper json;
     private final ObjectMapper pretty;
     private final Map<String, RunState> running = new ConcurrentHashMap<>();
+    private final BatchClient batch;
+    /** 배치 채점 진행 상태 확인 (20초마다). */
+    private final ScheduledExecutorService poller = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "batch-poll");
+        t.setDaemon(true);
+        return t;
+    });
 
     public GraderService(ScoringService scoring, PromptStore prompts, TaskRepository tasks, AttemptStore mine,
-                         PairProperties props, ObjectMapper json) {
+                         PairProperties props, ObjectMapper json, BatchClient batch) {
+        this.batch = batch;
         this.scoring = scoring;
         this.prompts = prompts;
         this.tasks = tasks;
@@ -78,6 +94,12 @@ public class GraderService {
             throw new UncheckedIOException(e);
         }
         markInterruptedRuns();
+        poller.scheduleWithFixedDelay(this::pollBatches, 20, 20, TimeUnit.SECONDS);
+    }
+
+    @PreDestroy
+    void shutdown() {
+        poller.shutdownNow();
     }
 
     // ── 응시 목록 ─────────────────────
@@ -151,14 +173,27 @@ public class GraderService {
 
     // ── 예상 비용 ─────────────────────
 
-    public record RunRequest(List<AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat) {}
+    /** mode: api(바로 호출) 또는 batch(배치 API, 비용 절반, 결과는 몇 분~최대 24시간 뒤) */
+    public record RunRequest(List<AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String mode) {}
+
+    static boolean isBatch(String mode) {
+        return "batch".equals(mode);
+    }
 
     /** basis: 지난 채점 기록(report) / 같은 과제 평균(task) / 기본값(default) */
     public record AttemptEstimate(String source, String id, double usdPerScoring, String basis) {}
 
     public record Estimate(int scorings, double usd, double minutes, List<AttemptEstimate> attempts) {}
 
+    /** 채점 설정은 실제 채점과 같게 고정한다(R1 다시 실행 횟수, 채점 모델 1번씩). 채점 툴에서는 반복 횟수만 바꾼다. */
+    private RunRequest fixed(RunRequest req) {
+        // 채점 모델도 실제 채점처럼 1번씩 (평균은 반복 채점 결과를 보고 팀이 정함)
+        return new RunRequest(req.attempts(), req.versionId(), req.count(), props.r2().replaysPerTurn(), 1,
+                isBatch(req.mode()) ? "batch" : "api");
+    }
+
     public Estimate estimate(RunRequest req) {
+        req = fixed(req);
         validate(req, false);
         List<AttemptEstimate> per = new ArrayList<>();
         double usd = 0;
@@ -166,6 +201,10 @@ public class GraderService {
             AttemptEstimate e = estimateOne(ref, req.replays(), req.judgeRepeat());
             per.add(e);
             usd += e.usdPerScoring() * req.count();
+        }
+        if (isBatch(req.mode())) {
+            usd *= BATCH_DISCOUNT;
+            per = per.stream().map(e -> new AttemptEstimate(e.source(), e.id(), round4(e.usdPerScoring() * BATCH_DISCOUNT), e.basis())).toList();
         }
         int scorings = req.attempts().size() * req.count();
         int parallel = Math.max(1, props.grader().parallel());
@@ -248,7 +287,15 @@ public class GraderService {
     /** 실험 채점 한 번의 기록. status: RUNNING, DONE, CANCELLED, INTERRUPTED(서버가 꺼져 중단) */
     public record RunMeta(String id, Instant createdAt, Instant finishedAt, String author, String versionId, String versionName,
                           List<AttemptRow> attempts, int count, int replays, int judgeRepeat, String status,
-                          int done, int failed, int total, double estimateUsd, double actualUsd, List<String> errors) {}
+                          int done, int failed, int total, double estimateUsd, double actualUsd, List<String> errors,
+                          String mode, String phase) {
+
+        /** 상태, 진행 수, 비용 같은 것만 바꾼 사본. */
+        RunMeta with(String status, int done, int failed, double actualUsd, List<String> errors, Instant finishedAt, String phase) {
+            return new RunMeta(id, createdAt, finishedAt, author, versionId, versionName, attempts, count, replays, judgeRepeat,
+                    status, done, failed, total, estimateUsd, actualUsd, errors, mode, phase);
+        }
+    }
 
     private static final class RunState {
         volatile boolean cancelled;
@@ -261,6 +308,7 @@ public class GraderService {
     }
 
     public RunMeta start(RunRequest req, String author) {
+        req = fixed(req);
         validate(req, true);
         PromptVersion version = prompts.get(req.versionId());
         List<AttemptRow> rows = new ArrayList<>();
@@ -272,12 +320,25 @@ public class GraderService {
         String id = STAMP.format(Instant.now());
         for (int i = 2; Files.exists(runsDir.resolve(id)); i++) id = STAMP.format(Instant.now()) + "-" + i;
         Estimate est = estimate(req);
+        boolean useBatch = isBatch(req.mode());
         RunMeta meta = new RunMeta(id, Instant.now(), null, author == null ? "" : author.trim(), version.id(), version.name(), rows,
-                req.count(), req.replays(), req.judgeRepeat(), "RUNNING", 0, 0, est.scorings(), est.usd(), 0, List.of());
+                req.count(), req.replays(), req.judgeRepeat(), "RUNNING", 0, 0, est.scorings(), est.usd(), 0, List.of(),
+                useBatch ? "batch" : "api", useBatch ? "배치 요청을 만드는 중" : null);
         RunState state = new RunState(meta);
         running.put(id, state);
         writeMeta(meta);
         ScoringService.Options opt = new ScoringService.Options(version, req.replays(), req.judgeRepeat());
+        if (useBatch) {
+            BatchState bs = new BatchState(0, units(rows, req.count()), new LinkedHashMap<>(), new LinkedHashMap<>(), new ArrayList<>());
+            writeBatch(id, bs);
+            String runId = id;
+            scoring.submit(() -> {
+                advanceBatch(runId); // 1단계 요청을 만들어 보낸다
+                return null;
+            });
+            log.info("배치 실험 채점 시작: {} (응시 {}개 × {}번, 버전 {})", id, rows.size(), req.count(), version.id());
+            return meta;
+        }
         for (AttemptRow r : rows) {
             for (int k = 1; k <= req.count(); k++) {
                 int n = k;
@@ -319,9 +380,7 @@ public class GraderService {
         int finished = done + failed + state.skipped;
         boolean all = finished >= m.total();
         String status = all ? (state.cancelled ? "CANCELLED" : "DONE") : "RUNNING";
-        RunMeta next = new RunMeta(m.id(), m.createdAt(), all ? Instant.now() : null, m.author(), m.versionId(), m.versionName(),
-                m.attempts(), m.count(), m.replays(), m.judgeRepeat(), status, done, failed, m.total(), m.estimateUsd(),
-                round4(m.actualUsd() + usd), errors);
+        RunMeta next = m.with(status, done, failed, round4(m.actualUsd() + usd), errors, all ? Instant.now() : null, m.phase());
         state.meta = next;
         writeMeta(next);
         if (all) {
@@ -334,7 +393,161 @@ public class GraderService {
         RunState s = running.get(runId);
         if (s == null) throw new IllegalStateException("진행 중인 실험 채점이 아닙니다: " + runId);
         s.cancelled = true;
+        if (isBatch(s.meta.mode())) {
+            synchronized (s) {
+                BatchState bs = readBatch(runId);
+                for (var e : bs.batches().entrySet()) {
+                    try {
+                        if (e.getKey().equals("claude")) batch.anthropicCancel(e.getValue());
+                        else batch.openaiCancel(e.getValue());
+                    } catch (RuntimeException ex) {
+                        log.warn("배치 취소 실패: {} {}", e.getValue(), ex.getMessage());
+                    }
+                }
+                RunMeta m = s.meta.with("CANCELLED", s.meta.done(), s.meta.failed(), s.meta.actualUsd(), s.meta.errors(), Instant.now(), "멈춤");
+                s.meta = m;
+                writeMeta(m);
+                running.remove(runId);
+            }
+        }
         return s.meta;
+    }
+
+    // ── 배치 채점 ─────────────────────
+    // 채점 코드를 그대로 돌리면서 필요한 모델 호출을 배치 요청으로 모은다(BatchCalls).
+    // 단계마다: 요청 모으기 → 배치 보내기 → 20초마다 상태 확인 → 결과 받기 → 다음 단계.
+    // 1단계: 다시 실행(luna) + 판정(Claude, OpenAI). 2단계: R1 비교. 더 모을 요청이 없으면 리포트를 만든다.
+    // 배치 ID 와 받은 결과는 batch.json 에 저장해서 서버를 다시 켜도 이어서 진행한다.
+
+    /** units: 채점 단위(응시 × 회차). batches: 배치 이름(claude 또는 openai:모델) → 배치 ID. known: custom_id → 받은 결과 */
+    public record BatchState(int round, List<Unit> units, Map<String, String> batches, Map<String, BatchClient.Answer> known,
+                             List<String> errors) {}
+
+    public record Unit(String source, String id, int n) {}
+
+    private static List<Unit> units(List<AttemptRow> rows, int count) {
+        List<Unit> out = new ArrayList<>();
+        for (AttemptRow r : rows) for (int k = 1; k <= count; k++) out.add(new Unit(r.source(), r.id(), k));
+        return out;
+    }
+
+    private void pollBatches() {
+        for (RunState s : List.copyOf(running.values())) {
+            if (!isBatch(s.meta.mode()) || s.cancelled) continue;
+            try {
+                advanceBatch(s.meta.id());
+            } catch (Exception e) {
+                log.warn("배치 진행 확인 실패: {} {}", s.meta.id(), e.getMessage());
+                setPhase(s, "확인 실패, 20초 뒤 다시 시도: " + e.getMessage());
+            }
+        }
+    }
+
+    /** 보낸 배치가 끝났는지 보고, 끝났으면 결과를 받아 다음 단계로 간다. */
+    private void advanceBatch(String runId) {
+        RunState s = running.get(runId);
+        if (s == null || s.cancelled) return;
+        synchronized (s) {
+            BatchState bs = readBatch(runId);
+            if (!bs.batches().isEmpty()) {
+                List<String> states = new ArrayList<>();
+                boolean allDone = true;
+                Map<String, BatchClient.Status> statuses = new LinkedHashMap<>();
+                for (var e : bs.batches().entrySet()) {
+                    BatchClient.Status st = e.getKey().equals("claude") ? batch.anthropicStatus(e.getValue()) : batch.openaiStatus(e.getValue());
+                    statuses.put(e.getKey(), st);
+                    states.add(e.getKey() + " " + st.raw());
+                    allDone &= st.done();
+                }
+                if (!allDone) {
+                    setPhase(s, bs.round() + "단계 배치 처리 중 · " + String.join(" / ", states));
+                    return;
+                }
+                Map<String, BatchClient.Answer> known = new LinkedHashMap<>(bs.known());
+                for (var e : statuses.entrySet()) {
+                    if (e.getKey().equals("claude")) {
+                        if (e.getValue().resultsUrl() != null) batch.anthropicResults(e.getValue().resultsUrl()).forEach((k, v) -> known.put(k, BatchClient.fromAnthropic(v)));
+                    } else {
+                        batch.openaiResults(e.getValue()).forEach((k, v) -> known.put(k, BatchClient.fromOpenai(v)));
+                    }
+                }
+                bs = new BatchState(bs.round(), bs.units(), new LinkedHashMap<>(), known, bs.errors());
+                writeBatch(runId, bs);
+            }
+            // 다음 단계 요청 모으기
+            setPhase(s, "배치 요청을 만드는 중 (" + (bs.round() + 1) + "단계)");
+            ScoringService.Options opt = new ScoringService.Options(prompts.get(s.meta.versionId()), s.meta.replays(), s.meta.judgeRepeat());
+            List<BatchCalls.Pending> pending = new ArrayList<>();
+            for (int i = 0; i < bs.units().size(); i++) {
+                Unit u = bs.units().get(i);
+                try {
+                    scoring.evaluate(store(u.source()), u.id(), opt, new BatchCalls("u" + i, bs.known(), pending, false, batch, scoring));
+                } catch (RuntimeException e) {
+                    log.warn("배치 요청 만들기 실패: {} {}", u.id(), e.getMessage());
+                }
+            }
+            // 이미 받은 결과는 다시 보내지 않는다
+            Map<String, BatchClient.Answer> knownNow = bs.known();
+            pending.removeIf(p -> knownNow.containsKey(p.customId()));
+            if (pending.isEmpty()) {
+                finishBatch(runId, s, bs, opt);
+                return;
+            }
+            Map<String, List<BatchClient.Req>> groups = new LinkedHashMap<>();
+            for (BatchCalls.Pending p : pending) {
+                String g = p.kind().equals("claude") ? "claude" : "openai:" + p.model();
+                groups.computeIfAbsent(g, k -> new ArrayList<>()).add(new BatchClient.Req(p.customId(), p.body()));
+            }
+            Map<String, String> sent = new LinkedHashMap<>();
+            for (var e : groups.entrySet()) {
+                String bid = e.getKey().equals("claude") ? batch.anthropicCreate(e.getValue()) : batch.openaiCreate(e.getValue());
+                sent.put(e.getKey(), bid);
+            }
+            int round = bs.round() + 1;
+            writeBatch(runId, new BatchState(round, bs.units(), sent, bs.known(), bs.errors()));
+            setPhase(s, round + "단계 배치 보냄 · " + pending.size() + "건 (" + String.join(", ", sent.keySet()) + ")");
+            log.info("배치 {}단계 보냄: {} {}", round, runId, sent);
+        }
+    }
+
+    /** 모든 결과를 받았으니 리포트를 만든다. */
+    private void finishBatch(String runId, RunState s, BatchState bs, ScoringService.Options opt) {
+        setPhase(s, "리포트 만드는 중");
+        for (int i = 0; i < bs.units().size(); i++) {
+            Unit u = bs.units().get(i);
+            String name = u.source() + "__" + u.id() + "__" + u.n();
+            try {
+                Map<String, Object> report = scoring.evaluate(store(u.source()), u.id(), opt,
+                        new BatchCalls("u" + i, bs.known(), new ArrayList<>(), true, batch, scoring));
+                report.put("graderRun", Map.of("runId", runId, "source", u.source(), "n", u.n(), "mode", "batch"));
+                write(resultsDir(runId).resolve(name + ".json"), report);
+                finishOne(runId, s, actualCost(report) * BATCH_DISCOUNT, null, true);
+            } catch (Exception e) {
+                finishOne(runId, s, 0, u.id() + " #" + u.n() + ": " + (e.getMessage() == null ? e.toString() : e.getMessage()), false);
+            }
+        }
+        setPhase(s, "완료");
+    }
+
+    private void setPhase(RunState s, String phase) {
+        synchronized (this) {
+            RunMeta m = s.meta;
+            RunMeta next = m.with(m.status(), m.done(), m.failed(), m.actualUsd(), m.errors(), m.finishedAt(), phase);
+            s.meta = next;
+            writeMeta(next);
+        }
+    }
+
+    private BatchState readBatch(String runId) {
+        try {
+            return json.readValue(runDir(runId).resolve("batch.json").toFile(), BatchState.class);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private void writeBatch(String runId, BatchState bs) {
+        write(runDir(runId).resolve("batch.json"), bs);
     }
 
     // ── 결과 조회 ─────────────────────
@@ -442,9 +655,13 @@ public class GraderService {
             try {
                 RunMeta m = json.readValue(runDir(id).resolve("run.json").toFile(), RunMeta.class);
                 if (!"RUNNING".equals(m.status())) continue;
-                writeMeta(new RunMeta(m.id(), m.createdAt(), Instant.now(), m.author(), m.versionId(), m.versionName(), m.attempts(),
-                        m.count(), m.replays(), m.judgeRepeat(), "INTERRUPTED", m.done(), m.failed(), m.total(), m.estimateUsd(),
-                        m.actualUsd(), m.errors()));
+                if (isBatch(m.mode()) && Files.exists(runDir(id).resolve("batch.json"))) {
+                    // 배치는 서버가 꺼져 있어도 각 회사 쪽에서 계속 처리된다. 다시 켜면 이어서 결과를 받는다.
+                    running.put(id, new RunState(m));
+                    log.info("배치 실험 채점 이어서 진행: {}", id);
+                    continue;
+                }
+                writeMeta(m.with("INTERRUPTED", m.done(), m.failed(), m.actualUsd(), m.errors(), Instant.now(), m.phase()));
             } catch (IOException | RuntimeException e) {
                 log.warn("실험 채점 기록을 읽지 못했습니다: {}", id);
             }

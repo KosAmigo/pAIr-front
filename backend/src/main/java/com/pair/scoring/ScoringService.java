@@ -171,6 +171,47 @@ public class ScoringService {
      * @param src 응시 기록을 읽을 곳 (실제 응시 또는 샘플 응시)
      */
     public Map<String, Object> evaluate(AttemptStore src, String attemptId, Options opt) {
+        return evaluate(src, attemptId, opt, live());
+    }
+
+    /**
+     * 채점 중 모델 호출. 일반 채점은 바로 부르고(live), 채점 툴의 배치 채점은 미리 받아 둔 배치 결과를 돌려준다.
+     * key 는 같은 응시를 다시 계산해도 같은 값이 나오도록 정한다(다시 실행: 턴과 순번, 판정: 모델과 반복 순번, 비교: 턴).
+     */
+    public interface Calls {
+        AssistantClient.Reply replay(int turn, int k, ChatTurn.AssistantRequest req);
+
+        Judge.Result<JudgeResult> judge(Judge base, int repeat, String system, String prefix, String body);
+
+        Judge.Result<ReplayJudgement> compare(Judge judge, int turn, String system, String user);
+    }
+
+    /** 바로 부르는 방식. */
+    public Calls live() {
+        return new Calls() {
+            public AssistantClient.Reply replay(int turn, int k, ChatTurn.AssistantRequest req) {
+                return assistant.send(req);
+            }
+
+            public Judge.Result<JudgeResult> judge(Judge base, int repeat, String system, String prefix, String body) {
+                return base.judge(system, prefix, body, JudgeResult.class);
+            }
+
+            public Judge.Result<ReplayJudgement> compare(Judge judge, int turn, String system, String user) {
+                return judge.judge(system, "", user, ReplayJudgement.class);
+            }
+        };
+    }
+
+    public List<Judge> judges() {
+        return judges;
+    }
+
+    public Judge replayJudge() {
+        return replayJudge;
+    }
+
+    public Map<String, Object> evaluate(AttemptStore src, String attemptId, Options opt, Calls calls) {
         Attempt a = src.load(attemptId);
         TaskDef task = tasks.get(a.taskId());
         boolean dev = task.isDev();
@@ -264,7 +305,10 @@ public class ScoringService {
             Map<Integer, List<Future<AssistantClient.Reply>>> pending = new LinkedHashMap<>();
             for (ChatTurn t : chosen) {
                 List<Future<AssistantClient.Reply>> fs = new ArrayList<>();
-                for (int i = 0; i < opt.replays(); i++) fs.add(replayPool.submit(() -> assistant.send(t.request())));
+                for (int i = 0; i < opt.replays(); i++) {
+                    int k = i + 1;
+                    fs.add(replayPool.submit(() -> calls.replay(t.turn(), k, t.request())));
+                }
                 pending.put(t.turn(), fs);
             }
             for (ChatTurn t : chosen) {
@@ -280,7 +324,7 @@ public class ScoringService {
                     replays.add(rep.text());
                 }
                 if (replays.isEmpty()) continue;
-                Judge.Result<ReplayJudgement> rj = replayJudge.judge(opt.version().replaySystem(), "", replayPrompt(t, replays), ReplayJudgement.class);
+                Judge.Result<ReplayJudgement> rj = calls.compare(replayJudge, t.turn(), opt.version().replaySystem(), replayPrompt(t, replays));
                 addTokens(judgeTokens, replayJudge, rj);
                 for (ReplayVerdict v : rj.value().verdicts()) {
                     total++;
@@ -313,18 +357,19 @@ public class ScoringService {
                 a.followUpAnswers(), eventSummary(events, a.startedAt()));
         // 두 채점 모델을 동시에 부른다. 한쪽이 실패하면 남은 한쪽으로만 판정한다.
         // 채점 모델마다 judgeRepeat 번 부른다. 모든 호출의 감점을 평균한다(combine).
-        Map<Judge, CompletableFuture<Judge.Result<JudgeResult>>> calls = new LinkedHashMap<>();
+        Map<Judge, CompletableFuture<Judge.Result<JudgeResult>>> judgeCalls = new LinkedHashMap<>();
         String judgeSystem = opt.version().judgeSystem();
         int repeat = Math.max(1, opt.judgeRepeat());
         for (Judge base : judges) {
             for (int r = 1; r <= repeat; r++) {
                 Judge j = repeat == 1 ? base : new Repeated(base, r);
-                calls.put(j, CompletableFuture.supplyAsync(() -> j.judge(judgeSystem, prefix, body, JudgeResult.class), replayPool));
+                int rr = r;
+                judgeCalls.put(j, CompletableFuture.supplyAsync(() -> calls.judge(base, rr, judgeSystem, prefix, body), replayPool));
             }
         }
         Map<Judge, Map<String, CheckVerdict>> byJudge = new LinkedHashMap<>();
         List<String> failures = new ArrayList<>();
-        for (var e : calls.entrySet()) {
+        for (var e : judgeCalls.entrySet()) {
             try {
                 Judge.Result<JudgeResult> jr = e.getValue().join();
                 addTokens(judgeTokens, e.getKey(), jr);
