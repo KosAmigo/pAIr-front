@@ -85,11 +85,12 @@ public class GraderController {
         return grader.estimate(req);
     }
 
-    public record StartRequest(List<GraderService.AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String author, String mode) {}
+    public record StartRequest(List<GraderService.AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String author, String mode,
+                               int batchWaitMinutes) {}
 
     @PostMapping("/runs")
     public GraderService.RunMeta start(@RequestBody StartRequest req) {
-        return grader.start(new GraderService.RunRequest(req.attempts(), req.versionId(), req.count(), req.replays(), req.judgeRepeat(), req.mode()), req.author());
+        return grader.start(new GraderService.RunRequest(req.attempts(), req.versionId(), req.count(), req.replays(), req.judgeRepeat(), req.mode(), req.batchWaitMinutes()), req.author());
     }
 
     @GetMapping("/runs")

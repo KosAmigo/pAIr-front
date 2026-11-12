@@ -333,6 +333,8 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
   const replays = defaults.replays // R1 다시 실행 횟수는 실제 채점과 같은 값으로 고정
   const judgeRepeat = 1 // 채점 모델은 실제 채점처럼 1번씩. 평균은 반복 채점 결과로 정한다
   const [mode, setMode] = useState<GraderMode>('api')
+  const BATCH_WAIT_DEFAULT = 10
+  const [batchWait, setBatchWait] = useState(BATCH_WAIT_DEFAULT)
 
   const [est, setEst] = useState<GraderEstimate | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -355,7 +357,10 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
     () => (attempts ?? []).filter((a) => picked.has(refKey(a))).map((a) => ({ source: a.source, id: a.id })),
     [attempts, picked],
   )
-  const req = useMemo(() => ({ attempts: refs, versionId, count, replays, judgeRepeat, mode }), [refs, versionId, count, replays, judgeRepeat, mode])
+  const req = useMemo(
+    () => ({ attempts: refs, versionId, count, replays, judgeRepeat, mode, batchWaitMinutes: batchWait }),
+    [refs, versionId, count, replays, judgeRepeat, mode, batchWait],
+  )
 
   useEffect(() => {
     if (!refs.length) {
@@ -528,7 +533,7 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
               </div>
               {mode === 'batch' && (
                 <span className="text-[12px] leading-4 text-text-faint">
-                  OpenAI, Anthropic 배치 API로 보냅니다. 결과는 보통 몇 분~1시간, 최대 24시간 뒤에 옵니다. 다시 실행과 판정을 먼저 보내고, 그 결과로 R1 비교를 한 번 더 보내서 두 단계로 진행합니다. 서버를 껐다 켜도 이어서 받습니다.
+                  OpenAI, Anthropic 배치 API로 보냅니다. 다시 실행과 판정을 먼저 보내고, 그 결과로 R1 비교를 한 번 더 보내서 두 단계로 진행합니다. 서버를 껐다 켜도 이어서 받습니다.
                 </span>
               )}
             </div>
@@ -543,6 +548,18 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
               </select>
             </label>
             <NumField label="반복 채점 횟수 (응시마다)" value={count} def={defaults.count} min={1} max={20} onChange={(v) => setCount(num(v, 1, 20))} hint="같은 응시를 여러 번 채점해 점수가 얼마나 흔들리는지 봄. 실제 채점은 1번" />
+            {mode === 'batch' && (
+              <NumField
+                label="배치 최대 대기 (분, 단계마다)"
+                value={batchWait}
+                def={BATCH_WAIT_DEFAULT}
+                min={5}
+                max={1440}
+                step={5}
+                onChange={(v) => setBatchWait(num(v, 1, 1440))}
+                hint="이 시간 안에 끝나지 않은 배치는 취소하고, 남은 요청만 일반 API(정가)로 바로 채점합니다. 끝난 부분은 배치 가격 그대로."
+              />
+            )}
           </div>
         </Box>
         <Box label="ESTIMATE" title="예상 비용">
@@ -555,7 +572,7 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
               <>
                 <div className="flex items-baseline gap-3">
                   <span className="tnum font-mono text-[28px] font-bold">{usd(est.usd)}</span>
-                  <span className="text-[14px] text-text-muted">{mode === 'batch' ? '보통 몇 분~1시간 (최대 24시간)' : `약 ${Math.max(1, Math.round(est.minutes))}분`}</span>
+                  <span className="text-[14px] text-text-muted">{mode === 'batch' ? `최대 약 ${batchWait * 2}분 (단계 2개 × ${batchWait}분)` : `약 ${Math.max(1, Math.round(est.minutes))}분`}</span>
                 </div>
                 <p className="mt-1 text-[14px] text-text-muted">
                   응시 {refs.length}개 × {count}번 = 채점 {est.scorings}번
@@ -577,12 +594,12 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
   )
 }
 
-function NumField({ label, value, def, min, max, hint, onChange }: { label: string; value: number; def: number; min: number; max: number; hint?: string; onChange: (v: number) => void }) {
+function NumField({ label, value, def, min, max, step = 1, hint, onChange }: { label: string; value: number; def: number; min: number; max: number; step?: number; hint?: string; onChange: (v: number) => void }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="label">{label}</span>
       <span className="flex items-center gap-2">
-        <input type="number" min={min} max={max} className={cx(inputCls, 'tnum w-24 font-mono', value !== def && 'border-caution')} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+        <input type="number" min={min} max={max} step={step} className={cx(inputCls, 'tnum w-24 font-mono', value !== def && 'border-caution')} value={value} onChange={(e) => onChange(Number(e.target.value))} />
         {/* 항목별 기본값 버튼: 기본값과 다를 때만 누를 수 있다 */}
         <button
           type="button"

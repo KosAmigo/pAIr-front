@@ -264,7 +264,7 @@ export type GraderAttempt = {
 }
 export type GraderRef = { source: GraderSource; id: string }
 export type GraderMode = 'api' | 'batch'
-export type GraderRunRequest = { attempts: GraderRef[]; versionId: string; count: number; replays: number; judgeRepeat: number; mode: GraderMode }
+export type GraderRunRequest = { attempts: GraderRef[]; versionId: string; count: number; replays: number; judgeRepeat: number; mode: GraderMode; batchWaitMinutes: number }
 export type GraderEstimate = {
   scorings: number
   usd: number
