@@ -315,13 +315,16 @@ function ChatPanel({
             className="block w-full resize-none bg-transparent px-3 pt-2 font-sans text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
           />
           <div className="flex items-center gap-2 px-2 pb-2">
-            <span className="label pl-1 text-text-faint">CTRL + ENTER</span>
-            <span className="ml-auto min-w-0 truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
+            {/* 단축키와 모델명은 작게, 글자 수에 자리를 더 준다 */}
+            <kbd className="shrink-0 rounded-sm border border-line px-1 font-mono text-[11px] leading-4 text-text-faint" title="Ctrl + Enter 로 보내기">
+              Ctrl↵
+            </kbd>
+            <span className="min-w-0 max-w-[96px] truncate font-mono text-[11px] text-text-faint" title={`이 시험에서 쓰는 AI 모델: ${model}`}>
               {model}
             </span>
             <span
               className={cx(
-                'tnum ml-1 mr-1 shrink-0 font-mono text-[12px]',
+                'tnum ml-auto mr-1 shrink-0 font-mono text-[13px]',
                 count >= maxChars ? 'text-alert' : count >= maxChars * 0.9 ? 'text-caution' : 'text-text-faint',
               )}
               aria-live="polite"
