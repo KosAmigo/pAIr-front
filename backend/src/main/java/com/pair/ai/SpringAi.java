@@ -41,6 +41,14 @@ final class SpringAi {
                 .build();
     }
 
+    /** 스트리밍 중 난 예외를 화면에 보여 줄 수 있는 예외로 바꾼다. */
+    static AiUnavailableException unavailable(String provider, RuntimeException e) {
+        String m = String.valueOf(e.getMessage());
+        if (m.contains("401")) return new AiUnavailableException(provider + " API 키가 올바르지 않습니다 (401).");
+        if (m.contains("429")) return new AiUnavailableException(provider + " 요청 한도에 걸렸습니다 (429). 잠시 후 다시 시도하세요.");
+        return new AiUnavailableException(provider + " 호출 실패: " + shorten(m));
+    }
+
     /** 호출하고, Spring AI 예외를 화면에 보여 줄 수 있는 AiUnavailableException 으로 바꾼다. */
     static ChatResponse call(String provider, Supplier<ChatResponse> call) {
         try {

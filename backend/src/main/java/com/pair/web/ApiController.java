@@ -76,6 +76,7 @@ public class ApiController {
                 } catch (RuntimeException e) {
                     continue;
                 }
+                if (isEmpty(a)) continue; // 응시 화면에 들어갔다 아무것도 안 하고 나간 기록은 보여 주지 않는다
                 TaskDef task = tasks.get(a.taskId());
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", a.id());
@@ -103,6 +104,13 @@ public class ApiController {
         }
         out.sort((x, y) -> String.valueOf(y.get("startedAt")).compareTo(String.valueOf(x.get("startedAt"))));
         return out;
+    }
+
+    /** 빈 응시: 풀이 중이고, AI 질문도, 파일 저장, 빌드, 실행도 없는 기록. */
+    private boolean isEmpty(Attempt a) {
+        if (a.status() != Attempt.Status.SOLVING) return false;
+        if (!store.turns(a.id()).isEmpty()) return false;
+        return store.events(a.id()).stream().allMatch(e -> "start".equals(e.path("type").asText()));
     }
 
     @GetMapping("/attempts/{id}")
@@ -149,6 +157,43 @@ public class ApiController {
         List<ChatTurn> added = attempts.chat(id, req.message());
         var edits = attempts.edits(id);
         return added.stream().map(t -> view(a, t, edits.getOrDefault(t.turn(), List.of()))).toList();
+    }
+
+    private final java.util.concurrent.ExecutorService streams = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
+
+    /**
+     * 채팅 스트리밍 (Server-Sent Events). 답변 글자가 오는 대로 "delta" 이벤트로 보내고,
+     * 다 받아 기록에 저장한 뒤 "done" 이벤트로 새 턴 2개(질문, 답변)를 보낸다. 실패하면 "error" 이벤트.
+     */
+    @PostMapping(value = "/attempts/{id}/chat/stream", produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter chatStream(@PathVariable String id, @RequestBody ChatRequest req) {
+        if (req.message() == null || req.message().isBlank()) throw new IllegalArgumentException("메시지가 비어 있습니다.");
+        Attempt a = store.load(id);
+        var emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(6 * 60 * 1000L);
+        streams.submit(() -> {
+            try {
+                List<ChatTurn> added = attempts.chat(id, req.message(), delta -> {
+                    try {
+                        emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name("delta").data(Map.of("t", delta)));
+                    } catch (java.io.IOException e) {
+                        throw new java.io.UncheckedIOException(e); // 응시자가 화면을 닫으면 받기를 멈춘다
+                    }
+                });
+                var edits = attempts.edits(id);
+                emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name("done")
+                        .data(added.stream().map(t -> view(a, t, edits.getOrDefault(t.turn(), List.of()))).toList()));
+                emitter.complete();
+            } catch (Exception e) {
+                try {
+                    String msg = e.getMessage() == null ? e.toString() : e.getMessage();
+                    emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name("error").data(Map.of("message", msg)));
+                    emitter.complete();
+                } catch (Exception ignored) {
+                    emitter.completeWithError(e);
+                }
+            }
+        });
+        return emitter;
     }
 
     /** AI 수정 제안 적용(apply) 또는 거절(reject). */

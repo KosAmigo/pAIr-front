@@ -1,0 +1,9 @@
+{"at":"2026-11-11T09:42:42.437621600Z","taskId":"pricing-plan","type":"start"}
+{"at":"2026-11-11T09:42:57.479767100Z","inputTokens":547,"outputTokens":1642,"turn":2,"type":"chat"}
+{"at":"2026-11-11T09:43:03.714466600Z","inputTokens":1577,"outputTokens":643,"turn":4,"type":"chat"}
+{"at":"2026-11-11T09:43:09.110658400Z","inputTokens":2069,"outputTokens":502,"turn":6,"type":"chat"}
+{"at":"2026-11-11T09:43:10.908881Z","inputTokens":2411,"outputTokens":112,"turn":8,"type":"chat"}
+{"at":"2026-11-11T09:43:10.941118800Z","length":784,"path":"기획안.md","type":"save"}
+{"at":"2026-11-11T09:43:10.944133Z","type":"firstValid"}
+{"at":"2026-11-11T09:43:10.971653400Z","type":"submit"}
+{"at":"2026-11-11T09:43:11.003236300Z","count":3,"type":"followups"}

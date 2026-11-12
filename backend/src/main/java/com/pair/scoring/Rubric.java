@@ -90,6 +90,16 @@ public final class Rubric {
             new Check("P4", "potential", Track.ALL, Method.JUDGE, 3, "결과의 한계나 남은 위험을 전혀 언급하지 않음",
                     "후속 답변, NOTES.md, 기획안 어디에도 결과의 한계, 남은 위험, 추가로 확인할 것을 언급하지 않았으면 걸림."));
 
+    /** 체크를 구분하는 키. D1~D4 는 개발/비개발 기준이 달라서 "D1-dev", "D1-biz" 처럼 과제 유형을 붙인다. */
+    public static String key(Check c) {
+        return c.track() == Track.ALL ? c.code() : c.code() + "-" + c.track().name().toLowerCase();
+    }
+
+    /** 배점을 바꿀 수 있는지. U0, C0, R0, D0 은 "이 항목 0점"이라 항목 배점과 같아야 해서 고정이다. */
+    public static boolean pointsEditable(Check c) {
+        return !List.of("U0", "C0", "R0", "D0").contains(c.code());
+    }
+
     public static Item item(String key) {
         return ITEMS.stream().filter(i -> i.key().equals(key)).findFirst().orElseThrow();
     }

@@ -53,7 +53,7 @@ public class AttemptService {
         Instant now = Instant.now();
         String id = "att-" + ID_TIME.format(now) + "-" + Integer.toString(ThreadLocalRandom.current().nextInt(36 * 36 * 36), 36);
         Attempt a = new Attempt(id, task.id(), props.assistant().provider(), props.assistant().model(),
-                now, null, null, null, Attempt.Status.SOLVING, List.of(), null);
+                now, null, null, null, Attempt.Status.SOLVING, List.of(), null, null);
         store.create(a, tasks.visibleFiles(task.id()));
         store.appendEvent(id, "start", Map.of("taskId", task.id()));
         return a;
@@ -101,7 +101,25 @@ public class AttemptService {
         return r;
     }
 
-    public synchronized List<ChatTurn> chat(String id, String message) {
+    /** 응시마다 잠금. 같은 응시의 채팅과 수정 제안 결정은 한 번에 하나씩, 다른 응시끼리는 동시에 처리한다. */
+    private final java.util.concurrent.ConcurrentHashMap<String, Object> locks = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private Object lock(String id) {
+        return locks.computeIfAbsent(id, k -> new Object());
+    }
+
+    public List<ChatTurn> chat(String id, String message) {
+        return chat(id, message, null);
+    }
+
+    /** onDelta 가 있으면 답변을 스트리밍으로 받으며 글자가 오는 대로 넘긴다. 다 받은 뒤에 대화 기록에 저장한다. */
+    public List<ChatTurn> chat(String id, String message, java.util.function.Consumer<String> onDelta) {
+        synchronized (lock(id)) {
+            return chatLocked(id, message, onDelta);
+        }
+    }
+
+    private List<ChatTurn> chatLocked(String id, String message, java.util.function.Consumer<String> onDelta) {
         Attempt a = requireStatus(id, Attempt.Status.SOLVING);
         int limit = props.assistant().maxInputChars();
         if (limit > 0 && message.length() > limit) {
@@ -118,7 +136,8 @@ public class AttemptService {
         AssistantRequest req = new AssistantRequest(a.model(), props.assistant().maxOutputTokens(),
                 props.assistant().reasoningEffort(), system, List.copyOf(msgs));
         Instant askedAt = Instant.now();
-        AssistantClient.Reply reply = assistant.send(req); // 실패하면 예외 → 질문도 저장하지 않는다
+        // 실패하면 예외 → 질문도 저장하지 않는다
+        AssistantClient.Reply reply = onDelta == null ? assistant.send(req) : assistant.stream(req, onDelta);
         if (reply.text().isBlank()) {
             // 추론 모델이 한도 안에서 답을 끝내지 못하면 빈 답이 온다. 저장하지 않고 다시 보내게 한다.
             store.appendEvent(id, "chatEmpty", Map.of("finishReason", reply.finishReason(), "outputTokens", reply.outputTokens()));
@@ -179,7 +198,13 @@ public class AttemptService {
     /** 결과: 적용했으면 바뀐 파일 내용을 함께 돌려준다. */
     public record EditDecision(String status, String path, String content) {}
 
-    public synchronized EditDecision decideEdit(String id, int turn, int index, boolean apply) {
+    public EditDecision decideEdit(String id, int turn, int index, boolean apply) {
+        synchronized (lock(id)) {
+            return decideEditLocked(id, turn, index, apply);
+        }
+    }
+
+    private EditDecision decideEditLocked(String id, int turn, int index, boolean apply) {
         requireStatus(id, Attempt.Status.SOLVING);
         ChatTurn t = store.turns(id).stream().filter(x -> x.turn() == turn && "ai".equals(x.role())).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("AI 답변 #T" + turn + " 이 없습니다."));
@@ -226,7 +251,7 @@ public class AttemptService {
 
     public Attempt followUps(String id, List<String> answers) {
         Attempt a = requireStatus(id, Attempt.Status.FOLLOWUP);
-        Attempt next = a.withFollowUps(answers == null ? List.of() : List.copyOf(answers), Instant.now());
+        Attempt next = a.withFollowUps(answers == null ? List.of() : List.copyOf(answers), tasks.get(a.taskId()).followUps(), Instant.now());
         store.save(next);
         store.appendEvent(id, "followups", Map.of("count", next.followUpAnswers().size()));
         scoring.scoreAsync(id);

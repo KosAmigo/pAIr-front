@@ -9,6 +9,8 @@ import Entry from './pages/Entry'
 import Submitted from './pages/Submitted'
 import Tasks from './pages/Tasks'
 import History from './pages/History'
+import Grader from './pages/Grader'
+import GraderResult from './pages/GraderResult'
 import { isRealAttempt } from './api'
 
 // 실제 응시 ID(att-...)는 백엔드에 연결된 응시 화면, 그 밖의 ID는 기존 목업 화면
@@ -31,6 +33,8 @@ export default function App() {
         <Route path="/report/:attemptId" element={<Report />} />
         <Route path="/replay/:taskId" element={<Replay />} />
         <Route path="/entry" element={<Entry />} />
+        <Route path="/grader" element={<Grader />} />
+        <Route path="/grader/result/:runId/:file" element={<GraderResult />} />
         <Route path="*" element={<Home />} />
       </Routes>
     </BrowserRouter>

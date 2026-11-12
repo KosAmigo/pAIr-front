@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, History, TicketCheck } from 'lucide-react'
+import { ArrowRight, FlaskConical, History, TicketCheck } from 'lucide-react'
 import { cx, Logo, Sep } from '../components/ui'
 
 // DESIGN.md §7-1 초기화면
@@ -31,7 +31,15 @@ export default function Home() {
     <div className="dot-grid flex min-h-full flex-col">
       <header className="flex h-14 items-center px-12">
         <Logo />
-        <span className="label ml-auto">AI 활용 역량평가 플랫폼</span>
+        {/* 채점 툴 (임시 기능): 아이콘만 */}
+        <Link
+          to="/grader"
+          aria-label="채점 툴 (임시)"
+          title="채점 툴 (임시)"
+          className="ml-auto inline-flex size-9 items-center justify-center rounded-md border border-line text-text-muted transition-colors duration-[120ms] hover:border-line-strong hover:bg-panel-raised hover:text-text"
+        >
+          <FlaskConical size={18} aria-hidden />
+        </Link>
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center px-12 pb-24">
