@@ -22,7 +22,6 @@ export default function GraderResult() {
           채점 툴
         </Link>
         <span className="text-[16px] text-text-muted">실험 채점 결과</span>
-        <span className="rounded-sm bg-caution/15 px-1.5 font-mono text-[11px] text-caution">임시 기능</span>
         <span className="ml-auto font-mono text-[13px] text-text-muted">
           {runId} · {n ? `#${n}` : file}
         </span>

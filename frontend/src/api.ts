@@ -263,7 +263,8 @@ export type GraderAttempt = {
   chatTurns: number
 }
 export type GraderRef = { source: GraderSource; id: string }
-export type GraderRunRequest = { attempts: GraderRef[]; versionId: string; count: number; replays: number; judgeRepeat: number }
+export type GraderMode = 'api' | 'batch'
+export type GraderRunRequest = { attempts: GraderRef[]; versionId: string; count: number; replays: number; judgeRepeat: number; mode: GraderMode }
 export type GraderEstimate = {
   scorings: number
   usd: number
@@ -289,6 +290,10 @@ export type GraderRun = {
   estimateUsd: number
   actualUsd: number
   errors: string[]
+  /** api: 바로 호출, batch: 배치 API (예전 기록은 null) */
+  mode: GraderMode | null
+  /** 배치 진행 단계 설명 */
+  phase: string | null
 }
 export type GraderCheckSummary = {
   code: string

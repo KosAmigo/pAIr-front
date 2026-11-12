@@ -108,8 +108,7 @@ public class PromptStore {
         for (Rubric.Check c : Rubric.CHECKS) {
             String k = Rubric.key(c);
             PromptVersion.CheckPrompt p = draft.checks() == null ? null : draft.checks().get(k);
-            int points = p != null && Rubric.pointsEditable(c) ? p.points() : c.points();
-            if (points < 1 || points > 30) throw new IllegalArgumentException(k + " 배점은 1~30 사이여야 합니다.");
+            int points = c.points(); // 배점은 고정: 보낸 값과 관계없이 기준표 배점을 저장
             String hint = c.method() == Rubric.Method.JUDGE ? (p == null || p.hint() == null || p.hint().isBlank() ? c.judgeHint() : p.hint().trim()) : null;
             checks.put(k, new PromptVersion.CheckPrompt(hint, points));
         }

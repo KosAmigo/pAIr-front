@@ -21,7 +21,7 @@ import com.pair.scoring.Rubric;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-/** 채점 툴 API (임시 기능). 로그인 없이 열려 있으므로 실제 서비스에서는 막아야 한다. */
+/** 채점 툴 API. 로그인 없이 열려 있으므로 실제 서비스에서는 막아야 한다. */
 @RestController
 @RequestMapping("/api/grader")
 public class GraderController {
@@ -85,11 +85,11 @@ public class GraderController {
         return grader.estimate(req);
     }
 
-    public record StartRequest(List<GraderService.AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String author) {}
+    public record StartRequest(List<GraderService.AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String author, String mode) {}
 
     @PostMapping("/runs")
     public GraderService.RunMeta start(@RequestBody StartRequest req) {
-        return grader.start(new GraderService.RunRequest(req.attempts(), req.versionId(), req.count(), req.replays(), req.judgeRepeat()), req.author());
+        return grader.start(new GraderService.RunRequest(req.attempts(), req.versionId(), req.count(), req.replays(), req.judgeRepeat(), req.mode()), req.author());
     }
 
     @GetMapping("/runs")

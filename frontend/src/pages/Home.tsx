@@ -31,11 +31,11 @@ export default function Home() {
     <div className="dot-grid flex min-h-full flex-col">
       <header className="flex h-14 items-center px-12">
         <Logo />
-        {/* 채점 툴 (임시 기능): 아이콘만 */}
+        {/* 채점 툴: 아이콘만 */}
         <Link
           to="/grader"
-          aria-label="채점 툴 (임시)"
-          title="채점 툴 (임시)"
+          aria-label="채점 툴"
+          title="채점 툴"
           className="ml-auto inline-flex size-9 items-center justify-center rounded-md border border-line text-text-muted transition-colors duration-[120ms] hover:border-line-strong hover:bg-panel-raised hover:text-text"
         >
           <FlaskConical size={18} aria-hidden />

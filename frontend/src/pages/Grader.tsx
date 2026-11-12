@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Download, ExternalLink, Loader2, Play, Save, Square, Star } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { CheckCircle2, Download, ExternalLink, Info, Loader2, Play, Save, Square, Star } from 'lucide-react'
 import { Button, cx, Logo, Tabs } from '../components/ui'
 import {
   ApiError,
@@ -10,12 +10,13 @@ import {
   type GraderRef,
   type GraderResult,
   type GraderRubric,
+  type GraderMode,
   type GraderRun,
   type PromptVersion,
   type PromptVersionRow,
 } from '../api'
 
-// 채점 툴 (임시 기능, DESIGN.md §7-9). 프롬프트 버전 편집, 실험 채점(여러 응시 × N번), 결과 분석.
+// 채점 툴 (DESIGN.md §7). 프롬프트 버전 편집, 실험 채점(여러 응시 × N번), 결과 분석.
 // 프롬프트 버전과 샘플 응시는 grader/ 폴더로 git 공유, 실험 결과는 각자 PC(pilot-data/grader)에 쌓인다.
 
 type Tab = 'versions' | 'run' | 'results'
@@ -128,7 +129,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
       setErr((e as ApiError).message)
     }
   }
-  const setCheck = (key: string, patch: Partial<{ hint: string | null; points: number }>) =>
+  const setCheck = (key: string, patch: Partial<{ hint: string | null }>) =>
     setDraft((d) => (d ? { ...d, checks: { ...d.checks, [key]: { ...d.checks[key], ...patch } } } : d))
 
   const activeRow = rows?.find((r) => r.id === sel)
@@ -136,6 +137,13 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
   return (
     <div className="grid min-h-0 grid-cols-[320px_minmax(0,1fr)] gap-4">
       <Box label="VERSIONS" title="버전 목록" className="self-start">
+        {/* 공지: 버전 파일 공유 방법 */}
+        <div role="note" className="flex gap-2 border-b border-line bg-info/8 px-4 py-3 text-[13px] leading-5 text-text-muted">
+          <Info size={15} className="mt-0.5 shrink-0 text-info" aria-hidden />
+          <p>
+            버전 파일은 <span className="font-mono text-text">grader/versions/</span>에 생깁니다. 커밋하고 push하면 팀원이 pull받아 같이 씁니다. 실제 채점 버전 지정은 각자 PC에만 저장됩니다.
+          </p>
+        </div>
         {!rows ? (
           <Loading />
         ) : (
@@ -165,9 +173,6 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
             ))}
           </ul>
         )}
-        <p className="border-t border-line px-4 py-3 text-[13px] leading-5 text-text-faint">
-          버전 파일은 <span className="font-mono">grader/versions/</span>에 생깁니다. 커밋하고 push하면 팀원이 pull받아 같이 씁니다. 실제 채점 버전 지정은 각자 PC에만 저장됩니다.
-        </p>
       </Box>
 
       <div className="min-w-0 space-y-4">
@@ -253,7 +258,6 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
                         const cur = shown.checks[c.key] ?? { hint: c.defaultHint, points: c.defaultPoints }
                         const base = parent?.checks[c.key]
                         const hintChanged = editing && base && (cur.hint ?? '') !== (base.hint ?? '')
-                        const pointsChanged = editing && base && cur.points !== base.points
                         return (
                           <tr key={c.key} className="border-b border-line align-top last:border-0">
                             <td className="px-3 py-2.5 font-mono text-[13px] text-text-muted">
@@ -277,19 +281,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
                                 ))}
                             </td>
                             <td className="px-3 py-2.5 text-right">
-                              {editing && c.pointsEditable ? (
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={30}
-                                  aria-label={`${c.code} 감점`}
-                                  className={cx(inputCls, 'tnum w-16 text-right font-mono', pointsChanged && 'border-caution')}
-                                  value={cur.points}
-                                  onChange={(e) => setCheck(c.key, { points: Number(e.target.value) })}
-                                />
-                              ) : (
-                                <span className="tnum font-mono text-[14px] text-alert">-{cur.points}</span>
-                              )}
+                              <span className="tnum font-mono text-[14px] text-alert">-{cur.points}</span>
                             </td>
                           </tr>
                         )
@@ -332,14 +324,10 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
   // 기본값: 채점 횟수 3번(흔들림을 보려고), R1 다시 실행과 채점 모델 반복은 실제 채점과 같게
   const defaults = { count: 3, replays: rubric.defaults.replays, judgeRepeat: rubric.defaults.judgeRepeat }
   const [count, setCount] = useState(defaults.count)
-  const [replays, setReplays] = useState(defaults.replays)
-  const [judgeRepeat, setJudgeRepeat] = useState(defaults.judgeRepeat)
-  const isDefault = count === defaults.count && replays === defaults.replays && judgeRepeat === defaults.judgeRepeat
-  const resetDefaults = () => {
-    setCount(defaults.count)
-    setReplays(defaults.replays)
-    setJudgeRepeat(defaults.judgeRepeat)
-  }
+  const replays = defaults.replays // R1 다시 실행 횟수는 실제 채점과 같은 값으로 고정
+  const judgeRepeat = 1 // 채점 모델은 실제 채점처럼 1번씩. 평균은 반복 채점 결과로 정한다
+  const [mode, setMode] = useState<GraderMode>('api')
+
   const [est, setEst] = useState<GraderEstimate | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -361,7 +349,7 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
     () => (attempts ?? []).filter((a) => picked.has(refKey(a))).map((a) => ({ source: a.source, id: a.id })),
     [attempts, picked],
   )
-  const req = useMemo(() => ({ attempts: refs, versionId, count, replays, judgeRepeat }), [refs, versionId, count, replays, judgeRepeat])
+  const req = useMemo(() => ({ attempts: refs, versionId, count, replays, judgeRepeat, mode }), [refs, versionId, count, replays, judgeRepeat, mode])
 
   useEffect(() => {
     if (!refs.length) {
@@ -396,10 +384,27 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
     }
   }
 
+  // 1. 과제 고르기 → 2. 그 과제의 응시 고르기. 과제를 바꾸면 고른 응시는 비운다.
+  const taskList = useMemo(() => {
+    const m = new Map<string, { id: string; title: string; type: GraderAttempt['taskType']; n: number }>()
+    for (const a of attempts ?? []) {
+      const t = m.get(a.taskId) ?? { id: a.taskId, title: a.taskTitle, type: a.taskType, n: 0 }
+      t.n++
+      m.set(a.taskId, t)
+    }
+    return [...m.values()].sort((a, b) => (a.type === b.type ? a.title.localeCompare(b.title) : a.type === 'dev' ? -1 : 1))
+  }, [attempts])
+  const [taskId, setTaskId] = useState('')
+  const currentTask = taskList.find((t) => t.id === taskId) ?? taskList[0]
+  const pickTask = (id: string) => {
+    setTaskId(id)
+    setPicked(new Set())
+  }
+  const ofTask = (attempts ?? []).filter((a) => a.taskId === currentTask?.id)
   const groups: { title: string; label: string; rows: GraderAttempt[] }[] = attempts
     ? [
-        { label: 'SAMPLES', title: '샘플 응시 (팀 공용, git 공유)', rows: attempts.filter((a) => a.source === 'sample') },
-        { label: 'MINE', title: '내 응시 (이 PC, 후속 질문까지 끝난 것)', rows: attempts.filter((a) => a.source === 'mine') },
+        { label: 'SAMPLES', title: '샘플 응시 (팀 공용, git 공유)', rows: ofTask.filter((a) => a.source === 'sample') },
+        { label: 'MINE', title: '내 응시 (이 PC, 후속 질문까지 끝난 것)', rows: ofTask.filter((a) => a.source === 'mine') },
       ]
     : []
 
@@ -413,8 +418,39 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
             <Loading />
           </Box>
         )}
+        {taskList.length > 0 && (
+          <Box label="STEP 1" title="과제 고르기">
+            <div role="radiogroup" aria-label="과제" className="grid grid-cols-2 gap-2 p-3">
+              {taskList.map((t) => {
+                const on = currentTask?.id === t.id
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => pickTask(t.id)}
+                    className={cx(
+                      'flex items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors duration-[120ms]',
+                      on ? 'border-signal bg-signal/6' : 'border-line hover:border-line-strong hover:bg-panel-raised/60',
+                    )}
+                  >
+                    <span className="rounded-sm bg-panel-raised px-1.5 font-mono text-[11px] text-text-muted">{t.type === 'dev' ? '개발' : '비개발'}</span>
+                    <span className={cx('min-w-0 flex-1 truncate text-[15px]', on ? 'font-semibold text-text' : 'text-text-muted')}>{t.title}</span>
+                    <span className="tnum font-mono text-[12px] text-text-faint">응시 {t.n}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </Box>
+        )}
         {groups.map((g) => (
-          <Box key={g.label} label={g.label} title={g.title} actions={<span className="font-mono text-[13px] text-text-muted">{g.rows.length}건</span>}>
+          <Box
+            key={g.label}
+            label={`STEP 2 · ${g.label}`}
+            title={g.title}
+            actions={<span className="font-mono text-[13px] text-text-muted">{g.rows.length}건</span>}
+          >
             {g.rows.length === 0 ? (
               <p className="px-4 py-4 text-[14px] text-text-muted">없습니다.</p>
             ) : (
@@ -423,7 +459,6 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
                   <tr className="border-b border-line text-text-faint">
                     <th className={cx(th, 'w-10')} aria-label="선택" />
                     <th className={th}>응시</th>
-                    <th className={th}>과제</th>
                     <th className={th}>날짜</th>
                     <th className={cx(th, 'text-right')}>대화</th>
                     <th className={cx(th, 'text-right')}>지난 점수</th>
@@ -440,10 +475,6 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
                         <td className="px-3 py-2">
                           <div className="text-[14px]">{a.label ?? <span className="font-mono">{a.id}</span>}</div>
                           {a.label && <div className="font-mono text-[12px] text-text-faint">{a.id}</div>}
-                        </td>
-                        <td className="px-3 py-2 text-[14px] text-text-muted">
-                          <span className="mr-1.5 rounded-sm bg-panel-raised px-1 font-mono text-[11px]">{a.taskType === 'dev' ? '개발' : '비개발'}</span>
-                          {a.taskTitle}
                         </td>
                         <td className="px-3 py-2 font-mono text-[13px] text-text-muted">{fmtDate(a.startedAt)}</td>
                         <td className="tnum px-3 py-2 text-right font-mono text-[13px] text-text-muted">{Math.floor(a.chatTurns / 2)}턴</td>
@@ -462,13 +493,39 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
         <Box
           label="SETTINGS"
           title="채점 설정"
-          actions={
-            <Button variant="ghost" size="sm" onClick={resetDefaults} disabled={isDefault} aria-label="전체 기본값으로 되돌리기" title={`채점 횟수 ${defaults.count}번, R1 다시 실행 ${defaults.replays}번, 채점 모델 ${defaults.judgeRepeat}번`}>
-              전체 기본값
-            </Button>
-          }
         >
           <div className="space-y-3 p-4">
+            <div className="flex flex-col gap-1">
+              <span className="label">호출 방식</span>
+              <div role="radiogroup" aria-label="호출 방식" className="grid grid-cols-2 gap-1 rounded-md border border-line-strong bg-panel-sunken p-1">
+                {(
+                  [
+                    { v: 'api', t: '일반 API', d: '바로 채점' },
+                    { v: 'batch', t: '배치 API', d: '비용 절반, 대기 있음' },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    role="radio"
+                    aria-checked={mode === o.v}
+                    onClick={() => setMode(o.v)}
+                    className={cx(
+                      'flex flex-col items-start rounded-sm px-2.5 py-1.5 text-left transition-colors duration-[120ms]',
+                      mode === o.v ? 'bg-panel-raised text-text shadow-[inset_0_0_0_1px_var(--color-signal)]' : 'text-text-muted hover:text-text',
+                    )}
+                  >
+                    <span className="text-[14px] font-semibold">{o.t}</span>
+                    <span className="text-[12px] text-text-faint">{o.d}</span>
+                  </button>
+                ))}
+              </div>
+              {mode === 'batch' && (
+                <span className="text-[12px] leading-4 text-text-faint">
+                  OpenAI, Anthropic 배치 API로 보냅니다. 결과는 보통 몇 분~1시간, 최대 24시간 뒤에 옵니다. 다시 실행과 판정을 먼저 보내고, 그 결과로 R1 비교를 한 번 더 보내서 두 단계로 진행합니다. 서버를 껐다 켜도 이어서 받습니다.
+                </span>
+              )}
+            </div>
             <label className="flex flex-col gap-1">
               <span className="label">프롬프트 버전</span>
               <select className={inputCls} value={versionId} onChange={(e) => setVersionId(e.target.value)}>
@@ -479,9 +536,7 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
                 ))}
               </select>
             </label>
-            <NumField label="응시마다 채점 횟수" value={count} def={defaults.count} min={1} max={20} onChange={(v) => setCount(num(v, 1, 20))} hint="같은 응시를 여러 번 채점해 점수가 얼마나 흔들리는지 봄. 실제 채점은 1번" />
-            <NumField label="R1 다시 실행 횟수 (핵심 턴마다)" value={replays} def={defaults.replays} min={1} max={10} onChange={(v) => setReplays(num(v, 1, 10))} hint="기본값이 실제 채점과 같음. 늘리면 R1 운의 영향이 줄어듦" />
-            <NumField label="채점 모델 반복 (모델마다 N번 불러 평균)" value={judgeRepeat} def={defaults.judgeRepeat} min={1} max={3} onChange={(v) => setJudgeRepeat(num(v, 1, 3))} hint="기본값이 실제 채점과 같음. 2번이면 판정 흔들림이 줄어드는지 볼 수 있음" />
+            <NumField label="반복 채점 횟수 (응시마다)" value={count} def={defaults.count} min={1} max={20} onChange={(v) => setCount(num(v, 1, 20))} hint="같은 응시를 여러 번 채점해 점수가 얼마나 흔들리는지 봄. 실제 채점은 1번" />
           </div>
         </Box>
         <Box label="ESTIMATE" title="예상 비용">
@@ -494,7 +549,7 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
               <>
                 <div className="flex items-baseline gap-3">
                   <span className="tnum font-mono text-[28px] font-bold">{usd(est.usd)}</span>
-                  <span className="text-[14px] text-text-muted">약 {Math.max(1, Math.round(est.minutes))}분</span>
+                  <span className="text-[14px] text-text-muted">{mode === 'batch' ? '보통 몇 분~1시간 (최대 24시간)' : `약 ${Math.max(1, Math.round(est.minutes))}분`}</span>
                 </div>
                 <p className="mt-1 text-[14px] text-text-muted">
                   응시 {refs.length}개 × {count}번 = 채점 {est.scorings}번
@@ -637,7 +692,7 @@ function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect:
                     <span className={cx('ml-auto font-mono text-[12px]', runStatus[r.status].cls)}>{runStatus[r.status].t}</span>
                   </div>
                   <div className="mt-0.5 font-mono text-[12px] text-text-faint">
-                    {fmtDate(r.createdAt)} · 응시 {r.attempts.length} × {r.count}번 · {usd(r.actualUsd)}
+                    {fmtDate(r.createdAt)} · {r.mode === 'batch' ? '배치 · ' : ''}응시 {r.attempts.length} × {r.count}번 · {usd(r.actualUsd)}
                   </div>
                 </button>
               </li>
@@ -727,14 +782,21 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
           {finished} / {m.total}
           {m.failed > 0 && <span className="text-alert"> (실패 {m.failed})</span>}
         </span>
+        <span className="rounded-sm bg-panel-raised px-1.5 font-mono text-[12px] text-text-muted">{m.mode === 'batch' ? '배치 API' : '일반 API'}</span>
         <span className="text-text-muted">
-          응시 {m.attempts.length}개 × {m.count}번 · R1 다시 실행 {m.replays}번 · 채점 모델 {m.judgeRepeat}번씩
+          응시 {m.attempts.length}개 × {m.count}번
         </span>
         <span className="tnum font-mono text-text-muted">
           비용 {usd(m.actualUsd)} <span className="text-text-faint">(예상 {usd(m.estimateUsd)})</span>
         </span>
         {m.author && <span className="text-text-faint">실행: {m.author}</span>}
       </div>
+      {m.mode === 'batch' && m.phase && (
+        <p className="border-t border-line px-4 py-2 font-mono text-[12px] leading-5 break-all text-text-muted">
+          {m.status === 'RUNNING' && <Loader2 size={12} className="mr-1.5 inline animate-spin text-caution" aria-hidden />}
+          {m.phase}
+        </p>
+      )}
       {m.status === 'RUNNING' && (
         <div className="mx-4 mb-3 h-1 overflow-hidden rounded-full bg-line">
           <div className="h-full bg-signal transition-[width] duration-500" style={{ width: `${(finished / Math.max(1, m.total)) * 100}%` }} />
@@ -967,7 +1029,6 @@ function Details({ data }: { data: { meta: GraderRun; results: GraderResult[] } 
 // ══ 페이지 ══════════════════════
 
 export default function Grader() {
-  const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('versions')
   const [rubric, setRubric] = useState<GraderRubric | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -984,7 +1045,6 @@ export default function Grader() {
       <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-panel px-8">
         <Logo />
         <span className="text-[16px] font-semibold">채점 툴</span>
-        <span className="rounded-sm bg-caution/15 px-1.5 font-mono text-[11px] text-caution">임시 기능</span>
         <div className="ml-auto flex items-center gap-3">
           <label className="flex items-center gap-2 text-[14px] text-text-muted">
             작성자
@@ -999,9 +1059,6 @@ export default function Grader() {
               }}
             />
           </label>
-          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-            <ArrowLeft size={14} aria-hidden /> 메인
-          </Button>
         </div>
       </header>
       <div className="flex shrink-0 items-end border-b border-line px-8">
