@@ -32,20 +32,44 @@ final class BatchCalls implements ScoringService.Calls {
     /** kind: claude(Anthropic 배치) 또는 openai(OpenAI 배치, model 별로 나눔) */
     record Pending(String customId, String kind, String model, ObjectNode body) {}
 
+    /** 일반 API 로 부른 호출의 토큰 (정가로 계산하려고 따로 모은다). */
+    record Used(String model, long input, long output) {}
+
     private final String unit;
     private final Map<String, Answer> known;
     private final List<Pending> pending;
     private final boolean last;
     private final BatchClient client;
     private final ScoringService scoring;
+    /** 배치 대기 시간을 넘겨 일반 API 로 넘어갔을 때: 결과가 없는 호출은 이걸로 바로 부른다. */
+    private final ScoringService.Calls live;
+    private final List<Used> liveUsed = new java.util.ArrayList<>();
 
     BatchCalls(String unit, Map<String, Answer> known, List<Pending> pending, boolean last, BatchClient client, ScoringService scoring) {
+        this(unit, known, pending, last, client, scoring, null);
+    }
+
+    BatchCalls(String unit, Map<String, Answer> known, List<Pending> pending, boolean last, BatchClient client, ScoringService scoring,
+               ScoringService.Calls live) {
         this.unit = unit;
         this.known = known;
         this.pending = pending;
         this.last = last;
         this.client = client;
         this.scoring = scoring;
+        this.live = live;
+    }
+
+    List<Used> liveUsed() {
+        synchronized (liveUsed) {
+            return List.copyOf(liveUsed);
+        }
+    }
+
+    private void used(String model, long in, long out) {
+        synchronized (liveUsed) {
+            liveUsed.add(new Used(model, in, out));
+        }
     }
 
     @Override
@@ -53,6 +77,11 @@ final class BatchCalls implements ScoringService.Calls {
         String key = unit + "-t" + pad(turn) + "-k" + k;
         Answer a = known.get(key);
         if (a == null) {
+            if (live != null) {
+                AssistantClient.Reply r = live.replay(turn, k, req);
+                used(req.model(), r.inputTokens(), r.outputTokens());
+                return r;
+            }
             if (!last) add(new Pending(key, "openai", req.model(), client.replayBody(req)));
             return new AssistantClient.Reply("", req.model(), 0, 0, 0, "none", 0);
         }
@@ -65,6 +94,11 @@ final class BatchCalls implements ScoringService.Calls {
         String key = unit + "-" + base.name() + "-" + repeat;
         Answer a = known.get(key);
         BeanOutputConverter<JudgeResult> converter = new BeanOutputConverter<>(JudgeResult.class);
+        if (a == null && live != null) {
+            Judge.Result<JudgeResult> r = live.judge(base, repeat, system, prefix, body);
+            used(base.model(), r.inputTokens(), r.outputTokens());
+            return r;
+        }
         if (a == null) {
             if (last) throw new AiUnavailableException(base.name() + " 채점 배치 결과가 없습니다.");
             boolean claude = "claude".equals(base.name());
@@ -87,6 +121,11 @@ final class BatchCalls implements ScoringService.Calls {
         String key = unit + "-c" + pad(turn);
         Answer a = known.get(key);
         BeanOutputConverter<ReplayJudgement> converter = new BeanOutputConverter<>(ReplayJudgement.class);
+        if (a == null && live != null) {
+            Judge.Result<ReplayJudgement> r = live.compare(judge, turn, system, user);
+            used(judge.model(), r.inputTokens(), r.outputTokens());
+            return r;
+        }
         if (a == null) {
             if (!last) {
                 boolean claude = "claude".equals(judge.name());

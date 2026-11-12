@@ -174,7 +174,11 @@ public class GraderService {
     // ── 예상 비용 ─────────────────────
 
     /** mode: api(바로 호출) 또는 batch(배치 API, 비용 절반, 결과는 몇 분~최대 24시간 뒤) */
-    public record RunRequest(List<AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String mode) {}
+    /** batchWaitMinutes: 배치 단계마다 기다릴 최대 시간(분). 넘으면 남은 요청을 일반 API 로 보낸다. */
+    public record RunRequest(List<AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String mode,
+                             int batchWaitMinutes) {}
+
+    static final int DEFAULT_BATCH_WAIT = 10;
 
     static boolean isBatch(String mode) {
         return "batch".equals(mode);
@@ -189,7 +193,7 @@ public class GraderService {
     private RunRequest fixed(RunRequest req) {
         // 채점 모델도 실제 채점처럼 1번씩 (평균은 반복 채점 결과를 보고 팀이 정함)
         return new RunRequest(req.attempts(), req.versionId(), req.count(), props.r2().replaysPerTurn(), 1,
-                isBatch(req.mode()) ? "batch" : "api");
+                isBatch(req.mode()) ? "batch" : "api", req.batchWaitMinutes() <= 0 ? DEFAULT_BATCH_WAIT : req.batchWaitMinutes());
     }
 
     public Estimate estimate(RunRequest req) {
@@ -329,7 +333,8 @@ public class GraderService {
         writeMeta(meta);
         ScoringService.Options opt = new ScoringService.Options(version, req.replays(), req.judgeRepeat());
         if (useBatch) {
-            BatchState bs = new BatchState(0, units(rows, req.count()), new LinkedHashMap<>(), new LinkedHashMap<>(), new ArrayList<>());
+            BatchState bs = new BatchState(0, units(rows, req.count()), new LinkedHashMap<>(), new LinkedHashMap<>(), new ArrayList<>(),
+                    null, req.batchWaitMinutes(), false);
             writeBatch(id, bs);
             String runId = id;
             scoring.submit(() -> {
@@ -420,8 +425,12 @@ public class GraderService {
     // 배치 ID 와 받은 결과는 batch.json 에 저장해서 서버를 다시 켜도 이어서 진행한다.
 
     /** units: 채점 단위(응시 × 회차). batches: 배치 이름(claude 또는 openai:모델) → 배치 ID. known: custom_id → 받은 결과 */
+    /**
+     * roundStartedAt: 지금 단계 배치를 보낸 시각, waitMinutes: 단계마다 기다릴 최대 시간,
+     * fallback: 대기 시간을 넘겨 남은 요청을 일반 API 로 처리했는지
+     */
     public record BatchState(int round, List<Unit> units, Map<String, String> batches, Map<String, BatchClient.Answer> known,
-                             List<String> errors) {}
+                             List<String> errors, Instant roundStartedAt, int waitMinutes, boolean fallback) {}
 
     public record Unit(String source, String id, int n) {}
 
@@ -460,19 +469,42 @@ public class GraderService {
                     states.add(model + " " + st.label() + (st.total() > 0 ? " " + st.finished() + "/" + st.total() : ""));
                     allDone &= st.done();
                 }
-                if (!allDone) {
-                    setPhase(s, bs.round() + "단계 배치 처리 중 · " + String.join(" · ", states));
+                boolean timedOut = !allDone && bs.waitMinutes() > 0 && bs.roundStartedAt() != null
+                        && java.time.Duration.between(bs.roundStartedAt(), Instant.now()).toMinutes() >= bs.waitMinutes();
+                if (!allDone && !timedOut) {
+                    long waited = bs.roundStartedAt() == null ? 0 : java.time.Duration.between(bs.roundStartedAt(), Instant.now()).toMinutes();
+                    setPhase(s, bs.round() + "단계 배치 처리 중 (" + waited + "/" + bs.waitMinutes() + "분) · " + String.join(" · ", states));
+                    return;
+                }
+                if (timedOut) {
+                    // 대기 시간 초과: 안 끝난 배치는 취소하고, 끝난 배치 결과만 받은 뒤 나머지는 일반 API 로 채점한다
+                    Map<String, BatchClient.Answer> known = new LinkedHashMap<>(bs.known());
+                    for (var e : statuses.entrySet()) {
+                        String bid = bs.batches().get(e.getKey());
+                        if (!e.getValue().done()) {
+                            try {
+                                if (e.getKey().equals("claude")) batch.anthropicCancel(bid);
+                                else batch.openaiCancel(bid);
+                            } catch (RuntimeException ex) {
+                                log.warn("배치 취소 실패: {} {}", bid, ex.getMessage());
+                            }
+                            continue;
+                        }
+                        collect(e.getKey(), e.getValue(), known);
+                    }
+                    bs = new BatchState(bs.round(), bs.units(), new LinkedHashMap<>(), known, bs.errors(), bs.roundStartedAt(), bs.waitMinutes(), true);
+                    writeBatch(runId, bs);
+                    log.info("배치 대기 {}분 초과, 남은 요청은 일반 API 로: {}", bs.waitMinutes(), runId);
+                    ScoringService.Options opt = new ScoringService.Options(prompts.get(s.meta.versionId()), s.meta.replays(), s.meta.judgeRepeat());
+                    setPhase(s, "대기 " + bs.waitMinutes() + "분 초과 · 남은 요청을 일반 API로 채점 중");
+                    finishBatch(runId, s, bs, opt);
                     return;
                 }
                 Map<String, BatchClient.Answer> known = new LinkedHashMap<>(bs.known());
                 for (var e : statuses.entrySet()) {
-                    if (e.getKey().equals("claude")) {
-                        if (e.getValue().resultsUrl() != null) batch.anthropicResults(e.getValue().resultsUrl()).forEach((k, v) -> known.put(k, BatchClient.fromAnthropic(v)));
-                    } else {
-                        batch.openaiResults(e.getValue()).forEach((k, v) -> known.put(k, BatchClient.fromOpenai(v)));
-                    }
+                    collect(e.getKey(), e.getValue(), known);
                 }
-                bs = new BatchState(bs.round(), bs.units(), new LinkedHashMap<>(), known, bs.errors());
+                bs = new BatchState(bs.round(), bs.units(), new LinkedHashMap<>(), known, bs.errors(), bs.roundStartedAt(), bs.waitMinutes(), bs.fallback());
                 writeBatch(runId, bs);
             }
             // 다음 단계 요청 모으기
@@ -505,7 +537,7 @@ public class GraderService {
                 sent.put(e.getKey(), bid);
             }
             int round = bs.round() + 1;
-            writeBatch(runId, new BatchState(round, bs.units(), sent, bs.known(), bs.errors()));
+            writeBatch(runId, new BatchState(round, bs.units(), sent, bs.known(), bs.errors(), Instant.now(), bs.waitMinutes(), bs.fallback()));
             List<String> models = sent.keySet().stream()
                     .map(k -> (k.equals("claude") ? props.judge().claude().model() : k.substring("openai:".length())) + " 접수").toList();
             setPhase(s, round + "단계 배치 보냄 (" + pending.size() + "건) · " + String.join(" · ", models));
@@ -513,23 +545,37 @@ public class GraderService {
         }
     }
 
-    /** 모든 결과를 받았으니 리포트를 만든다. */
+    /** 배치 결과를 known 에 모은다. */
+    private void collect(String group, BatchClient.Status st, Map<String, BatchClient.Answer> known) {
+        if (group.equals("claude")) {
+            if (st.resultsUrl() != null) batch.anthropicResults(st.resultsUrl()).forEach((k, v) -> known.put(k, BatchClient.fromAnthropic(v)));
+        } else {
+            batch.openaiResults(st).forEach((k, v) -> known.put(k, BatchClient.fromOpenai(v)));
+        }
+    }
+
+    /** 모든 결과를 받았으니 리포트를 만든다. fallback 이면 결과가 없는 호출은 일반 API 로 바로 부른다. */
     private void finishBatch(String runId, RunState s, BatchState bs, ScoringService.Options opt) {
-        setPhase(s, "리포트 만드는 중");
+        if (!bs.fallback()) setPhase(s, "리포트 만드는 중");
         for (int i = 0; i < bs.units().size(); i++) {
             Unit u = bs.units().get(i);
             String name = u.source() + "__" + u.id() + "__" + u.n();
             try {
-                Map<String, Object> report = scoring.evaluate(store(u.source()), u.id(), opt,
-                        new BatchCalls("u" + i, bs.known(), new ArrayList<>(), true, batch, scoring));
-                report.put("graderRun", Map.of("runId", runId, "source", u.source(), "n", u.n(), "mode", "batch"));
+                BatchCalls calls = new BatchCalls("u" + i, bs.known(), new ArrayList<>(), true, batch, scoring,
+                        bs.fallback() ? scoring.live() : null);
+                Map<String, Object> report = scoring.evaluate(store(u.source()), u.id(), opt, calls);
+                report.put("graderRun", Map.of("runId", runId, "source", u.source(), "n", u.n(), "mode", "batch", "fallback", bs.fallback()));
                 write(resultsDir(runId).resolve(name + ".json"), report);
-                finishOne(runId, s, actualCost(report) * BATCH_DISCOUNT, null, true);
+                // 배치로 받은 부분은 절반 가격, 일반 API 로 부른 부분은 정가
+                double liveUsd = 0;
+                for (BatchCalls.Used used : calls.liveUsed()) liveUsd += cost(used.model(), used.input(), used.output());
+                double usd = (actualCost(report) - liveUsd) * BATCH_DISCOUNT + liveUsd;
+                finishOne(runId, s, usd, null, true);
             } catch (Exception e) {
                 finishOne(runId, s, 0, u.id() + " #" + u.n() + ": " + (e.getMessage() == null ? e.toString() : e.getMessage()), false);
             }
         }
-        setPhase(s, "완료");
+        setPhase(s, bs.fallback() ? "완료 (대기 " + bs.waitMinutes() + "분 초과분은 일반 API)" : "완료");
     }
 
     private void setPhase(RunState s, String phase) {
@@ -648,6 +694,9 @@ public class GraderService {
         if (req.count() < 1 || req.count() > 20) throw new IllegalArgumentException("채점 횟수는 1~20번입니다.");
         if (req.replays() < 1 || req.replays() > 10) throw new IllegalArgumentException("R1 다시 실행 횟수는 1~10번입니다.");
         if (req.judgeRepeat() < 1 || req.judgeRepeat() > 3) throw new IllegalArgumentException("채점 모델 반복은 1~3번입니다.");
+        if (isBatch(req.mode()) && (req.batchWaitMinutes() < 1 || req.batchWaitMinutes() > 1440)) {
+            throw new IllegalArgumentException("배치 최대 대기 시간은 1~1440분입니다.");
+        }
         if (full && (req.versionId() == null || req.versionId().isBlank())) throw new IllegalArgumentException("프롬프트 버전을 고르세요.");
         for (AttemptRef r : req.attempts()) store(r.source()).dir(r.id());
     }
