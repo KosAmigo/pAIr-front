@@ -156,7 +156,7 @@ public class AttemptService {
 
     // ── AI 수정 제안 ─────────────────────
 
-    /** 어시스턴트에 알려 주는 파일 목록과 수정 제안 형식. 요청 원문(systemPrompt)에 함께 남아 다시 실행(R1)에도 그대로 쓰인다. */
+    /** 어시스턴트에 알려 주는 파일 목록과 수정 제안 형식. 요청 원문(systemPrompt)에 함께 남는다. */
     static String editGuide(java.util.Collection<String> files) {
         return "\n\n" + EDIT_GUIDE + "\n응시자 작업 폴더의 파일: " + String.join(", ", files);
     }

@@ -22,7 +22,7 @@ function TaskCard({ t }: { t: CatalogTask }) {
           {t.minutes}m
         </span>
         <Sep />
-        <span>재현성, AI 결과 도출력 채점</span>
+        <span>6개 역량 채점</span>
         {ready ? (
           <ArrowRight size={18} className="ml-auto text-text-muted transition-transform duration-[120ms] group-hover:translate-x-0.5 group-hover:text-text" aria-hidden />
         ) : (

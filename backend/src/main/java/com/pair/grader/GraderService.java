@@ -48,7 +48,7 @@ public class GraderService {
 
     private static final Logger log = LoggerFactory.getLogger(GraderService.class);
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.of("Asia/Seoul"));
-    /** 예상 시간: 채점 한 번에 걸리는 대략의 시간(분). R1 다시 실행과 채점 모델을 동시에 부른 기준. */
+    /** 예상 시간: 채점 한 번에 걸리는 대략의 시간(분). 두 채점 모델을 동시에 부른 기준. */
     private static final double MINUTES_PER_SCORING = 0.8;
     /** 배치 API 가격 (두 회사 모두 일반 가격의 50%) */
     static final double BATCH_DISCOUNT = 0.5;
@@ -175,7 +175,7 @@ public class GraderService {
 
     /** mode: api(바로 호출) 또는 batch(배치 API, 비용 절반, 결과는 몇 분~최대 24시간 뒤) */
     /** batchWaitMinutes: 배치 단계마다 기다릴 최대 시간(분). 넘으면 남은 요청을 일반 API 로 보낸다. */
-    public record RunRequest(List<AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String mode,
+    public record RunRequest(List<AttemptRef> attempts, String versionId, int count, int judgeRepeat, String mode,
                              int batchWaitMinutes) {}
 
     static final int DEFAULT_BATCH_WAIT = 10;
@@ -189,10 +189,10 @@ public class GraderService {
 
     public record Estimate(int scorings, double usd, double minutes, List<AttemptEstimate> attempts) {}
 
-    /** 채점 설정은 실제 채점과 같게 고정한다(R1 다시 실행 횟수, 채점 모델 1번씩). 채점 툴에서는 반복 횟수만 바꾼다. */
+    /** 채점 설정은 실제 채점과 같게 고정한다(채점 모델 1번씩). 채점 툴에서는 반복 횟수만 바꾼다. */
     private RunRequest fixed(RunRequest req) {
         // 채점 모델도 실제 채점처럼 1번씩 (평균은 반복 채점 결과를 보고 팀이 정함)
-        return new RunRequest(req.attempts(), req.versionId(), req.count(), props.r2().replaysPerTurn(), 1,
+        return new RunRequest(req.attempts(), req.versionId(), req.count(), 1,
                 isBatch(req.mode()) ? "batch" : "api", req.batchWaitMinutes() <= 0 ? DEFAULT_BATCH_WAIT : req.batchWaitMinutes());
     }
 
@@ -202,7 +202,7 @@ public class GraderService {
         List<AttemptEstimate> per = new ArrayList<>();
         double usd = 0;
         for (AttemptRef ref : req.attempts()) {
-            AttemptEstimate e = estimateOne(ref, req.replays(), req.judgeRepeat());
+            AttemptEstimate e = estimateOne(ref, req.judgeRepeat());
             per.add(e);
             usd += e.usdPerScoring() * req.count();
         }
@@ -216,7 +216,7 @@ public class GraderService {
         return new Estimate(scorings, round4(usd), Math.round(minutes * 10) / 10.0, per);
     }
 
-    private AttemptEstimate estimateOne(AttemptRef ref, int replays, int judgeRepeat) {
+    private AttemptEstimate estimateOne(AttemptRef ref, int judgeRepeat) {
         AttemptStore src = store(ref.source());
         JsonNode rep = src.readReport(ref.id());
         String basis = "report";
@@ -226,24 +226,19 @@ public class GraderService {
         }
         double usd;
         if (rep == null) {
-            // 기본값: 채점 모델 입력 1.2만, 출력 3천 토큰씩, 다시 실행 9번에 입력 1만, 출력 3천 토큰
-            usd = judgeRepeat * (cost(props.judge().claude().model(), 12000, 3000) + cost(props.judge().openai().model(), 12000, 3000))
-                    + replays / 3.0 * cost(props.assistant().model(), 10000, 3000);
+            // 기본값: 채점 모델 입력 1.2만, 출력 3천 토큰씩
+            usd = judgeRepeat * (cost(props.judge().claude().model(), 12000, 3000) + cost(props.judge().openai().model(), 12000, 3000));
         } else {
-            // settings 가 없는 예전 리포트는 다시 실행 3번으로 채점한 것이다
-            usd = scaledCost(rep.path("tokens"), rep.path("settings").path("replays").asInt(3), replays, judgeRepeat,
-                    rep.path("settings").path("judgeRepeat").asInt(1));
+            // 예전 리포트의 다시 실행(R1) 토큰은 빼고 채점 모델 토큰만 본다
+            usd = scaledCost(rep.path("tokens"), judgeRepeat, rep.path("settings").path("judgeRepeat").asInt(1));
         }
         return new AttemptEstimate(ref.source(), ref.id(), round4(usd), basis);
     }
 
     /** 지난 채점의 토큰을 새 설정에 맞게 늘리거나 줄여 비용을 계산한다. */
-    private double scaledCost(JsonNode tokens, int oldReplays, int replays, int judgeRepeat, int oldRepeat) {
-        double r = oldReplays <= 0 ? 1 : (double) replays / oldReplays;
+    private double scaledCost(JsonNode tokens, int judgeRepeat, int oldRepeat) {
         double j = (double) judgeRepeat / Math.max(1, oldRepeat);
         double usd = 0;
-        JsonNode rp = tokens.path("r2Replay");
-        usd += r * cost(props.assistant().model(), rp.path("input").asLong(), rp.path("output").asLong());
         for (String k : List.of("judge_claude", "judge_openai")) {
             JsonNode t = tokens.path(k);
             usd += j * cost(t.path("model").asText(), t.path("input").asLong(), t.path("output").asLong());
@@ -271,8 +266,6 @@ public class GraderService {
     double actualCost(Map<String, Object> report) {
         JsonNode tokens = json.valueToTree(report).path("tokens");
         double usd = 0;
-        JsonNode rp = tokens.path("r2Replay");
-        usd += cost(props.assistant().model(), rp.path("input").asLong(), rp.path("output").asLong());
         for (String k : List.of("judge_claude", "judge_openai")) {
             JsonNode t = tokens.path(k);
             usd += cost(t.path("model").asText(), t.path("input").asLong(), t.path("output").asLong());
@@ -290,13 +283,13 @@ public class GraderService {
 
     /** 실험 채점 한 번의 기록. status: RUNNING, DONE, CANCELLED, INTERRUPTED(서버가 꺼져 중단) */
     public record RunMeta(String id, Instant createdAt, Instant finishedAt, String author, String versionId, String versionName,
-                          List<AttemptRow> attempts, int count, int replays, int judgeRepeat, String status,
+                          List<AttemptRow> attempts, int count, int judgeRepeat, String status,
                           int done, int failed, int total, double estimateUsd, double actualUsd, List<String> errors,
                           String mode, String phase) {
 
         /** 상태, 진행 수, 비용 같은 것만 바꾼 사본. */
         RunMeta with(String status, int done, int failed, double actualUsd, List<String> errors, Instant finishedAt, String phase) {
-            return new RunMeta(id, createdAt, finishedAt, author, versionId, versionName, attempts, count, replays, judgeRepeat,
+            return new RunMeta(id, createdAt, finishedAt, author, versionId, versionName, attempts, count, judgeRepeat,
                     status, done, failed, total, estimateUsd, actualUsd, errors, mode, phase);
         }
     }
@@ -326,12 +319,12 @@ public class GraderService {
         Estimate est = estimate(req);
         boolean useBatch = isBatch(req.mode());
         RunMeta meta = new RunMeta(id, Instant.now(), null, author == null ? "" : author.trim(), version.id(), version.name(), rows,
-                req.count(), req.replays(), req.judgeRepeat(), "RUNNING", 0, 0, est.scorings(), est.usd(), 0, List.of(),
+                req.count(), req.judgeRepeat(), "RUNNING", 0, 0, est.scorings(), est.usd(), 0, List.of(),
                 useBatch ? "batch" : "api", useBatch ? "배치 요청을 만드는 중" : null);
         RunState state = new RunState(meta);
         running.put(id, state);
         writeMeta(meta);
-        ScoringService.Options opt = new ScoringService.Options(version, req.replays(), req.judgeRepeat());
+        ScoringService.Options opt = new ScoringService.Options(version, req.judgeRepeat());
         if (useBatch) {
             BatchState bs = new BatchState(0, units(rows, req.count()), new LinkedHashMap<>(), new LinkedHashMap<>(), new ArrayList<>(),
                     null, req.batchWaitMinutes(), false);
@@ -421,7 +414,7 @@ public class GraderService {
     // ── 배치 채점 ─────────────────────
     // 채점 코드를 그대로 돌리면서 필요한 모델 호출을 배치 요청으로 모은다(BatchCalls).
     // 단계마다: 요청 모으기 → 배치 보내기 → 20초마다 상태 확인 → 결과 받기 → 다음 단계.
-    // 1단계: 다시 실행(luna) + 판정(Claude, OpenAI). 2단계: R1 비교. 더 모을 요청이 없으면 리포트를 만든다.
+    // 판정(Claude, OpenAI) 요청을 보내고, 결과를 받은 뒤 더 모을 요청이 없으면 리포트를 만든다.
     // 배치 ID 와 받은 결과는 batch.json 에 저장해서 서버를 다시 켜도 이어서 진행한다.
 
     /** units: 채점 단위(응시 × 회차). batches: 배치 이름(claude 또는 openai:모델) → 배치 ID. known: custom_id → 받은 결과 */
@@ -495,7 +488,7 @@ public class GraderService {
                     bs = new BatchState(bs.round(), bs.units(), new LinkedHashMap<>(), known, bs.errors(), bs.roundStartedAt(), bs.waitMinutes(), true);
                     writeBatch(runId, bs);
                     log.info("배치 대기 {}분 초과, 남은 요청은 일반 API 로: {}", bs.waitMinutes(), runId);
-                    ScoringService.Options opt = new ScoringService.Options(prompts.get(s.meta.versionId()), s.meta.replays(), s.meta.judgeRepeat());
+                    ScoringService.Options opt = new ScoringService.Options(prompts.get(s.meta.versionId()), s.meta.judgeRepeat());
                     setPhase(s, "대기 " + bs.waitMinutes() + "분 초과 · 남은 요청을 일반 API로 채점 중");
                     finishBatch(runId, s, bs, opt);
                     return;
@@ -509,7 +502,7 @@ public class GraderService {
             }
             // 다음 단계 요청 모으기
             setPhase(s, "배치 요청을 만드는 중 (" + (bs.round() + 1) + "단계)");
-            ScoringService.Options opt = new ScoringService.Options(prompts.get(s.meta.versionId()), s.meta.replays(), s.meta.judgeRepeat());
+            ScoringService.Options opt = new ScoringService.Options(prompts.get(s.meta.versionId()), s.meta.judgeRepeat());
             List<BatchCalls.Pending> pending = new ArrayList<>();
             for (int i = 0; i < bs.units().size(); i++) {
                 Unit u = bs.units().get(i);
@@ -692,7 +685,6 @@ public class GraderService {
     private void validate(RunRequest req, boolean full) {
         if (req.attempts() == null || req.attempts().isEmpty()) throw new IllegalArgumentException("채점할 응시를 하나 이상 고르세요.");
         if (req.count() < 1 || req.count() > 20) throw new IllegalArgumentException("채점 횟수는 1~20번입니다.");
-        if (req.replays() < 1 || req.replays() > 10) throw new IllegalArgumentException("R1 다시 실행 횟수는 1~10번입니다.");
         if (req.judgeRepeat() < 1 || req.judgeRepeat() > 3) throw new IllegalArgumentException("채점 모델 반복은 1~3번입니다.");
         if (isBatch(req.mode()) && (req.batchWaitMinutes() < 1 || req.batchWaitMinutes() > 1440)) {
             throw new IllegalArgumentException("배치 최대 대기 시간은 1~1440분입니다.");

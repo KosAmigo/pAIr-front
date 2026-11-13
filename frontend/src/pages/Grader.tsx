@@ -237,8 +237,6 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
                 )}
                 <PromptField label="공통 채점 규칙 (채점 모델 시스템 프롬프트)" value={shown.judgeSystem} base={parent?.judgeSystem} editing={editing} rows={10}
                   onChange={(t) => draft && setDraft({ ...draft, judgeSystem: t })} />
-                <PromptField label="R1 비교 프롬프트 (다시 실행한 답이 같은 해결책인지 판정)" value={shown.replaySystem} base={parent?.replaySystem} editing={editing} rows={5}
-                  onChange={(t) => draft && setDraft({ ...draft, replaySystem: t })} />
               </div>
             </Box>
 
@@ -327,10 +325,9 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
   const [versions, setVersions] = useState<PromptVersionRow[]>([])
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [versionId, setVersionId] = useState('')
-  // 기본값: 채점 횟수 3번(흔들림을 보려고), R1 다시 실행과 채점 모델 반복은 실제 채점과 같게
-  const defaults = { count: 3, replays: rubric.defaults.replays, judgeRepeat: rubric.defaults.judgeRepeat }
+  // 기본값: 채점 횟수 3번(흔들림을 보려고), 채점 모델 반복은 실제 채점과 같게
+  const defaults = { count: 3, judgeRepeat: rubric.defaults.judgeRepeat }
   const [count, setCount] = useState(defaults.count)
-  const replays = defaults.replays // R1 다시 실행 횟수는 실제 채점과 같은 값으로 고정
   const judgeRepeat = 1 // 채점 모델은 실제 채점처럼 1번씩. 평균은 반복 채점 결과로 정한다
   const [mode, setMode] = useState<GraderMode>('api')
   const BATCH_WAIT_DEFAULT = 10
@@ -358,8 +355,8 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
     [attempts, picked],
   )
   const req = useMemo(
-    () => ({ attempts: refs, versionId, count, replays, judgeRepeat, mode, batchWaitMinutes: batchWait }),
-    [refs, versionId, count, replays, judgeRepeat, mode, batchWait],
+    () => ({ attempts: refs, versionId, count, judgeRepeat, mode, batchWaitMinutes: batchWait }),
+    [refs, versionId, count, judgeRepeat, mode, batchWait],
   )
 
   useEffect(() => {
@@ -533,7 +530,7 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
               </div>
               {mode === 'batch' && (
                 <span className="text-[12px] leading-4 text-text-faint">
-                  OpenAI, Anthropic 배치 API로 보냅니다. 다시 실행과 판정을 먼저 보내고, 그 결과로 R1 비교를 한 번 더 보내서 두 단계로 진행합니다. 서버를 껐다 켜도 이어서 받습니다.
+                  OpenAI, Anthropic 배치 API로 두 채점 모델의 판정을 보냅니다. 서버를 껐다 켜도 이어서 받습니다.
                 </span>
               )}
             </div>
@@ -631,7 +628,6 @@ const runStatus: Record<GraderRun['status'], { t: string; cls: string }> = {
   INTERRUPTED: { t: '중단됨', cls: 'text-alert' },
 }
 
-const r1Of = (r: GraderResult) => r.checks.find((c) => c.code === 'R1')?.deducted ?? 0
 const stats = (xs: number[]) => {
   if (!xs.length) return { min: 0, max: 0, avg: 0, range: 0 }
   const min = Math.min(...xs)
@@ -875,15 +871,11 @@ function Distribution({ data }: { data: { meta: GraderRun; results: GraderResult
               <th className={th}>회차별 총점</th>
               <th className={cx(th, 'text-right')}>평균</th>
               <th className={cx(th, 'text-right')}>범위</th>
-              <th className={cx(th, 'text-right')} title="R1 감점을 다시 더한 점수의 범위. 채점 모델 판정만의 흔들림">
-                R1 뺀 범위
-              </th>
             </tr>
           </thead>
           <tbody>
             {[...groups.entries()].map(([k, rs]) => {
               const s = stats(rs.map((r) => r.total))
-              const s2 = stats(rs.map((r) => r.total + r1Of(r)))
               return (
                 <tr key={k} className="border-b border-line last:border-0">
                   <td className="px-3 py-2 text-[14px]">{attemptName(data.meta, rs[0].source, rs[0].attemptId)}</td>
@@ -892,7 +884,6 @@ function Distribution({ data }: { data: { meta: GraderRun; results: GraderResult
                   <td className={cx('tnum px-3 py-2 text-right font-mono text-[14px]', s.range > 5 ? 'text-alert' : s.range > 3 ? 'text-caution' : 'text-signal')}>
                     {s.min}~{s.max} ({s.range})
                   </td>
-                  <td className="tnum px-3 py-2 text-right font-mono text-[14px] text-text-muted">{s2.range}</td>
                 </tr>
               )
             })}

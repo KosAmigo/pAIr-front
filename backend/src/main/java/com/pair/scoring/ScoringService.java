@@ -3,9 +3,7 @@ package com.pair.scoring;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import com.pair.ai.AssistantClient;
 import com.pair.ai.AiUnavailableException;
 import com.pair.ai.ClaudeJudge;
 import com.pair.ai.Judge;
@@ -43,7 +40,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * 감점식 채점 (docs/evaluation/채점_기준표.md).
- * 자동 체크는 기록(숨은 테스트, 이벤트, 다시 실행 결과)으로, 판정 체크는 채점 모델이 근거와 함께 판정한다.
+ * 자동 체크는 기록(숨은 테스트, 이벤트)으로, 판정 체크는 채점 모델이 근거와 함께 판정한다.
  * 결과는 report.json 과 콘솔 요약으로 남긴다.
  */
 @Service
@@ -55,29 +52,25 @@ public class ScoringService {
     private final AttemptStore store;
     private final TaskRepository tasks;
     private final CodeRunner runner;
-    private final AssistantClient assistant;
     private final List<Judge> judges;
-    private final Judge replayJudge;
     private final PairProperties props;
     private final PromptStore prompts;
     /** 채점 작업(실제 응시 채점, 채점 툴 실험 채점). 여러 건을 동시에 채점한다. */
     private final ExecutorService executor;
-    /** R1 다시 실행 호출을 한꺼번에 보낼 때 쓴다. */
-    private final ExecutorService replayPool = Executors.newFixedThreadPool(9, r -> {
-        Thread t = new Thread(r, "replay");
+    /** 두 채점 모델을 동시에 부를 때 쓴다. */
+    private final ExecutorService judgePool = Executors.newFixedThreadPool(8, r -> {
+        Thread t = new Thread(r, "judge");
         t.setDaemon(true);
         return t;
     });
 
     public ScoringService(AttemptStore store, TaskRepository tasks, CodeRunner runner,
-                          AssistantClient assistant, ClaudeJudge claudeJudge, OpenAiJudge openAiJudge, PairProperties props,
+                          ClaudeJudge claudeJudge, OpenAiJudge openAiJudge, PairProperties props,
                           PromptStore prompts) {
         this.store = store;
         this.tasks = tasks;
         this.runner = runner;
-        this.assistant = assistant;
         this.judges = List.of(claudeJudge, openAiJudge);
-        this.replayJudge = "claude".equals(props.judge().replayCompare()) ? claudeJudge : openAiJudge;
         this.props = props;
         this.prompts = prompts;
         int parallel = props.grader() == null || props.grader().parallel() < 1 ? 4 : props.grader().parallel();
@@ -91,20 +84,19 @@ public class ScoringService {
     @PreDestroy
     void shutdown() {
         executor.shutdownNow();
-        replayPool.shutdownNow();
+        judgePool.shutdownNow();
     }
 
     /**
      * 채점 설정.
-     * @param version 프롬프트 버전 (판정 기준, 배점, 공통 규칙, R1 비교 프롬프트)
-     * @param replays R1 핵심 턴마다 다시 실행할 횟수
+     * @param version 프롬프트 버전 (판정 기준, 공통 규칙)
      * @param judgeRepeat 채점 모델마다 부를 횟수 (2 이상이면 모든 호출의 감점을 평균)
      */
-    public record Options(PromptVersion version, int replays, int judgeRepeat) {}
+    public record Options(PromptVersion version, int judgeRepeat) {}
 
-    /** 실제 응시 채점 설정: 채점 툴에서 지정한 버전, 설정 파일의 다시 실행 횟수, 채점 모델 1번씩. */
+    /** 실제 응시 채점 설정: 채점 툴에서 지정한 버전, 채점 모델 1번씩. */
     public Options defaultOptions() {
-        return new Options(prompts.active(), props.r2().replaysPerTurn(), 1);
+        return new Options(prompts.active(), 1);
     }
 
     /** 채점 작업 풀에 작업을 넣는다 (채점 툴 실험 채점용). */
@@ -130,10 +122,6 @@ public class ScoringService {
 
     public record JudgeResult(List<CheckVerdict> verdicts) {}
 
-    public record ReplayVerdict(int replay, boolean same, String reason) {}
-
-    public record ReplayJudgement(List<ReplayVerdict> verdicts) {}
-
     // ── 리포트 형식 ───────────────────
 
     /**
@@ -152,8 +140,6 @@ public class ScoringService {
     public record JudgeView(String judge, String model, boolean violated, int count, List<String> evidence, String reason) {}
 
     public record ItemResult(String key, String name, int max, int score, List<CheckResult> checks) {}
-
-    public record KeyTurn(int turn, double adoption, List<String> replays, List<ReplayVerdict> verdicts) {}
 
     /** 실제 응시 채점: 지정한 버전으로 채점하고 report.json 에 저장한다. */
     public void score(String attemptId) {
@@ -175,40 +161,20 @@ public class ScoringService {
     }
 
     /**
-     * 채점 중 모델 호출. 일반 채점은 바로 부르고(live), 채점 툴의 배치 채점은 미리 받아 둔 배치 결과를 돌려준다.
-     * key 는 같은 응시를 다시 계산해도 같은 값이 나오도록 정한다(다시 실행: 턴과 순번, 판정: 모델과 반복 순번, 비교: 턴).
+     * 채점 중 채점 모델 호출. 일반 채점은 바로 부르고(live), 채점 툴의 배치 채점은 미리 받아 둔 배치 결과를 돌려준다.
+     * 같은 응시를 다시 계산해도 같은 호출을 찾을 수 있게 모델(base)과 반복 순번(repeat)으로 구분한다.
      */
     public interface Calls {
-        AssistantClient.Reply replay(int turn, int k, ChatTurn.AssistantRequest req);
-
         Judge.Result<JudgeResult> judge(Judge base, int repeat, String system, String prefix, String body);
-
-        Judge.Result<ReplayJudgement> compare(Judge judge, int turn, String system, String user);
     }
 
     /** 바로 부르는 방식. */
     public Calls live() {
-        return new Calls() {
-            public AssistantClient.Reply replay(int turn, int k, ChatTurn.AssistantRequest req) {
-                return assistant.send(req);
-            }
-
-            public Judge.Result<JudgeResult> judge(Judge base, int repeat, String system, String prefix, String body) {
-                return base.judge(system, prefix, body, JudgeResult.class);
-            }
-
-            public Judge.Result<ReplayJudgement> compare(Judge judge, int turn, String system, String user) {
-                return judge.judge(system, "", user, ReplayJudgement.class);
-            }
-        };
+        return (base, repeat, system, prefix, body) -> base.judge(system, prefix, body, JudgeResult.class);
     }
 
     public List<Judge> judges() {
         return judges;
-    }
-
-    public Judge replayJudge() {
-        return replayJudge;
     }
 
     public Map<String, Object> evaluate(AttemptStore src, String attemptId, Options opt, Calls calls) {
@@ -219,7 +185,6 @@ public class ScoringService {
         List<ChatTurn> turns = src.turns(attemptId);
         Map<String, String> files = src.readFiles(attemptId);
         List<JsonNode> events = src.events(attemptId);
-        long replayIn = 0, replayOut = 0;
         Map<String, long[]> judgeTokens = new LinkedHashMap<>(); // 모델별 {입력, 출력, 캐시 입력}
         for (Judge j : judges) judgeTokens.put(j.name(), new long[3]);
         Map<String, CheckResult> results = new LinkedHashMap<>();
@@ -232,10 +197,11 @@ public class ScoringService {
         boolean usedAi = !aiTurns.isEmpty();
 
         // ── 자동: AI 사용 여부 (U0) ─────────
-        results.put("U0", auto(checks, "U0", usedAi ? 0 : 25, usedAi ? null : "AI 대화 기록이 없습니다."));
-        // AI를 안 쓰면 AI 통제력과 재현성도 볼 수 없으므로 0점 (AI를 안 쓴 응시가 두 항목을 공짜로 만점 받는 것을 막는다)
-        results.put("C0", auto(checks, "C0", usedAi ? 0 : 15, usedAi ? null : "AI를 쓰지 않았습니다."));
-        results.put("R0", auto(checks, "R0", usedAi ? 0 : 15, usedAi ? null : "AI를 쓰지 않았습니다."));
+        results.put("U0", auto(checks, "U0", usedAi ? 0 : check(checks, "U0").points(), usedAi ? null : "AI 대화 기록이 없습니다."));
+        // AI를 안 쓰면 통제력, 문제 분해력, 위임 판단력도 볼 수 없으므로 0점 (AI를 안 쓴 응시가 이 항목들을 공짜로 만점 받는 것을 막는다)
+        for (String code : List.of("C0", "K0", "J0")) {
+            results.put(code, auto(checks, code, usedAi ? 0 : check(checks, code).points(), usedAi ? null : "AI를 쓰지 않았습니다."));
+        }
 
         // ── 자동: 숨은 테스트 (D0~D4 개발) ─────────
         if (dev) {
@@ -287,61 +253,6 @@ public class ScoringService {
                 : String.format("첫 유효 결과까지 %.1f분 (%s)", firstValidMin,
                         dev ? "src 코드를 고친 뒤 테스트가 전부 통과한 첫 실행" : "필수 제목을 모두 채운 첫 저장")));
 
-        // ── 자동: 다시 실행 (R1) ─────────
-        List<KeyTurn> keyTurns = new ArrayList<>();
-        if (!usedAi) {
-            results.put("R1", skipped(checks, "R1", "AI를 쓰지 않아 적용하지 않음"));
-        } else {
-            Set<String> finalGrams = grams(String.join("\n", files.values()));
-            Map<Integer, Double> adoption = new HashMap<>();
-            for (ChatTurn t : aiTurns) adoption.put(t.turn(), adoptionRatio(t.text(), finalGrams));
-            List<ChatTurn> ranked = new ArrayList<>(aiTurns);
-            ranked.sort(Comparator.comparingDouble((ChatTurn t) -> adoption.get(t.turn())).reversed());
-            List<ChatTurn> chosen = ranked.stream().filter(t -> adoption.get(t.turn()) >= 0.05)
-                    .limit(props.r2().maxKeyTurns()).toList();
-            if (chosen.isEmpty()) chosen = List.of(ranked.get(0));
-            int same = 0, total = 0, replayFailed = 0;
-            // 핵심 턴 × 횟수만큼의 다시 실행을 한꺼번에 보낸다
-            Map<Integer, List<Future<AssistantClient.Reply>>> pending = new LinkedHashMap<>();
-            for (ChatTurn t : chosen) {
-                List<Future<AssistantClient.Reply>> fs = new ArrayList<>();
-                for (int i = 0; i < opt.replays(); i++) {
-                    int k = i + 1;
-                    fs.add(replayPool.submit(() -> calls.replay(t.turn(), k, t.request())));
-                }
-                pending.put(t.turn(), fs);
-            }
-            for (ChatTurn t : chosen) {
-                List<String> replays = new ArrayList<>();
-                for (Future<AssistantClient.Reply> f : pending.get(t.turn())) {
-                    AssistantClient.Reply rep = join(f);
-                    replayIn += rep.inputTokens();
-                    replayOut += rep.outputTokens();
-                    if (rep.text().isBlank()) {
-                        replayFailed++; // 다시 실행에서 빈 답이 오면 비교에서 뺀다
-                        continue;
-                    }
-                    replays.add(rep.text());
-                }
-                if (replays.isEmpty()) continue;
-                Judge.Result<ReplayJudgement> rj = calls.compare(replayJudge, t.turn(), opt.version().replaySystem(), replayPrompt(t, replays));
-                addTokens(judgeTokens, replayJudge, rj);
-                for (ReplayVerdict v : rj.value().verdicts()) {
-                    total++;
-                    if (v.same()) same++;
-                }
-                keyTurns.add(new KeyTurn(t.turn(), round(adoption.get(t.turn())), replays, rj.value().verdicts()));
-            }
-            double diffRate = total == 0 ? 0 : (double) (total - same) / total;
-            int r1Points = check(checks, "R1").points();
-            int r1 = (int) Math.round(diffRate * r1Points);
-            List<String> ev = keyTurns.stream().map(k -> "#T" + pad(k.turn())).toList();
-            results.put("R1", new CheckResult("R1", check(checks, "R1").label(), "AUTO", r1Points, r1, r1 > 0 ? "DEDUCTED" : "PASSED", ev,
-                    String.format("핵심 턴 %d개를 %d번씩 다시 실행, 다른 해결책 %d/%d", chosen.size(), opt.replays(), total - same, total)
-                            + (replayFailed > 0 ? " (빈 답 " + replayFailed + "건은 비교에서 제외)" : "")));
-            extras.put("r2KeyTurns", keyTurns);
-        }
-
         // ── 판정: 채점 모델 ─────────
         List<Check> judgeChecks = checks.stream()
                 .filter(c -> c.method() == Method.JUDGE)
@@ -349,7 +260,7 @@ public class ScoringService {
                 .toList();
         if (!usedAi) {
             checks.stream().filter(c -> NEEDS_AI.contains(c.item()) && c.method() == Method.JUDGE)
-                    .forEach(c -> results.put(c.code(), skipped(checks, c.code(), "AI를 쓰지 않아 판정하지 않음 (U0, C0, R0)")));
+                    .forEach(c -> results.put(c.code(), skipped(checks, c.code(), "AI를 쓰지 않아 판정하지 않음 (U0, C0, K0, J0)")));
         }
         String prefix = judgePrefix(task, judgeChecks);
         String body = judgeBody(task, judgeChecks, transcript(turns, a.startedAt()), files,
@@ -364,7 +275,7 @@ public class ScoringService {
             for (int r = 1; r <= repeat; r++) {
                 Judge j = repeat == 1 ? base : new Repeated(base, r);
                 int rr = r;
-                judgeCalls.put(j, CompletableFuture.supplyAsync(() -> calls.judge(base, rr, judgeSystem, prefix, body), replayPool));
+                judgeCalls.put(j, CompletableFuture.supplyAsync(() -> calls.judge(base, rr, judgeSystem, prefix, body), judgePool));
             }
         }
         Map<Judge, Map<String, CheckVerdict>> byJudge = new LinkedHashMap<>();
@@ -408,8 +319,7 @@ public class ScoringService {
         notes.add("이중 채점: 판정 체크는 두 채점 모델(" + String.join(", ", judges.stream().map(Judge::model).toList())
                 + ")의 감점을 평균함" + (repeat > 1 ? "(모델마다 " + repeat + "번씩 불러 모든 호출을 평균)" : "")
                 + ". 근거(대화 턴, 파일) 없이 걸렸다고 한 판정은 감점하지 않음. 일부만 걸렸다고 하면 '판정 엇갈림'으로 평균만큼 감점(소수점 버림)");
-        notes.add("프롬프트 버전: " + opt.version().id() + " (" + opt.version().name() + "), R1 다시 실행 " + opt.replays() + "번");
-        notes.add("파일럿 단순화: 다시 실행(R1)은 다시 나온 답변을 채점 모델이 원래 답변과 같은 해결책인지 판정해 비교함");
+        notes.add("프롬프트 버전: " + opt.version().id() + " (" + opt.version().name() + ")");
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("version", 2);
@@ -419,9 +329,8 @@ public class ScoringService {
         report.put("taskType", task.type());
         report.put("assistant", a.provider() + " / " + a.model());
         report.put("judgeModel", String.join(" + ", judges.stream().map(Judge::model).toList()));
-        report.put("replayJudge", replayJudge.model());
         report.put("promptVersion", opt.version().id());
-        report.put("settings", Map.of("replays", opt.replays(), "judgeRepeat", repeat));
+        report.put("settings", Map.of("judgeRepeat", repeat));
         report.put("startedAt", a.startedAt());
         report.put("submittedAt", a.submittedAt());
         report.put("durationSec", a.submittedAt() == null ? null : Duration.between(a.startedAt(), a.submittedAt()).toSeconds());
@@ -436,7 +345,6 @@ public class ScoringService {
         long assistantOut = turns.stream().filter(t -> t.outputTokens() != null).mapToLong(ChatTurn::outputTokens).sum();
         Map<String, Object> tokens = new LinkedHashMap<>();
         tokens.put("assistant", Map.of("input", assistantIn, "output", assistantOut));
-        tokens.put("r2Replay", Map.of("input", replayIn, "output", replayOut));
         for (Judge j : judges) {
             long[] t = judgeTokens.get(j.name());
             tokens.put("judge_" + j.name(), Map.of("model", j.model(), "input", t[0], "output", t[1], "cachedInput", t[2]));
@@ -459,19 +367,6 @@ public class ScoringService {
 
         public <T> Result<T> judge(String system, String cachedPrefix, String user, Class<T> type) {
             return base.judge(system, cachedPrefix, user, type);
-        }
-    }
-
-    private static <T> T join(Future<T> f) {
-        try {
-            return f.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AiUnavailableException("채점이 중단되었습니다.");
-        } catch (java.util.concurrent.ExecutionException e) {
-            Throwable c = e.getCause();
-            if (c instanceof RuntimeException re) throw re;
-            throw new AiUnavailableException(String.valueOf(c));
         }
     }
 
@@ -528,20 +423,7 @@ public class ScoringService {
         return sb.toString();
     }
 
-    private static String replayPrompt(ChatTurn original, List<String> replays) {
-        StringBuilder sb = new StringBuilder();
-        List<ChatTurn.Message> msgs = original.request().messages();
-        String lastUser = msgs.isEmpty() ? "" : msgs.get(msgs.size() - 1).content();
-        sb.append("# 응시자의 마지막 요청\n").append(lastUser).append("\n\n");
-        sb.append("# 원래 답변 (#T").append(pad(original.turn())).append(")\n").append(original.text()).append("\n\n");
-        for (int i = 0; i < replays.size(); i++) {
-            sb.append("# 다시 실행 ").append(i + 1).append("\n").append(replays.get(i)).append("\n\n");
-        }
-        sb.append("다시 실행한 답변마다 replay(1부터), same, reason 을 채워 verdicts 배열로 답하세요.");
-        return sb.toString();
-    }
-
-    /** 채점 모델이 검증 흐름(C1, P3)을 볼 수 있게 이벤트를 짧게 요약한다. */
+    /** 채점 모델이 검증 흐름(C1, P3)과 직접 편집 흐름(J3)을 볼 수 있게 이벤트를 짧게 요약한다. */
     static String eventSummary(List<JsonNode> events, Instant start) {
         StringBuilder sb = new StringBuilder();
         for (JsonNode e : events) {
@@ -558,7 +440,7 @@ public class ScoringService {
             if (type.equals("run")) sb.append(" passed=").append(e.path("passed").asInt()).append(" failed=").append(e.path("failed").asInt())
                     .append(" compiled=").append(e.path("compiled").asBoolean());
             if (type.equals("build")) sb.append(" compiled=").append(e.path("compiled").asBoolean());
-            if (type.equals("save")) sb.append(" ").append(e.path("path").asText());
+            if (type.equals("save")) sb.append(" ").append(e.path("path").asText()).append(" (").append(e.path("length").asInt()).append("자)");
             if (type.equals("aiEdit")) sb.append(" #T").append(pad(e.path("turn").asInt())).append(" 수정 제안 ")
                     .append(e.path("action").asText().equals("apply") ? "적용" : "거절").append(" ").append(e.path("path").asText());
             sb.append("\n");
@@ -588,7 +470,7 @@ public class ScoringService {
     }
 
     /** AI를 써야 판정할 수 있는 항목. AI를 안 쓰면 판정 체크를 하지 않고 U0, C0, R0 으로 0점 처리한다. */
-    static final Set<String> NEEDS_AI = Set.of("usage", "control", "reproducibility");
+    static final Set<String> NEEDS_AI = Set.of("usage", "control", "decomposition", "delegation");
 
     /**
      * 두 채점 모델의 판정을 합친다. 모델마다 감점을 정하고(근거를 대고 걸렸다고 하면 배점, D1은 개수 × 배점) 평균을 낸다(소수점 버림).
@@ -687,25 +569,6 @@ public class ScoringService {
 
     static boolean notesFilled(String notes) {
         return notes.lines().map(String::trim).filter(l -> !l.isEmpty() && !l.startsWith("#")).count() >= 1;
-    }
-
-    /** 공백을 무시한 6글자 조각 집합. AI 답변이 최종 파일에 얼마나 남았는지 볼 때 쓴다. */
-    static Set<String> grams(String text) {
-        String s = text.replaceAll("\\s+", "");
-        Set<String> out = new HashSet<>();
-        for (int i = 0; i + 6 <= s.length(); i++) out.add(s.substring(i, i + 6));
-        return out;
-    }
-
-    static double adoptionRatio(String aiText, Set<String> finalGrams) {
-        Set<String> g = grams(aiText);
-        if (g.isEmpty()) return 0;
-        long hit = g.stream().filter(finalGrams::contains).count();
-        return (double) hit / g.size();
-    }
-
-    private static double round(double v) {
-        return Math.round(v * 1000) / 1000.0;
     }
 
     private static double round1(double v) {

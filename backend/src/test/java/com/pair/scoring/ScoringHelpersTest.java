@@ -17,10 +17,20 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 class ScoringHelpersTest {
 
     @Test
-    void rubric_fiveItemsTotal100() {
-        assertEquals(5, Rubric.ITEMS.size());
+    void rubric_sixItemsTotal100() {
+        assertEquals(6, Rubric.ITEMS.size());
         assertEquals(100, Rubric.total());
-        assertTrue(Rubric.ITEMS.stream().noneMatch(i -> i.key().equals("literacy")));
+        assertTrue(Rubric.ITEMS.stream().noneMatch(i -> i.key().equals("literacy") || i.key().equals("reproducibility")));
+    }
+
+    @Test
+    void rubric_zeroChecksMatchItemMax() {
+        // "이 항목 0점" 체크는 항목 배점과 같아야 한다
+        for (var code : List.of("U0", "C0", "K0", "J0", "D0")) {
+            var c = Rubric.CHECKS.stream().filter(x -> x.code().equals(code)).findFirst().orElseThrow();
+            assertEquals(Rubric.item(c.item()).max(), c.points(), code);
+        }
+        assertTrue(Rubric.CHECKS.stream().noneMatch(c -> c.code().startsWith("R") || c.code().equals("U4")));
     }
 
     @Test
@@ -28,7 +38,7 @@ class ScoringHelpersTest {
         for (boolean dev : new boolean[] {true, false}) {
             var codes = Rubric.checksFor(dev).stream().map(Rubric.Check::code).toList();
             assertEquals(codes.size(), new java.util.HashSet<>(codes).size());
-            assertTrue(codes.containsAll(List.of("U0", "C1", "R1", "D1", "D5", "P1")));
+            assertTrue(codes.containsAll(List.of("U0", "U7", "C1", "K1", "K3", "J1", "J3", "D1", "D5", "P1")));
         }
         assertTrue(Rubric.checksFor(true).stream().anyMatch(c -> c.code().equals("D0")));
         assertTrue(Rubric.checksFor(false).stream().noneMatch(c -> c.code().equals("D0")));
@@ -45,13 +55,6 @@ class ScoringHelpersTest {
     void notesFilled_ignoresTemplateHeadings() {
         assertFalse(ScoringService.notesFilled("# 원인\n\n# 판단 근거\n"));
         assertTrue(ScoringService.notesFilled("# 원인\n잠금 순서\n"));
-    }
-
-    @Test
-    void adoptionRatio_highWhenAiTextKeptInFinal() {
-        var finalGrams = ScoringService.grams("Map<Long, Integer> quantities = new TreeMap<>();");
-        assertTrue(ScoringService.adoptionRatio("quantities = new TreeMap<>();", finalGrams) > 0.9);
-        assertEquals(0.0, ScoringService.adoptionRatio("완전히 다른 문장입니다 정말로", finalGrams));
     }
 
     @Test
