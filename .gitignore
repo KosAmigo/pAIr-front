@@ -38,3 +38,8 @@ backend/.gradle/
 backend/build/
 .idea/
 *.iml
+
+# 외부 스킬 (각자 설치, 저장소에 올리지 않음)
+.agents/
+.claude/skills/
+skills-lock.json
