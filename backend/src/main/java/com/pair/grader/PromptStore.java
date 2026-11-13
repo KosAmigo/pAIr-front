@@ -36,7 +36,8 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 public class PromptStore {
 
     private static final Logger log = LoggerFactory.getLogger(PromptStore.class);
-    public static final String DEFAULT_ID = "v1_기본";
+    /** 2026-11-12: 6개 역량(재현성 제외, 문제 분해력·위임 판단력 추가) 기준의 기본 버전. v1_기본은 예전 5개 항목 기준. */
+    public static final String DEFAULT_ID = "v2_기본";
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmm").withZone(ZoneId.of("Asia/Seoul"));
 
     private final Path dir;
@@ -57,12 +58,12 @@ public class PromptStore {
         }
     }
 
-    /** 코드 기본값으로 만든 버전 (v1_기본). */
+    /** 코드 기본값으로 만든 버전 (v2_기본). */
     public static PromptVersion builtin() {
         Map<String, PromptVersion.CheckPrompt> checks = new LinkedHashMap<>();
         for (Rubric.Check c : Rubric.CHECKS) checks.put(Rubric.key(c), new PromptVersion.CheckPrompt(c.judgeHint(), c.points()));
-        return new PromptVersion(DEFAULT_ID, "기본", "system", "코드에 있던 채점 프롬프트와 배점", Instant.parse("2026-11-12T00:00:00Z"), null,
-                ScoringPrompts.JUDGE_SYSTEM, ScoringPrompts.REPLAY_SYSTEM, checks);
+        return new PromptVersion(DEFAULT_ID, "기본 (6개 역량)", "system", "재현성을 빼고 문제 분해력, 위임 판단력을 넣은 기준의 코드 기본값",
+                Instant.parse("2026-11-12T09:00:00Z"), null, ScoringPrompts.JUDGE_SYSTEM, checks);
     }
 
     public List<PromptVersion> list() {
@@ -99,7 +100,6 @@ public class PromptStore {
         if (name.isEmpty()) throw new IllegalArgumentException("버전 이름을 입력하세요.");
         if (author.isEmpty()) throw new IllegalArgumentException("작성자 이름을 입력하세요.");
         if (draft.judgeSystem() == null || draft.judgeSystem().isBlank()) throw new IllegalArgumentException("공통 채점 규칙이 비어 있습니다.");
-        if (draft.replaySystem() == null || draft.replaySystem().isBlank()) throw new IllegalArgumentException("R1 비교 프롬프트가 비어 있습니다.");
         Instant now = Instant.now();
         String base = STAMP.format(now) + "_" + author + "_" + name;
         String id = base;
@@ -113,7 +113,7 @@ public class PromptStore {
             checks.put(k, new PromptVersion.CheckPrompt(hint, points));
         }
         PromptVersion v = new PromptVersion(id, draft.name().trim(), draft.author().trim(), draft.note() == null ? "" : draft.note().trim(),
-                now, draft.parent(), draft.judgeSystem().trim(), draft.replaySystem().trim(), checks);
+                now, draft.parent(), draft.judgeSystem().trim(), checks);
         write(v);
         return v;
     }

@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 import com.pair.attempt.ChatTurn.AssistantRequest;
 import com.pair.config.AiKeys;
 
-/** 응시자가 쓰는 AI 어시스턴트 (Spring AI OpenAI). R1 다시 실행도 이 클래스로 한다. */
+/** 응시자가 쓰는 AI 어시스턴트 (Spring AI OpenAI). */
 @Component
 public class AssistantClient {
 

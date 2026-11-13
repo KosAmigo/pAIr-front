@@ -45,7 +45,7 @@ public class GraderController {
         List<CheckInfo> checks = Rubric.CHECKS.stream().map(c -> new CheckInfo(Rubric.key(c), c.code(), c.item(), Rubric.item(c.item()).name(),
                 c.track().name().toLowerCase(), c.method().name(), c.label(), c.points(), c.judgeHint(), Rubric.pointsEditable(c))).toList();
         return Map.of("items", Rubric.ITEMS, "checks", checks,
-                "defaults", Map.of("replays", props.r2().replaysPerTurn(), "judgeRepeat", 1, "parallel", props.grader().parallel()));
+                "defaults", Map.of("judgeRepeat", 1, "parallel", props.grader().parallel()));
     }
 
     public record VersionRow(String id, String name, String author, String note, java.time.Instant createdAt, String parent, boolean active) {}
@@ -85,12 +85,12 @@ public class GraderController {
         return grader.estimate(req);
     }
 
-    public record StartRequest(List<GraderService.AttemptRef> attempts, String versionId, int count, int replays, int judgeRepeat, String author, String mode,
+    public record StartRequest(List<GraderService.AttemptRef> attempts, String versionId, int count, int judgeRepeat, String author, String mode,
                                int batchWaitMinutes) {}
 
     @PostMapping("/runs")
     public GraderService.RunMeta start(@RequestBody StartRequest req) {
-        return grader.start(new GraderService.RunRequest(req.attempts(), req.versionId(), req.count(), req.replays(), req.judgeRepeat(), req.mode(), req.batchWaitMinutes()), req.author());
+        return grader.start(new GraderService.RunRequest(req.attempts(), req.versionId(), req.count(), req.judgeRepeat(), req.mode(), req.batchWaitMinutes()), req.author());
     }
 
     @GetMapping("/runs")

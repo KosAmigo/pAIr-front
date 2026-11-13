@@ -26,7 +26,7 @@ pair:
   # 응시 기록을 쌓는 폴더 (bootRun 은 저장소 루트에서 실행되므로 pAIr/pilot-data)
   data-dir: pilot-data
 
-  # 응시자가 쓰는 AI 어시스턴트. R2 다시 실행도 같은 설정을 쓴다.
+  # 응시자가 쓰는 AI 어시스턴트.
   assistant:
     provider: openai
     model: gpt-6-luna
@@ -53,8 +53,6 @@ pair:
       model: gpt-6.1-terra
       effort: medium
       max-tokens: 16000
-    # 다시 실행(R1) 결과 비교에 쓸 모델
-    replay-compare: openai
 
   # (예비) Claude 를 어시스턴트로 쓸 때의 모델. 이번 파일럿에서는 쓰지 않는다.
   claude-assistant-model: claude-haiku-5-5
@@ -62,11 +60,6 @@ pair:
   # 응시자 코드 테스트 실행
   run:
     timeout-seconds: 30
-
-  # 출력 안정성(R2): 핵심 턴 최대 개수와 턴마다 다시 실행할 횟수
-  r2:
-    max-key-turns: 3
-    replays-per-turn: 5
 
   # 채점 툴 (메인 화면 오른쪽 위 아이콘). 프롬프트 버전과 샘플 응시는 grader/ 폴더로 git 공유.
   grader:

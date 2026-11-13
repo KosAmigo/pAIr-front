@@ -13,7 +13,6 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
-import com.pair.attempt.ChatTurn;
 import com.pair.config.AiKeys;
 import com.pair.config.PairProperties;
 
@@ -111,20 +110,6 @@ public class BatchClient {
         js.put("name", "custom_schema");
         js.set("schema", parse(schemaJson));
         js.put("strict", true);
-        return b;
-    }
-
-    /** 어시스턴트 다시 실행 요청 (AssistantClient 와 같음). */
-    public ObjectNode replayBody(ChatTurn.AssistantRequest req) {
-        ObjectNode b = json.createObjectNode();
-        b.put("model", req.model());
-        ArrayNode msgs = b.putArray("messages");
-        msgs.addObject().put("role", "system").put("content", req.systemPrompt());
-        for (ChatTurn.Message m : req.messages()) {
-            msgs.addObject().put("role", "user".equals(m.role()) ? "user" : "assistant").put("content", m.content());
-        }
-        b.put("max_completion_tokens", req.maxOutputTokens());
-        if (req.reasoningEffort() != null && !req.reasoningEffort().isBlank()) b.put("reasoning_effort", req.reasoningEffort());
         return b;
     }
 

@@ -6,26 +6,22 @@ import java.util.Map;
 import org.springframework.ai.converter.BeanOutputConverter;
 
 import com.pair.ai.AiUnavailableException;
-import com.pair.ai.AssistantClient;
 import com.pair.ai.BatchClient;
 import com.pair.ai.BatchClient.Answer;
 import com.pair.ai.Judge;
-import com.pair.attempt.ChatTurn;
 import com.pair.scoring.ScoringService;
 import com.pair.scoring.ScoringService.JudgeResult;
-import com.pair.scoring.ScoringService.ReplayJudgement;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * 배치 채점용 모델 호출. 채점 코드(ScoringService.evaluate)를 그대로 여러 번 돌리면서
+ * 배치 채점용 채점 모델 호출. 채점 코드(ScoringService.evaluate)를 그대로 두 번 돌리면서
  * - 이미 받은 배치 결과(known)가 있으면 그 결과를 돌려주고
  * - 없으면 보낼 요청으로 모아 두고(pending) 빈 결과를 돌려준다.
- * 1단계: 다시 실행과 판정 요청이 모인다(다시 실행 답이 비어 있어 비교 요청은 아직 안 생김).
- * 2단계: 다시 실행 답을 받은 뒤 다시 돌리면 R1 비교 요청이 모인다.
- * 마지막(last): 모든 결과로 실제 리포트를 만든다. 빠진 결과는 실패로 처리한다.
+ * 1단계: 판정 요청이 모인다.
+ * 마지막(last): 받은 결과로 실제 리포트를 만든다. 빠진 결과는 실패로 처리한다.
  *
- * custom_id 는 [a-zA-Z0-9_-]{1,64} 여야 해서 "u3-claude-1", "u3-t05-k2", "u3-c05" 처럼 만든다.
+ * custom_id 는 [a-zA-Z0-9_-]{1,64} 여야 해서 "u3-claude-1" 처럼 만든다.
  */
 final class BatchCalls implements ScoringService.Calls {
 
@@ -73,23 +69,6 @@ final class BatchCalls implements ScoringService.Calls {
     }
 
     @Override
-    public AssistantClient.Reply replay(int turn, int k, ChatTurn.AssistantRequest req) {
-        String key = unit + "-t" + pad(turn) + "-k" + k;
-        Answer a = known.get(key);
-        if (a == null) {
-            if (live != null) {
-                AssistantClient.Reply r = live.replay(turn, k, req);
-                used(req.model(), r.inputTokens(), r.outputTokens());
-                return r;
-            }
-            if (!last) add(new Pending(key, "openai", req.model(), client.replayBody(req)));
-            return new AssistantClient.Reply("", req.model(), 0, 0, 0, "none", 0);
-        }
-        // 실패한 다시 실행은 빈 답으로 둔다(일반 채점처럼 비교에서 빠진다)
-        return new AssistantClient.Reply(a.ok() ? a.text() : "", req.model(), a.inputTokens(), a.outputTokens(), 0, a.finishReason(), 0);
-    }
-
-    @Override
     public Judge.Result<JudgeResult> judge(Judge base, int repeat, String system, String prefix, String body) {
         String key = unit + "-" + base.name() + "-" + repeat;
         Answer a = known.get(key);
@@ -116,40 +95,9 @@ final class BatchCalls implements ScoringService.Calls {
         }
     }
 
-    @Override
-    public Judge.Result<ReplayJudgement> compare(Judge judge, int turn, String system, String user) {
-        String key = unit + "-c" + pad(turn);
-        Answer a = known.get(key);
-        BeanOutputConverter<ReplayJudgement> converter = new BeanOutputConverter<>(ReplayJudgement.class);
-        if (a == null && live != null) {
-            Judge.Result<ReplayJudgement> r = live.compare(judge, turn, system, user);
-            used(judge.model(), r.inputTokens(), r.outputTokens());
-            return r;
-        }
-        if (a == null) {
-            if (!last) {
-                boolean claude = "claude".equals(judge.name());
-                ObjectNode req = claude ? client.claudeJudgeParams(system, "", user, converter.getJsonSchema())
-                        : client.openaiJudgeBody(system, "", user, converter.getJsonSchema());
-                add(new Pending(key, claude ? "claude" : "openai", judge.model(), req));
-            }
-            return new Judge.Result<>(new ReplayJudgement(List.of()), 0, 0, 0);
-        }
-        if (!a.ok() || a.text().isBlank()) return new Judge.Result<>(new ReplayJudgement(List.of()), a.inputTokens(), a.outputTokens(), 0);
-        try {
-            return new Judge.Result<>(converter.convert(a.text()), a.inputTokens(), a.outputTokens(), a.cachedInputTokens());
-        } catch (RuntimeException e) {
-            return new Judge.Result<>(new ReplayJudgement(List.of()), a.inputTokens(), a.outputTokens(), 0);
-        }
-    }
-
     private void add(Pending p) {
         synchronized (pending) {
             pending.add(p);
         }
-    }
-
-    private static String pad(int n) {
-        return n < 10 ? "0" + n : String.valueOf(n);
     }
 }

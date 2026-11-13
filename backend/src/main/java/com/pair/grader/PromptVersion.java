@@ -16,7 +16,7 @@ import com.pair.scoring.Rubric.Check;
  * @param checks 체크 키(Rubric.key) → 판정 기준과 배점
  */
 public record PromptVersion(String id, String name, String author, String note, Instant createdAt, String parent,
-                            String judgeSystem, String replaySystem, Map<String, CheckPrompt> checks) {
+                            String judgeSystem, Map<String, CheckPrompt> checks) {
 
     /** hint: 판정 체크의 판정 기준 문장(자동 체크는 null). points: 감점(단위 감점이면 1개당). */
     public record CheckPrompt(String hint, int points) {}

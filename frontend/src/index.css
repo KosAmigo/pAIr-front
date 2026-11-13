@@ -26,8 +26,9 @@
   --color-branch-3: #c792ea;
   --color-branch-4: #ffb547;
   --color-branch-5: #ff6b8b;
-  /* 1.4 역량 항목 6번째 (성과 잠재력) 전용 */
+  /* 1.4 역량 항목 전용 (성과 잠재력, 위임 판단력) */
   --color-comp-6: #4dd4e6;
+  --color-comp-7: #b5e35b;
 
   /* 6.9 코드 편집기 전용: 클래스와 타입, 필드 */
   --color-code-type: #4dd4e6;

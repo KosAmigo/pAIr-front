@@ -3,10 +3,21 @@ import { useParams } from 'react-router-dom'
 import { Bot, ChevronDown, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { Button, ButtonLink, cx, Panel, Sep } from '../components/ui'
-import { COMPETENCIES } from '../data/mock'
 import { api, ApiError, type CheckResult, type Report, type ReportResponse, type Turn } from '../api'
 
-// 실제 응시 결과 리포트. 감점식 채점(docs/evaluation/채점_기준표.md): 5개 항목, 총점 100점.
+// 실제 응시 결과 리포트. 감점식 채점(docs/evaluation/채점_기준표.md): 6개 항목, 총점 100점.
+
+// DESIGN.md §1.4 역량 항목 색. 항목 목록과 순서는 리포트(report.items)를 따른다.
+// 재현성(reproducibility)은 2026-11-12에 빠졌지만 예전 리포트를 보여 주려고 색을 남긴다.
+const ITEM_COLORS: Record<string, string> = {
+  usage: 'var(--color-branch-2)',
+  control: 'var(--color-branch-3)',
+  decomposition: 'var(--color-branch-4)',
+  delegation: 'var(--color-comp-7)',
+  reproducibility: 'var(--color-branch-4)',
+  delivery: 'var(--color-branch-5)',
+  potential: 'var(--color-comp-6)',
+}
 
 function fmtDuration(sec: number | null) {
   if (sec == null) return '-'
@@ -108,7 +119,6 @@ export function ReportView({ r }: { r: Report }) {
     setSelected(t)
     document.getElementById(`turn-${t}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
-  const items = Object.fromEntries(r.items.map((i) => [i.key, i]))
   const tokens = Object.entries(r.tokens ?? {})
   return (
     <div className="mx-auto grid max-w-[1440px] grid-cols-12 gap-2 p-8">
@@ -134,15 +144,14 @@ export function ReportView({ r }: { r: Report }) {
             <span className="tnum font-mono text-display font-semibold">{r.total}</span>
             <span className="font-mono text-[16px] text-text-muted">/{r.max}</span>
           </div>
-          <span className="text-[14px] text-text-muted">감점식, 5개 항목</span>
+          <span className="text-[14px] text-text-muted">감점식, {r.items.length}개 항목</span>
         </div>
       </section>
 
       <Panel label="BREAKDOWN" title="항목별 점수와 감점 내역" className="col-span-12" flush>
         <ul className="divide-y divide-line">
-          {COMPETENCIES.map((c) => {
-            const it = items[c.key]
-            if (!it) return null
+          {r.items.map((it) => {
+            const c = { key: it.key, name: it.name, color: ITEM_COLORS[it.key] ?? 'var(--color-text-muted)' }
             const lost = it.checks.filter((k) => k.status === 'DEDUCTED')
             const isOpen = open.has(c.key)
             return (

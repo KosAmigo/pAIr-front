@@ -233,7 +233,7 @@ export type GraderCheckInfo = {
 export type GraderRubric = {
   items: { key: string; name: string; max: number }[]
   checks: GraderCheckInfo[]
-  defaults: { replays: number; judgeRepeat: number; parallel: number }
+  defaults: { judgeRepeat: number; parallel: number }
 }
 
 export type PromptVersionRow = { id: string; name: string; author: string; note: string; createdAt: string; parent: string | null; active: boolean }
@@ -246,7 +246,6 @@ export type PromptVersion = {
   createdAt: string
   parent: string | null
   judgeSystem: string
-  replaySystem: string
   checks: Record<string, { hint: string | null; points: number }>
 }
 
@@ -264,7 +263,7 @@ export type GraderAttempt = {
 }
 export type GraderRef = { source: GraderSource; id: string }
 export type GraderMode = 'api' | 'batch'
-export type GraderRunRequest = { attempts: GraderRef[]; versionId: string; count: number; replays: number; judgeRepeat: number; mode: GraderMode; batchWaitMinutes: number }
+export type GraderRunRequest = { attempts: GraderRef[]; versionId: string; count: number; judgeRepeat: number; mode: GraderMode; batchWaitMinutes: number }
 export type GraderEstimate = {
   scorings: number
   usd: number
@@ -281,7 +280,6 @@ export type GraderRun = {
   versionName: string
   attempts: GraderAttempt[]
   count: number
-  replays: number
   judgeRepeat: number
   status: GraderRunStatus
   done: number
