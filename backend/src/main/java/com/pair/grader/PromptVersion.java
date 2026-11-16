@@ -10,12 +10,13 @@ import com.pair.scoring.Rubric.Check;
 
 /**
  * 채점 프롬프트 버전 하나. grader/versions/{id}.json 으로 저장하고 git 으로 팀원과 공유한다.
+ * 팀 공용 목록이라 작성자를 따로 두지 않는다(2026-11-16).
  * 체크 항목 구성과 배점은 고정이고(2026-11-12 결정), 판정 기준 문장(hint)과 공통 프롬프트만 바꾼다.
  * points 는 기록용으로 남지만 채점에는 코드(Rubric)의 배점을 쓴다.
  *
  * @param checks 체크 키(Rubric.key) → 판정 기준과 배점
  */
-public record PromptVersion(String id, String name, String author, String note, Instant createdAt, String parent,
+public record PromptVersion(String id, String name, String note, Instant createdAt, String parent,
                             String judgeSystem, Map<String, CheckPrompt> checks) {
 
     /** hint: 판정 체크의 판정 기준 문장(자동 체크는 null). points: 감점(단위 감점이면 1개당). */

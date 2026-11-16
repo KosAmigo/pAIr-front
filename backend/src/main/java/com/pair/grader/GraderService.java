@@ -282,14 +282,14 @@ public class GraderService {
     // ── 실험 채점 실행 ─────────────────
 
     /** 실험 채점 한 번의 기록. status: RUNNING, DONE, CANCELLED, INTERRUPTED(서버가 꺼져 중단) */
-    public record RunMeta(String id, Instant createdAt, Instant finishedAt, String author, String versionId, String versionName,
+    public record RunMeta(String id, Instant createdAt, Instant finishedAt, String versionId, String versionName,
                           List<AttemptRow> attempts, int count, int judgeRepeat, String status,
                           int done, int failed, int total, double estimateUsd, double actualUsd, List<String> errors,
                           String mode, String phase) {
 
         /** 상태, 진행 수, 비용 같은 것만 바꾼 사본. */
         RunMeta with(String status, int done, int failed, double actualUsd, List<String> errors, Instant finishedAt, String phase) {
-            return new RunMeta(id, createdAt, finishedAt, author, versionId, versionName, attempts, count, judgeRepeat,
+            return new RunMeta(id, createdAt, finishedAt, versionId, versionName, attempts, count, judgeRepeat,
                     status, done, failed, total, estimateUsd, actualUsd, errors, mode, phase);
         }
     }
@@ -304,7 +304,7 @@ public class GraderService {
         }
     }
 
-    public RunMeta start(RunRequest req, String author) {
+    public RunMeta start(RunRequest req) {
         req = fixed(req);
         validate(req, true);
         PromptVersion version = prompts.get(req.versionId());
@@ -318,7 +318,7 @@ public class GraderService {
         for (int i = 2; Files.exists(runsDir.resolve(id)); i++) id = STAMP.format(Instant.now()) + "-" + i;
         Estimate est = estimate(req);
         boolean useBatch = isBatch(req.mode());
-        RunMeta meta = new RunMeta(id, Instant.now(), null, author == null ? "" : author.trim(), version.id(), version.name(), rows,
+        RunMeta meta = new RunMeta(id, Instant.now(), null, version.id(), version.name(), rows,
                 req.count(), req.judgeRepeat(), "RUNNING", 0, 0, est.scorings(), est.usd(), 0, List.of(),
                 useBatch ? "batch" : "api", useBatch ? "배치 요청을 만드는 중" : null);
         RunState state = new RunState(meta);

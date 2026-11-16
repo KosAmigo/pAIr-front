@@ -30,7 +30,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 /**
  * 채점 프롬프트 버전 저장소.
  * - 버전: grader/versions/{id}.json (git 으로 공유. 한 번 저장한 버전은 고치지 않고 새 버전으로 저장)
- * - 실제 채점에 쓸 버전: pilot-data/grader/active.txt (각자 PC 에만)
+ * - 실제 채점에 쓸 버전: grader/active.txt (git 으로 공유하는 팀 공용 설정)
  */
 @Component
 public class PromptStore {
@@ -47,7 +47,7 @@ public class PromptStore {
 
     public PromptStore(PairProperties props, ObjectMapper json) {
         this.dir = Path.of(props.grader().dir(), "versions").toAbsolutePath();
-        this.activeFile = Path.of(props.dataDir(), "grader", "active.txt").toAbsolutePath();
+        this.activeFile = Path.of(props.grader().dir(), "active.txt").toAbsolutePath();
         this.json = json;
         this.pretty = json.copy().enable(SerializationFeature.INDENT_OUTPUT);
         try {
@@ -62,7 +62,7 @@ public class PromptStore {
     public static PromptVersion builtin() {
         Map<String, PromptVersion.CheckPrompt> checks = new LinkedHashMap<>();
         for (Rubric.Check c : Rubric.CHECKS) checks.put(Rubric.key(c), new PromptVersion.CheckPrompt(c.judgeHint(), c.points()));
-        return new PromptVersion(DEFAULT_ID, "기본 (6개 역량)", "system", "재현성을 빼고 문제 분해력, 위임 판단력을 넣은 기준의 코드 기본값",
+        return new PromptVersion(DEFAULT_ID, "기본 (6개 역량)", "재현성을 빼고 문제 분해력, 위임 판단력을 넣은 기준의 코드 기본값",
                 Instant.parse("2026-11-12T09:00:00Z"), null, ScoringPrompts.JUDGE_SYSTEM, checks);
     }
 
@@ -93,15 +93,13 @@ public class PromptStore {
         }
     }
 
-    /** 새 버전 저장. id 는 "날짜-시각_작성자_이름" 이라 여러 명이 동시에 만들어도 파일이 겹치지 않는다. */
+    /** 새 버전 저장. id 는 "날짜-시각_이름". 같은 이름이 이미 있으면 뒤에 -2, -3 을 붙인다. */
     public synchronized PromptVersion create(PromptVersion draft) {
         String name = clean(draft.name());
-        String author = clean(draft.author());
         if (name.isEmpty()) throw new IllegalArgumentException("버전 이름을 입력하세요.");
-        if (author.isEmpty()) throw new IllegalArgumentException("작성자 이름을 입력하세요.");
         if (draft.judgeSystem() == null || draft.judgeSystem().isBlank()) throw new IllegalArgumentException("공통 채점 규칙이 비어 있습니다.");
         Instant now = Instant.now();
-        String base = STAMP.format(now) + "_" + author + "_" + name;
+        String base = STAMP.format(now) + "_" + name;
         String id = base;
         for (int i = 2; Files.exists(file(id)); i++) id = base + "-" + i;
         Map<String, PromptVersion.CheckPrompt> checks = new LinkedHashMap<>();
@@ -112,7 +110,7 @@ public class PromptStore {
             String hint = c.method() == Rubric.Method.JUDGE ? (p == null || p.hint() == null || p.hint().isBlank() ? c.judgeHint() : p.hint().trim()) : null;
             checks.put(k, new PromptVersion.CheckPrompt(hint, points));
         }
-        PromptVersion v = new PromptVersion(id, draft.name().trim(), draft.author().trim(), draft.note() == null ? "" : draft.note().trim(),
+        PromptVersion v = new PromptVersion(id, draft.name().trim(), draft.note() == null ? "" : draft.note().trim(),
                 now, draft.parent(), draft.judgeSystem().trim(), checks);
         write(v);
         return v;

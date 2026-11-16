@@ -236,12 +236,11 @@ export type GraderRubric = {
   defaults: { judgeRepeat: number; parallel: number }
 }
 
-export type PromptVersionRow = { id: string; name: string; author: string; note: string; createdAt: string; parent: string | null; active: boolean }
+export type PromptVersionRow = { id: string; name: string; note: string; createdAt: string; parent: string | null; active: boolean }
 
 export type PromptVersion = {
   id: string
   name: string
-  author: string
   note: string
   createdAt: string
   parent: string | null
@@ -275,7 +274,6 @@ export type GraderRun = {
   id: string
   createdAt: string
   finishedAt: string | null
-  author: string
   versionId: string
   versionName: string
   attempts: GraderAttempt[]
@@ -320,7 +318,7 @@ export const grader = {
   setActive: (id: string) => call<{ active: string }>('PUT', '/api/grader/active', { id }),
   attempts: () => call<GraderAttempt[]>('GET', '/api/grader/attempts'),
   estimate: (req: GraderRunRequest) => call<GraderEstimate>('POST', '/api/grader/estimate', req),
-  start: (req: GraderRunRequest & { author: string }) => call<GraderRun>('POST', '/api/grader/runs', req),
+  start: (req: GraderRunRequest) => call<GraderRun>('POST', '/api/grader/runs', req),
   runs: () => call<GraderRun[]>('GET', '/api/grader/runs'),
   run: (id: string) => call<{ meta: GraderRun; results: GraderResult[] }>('GET', `/api/grader/runs/${enc(id)}`),
   cancel: (id: string) => call<GraderRun>('POST', `/api/grader/runs/${enc(id)}/cancel`),
