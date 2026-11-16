@@ -467,3 +467,14 @@ COMMENT ON COLUMN question_results.question_id IS '문항 ID';
 COMMENT ON COLUMN question_results.score IS '얻은 점수';
 COMMENT ON COLUMN question_results.method IS '채점 방식(AUTO/JUDGE)';
 COMMENT ON COLUMN question_results.reason IS '판정 이유';
+
+-- ───────── 6. 조회용 인덱스 ─────────
+-- PostgreSQL 은 외래 키에 인덱스를 자동으로 만들지 않는다. 자주 따라가는 외래 키에만 건다.
+-- (UNIQUE 나 복합 PK 의 첫 컬럼인 외래 키는 그 인덱스를 함께 쓰므로 따로 만들지 않는다)
+CREATE INDEX idx_attempts_user_id          ON attempts (user_id);           -- 내 응시 목록
+CREATE INDEX idx_attempt_events_attempt_id ON attempt_events (attempt_id);  -- 응시 작업 기록
+CREATE INDEX idx_checkpoints_attempt_id    ON checkpoints (attempt_id);     -- 응시의 체크포인트(복기 트리)
+CREATE INDEX idx_chat_attachments_turn_id  ON chat_attachments (turn_id);   -- 대화의 첨부
+CREATE INDEX idx_scorings_attempt_id       ON scorings (attempt_id);        -- 응시의 채점 → 리포트
+CREATE INDEX idx_judge_calls_scoring_id    ON judge_calls (scoring_id);     -- 채점의 모델 호출(토큰)
+CREATE INDEX idx_judge_verdicts_result_id  ON judge_verdicts (result_id);   -- 체크 결과의 모델별 판정 → 리포트

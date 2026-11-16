@@ -7,6 +7,11 @@ ERD 확정 전에 실제 데이터를 넣어 구조를 검증했다.
 python docs/erd/sample/make_sample.py   # csv/*.csv 생성
 python docs/erd/sample/embed.py         # csv/document_chunks.csv (OpenAI text-embedding-3-small, 1536차원)
 bash docs/erd/sample/load.sh            # eXERD용 Docker DB(pair-erd-pg)에 적재
+
+# N배 검증 (예: 5배)
+python docs/erd/sample/scale.py 5       # csv5/ 생성 (git 에 안 올림)
+bash docs/erd/sample/load.sh csv5
+docker exec -i pair-erd-pg psql -U pair -d pair < docs/erd/sample/verify.sql
 ```
 
 ## 데이터
@@ -29,3 +34,20 @@ bash docs/erd/sample/load.sh            # eXERD용 Docker DB(pair-erd-pg)에 적
 - **attempts ↔ checkpoints 는 서로를 가리킨다.** 적재할 때 롤백 출발점(forked_from_checkpoint_id)은 체크포인트를 넣은 뒤에 채워야 한다.
 - **검색은 상위 3개를 쓰는 게 안전하다.** "가격 때문에 떠난 고객은…" 질문은 정답 조각(유사도 0.429)과 다른 조각(0.436)의 점수 차가 매우 작았다.
 - **숫자 표(CSV)는 RAG 보다 표 전체를 넘기는 게 낫다.** 행이 비슷비슷해 조각끼리 점수 차가 작다. 표가 작으면 통째로 채점 모델에 넘기고, RAG 는 글 문서에 쓰는 것을 권장한다.
+
+## 5배 검증 (2026-11-16)
+과제·문항·채점 기준·프롬프트 버전은 그대로 두고, 회원과 응시 아래 데이터만 번호를 밀어 5벌 복제했다(회원 15명, 응시 40건, 채점 35건, 약 5,600행). 복제본은 내용이 원본과 같으므로 데이터 다양성이 아니라 **번호가 엉키지 않는지, 제약과 쿼리가 늘어난 양에서도 그대로인지**를 본 검증이다. 의미 검색은 문서 조각이 그대로라 다시 하지 않았다.
+
+| 검증 | 결과 |
+|---|---|
+| 5배 적재 | 오류 없음, 5초 |
+| 총점 (원본 채점 7건 × 5벌) | 35건 모두 원본과 같음 (96, 96, 93, 68, 45, 96, 60) |
+| 다른 벌과 섞인 참조 6종 (판정↔호출 채점, 롤백↔체크포인트 회원, 체크포인트 턴, 보기↔문항, 답변↔과제, 첨부↔과제) | 모두 0건 |
+| 잘못된 데이터 차단 (기존 8종 + 같은 이메일 회원) | 9종 모두 차단 |
+| 적재 후 새 행 자동 번호 | 41번 (기존 최댓값 40 다음) |
+| 활용 쿼리 6개 | 결과가 정확히 5배로 나옴 |
+| 리포트 한 건 조회 | 0.5ms |
+
+### 발견한 것
+- **외래 키 컬럼 22개에 인덱스가 없다.** PostgreSQL 은 외래 키에 인덱스를 자동으로 만들지 않는다. 리포트 조회에서 `judge_verdicts` 는 이미 1,530행 전체를 훑었다(지금은 0.5ms 지만 응시가 1만 건이면 판정이 수십만 행). → 자주 조회하는 7개에 인덱스를 추가했다(`pair_schema.sql` 6절). 리포트 조회가 `idx_scorings_attempt_id`, `idx_judge_verdicts_result_id` 를 타는 것을 확인했다(지금 데이터 양에선 PostgreSQL 이 통째로 읽는 쪽을 고를 수 있어, 확인은 순차 읽기를 끄고 했다): `judge_verdicts.result_id`, `judge_calls.scoring_id`, `scorings.attempt_id`, `attempts.user_id`, `attempt_events.attempt_id`, `checkpoints.attempt_id`, `chat_attachments.turn_id`.
+- **Windows Git Bash 에서 `docker exec ... /sample` 경로가 `C:/Program Files/Git/sample` 로 바뀐다.** 그래서 처음엔 이전 CSV 가 그대로 다시 들어갔다. `load.sh` 에 `MSYS_NO_PATHCONV=1` 을 넣어 고쳤다.

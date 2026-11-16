@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # 샘플 CSV 를 eXERD 용 Docker DB(pair-erd-pg)에 외래 키 순서대로 넣는다. 한 테이블이라도 실패하면 전체를 되돌린다.
-# 실행: bash docs/erd/sample/load.sh
+# 실행: bash docs/erd/sample/load.sh [csv 폴더, 기본 csv]   예) bash docs/erd/sample/load.sh csv5
 set -euo pipefail
 cd "$(dirname "$0")"
+CSV_DIR="${1:-csv}"
+export MSYS_NO_PATHCONV=1   # Windows Git Bash 가 /sample 을 C:/Program Files/Git/sample 로 바꾸지 않게
 docker exec pair-erd-pg rm -rf /sample
-docker cp csv pair-erd-pg:/sample
+docker cp "$CSV_DIR" pair-erd-pg:/sample
 
 ORDER="users tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys question_sources
 rubric_items rubric_checks prompt_versions prompt_check_hints
@@ -15,7 +17,7 @@ SQL="BEGIN;
 TRUNCATE $(echo $ORDER | tr ' ' ',') RESTART IDENTITY CASCADE;
 SET CONSTRAINTS ALL DEFERRED;"
 for t in $ORDER; do
-  cols=$(head -1 "csv/$t.csv" | tr -d '\r')
+  cols=$(head -1 "$CSV_DIR/$t.csv" | tr -d '\r')
   if [ "$t" = attempts ]; then
     # attempts ↔ checkpoints 가 서로를 가리키므로, 롤백 출발점은 체크포인트를 넣은 뒤에 채운다
     SQL+="
