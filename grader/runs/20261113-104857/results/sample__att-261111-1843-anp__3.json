@@ -1,0 +1,718 @@
+{
+  "version" : 2,
+  "attemptId" : "att-261111-1843-anp",
+  "taskId" : "pricing-plan",
+  "taskTitle" : "신규 저가 요금제 출시 기획안",
+  "taskType" : "biz",
+  "assistant" : "openai / gpt-6-luna",
+  "judgeModel" : "claude-haiku-5-5 + gpt-6.1-terra",
+  "promptVersion" : "v2_기본",
+  "settings" : {
+    "judgeRepeat" : 1
+  },
+  "startedAt" : "2026-11-11T09:43:11.032003300Z",
+  "submittedAt" : "2026-11-11T09:43:18.067863500Z",
+  "durationSec" : 7,
+  "chatTurns" : 2,
+  "firstValidMinutes" : 0.1,
+  "total" : 64,
+  "max" : 100,
+  "items" : [ {
+    "key" : "usage",
+    "name" : "AI 활용력",
+    "max" : 20,
+    "score" : 12,
+    "checks" : [ {
+      "code" : "U0",
+      "label" : "AI에게 한 번도 질문하지 않음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 20,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "U1",
+      "label" : "첫 질문에서 무엇을 하려는지(목표)를 밝히지 않음",
+      "method" : "JUDGE",
+      "points" : 4,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "첫 질문에서 라이트 요금제 출시 기획안을 쓰려는 목표가 분명히 드러났습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "첫 질문에서 라이트 요금제 출시 기획안을 쓰려는 목표가 분명히 드러났습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "첫 질문에서 라이트 요금제 출시 기획안을 작성하려는 목표를 밝혔습니다."
+      } ]
+    }, {
+      "code" : "U2",
+      "label" : "필요한 코드, 로그, 자료를 붙이지 않아 AI가 추측해서 답하게 함",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 5,
+      "status" : "DEDUCTED",
+      "evidence" : [ "#T01", "#T02" ],
+      "reason" : "요금제별 매출 CSV와 설문 요약을 대화창에 붙이지 않은 채 기획안을 요청해 AI가 일반론으로 답했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01" ],
+        "reason" : "요금제별 매출 CSV와 설문 요약을 대화창에 붙이지 않은 채 기획안을 요청해 AI가 일반론으로 답했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01", "#T02" ],
+        "reason" : "핵심 자료의 수치를 제공하지 않고 기획안을 요청해 AI가 일반적인 근거로 답했습니다."
+      } ]
+    }, {
+      "code" : "U3",
+      "label" : "대부분의 질문에서 원하는 출력 형식이나 범위를 정하지 않음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "첫 질문에서 결론, 근거, 예상 효과, 리스크와 대응 제목과 마크다운 형식을 지정했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "첫 질문에서 결론, 근거, 예상 효과, 리스크와 대응 제목과 마크다운 형식을 지정했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "첫 질문에서 1페이지 분량과 마크다운 제목 구성을 지정했습니다."
+      } ]
+    }, {
+      "code" : "U5",
+      "label" : "막혔을 때 거의 같은 질문을 3번 이상 반복하고 전략을 바꾸지 않음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "같은 질문을 반복하지 않았습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "같은 질문을 반복하지 않았습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "같은 질문을 반복한 기록이 없습니다."
+      } ]
+    }, {
+      "code" : "U6",
+      "label" : "AI 답변을 받은 뒤 이어서 확인하거나 좁혀 묻는 질문이 없음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 3,
+      "status" : "DEDUCTED",
+      "evidence" : [ "#T01", "#T02" ],
+      "reason" : "질문이 한 번뿐이어서 AI 답변을 바탕으로 확인하거나 좁혀 묻는 후속 질문이 없습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01" ],
+        "reason" : "질문이 한 번뿐이어서 AI 답변을 바탕으로 확인하거나 좁혀 묻는 후속 질문이 없습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01", "#T02" ],
+        "reason" : "AI의 답변을 받은 뒤 확인하거나 범위를 좁히는 질문 없이 제출했습니다."
+      } ]
+    }, {
+      "code" : "U7",
+      "label" : "핵심 지시가 앞 대화 없이는 뜻이 통하지 않음",
+      "method" : "JUDGE",
+      "points" : 2,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "핵심 지시가 첫 질문만으로 뜻이 통합니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "핵심 지시가 첫 질문만으로 뜻이 통합니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "기획안 작성 지시는 앞 대화 없이도 이해할 수 있습니다."
+      } ]
+    } ]
+  }, {
+    "key" : "control",
+    "name" : "AI 통제력",
+    "max" : 15,
+    "score" : 8,
+    "checks" : [ {
+      "code" : "C0",
+      "label" : "AI를 쓰지 않아 AI 결과를 검증하고 통제하는 모습을 볼 수 없음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 15,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "C1",
+      "label" : "AI가 준 코드나 수치를 실행, 테스트, 자료 대조 없이 최종본에 넣음",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "최종본에 AI가 만든 수치가 들어가지 않아 검증 대상이 없습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "최종본에 AI가 만든 수치가 들어가지 않아 검증 대상이 없습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "최종본에 검증이 필요한 AI 생성 수치는 없으며 5,900원은 과제에서 주어진 금액입니다."
+      } ]
+    }, {
+      "code" : "C2",
+      "label" : "AI의 오답이나 근거 없는 수치가 최종본에 남음",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 2,
+      "status" : "SPLIT",
+      "evidence" : [ "#T02", "기획안.md" ],
+      "reason" : "판정 엇갈림: 1/2 판정만 걸렸다고 봐서 평균(2점) 감점. 최종본에 '요금제별 매출과 이탈 사유 데이터가 확인되지 않아'라는 문장이 남아 있는데, 제공 자료에는 해당 데이터가 있어 사실과 맞지 않습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T02", "기획안.md" ],
+        "reason" : "최종본에 '요금제별 매출과 이탈 사유 데이터가 확인되지 않아'라는 문장이 남아 있는데, 제공 자료에는 해당 데이터가 있어 사실과 맞지 않습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "최종본에 자료와 불일치하는 AI 생성 수치는 확인되지 않습니다."
+      } ]
+    }, {
+      "code" : "C3",
+      "label" : "증상만 가리는 제안(타임아웃 늘리기, 전체 잠금 등)이나 근거 없는 주장을 따져 보지 않고 받아들임",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 3,
+      "status" : "DEDUCTED",
+      "evidence" : [ "#T02", "기획안.md" ],
+      "reason" : "'해지 고려 고객의 저가 요금제 전환을 통한 구독 유지' 같은 근거 없는 주장을 자료와 대조하지 않고 그대로 받아들였습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T02" ],
+        "reason" : "'해지 고려 고객의 저가 요금제 전환을 통한 구독 유지' 같은 근거 없는 주장을 자료와 대조하지 않고 그대로 받아들였습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T02", "기획안.md" ],
+        "reason" : "신규 가입과 유료 전환에 도움이 된다는 근거 없는 주장을 따져 보지 않고 채택했습니다."
+      } ]
+    }, {
+      "code" : "C4",
+      "label" : "AI 답변의 근거나 이유를 한 번도 확인하지 않음",
+      "method" : "JUDGE",
+      "points" : 2,
+      "deducted" : 2,
+      "status" : "DEDUCTED",
+      "evidence" : [ "#T01", "Q2", "#T02" ],
+      "reason" : "AI 답변의 근거를 묻거나 반박한 질문이 한 번도 없습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01", "Q2" ],
+        "reason" : "AI 답변의 근거를 묻거나 반박한 질문이 한 번도 없습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01", "#T02" ],
+        "reason" : "AI가 제시한 결론이나 근거의 이유를 확인하지 않았습니다."
+      } ]
+    } ]
+  }, {
+    "key" : "decomposition",
+    "name" : "문제 분해력",
+    "max" : 10,
+    "score" : 5,
+    "checks" : [ {
+      "code" : "K0",
+      "label" : "AI를 쓰지 않아 AI에게 일을 나눠 맡기는 모습을 볼 수 없음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 10,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "K1",
+      "label" : "너무 큰 덩어리: 앞 결과에 기대는 여러 단계를 한 요청으로 맡겨 중간 결과를 확인하지 못함",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 2,
+      "status" : "SPLIT",
+      "evidence" : [ "#T01" ],
+      "reason" : "판정 엇갈림: 1/2 판정만 걸렸다고 봐서 평균(2점) 감점. 자료 분석부터 결론, 근거, 효과, 리스크까지 전체 기획안을 한 요청에 묶어 맡기고 중간 결과를 확인하지 않았습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01" ],
+        "reason" : "자료 분석부터 결론, 근거, 효과, 리스크까지 전체 기획안을 한 요청에 묶어 맡기고 중간 결과를 확인하지 않았습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "한 요청에 상호 의존적인 여러 분석 단계를 명시적으로 묶어 맡긴 기록은 없습니다."
+      } ]
+    }, {
+      "code" : "K2",
+      "label" : "순서 거꾸로: 앞 단계가 끝나기 전에 뒤 단계를 요청함",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 3,
+      "status" : "DEDUCTED",
+      "evidence" : [ "#T01", "#T02" ],
+      "reason" : "자료를 확인하기 전에 기획안 작성을 먼저 요청했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01" ],
+        "reason" : "자료를 확인하기 전에 기획안 작성을 먼저 요청했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T01", "#T02" ],
+        "reason" : "설문과 매출 현황을 확인하기 전에 출시 기획안부터 요청했습니다."
+      } ]
+    }, {
+      "code" : "K3",
+      "label" : "너무 잘게 쪼갬: 한 번에 해도 되는 단순한 일을 여러 턴으로 나눠 턴만 늘림",
+      "method" : "JUDGE",
+      "points" : 2,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "단순한 일을 턴마다 쪼개지 않았습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "단순한 일을 턴마다 쪼개지 않았습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "단순한 작업을 여러 턴으로 쪼개 요청하지 않았습니다."
+      } ]
+    } ]
+  }, {
+    "key" : "delegation",
+    "name" : "위임 판단력",
+    "max" : 10,
+    "score" : 6,
+    "checks" : [ {
+      "code" : "J0",
+      "label" : "AI를 쓰지 않아 위임 판단을 볼 수 없음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 10,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "J1",
+      "label" : "과제의 핵심 판단(근본 원인 결정, 최종 결론과 추천안)을 AI에게 맡기고 자기 판단 없이 그대로 씀",
+      "method" : "JUDGE",
+      "points" : 4,
+      "deducted" : 4,
+      "status" : "DEDUCTED",
+      "evidence" : [ "#T02", "Q1", "Q3", "기획안.md" ],
+      "reason" : "출시 결론과 근거를 AI가 정했고, 응시자가 자료로 따져 본 흔적 없이 그대로 제출했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T02", "Q1", "Q3" ],
+        "reason" : "출시 결론과 근거를 AI가 정했고, 응시자가 자료로 따져 본 흔적 없이 그대로 제출했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "#T02", "기획안.md", "Q1" ],
+        "reason" : "출시 결론을 AI가 정한 뒤 별도의 자기 판단이나 근거 없이 그대로 채택했습니다."
+      } ]
+    }, {
+      "code" : "J2",
+      "label" : "주어진 파일을 열어 보면 바로 아는 내용이나 단순 계산을 AI에게 여러 번 물음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "파일에 있는 내용을 AI에게 물은 기록이 없습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "파일에 있는 내용을 AI에게 물은 기록이 없습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "파일에 적힌 내용이나 단순 계산을 여러 번 질문하지 않았습니다."
+      } ]
+    }, {
+      "code" : "J3",
+      "label" : "AI에게 맡기기 좋은 반복 작업을 직접 하느라 시간을 많이 씀",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "직접 반복 편집을 오래 한 흐름이 보이지 않습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "직접 반복 편집을 오래 한 흐름이 보이지 않습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "AI에게 맡길 만한 반복 작업을 직접 오래 수행한 기록은 없습니다."
+      } ]
+    } ]
+  }, {
+    "key" : "delivery",
+    "name" : "AI 결과 도출력",
+    "max" : 30,
+    "score" : 23,
+    "checks" : [ {
+      "code" : "D1",
+      "label" : "필수 체크리스트 미충족 (1개당)",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 7,
+      "status" : "DEDUCTED",
+      "evidence" : [ "기획안.md", "#T02" ],
+      "reason" : "근거 3개가 제공 자료의 수치를 인용하지 않았고, 잠식 효과는 언급만 있을 뿐 자료로 다루지 않아 필수 항목 2개가 미충족입니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 2,
+        "evidence" : [ "기획안.md", "#T02" ],
+        "reason" : "근거 3개가 제공 자료의 수치를 인용하지 않았고, 잠식 효과는 언급만 있을 뿐 자료로 다루지 않아 필수 항목 2개가 미충족입니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 1,
+        "evidence" : [ "기획안.md" ],
+        "reason" : "결론과 잠식 위험 및 대응은 제시했지만 제공 자료의 수치를 인용한 근거 3개는 제시하지 못했습니다."
+      } ]
+    }, {
+      "code" : "D2",
+      "label" : "설문 의향을 실제 전환율로 보정하지 않음",
+      "method" : "JUDGE",
+      "points" : 2,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "설문 의향 수치를 계산에 사용하지 않아 보정 대상이 없습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "설문 의향 수치를 계산에 사용하지 않아 보정 대상이 없습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "설문 의향을 보정 없이 계산에 사용한 내용은 없습니다."
+      } ]
+    }, {
+      "code" : "D3",
+      "label" : "근거 수치에 출처(어느 자료인지)를 밝히지 않음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "기획안에 자료에서 가져온 근거 수치가 없어 출처 표기 대상이 없습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "기획안에 자료에서 가져온 근거 수치가 없어 출처 표기 대상이 없습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "출처를 표시해야 할 자료 기반 근거 수치가 기획안에 제시되지 않았습니다."
+      } ]
+    }, {
+      "code" : "D4",
+      "label" : "결론과 근거가 서로 맞지 않음",
+      "method" : "JUDGE",
+      "points" : 2,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "결론과 근거가 같은 방향을 가리키고 있어 서로 어긋나지 않습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "결론과 근거가 같은 방향을 가리키고 있어 서로 어긋나지 않습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "제시된 일반적 근거와 출시 결론이 서로 반대 방향을 가리키지는 않습니다."
+      } ]
+    }, {
+      "code" : "D5",
+      "label" : "첫 유효 결과가 30분을 넘김(-2) 또는 도달하지 못함(-4)",
+      "method" : "AUTO",
+      "points" : 4,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "첫 유효 결과까지 0.1분 (필수 제목을 모두 채운 첫 저장)",
+      "judges" : [ ]
+    } ]
+  }, {
+    "key" : "potential",
+    "name" : "성과 잠재력",
+    "max" : 15,
+    "score" : 10,
+    "checks" : [ {
+      "code" : "P1",
+      "label" : "후속 질문 답변이 근거 없이 한두 마디에 그침",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 5,
+      "status" : "DEDUCTED",
+      "evidence" : [ "Q1", "Q2", "Q3" ],
+      "reason" : "후속 질문 답변이 모두 근거 없는 한두 마디에 그쳤습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "Q1", "Q2", "Q3" ],
+        "reason" : "후속 질문 답변이 모두 근거 없는 한두 마디에 그쳤습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "Q1", "Q3" ],
+        "reason" : "후속 답변 대부분이 구체적인 판단 근거나 설명 없이 짧게 끝났습니다."
+      } ]
+    }, {
+      "code" : "P2",
+      "label" : "채택하지 않은 AI 제안과 그 이유를 설명하지 못함",
+      "method" : "JUDGE",
+      "points" : 4,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "Q2" ],
+      "reason" : "대화에 거절할 만한 AI 제안이 없었고 응시자도 없다고 답했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "Q2" ],
+        "reason" : "대화에 거절할 만한 AI 제안이 없었고 응시자도 없다고 답했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "AI 제안을 그대로 채택한 기록과 채택하지 않은 제안이 없다는 답변이 일치합니다."
+      } ]
+    }, {
+      "code" : "P3",
+      "label" : "오류나 테스트 실패에서 원인을 확인하지 않고 같은 시도를 반복함",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "실패나 오류가 없었습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "실패나 오류가 없었습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "실패 후 같은 시도를 반복한 기록이 없습니다."
+      } ]
+    }, {
+      "code" : "P4",
+      "label" : "결과의 한계나 남은 위험을 전혀 언급하지 않음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "기획안.md" ],
+      "reason" : "기획안에 데이터 확인 필요성과 검증 필요성을 남은 위험으로 언급했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "기획안.md" ],
+        "reason" : "기획안에 데이터 확인 필요성과 검증 필요성을 남은 위험으로 언급했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "기획안에 잠식과 수요 예측 오류 등 남은 위험과 추가 검증 필요성을 적었습니다."
+      } ]
+    } ]
+  } ],
+  "notes" : [ "채점 기준: docs/evaluation/채점_기준표.md (감점식, 총점 100점)", "이중 채점: 판정 체크는 두 채점 모델(claude-haiku-5-5, gpt-6.1-terra)의 감점을 평균함. 근거(대화 턴, 파일) 없이 걸렸다고 한 판정은 감점하지 않음. 일부만 걸렸다고 하면 '판정 엇갈림'으로 평균만큼 감점(소수점 버림)", "프롬프트 버전: v2_기본 (기본 (6개 역량))" ],
+  "tokens" : {
+    "assistant" : {
+      "output" : 591,
+      "input" : 328
+    },
+    "judge_claude" : {
+      "cachedInput" : 5763,
+      "model" : "claude-haiku-5-5",
+      "input" : 9137,
+      "output" : 4325
+    },
+    "judge_openai" : {
+      "cachedInput" : 5412,
+      "model" : "gpt-6.1-terra",
+      "input" : 5415,
+      "output" : 1870
+    }
+  },
+  "transcript" : [ {
+    "text" : "영상 구독 서비스 무비랩에서 월 5,900원 라이트 요금제 출시 기획안 1페이지 써줘. 결론, 근거, 예상 효과, 리스크와 대응 제목으로 마크다운으로.",
+    "turn" : 1,
+    "role" : "user",
+    "time" : "00:00:00"
+  }, {
+    "text" : "# 무비랩 라이트 요금제 출시 기획안\n\n## 결론\n월 **5,900원**의 라이트 요금제를 출시해 가격 부담을 낮춘 신규 구독 선택지를 제공한다. 기존 요금제와의 차이는 **콘텐츠 이용 범위 또는 동시 시청 등 제공 조건**으로 명확히 구분하고, 출시 전 가격·혜택 조합을 검증한다.\n\n## 근거\n- 구독료 부담으로 가입을 망설이거나 해지를 고려하는 이용자를 위한 저가 선택지가 될 수 있다.\n- 낮은 진입 가격은 신규 가입을 유도하고, 무료 이용자를 유료 구독자로 전환하는 데 도움이 될 수 있다.\n- 다만 현재 요금제별 매출과 이탈 사유 데이터가 확인되지 않아, 수요와 기존 요금제 잠식 가능성은 출시 전 검증이 필요하다.\n\n## 예상 효과\n- 가격 민감층의 신규 가입 및 유료 전환 증가\n- 해지 고려 고객의 저가 요금제 전환을 통한 구독 유지\n- 요금제 선택 폭 확대에 따른 고객군 세분화\n\n성과는 신규 가입·전환율뿐 아니라 **기존 요금제에서의 하향 이동, 가입자당 매출, 해지율**을 함께 측정한다.\n\n## 리스크와 대응\n- **기존 요금제 잠식:** 혜택과 이용 조건을 분명히 차별화하고, 요금제 간 이동을 추적한다.\n- **가입 증가에도 매출이 기대에 못 미칠 위험:** 가입자 수가 아닌 가입자당 매출과 전체 매출 변화를 함께 평가한다.\n- **저가 요금제의 만족도 저하:** 제공 범위와 제한 사항을 가입 전에 명확히 안내하고, 고객 문의·불만을 모니터링한다.\n- **수요 예측 오류:** 전면 출시 전 대상 고객을 제한한 시험 운영으로 가격과 혜택 조합을 검증한다.",
+    "turn" : 2,
+    "role" : "ai",
+    "time" : "00:00:06"
+  } ],
+  "graderRun" : {
+    "n" : 3,
+    "runId" : "20261113-104857",
+    "source" : "sample"
+  }
+}

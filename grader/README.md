@@ -19,5 +19,5 @@
 ## 각자 PC에만 있는 것 (git에 올라가지 않음)
 
 - 실제 응시 채점에 쓸 버전: `pilot-data/grader/active.txt` (툴의 [실제 채점에 사용])
-- 실험 채점 결과: `pilot-data/grader/runs/` (배치 채점이면 배치 ID와 받은 결과가 `batch.json`에 있어, 서버를 다시 켜면 이어서 받음) (툴의 [결과 파일 내보내기]로 JSON 하나로 받아 공유할 수 있음)
+- 실험 채점 결과: `grader/runs/` (git으로 팀원과 공유. 커밋, push 하면 팀원의 채점 툴 결과 탭에도 보임. 배치 채점이면 배치 ID와 받은 결과가 `batch.json`에 있어, 서버를 다시 켜면 이어서 받음) (툴의 [결과 파일 내보내기]로 JSON 하나로 받아 공유할 수 있음)
 - API 키: 각자 환경 변수 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`. 실험 채점 비용도 각자의 키로 나갑니다.

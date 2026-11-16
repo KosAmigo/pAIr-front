@@ -1,0 +1,31 @@
+{
+  "id" : "20261112-120807",
+  "createdAt" : "2026-11-12T03:08:07.370483900Z",
+  "finishedAt" : "2026-11-12T03:10:00.619942300Z",
+  "author" : "대기시험",
+  "versionId" : "v1_기본",
+  "versionName" : "기본",
+  "attempts" : [ {
+    "source" : "sample",
+    "id" : "att-261111-1842-l5r",
+    "label" : "비개발 · 모범 응시",
+    "taskId" : "pricing-plan",
+    "taskTitle" : "신규 저가 요금제 출시 기획안",
+    "taskType" : "biz",
+    "startedAt" : "2026-11-11T09:42:42.418973700Z",
+    "total" : 89,
+    "chatTurns" : 8
+  } ],
+  "count" : 1,
+  "replays" : 5,
+  "judgeRepeat" : 1,
+  "status" : "DONE",
+  "done" : 1,
+  "failed" : 0,
+  "total" : 1,
+  "estimateUsd" : 0.0143,
+  "actualUsd" : 0.0256,
+  "errors" : [ ],
+  "mode" : "batch",
+  "phase" : "완료 (대기 1분 초과분은 일반 API)"
+}

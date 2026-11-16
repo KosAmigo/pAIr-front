@@ -1,0 +1,40 @@
+{
+  "id" : "20261116-121219",
+  "createdAt" : "2026-11-16T03:12:19.017076600Z",
+  "finishedAt" : "2026-11-16T03:18:47.524452600Z",
+  "author" : "안정현",
+  "versionId" : "v2_기본",
+  "versionName" : "기본 (6개 역량)",
+  "attempts" : [ {
+    "source" : "sample",
+    "id" : "att-261111-1841-avn",
+    "label" : "개발 · 모범 응시",
+    "taskId" : "order-deadlock",
+    "taskTitle" : "주문 처리 장애 원인 분석",
+    "taskType" : "dev",
+    "startedAt" : "2026-11-11T09:41:09.867230800Z",
+    "total" : 95,
+    "chatTurns" : 10
+  }, {
+    "source" : "sample",
+    "id" : "att-261111-1842-2q",
+    "label" : "개발 · 증상만 가림",
+    "taskId" : "order-deadlock",
+    "taskTitle" : "주문 처리 장애 원인 분석",
+    "taskType" : "dev",
+    "startedAt" : "2026-11-11T09:42:08.886581300Z",
+    "total" : 71,
+    "chatTurns" : 4
+  } ],
+  "count" : 1,
+  "judgeRepeat" : 1,
+  "status" : "DONE",
+  "done" : 2,
+  "failed" : 0,
+  "total" : 2,
+  "estimateUsd" : 0.0194,
+  "actualUsd" : 0.0207,
+  "errors" : [ ],
+  "mode" : "batch",
+  "phase" : "완료 (대기 5분 초과분은 일반 API)"
+}
