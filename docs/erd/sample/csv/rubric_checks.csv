@@ -1,0 +1,35 @@
+check_id,item_key,code,track,method,points,label
+1,usage,U0,ALL,AUTO,20,AI에게 한 번도 질문하지 않음 (이 항목 0점)
+2,usage,U1,ALL,JUDGE,4,첫 질문에서 무엇을 하려는지(목표)를 밝히지 않음
+3,usage,U2,ALL,JUDGE,5,"필요한 코드, 로그, 자료를 붙이지 않아 AI가 추측해서 답하게 함"
+4,usage,U3,ALL,JUDGE,3,대부분의 질문에서 원하는 출력 형식이나 범위를 정하지 않음
+5,usage,U5,ALL,JUDGE,3,막혔을 때 거의 같은 질문을 3번 이상 반복하고 전략을 바꾸지 않음
+6,usage,U6,ALL,JUDGE,3,AI 답변을 받은 뒤 이어서 확인하거나 좁혀 묻는 질문이 없음
+7,usage,U7,ALL,JUDGE,2,핵심 지시가 앞 대화 없이는 뜻이 통하지 않음
+8,control,C0,ALL,AUTO,15,AI를 쓰지 않아 AI 결과를 검증하고 통제하는 모습을 볼 수 없음 (이 항목 0점)
+9,control,C1,ALL,JUDGE,5,"AI가 준 코드나 수치를 실행, 테스트, 자료 대조 없이 최종본에 넣음"
+10,control,C2,ALL,JUDGE,5,AI의 오답이나 근거 없는 수치가 최종본에 남음
+11,control,C3,ALL,JUDGE,3,"증상만 가리는 제안(타임아웃 늘리기, 전체 잠금 등)이나 근거 없는 주장을 따져 보지 않고 받아들임"
+12,control,C4,ALL,JUDGE,2,AI 답변의 근거나 이유를 한 번도 확인하지 않음
+13,decomposition,K0,ALL,AUTO,10,AI를 쓰지 않아 AI에게 일을 나눠 맡기는 모습을 볼 수 없음 (이 항목 0점)
+14,decomposition,K1,ALL,JUDGE,5,너무 큰 덩어리: 앞 결과에 기대는 여러 단계를 한 요청으로 맡겨 중간 결과를 확인하지 못함
+15,decomposition,K2,ALL,JUDGE,3,순서 거꾸로: 앞 단계가 끝나기 전에 뒤 단계를 요청함
+16,decomposition,K3,ALL,JUDGE,2,너무 잘게 쪼갬: 한 번에 해도 되는 단순한 일을 여러 턴으로 나눠 턴만 늘림
+17,delegation,J0,ALL,AUTO,10,AI를 쓰지 않아 위임 판단을 볼 수 없음 (이 항목 0점)
+18,delegation,J1,ALL,JUDGE,4,"과제의 핵심 판단(근본 원인 결정, 최종 결론과 추천안)을 AI에게 맡기고 자기 판단 없이 그대로 씀"
+19,delegation,J2,ALL,JUDGE,3,주어진 파일을 열어 보면 바로 아는 내용이나 단순 계산을 AI에게 여러 번 물음
+20,delegation,J3,ALL,JUDGE,3,AI에게 맡기기 좋은 반복 작업을 직접 하느라 시간을 많이 씀
+21,delivery,D0,DEV,AUTO,30,제출 코드가 컴파일되지 않음 (이 항목 0점)
+22,delivery,D1,DEV,AUTO,5,숨은 필수 테스트 실패 (1개당)
+23,delivery,D2,DEV,AUTO,2,엣지 케이스 누락 (숨은 선택 테스트 실패)
+24,delivery,D3,DEV,AUTO,3,수정을 확인하는 테스트를 추가하지 않음
+25,delivery,D4,DEV,JUDGE,3,NOTES.md의 원인 설명이 비어 있거나 핵심 원인과 맞지 않음
+26,delivery,D5,ALL,AUTO,4,첫 유효 결과가 30분을 넘김(-2) 또는 도달하지 못함(-4)
+27,potential,P1,ALL,JUDGE,5,후속 질문 답변이 근거 없이 한두 마디에 그침
+28,potential,P2,ALL,JUDGE,4,채택하지 않은 AI 제안과 그 이유를 설명하지 못함
+29,potential,P3,ALL,JUDGE,3,오류나 테스트 실패에서 원인을 확인하지 않고 같은 시도를 반복함
+30,potential,P4,ALL,JUDGE,3,결과의 한계나 남은 위험을 전혀 언급하지 않음
+31,delivery,D1,BIZ,JUDGE,5,필수 체크리스트 미충족 (1개당)
+32,delivery,D2,BIZ,JUDGE,2,설문 의향을 실제 전환율로 보정하지 않음
+33,delivery,D3,BIZ,JUDGE,3,근거 수치에 출처(어느 자료인지)를 밝히지 않음
+34,delivery,D4,BIZ,JUDGE,2,결론과 근거가 서로 맞지 않음

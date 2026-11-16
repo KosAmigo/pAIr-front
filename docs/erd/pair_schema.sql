@@ -1,6 +1,9 @@
 -- pAIr ERD (PostgreSQL, 3정규형 기준)
 -- 반정규화(점수 합계 컬럼 등)는 팀에서 판단해 추가한다.
 
+-- 채점용 RAG 의 임베딩 벡터(document_chunks.embedding)에 pgvector 확장을 쓴다.
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- ───────── 1. 회원 · 과제 ─────────
 
 CREATE TABLE users (
@@ -23,6 +26,7 @@ CREATE TABLE tasks (
     task_id         BIGSERIAL    PRIMARY KEY,
     code            VARCHAR(50)  NOT NULL UNIQUE,
     title           VARCHAR(200) NOT NULL,
+    summary         VARCHAR(200) NOT NULL,
     description     TEXT         NOT NULL,
     requirements    TEXT         NOT NULL,
     track           VARCHAR(10)  NOT NULL,
@@ -35,7 +39,8 @@ COMMENT ON TABLE  tasks IS '과제';
 COMMENT ON COLUMN tasks.task_id IS '과제 ID';
 COMMENT ON COLUMN tasks.code IS '과제 코드';
 COMMENT ON COLUMN tasks.title IS '제목';
-COMMENT ON COLUMN tasks.description IS '설명';
+COMMENT ON COLUMN tasks.summary IS '한 줄 소개(과제 목록 카드)';
+COMMENT ON COLUMN tasks.description IS '상세 설명(응시 화면)';
 COMMENT ON COLUMN tasks.requirements IS '요구사항';
 COMMENT ON COLUMN tasks.track IS '직군(DEV/BIZ)';
 COMMENT ON COLUMN tasks.category IS '과제 형태';
@@ -76,6 +81,27 @@ COMMENT ON TABLE  document_pages IS '문서 페이지 텍스트';
 COMMENT ON COLUMN document_pages.task_file_id IS '과제 파일 ID';
 COMMENT ON COLUMN document_pages.page_no IS '페이지 번호';
 COMMENT ON COLUMN document_pages.text IS '추출한 텍스트';
+
+CREATE TABLE document_chunks (
+    chunk_id      BIGSERIAL    PRIMARY KEY,
+    task_file_id  BIGINT       NOT NULL,
+    page_no       INT          NOT NULL,
+    chunk_no      INT          NOT NULL,
+    content       TEXT         NOT NULL,
+    token_count   INT          NOT NULL,
+    embedding     VECTOR(1536) NOT NULL,
+    FOREIGN KEY (task_file_id, page_no) REFERENCES document_pages (task_file_id, page_no),
+    UNIQUE (task_file_id, page_no, chunk_no)
+);
+CREATE INDEX idx_document_chunks_embedding ON document_chunks USING hnsw (embedding vector_cosine_ops);
+COMMENT ON TABLE  document_chunks IS '문서 조각(채점용 RAG 임베딩)';
+COMMENT ON COLUMN document_chunks.chunk_id IS '조각 ID';
+COMMENT ON COLUMN document_chunks.task_file_id IS '과제 파일 ID';
+COMMENT ON COLUMN document_chunks.page_no IS '페이지 번호';
+COMMENT ON COLUMN document_chunks.chunk_no IS '페이지 안 조각 순서';
+COMMENT ON COLUMN document_chunks.content IS '조각 내용';
+COMMENT ON COLUMN document_chunks.token_count IS '토큰 수';
+COMMENT ON COLUMN document_chunks.embedding IS '임베딩 벡터(차원은 임베딩 모델 확정 시 조정)';
 
 CREATE TABLE task_questions (
     question_id    BIGSERIAL   PRIMARY KEY,
