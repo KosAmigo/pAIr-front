@@ -17,25 +17,9 @@ import {
 } from '../api'
 
 // 채점 툴 (DESIGN.md §7). 프롬프트 버전 편집, 실험 채점(여러 응시 × N번), 결과 분석.
-// 프롬프트 버전과 샘플 응시는 grader/ 폴더로 git 공유, 실험 결과는 각자 PC(pilot-data/grader)에 쌓인다.
+// 프롬프트 버전, 실제 채점 버전, 샘플 응시, 실험 결과는 모두 grader/ 폴더로 git 공유한다(팀 공용, 작성자 구분 없음).
 
 type Tab = 'versions' | 'run' | 'results'
-
-const AUTHOR_KEY = 'pair.grader.author'
-function loadAuthor() {
-  try {
-    return localStorage.getItem(AUTHOR_KEY) ?? ''
-  } catch {
-    return ''
-  }
-}
-function saveAuthor(v: string) {
-  try {
-    localStorage.setItem(AUTHOR_KEY, v)
-  } catch {
-    // 저장 못 해도 동작에는 문제 없음
-  }
-}
 
 const fmtDate = (s: string | null | undefined) => (s ? new Date(s).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-')
 /** 실험 목록용: "11.12 11:33" (24시간제) */
@@ -73,7 +57,7 @@ function Loading() {
 
 // ══ 1. 프롬프트 버전 ══════════════════════
 
-function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; author: string; onChanged: () => void }) {
+function VersionsTab({ rubric, onChanged }: { rubric: GraderRubric; onChanged: () => void }) {
   const [rows, setRows] = useState<PromptVersionRow[] | null>(null)
   const [sel, setSel] = useState<string | null>(null)
   const [v, setV] = useState<PromptVersion | null>(null)
@@ -103,7 +87,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
 
   const startEdit = () => {
     if (!v) return
-    setDraft({ ...v, name: '', note: '', author, parent: v.id, checks: structuredClone(v.checks) })
+    setDraft({ ...v, name: '', note: '', parent: v.id, checks: structuredClone(v.checks) })
     setErr(null)
   }
   const save = async () => {
@@ -114,7 +98,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
       const { id: _id, createdAt: _c, ...body } = draft
       void _id
       void _c
-      const saved = await grader.createVersion({ ...body, author })
+      const saved = await grader.createVersion(body)
       setDraft(null)
       setSel(saved.id)
       load()
@@ -147,7 +131,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
         <div role="note" className="flex gap-2 border-b border-line bg-info/8 px-4 py-3 text-[13px] leading-5 text-text-muted">
           <Info size={15} className="mt-0.5 shrink-0 text-info" aria-hidden />
           <p>
-            버전 파일은 <span className="font-mono text-text">grader/versions/</span>에 생깁니다. 커밋하고 push하면 팀원이 pull받아 같이 씁니다. 실제 채점 버전 지정은 각자 PC에만 저장됩니다.
+            버전 파일은 <span className="font-mono text-text">grader/versions/</span>에, 실제 채점 버전은 <span className="font-mono text-text">grader/active.txt</span>에 저장됩니다. 커밋하고 push하면 팀 전체가 같은 버전을 씁니다.
           </p>
         </div>
         {!rows ? (
@@ -171,7 +155,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
                     )}
                   </div>
                   <div className="mt-0.5 truncate font-mono text-[12px] text-text-faint">
-                    {r.author} · {fmtDate(r.createdAt)}
+                    {fmtDate(r.createdAt)}
                   </div>
                   {r.note && <div className="mt-0.5 truncate text-[13px] text-text-muted">{r.note}</div>}
                 </button>
@@ -198,7 +182,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
                     <Button variant="ghost" size="sm" onClick={() => setDraft(null)} disabled={busy}>
                       취소
                     </Button>
-                    <Button variant="primary" size="sm" onClick={() => void save()} disabled={busy || !author.trim()}>
+                    <Button variant="primary" size="sm" onClick={() => void save()} disabled={busy}>
                       {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Save size={14} aria-hidden />} 새 버전으로 저장
                     </Button>
                   </>
@@ -209,7 +193,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
                         <Star size={14} aria-hidden /> 실제 채점에 사용
                       </Button>
                     )}
-                    <Button variant="primary" size="sm" onClick={startEdit} disabled={!author.trim()} title={author.trim() ? '' : '오른쪽 위에 작성자 이름을 먼저 입력하세요'}>
+                    <Button variant="primary" size="sm" onClick={startEdit}>
                       이 버전을 고쳐 새로 만들기
                     </Button>
                   </>
@@ -230,7 +214,7 @@ function VersionsTab({ rubric, author, onChanged }: { rubric: GraderRubric; auth
                   </div>
                 ) : (
                   <p className="font-mono text-[13px] text-text-muted">
-                    {shown.id} · {shown.author} · {fmtDate(shown.createdAt)}
+                    {shown.id} · {fmtDate(shown.createdAt)}
                     {shown.parent && <> · {shown.parent} 바탕</>}
                     {shown.note && <span className="mt-1 block font-sans text-[14px] text-text">{shown.note}</span>}
                   </p>
@@ -320,7 +304,7 @@ function PromptField({ label, value, base, editing, rows, onChange }: { label: s
 
 // ══ 2. 실험 채점 ══════════════════════
 
-function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubric; author: string; versionsKey: number; onStarted: (runId: string) => void }) {
+function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; versionsKey: number; onStarted: (runId: string) => void }) {
   const [attempts, setAttempts] = useState<GraderAttempt[] | null>(null)
   const [versions, setVersions] = useState<PromptVersionRow[]>([])
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -383,7 +367,7 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
     setBusy(true)
     setErr(null)
     try {
-      const run = await grader.start({ ...req, author })
+      const run = await grader.start(req)
       onStarted(run.id)
     } catch (e) {
       setErr((e as ApiError).message)
@@ -539,7 +523,7 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
               <select className={inputCls} value={versionId} onChange={(e) => setVersionId(e.target.value)}>
                 {versions.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.name} ({v.author}){v.active ? ' · 실제 채점' : ''}
+                    {v.name}{v.active ? ' · 실제 채점' : ''}
                   </option>
                 ))}
               </select>
@@ -580,10 +564,9 @@ function RunTab({ rubric, author, versionsKey, onStarted }: { rubric: GraderRubr
               </>
             )}
             {err && <p className="mt-3 text-[14px] text-alert">{err}</p>}
-            <Button variant="primary" className="mt-4 w-full" disabled={!refs.length || !versionId || busy || !author.trim()} onClick={() => void start()}>
+            <Button variant="primary" className="mt-4 w-full" disabled={!refs.length || !versionId || busy} onClick={() => void start()}>
               {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Play size={16} aria-hidden />} 채점 시작
             </Button>
-            {!author.trim() && <p className="mt-2 text-[13px] text-caution">오른쪽 위에 작성자 이름을 먼저 입력하세요.</p>}
           </div>
         </Box>
       </div>
@@ -818,7 +801,6 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
         <span className="tnum font-mono text-text-muted">
           비용 {usd(m.actualUsd)} <span className="text-text-faint">(예상 {usd(m.estimateUsd)})</span>
         </span>
-        {m.author && <span className="text-text-faint">실행: {m.author}</span>}
       </div>
       {m.mode === 'batch' && m.phase && <BatchPhase phase={m.phase} running={m.status === 'RUNNING'} />}
       {m.status === 'RUNNING' && (
@@ -1071,7 +1053,6 @@ export default function Grader() {
   const [tab, setTab] = useState<Tab>('versions')
   const [rubric, setRubric] = useState<GraderRubric | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [author, setAuthor] = useState(loadAuthor)
   const [versionsKey, setVersionsKey] = useState(0)
   const [runId, setRunId] = useState<string | null>(null)
 
@@ -1084,21 +1065,6 @@ export default function Grader() {
       <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-panel px-8">
         <Logo />
         <span className="text-[16px] font-semibold">채점 툴</span>
-        <div className="ml-auto flex items-center gap-3">
-          <label className="flex items-center gap-2 text-[14px] text-text-muted">
-            작성자
-            <input
-              className={cx(inputCls, 'h-8 w-32')}
-              value={author}
-              maxLength={20}
-              placeholder="이름"
-              onChange={(e) => {
-                setAuthor(e.target.value)
-                saveAuthor(e.target.value)
-              }}
-            />
-          </label>
-        </div>
       </header>
       <div className="flex shrink-0 items-end border-b border-line px-8">
         <Tabs
@@ -1115,11 +1081,10 @@ export default function Grader() {
         <div className="mx-auto max-w-[1440px] px-8 py-6">
           {err && <p className="text-[15px] text-alert">{err}</p>}
           {!rubric && !err && <Loading />}
-          {rubric && tab === 'versions' && <VersionsTab rubric={rubric} author={author} onChanged={() => setVersionsKey((k) => k + 1)} />}
+          {rubric && tab === 'versions' && <VersionsTab rubric={rubric} onChanged={() => setVersionsKey((k) => k + 1)} />}
           {rubric && tab === 'run' && (
             <RunTab
               rubric={rubric}
-              author={author}
               versionsKey={versionsKey}
               onStarted={(id) => {
                 setRunId(id)

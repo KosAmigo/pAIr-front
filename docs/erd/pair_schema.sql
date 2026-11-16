@@ -324,17 +324,15 @@ CREATE TABLE prompt_versions (
     version_id         BIGSERIAL    PRIMARY KEY,
     name               VARCHAR(100) NOT NULL,
     note               VARCHAR(500),
-    author_id          BIGINT       NOT NULL REFERENCES users (user_id),
     parent_version_id  BIGINT       REFERENCES prompt_versions (version_id),
     judge_system       TEXT         NOT NULL,
     is_active          BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE  prompt_versions IS '채점 프롬프트 버전';
+COMMENT ON TABLE  prompt_versions IS '채점 프롬프트 버전(팀 공용, 작성자 구분 없음)';
 COMMENT ON COLUMN prompt_versions.version_id IS '버전 ID';
 COMMENT ON COLUMN prompt_versions.name IS '버전 이름';
 COMMENT ON COLUMN prompt_versions.note IS '메모';
-COMMENT ON COLUMN prompt_versions.author_id IS '작성자 ID';
 COMMENT ON COLUMN prompt_versions.parent_version_id IS '바탕 버전 ID';
 COMMENT ON COLUMN prompt_versions.judge_system IS '공통 채점 규칙';
 COMMENT ON COLUMN prompt_versions.is_active IS '실제 채점 사용 여부';
