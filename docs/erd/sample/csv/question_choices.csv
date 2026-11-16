@@ -1,0 +1,5 @@
+choice_id,question_id,seq,content,is_correct
+1,7,1,"약 21,080명",false
+2,7,2,"약 11,590명",true
+3,7,3,"약 7,030명",false
+4,7,4,"약 3,400명",false

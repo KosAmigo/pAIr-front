@@ -1,0 +1,76 @@
+event_id,attempt_id,type,payload,created_at
+1,1,START,"{""taskId"": ""order-deadlock""}",2026-11-11T09:41:09.914856500Z
+2,1,CHAT,"{""inputTokens"": 538, ""outputTokens"": 212, ""turn"": 2}",2026-11-11T09:41:14.302573100Z
+3,1,CHAT,"{""inputTokens"": 854, ""outputTokens"": 103, ""turn"": 4}",2026-11-11T09:41:16.641097600Z
+4,1,CHAT,"{""inputTokens"": 1005, ""outputTokens"": 78, ""turn"": 6}",2026-11-11T09:41:18.824119800Z
+5,1,CHAT,"{""inputTokens"": 1135, ""outputTokens"": 255, ""turn"": 8}",2026-11-11T09:41:21.914550500Z
+6,1,SAVE,"{""length"": 1436, ""path"": ""src/shop/OrderService.java""}",2026-11-11T09:41:21.955912400Z
+7,1,RUN,"{""compiled"": true, ""failed"": 0, ""millis"": 1012, ""passed"": 1}",2026-11-11T09:41:23.026886900Z
+8,1,FIRST_VALID,,2026-11-11T09:41:23.044137Z
+9,1,CHAT,"{""inputTokens"": 1458, ""outputTokens"": 323, ""turn"": 10}",2026-11-11T09:41:27.465096100Z
+10,1,SAVE,"{""length"": 2211, ""path"": ""test/shop/OrderServiceTest.java""}",2026-11-11T09:41:27.508613Z
+11,1,RUN,"{""compiled"": true, ""failed"": 0, ""millis"": 1259, ""passed"": 3}",2026-11-11T09:41:28.812426800Z
+12,1,SAVE,"{""length"": 309, ""path"": ""NOTES.md""}",2026-11-11T09:41:28.852461700Z
+13,1,SUBMIT,,2026-11-11T09:41:28.877857700Z
+14,1,FOLLOWUPS,"{""count"": 3}",2026-11-11T09:41:28.909753600Z
+15,2,START,"{""taskId"": ""order-deadlock""}",2026-11-11T09:42:16.246753100Z
+16,2,CHAT,"{""inputTokens"": 507, ""outputTokens"": 138, ""turn"": 2}",2026-11-11T09:42:18.986602600Z
+17,2,CHAT,"{""inputTokens"": 805, ""outputTokens"": 110, ""turn"": 4}",2026-11-11T09:42:20.955606600Z
+18,2,CHAT,"{""inputTokens"": 943, ""outputTokens"": 59, ""turn"": 6}",2026-11-11T09:42:23.507383400Z
+19,2,CHAT,"{""inputTokens"": 1035, ""outputTokens"": 744, ""turn"": 8}",2026-11-11T09:42:31.961222800Z
+20,2,AI_EDIT,"{""action"": ""reject"", ""index"": 0, ""path"": ""src/shop/OrderService.java"", ""turn"": 8}",2026-11-11T09:42:31.999486900Z
+21,2,SAVE,"{""length"": 1436, ""path"": ""src/shop/OrderService.java""}",2026-11-11T09:42:32.030589700Z
+22,2,RUN,"{""compiled"": true, ""failed"": 0, ""millis"": 995, ""passed"": 1}",2026-11-11T09:42:33.072961500Z
+23,2,FIRST_VALID,,2026-11-11T09:42:33.085681800Z
+24,2,CHAT,"{""inputTokens"": 1486, ""outputTokens"": 678, ""turn"": 10}",2026-11-11T09:42:41.047930800Z
+25,2,SAVE,"{""length"": 2211, ""path"": ""test/shop/OrderServiceTest.java""}",2026-11-11T09:42:41.102008500Z
+26,2,RUN,"{""compiled"": true, ""failed"": 0, ""millis"": 1146, ""passed"": 3}",2026-11-11T09:42:42.293821800Z
+27,2,SAVE,"{""length"": 309, ""path"": ""NOTES.md""}",2026-11-11T09:42:42.333846700Z
+28,2,SUBMIT,,2026-11-11T09:42:42.360379Z
+29,2,FOLLOWUPS,"{""count"": 3}",2026-11-11T09:42:42.390051600Z
+30,3,START,"{""taskId"": ""order-deadlock""}",2026-11-11T09:41:28.967630700Z
+31,3,CHAT,"{""inputTokens"": 538, ""outputTokens"": 225, ""turn"": 2}",2026-11-11T09:41:33.010253700Z
+32,3,CHAT,"{""inputTokens"": 829, ""outputTokens"": 102, ""turn"": 4}",2026-11-11T09:41:35.510908200Z
+33,3,CHAT,"{""inputTokens"": 979, ""outputTokens"": 77, ""turn"": 6}",2026-11-11T09:41:37.092466Z
+34,3,CHAT,"{""inputTokens"": 1108, ""outputTokens"": 677, ""turn"": 8}",2026-11-11T09:41:45.443774400Z
+35,3,SAVE,"{""length"": 1436, ""path"": ""src/shop/OrderService.java""}",2026-11-11T09:41:45.475742700Z
+36,3,RUN,"{""compiled"": true, ""failed"": 0, ""millis"": 1028, ""passed"": 1}",2026-11-11T09:41:46.559517800Z
+37,3,FIRST_VALID,,2026-11-11T09:41:46.574004700Z
+38,3,CHAT,"{""inputTokens"": 1429, ""outputTokens"": 743, ""turn"": 10}",2026-11-11T09:41:55.466337900Z
+39,3,SAVE,"{""length"": 2211, ""path"": ""test/shop/OrderServiceTest.java""}",2026-11-11T09:41:55.509342100Z
+40,3,RUN,"{""compiled"": true, ""failed"": 0, ""millis"": 1336, ""passed"": 3}",2026-11-11T09:41:56.894185700Z
+41,3,SAVE,"{""length"": 309, ""path"": ""NOTES.md""}",2026-11-11T09:41:56.928301500Z
+42,3,SUBMIT,,2026-11-11T09:41:56.961418600Z
+43,3,FOLLOWUPS,"{""count"": 3}",2026-11-11T09:41:56.992998900Z
+44,4,START,"{""taskId"": ""order-deadlock""}",2026-11-11T09:42:08.921963500Z
+45,4,CHAT,"{""inputTokens"": 350, ""outputTokens"": 209, ""turn"": 2}",2026-11-11T09:42:12.089317200Z
+46,4,CHAT,"{""inputTokens"": 528, ""outputTokens"": 61, ""turn"": 4}",2026-11-11T09:42:13.782022Z
+47,4,SAVE,"{""length"": 1013, ""path"": ""src/shop/OrderService.java""}",2026-11-11T09:42:13.860681100Z
+48,4,SAVE,"{""length"": 1415, ""path"": ""src/shop/InventoryService.java""}",2026-11-11T09:42:13.930916300Z
+49,4,RUN,"{""compiled"": true, ""failed"": 0, ""millis"": 929, ""passed"": 1}",2026-11-11T09:42:14.900449500Z
+50,4,FIRST_VALID,,2026-11-11T09:42:14.912459600Z
+51,4,SAVE,"{""length"": 1213, ""path"": ""test/shop/OrderServiceTest.java""}",2026-11-11T09:42:14.940509200Z
+52,4,RUN,"{""compiled"": true, ""failed"": 0, ""millis"": 1095, ""passed"": 2}",2026-11-11T09:42:16.094101300Z
+53,4,SAVE,"{""length"": 139, ""path"": ""NOTES.md""}",2026-11-11T09:42:16.127273200Z
+54,4,SUBMIT,,2026-11-11T09:42:16.159215200Z
+55,4,FOLLOWUPS,"{""count"": 3}",2026-11-11T09:42:16.187516600Z
+56,5,START,"{""taskId"": ""order-deadlock""}",2026-11-11T09:41:57.059339900Z
+57,5,CHAT,"{""inputTokens"": 458, ""outputTokens"": 872, ""turn"": 2}",2026-11-11T09:42:07.194756200Z
+58,5,CHAT,"{""inputTokens"": 963, ""outputTokens"": 67, ""turn"": 4}",2026-11-11T09:42:08.786681Z
+59,5,SUBMIT,,2026-11-11T09:42:08.825590400Z
+60,5,FOLLOWUPS,"{""count"": 3}",2026-11-11T09:42:08.858961700Z
+61,6,START,"{""taskId"": ""pricing-plan""}",2026-11-11T09:42:42.437621600Z
+62,6,CHAT,"{""inputTokens"": 547, ""outputTokens"": 1642, ""turn"": 2}",2026-11-11T09:42:57.479767100Z
+63,6,CHAT,"{""inputTokens"": 1577, ""outputTokens"": 643, ""turn"": 4}",2026-11-11T09:43:03.714466600Z
+64,6,CHAT,"{""inputTokens"": 2069, ""outputTokens"": 502, ""turn"": 6}",2026-11-11T09:43:09.110658400Z
+65,6,CHAT,"{""inputTokens"": 2411, ""outputTokens"": 112, ""turn"": 8}",2026-11-11T09:43:10.908881Z
+66,6,SAVE,"{""length"": 784, ""path"": ""기획안.md""}",2026-11-11T09:43:10.941118800Z
+67,6,FIRST_VALID,,2026-11-11T09:43:10.944133Z
+68,6,SUBMIT,,2026-11-11T09:43:10.971653400Z
+69,6,FOLLOWUPS,"{""count"": 3}",2026-11-11T09:43:11.003236300Z
+70,7,START,"{""taskId"": ""pricing-plan""}",2026-11-11T09:43:11.044001700Z
+71,7,CHAT,"{""inputTokens"": 328, ""outputTokens"": 591, ""turn"": 2}",2026-11-11T09:43:17.969917600Z
+72,7,SAVE,"{""length"": 775, ""path"": ""기획안.md""}",2026-11-11T09:43:18.040151300Z
+73,7,FIRST_VALID,,2026-11-11T09:43:18.042083500Z
+74,7,SUBMIT,,2026-11-11T09:43:18.068840Z
+75,7,FOLLOWUPS,"{""count"": 3}",2026-11-11T09:43:18.103144600Z

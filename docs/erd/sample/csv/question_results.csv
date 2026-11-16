@@ -1,0 +1,5 @@
+scoring_id,question_id,score,method,reason
+6,7,5,AUTO,정답
+6,8,3,AUTO,정답
+7,7,0,AUTO,오답
+7,8,0,AUTO,오답

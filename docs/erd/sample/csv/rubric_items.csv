@@ -1,0 +1,7 @@
+item_key,name,max_score,sort_order
+usage,AI 활용력,20,1
+control,AI 통제력,15,2
+decomposition,문제 분해력,10,3
+delegation,위임 판단력,10,4
+delivery,AI 결과 도출력,30,5
+potential,성과 잠재력,15,6

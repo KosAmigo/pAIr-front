@@ -1,0 +1,15 @@
+judge_call_id,scoring_id,model,input_tokens,output_tokens,cached_tokens
+1,1,claude-haiku-5-5,12836,2880,0
+2,1,gpt-6.1-terra,7296,1616,7293
+3,2,claude-haiku-5-5,12468,3571,0
+4,2,gpt-6.1-terra,7128,1163,3160
+5,3,claude-haiku-5-5,12394,3528,5852
+6,3,gpt-6.1-terra,7056,1162,3160
+7,4,claude-haiku-5-5,9653,5067,5852
+8,4,gpt-6.1-terra,5401,1347,3160
+9,5,claude-haiku-5-5,9765,3714,5852
+10,5,gpt-6.1-terra,5448,2403,3160
+11,6,claude-haiku-5-5,12323,4720,0
+12,6,gpt-6.1-terra,7626,1417,0
+13,7,claude-haiku-5-5,9401,3978,6027
+14,7,gpt-6.1-terra,5567,2037,3333

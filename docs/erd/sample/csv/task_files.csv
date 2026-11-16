@@ -1,0 +1,421 @@
+task_file_id,task_id,path,content,storage_key,mime_type,size_bytes,visibility,read_only
+1,1,NOTES.md,"# 원인
+
+# 판단 근거
+",,text/markdown,26,VISIBLE,false
+2,1,logs/app.log,"2026-11-10 21:02:09.114 INFO  [order-7]  POST /orders user=4812 items=[10:1, 22:2]
+2026-11-10 21:02:09.131 INFO  [order-9]  POST /orders user=5120 items=[22:1, 10:1]
+2026-11-10 21:02:12.140 ERROR [order-9]  POST /orders 500 shop.LockTimeoutException: Lock wait timeout exceeded (stock.product_id=10)
+2026-11-10 21:02:12.141 ERROR [order-7]  POST /orders 500 shop.LockTimeoutException: Lock wait timeout exceeded (stock.product_id=22)
+2026-11-10 21:02:15.402 INFO  [order-3]  POST /orders user=771 items=[31:1]
+2026-11-10 21:02:15.459 INFO  [order-3]  POST /orders 200 (57ms)
+2026-11-10 21:03:40.010 INFO  [order-2]  POST /orders user=903 items=[10:2, 31:1, 22:1]
+2026-11-10 21:03:40.022 INFO  [order-5]  POST /orders user=1288 items=[31:1, 10:1]
+2026-11-10 21:03:43.031 ERROR [order-5]  POST /orders 500 shop.LockTimeoutException: Lock wait timeout exceeded (stock.product_id=10)
+2026-11-10 21:03:43.188 INFO  [order-2]  POST /orders 200 (3178ms)
+2026-11-10 21:05:02.500 WARN  [batch]    stock check: product_id=22 expected=118 actual=116 (diff -2)
+2026-11-10 21:05:02.501 WARN  [batch]    stock check: product_id=10 expected=240 actual=239 (diff -1)
+",,text/plain,1151,VISIBLE,true
+3,1,src/shop/Db.java,"package shop;
+
+/** 실제 DB 왕복 시간을 흉내 낸다. 수정 대상이 아니다. */
+final class Db {
+
+    private Db() {
+    }
+
+    static void simulateLatency() throws InterruptedException {
+        Thread.sleep(50);
+    }
+}
+",,text/x-java,234,VISIBLE,false
+4,1,src/shop/InventoryService.java,"package shop;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+
+public class InventoryService {
+
+    /** 잠금을 기다리는 최대 시간. 운영 DB의 lock wait timeout 과 같은 값이다. */
+    static final long LOCK_TIMEOUT_MS = 3000;
+
+    private final Map<Long, Stock> stocks = new ConcurrentHashMap<>();
+
+    public void register(long productId, int count) {
+        stocks.put(productId, new Stock(productId, count));
+    }
+
+    public int countOf(long productId) {
+        return stock(productId).count();
+    }
+
+    /** 재고 행을 잠근다. LOCK_TIMEOUT_MS 안에 잠그지 못하면 LockTimeoutException. */
+    public void lock(long productId) throws InterruptedException {
+        Stock stock = stock(productId);
+        if (!stock.lock().tryLock(LOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            throw new LockTimeoutException(productId);
+        }
+    }
+
+    public void unlock(long productId) {
+        stock(productId).lock().unlock();
+    }
+
+    public void decrease(long productId, int quantity) {
+        stock(productId).decrease(quantity);
+    }
+
+    public void increase(long productId, int quantity) {
+        stock(productId).increase(quantity);
+    }
+
+    private Stock stock(long productId) {
+        Stock stock = stocks.get(productId);
+        if (stock == null) {
+            throw new IllegalArgumentException(""등록되지 않은 상품: "" + productId);
+        }
+        return stock;
+    }
+}
+",,text/x-java,1500,VISIBLE,false
+5,1,src/shop/LockTimeoutException.java,"package shop;
+
+public class LockTimeoutException extends RuntimeException {
+
+    public LockTimeoutException(long productId) {
+        super(""Lock wait timeout exceeded (stock.product_id="" + productId + "")"");
+    }
+}
+",,text/x-java,217,VISIBLE,false
+6,1,src/shop/Order.java,"package shop;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class Order {
+
+    private final long userId;
+    private final List<OrderItem> items = new ArrayList<>();
+
+    public Order(long userId) {
+        this.userId = userId;
+    }
+
+    void add(OrderItem item) {
+        items.add(item);
+    }
+
+    public long userId() {
+        return userId;
+    }
+
+    public List<OrderItem> items() {
+        return Collections.unmodifiableList(items);
+    }
+
+    public int totalQuantity() {
+        return items.stream().mapToInt(OrderItem::quantity).sum();
+    }
+}
+",,text/x-java,605,VISIBLE,false
+7,1,src/shop/OrderItem.java,"package shop;
+
+public record OrderItem(long productId, int quantity) {
+}
+",,text/x-java,73,VISIBLE,false
+8,1,src/shop/OrderService.java,"package shop;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class OrderService {
+
+    private final InventoryService inventory;
+
+    public OrderService(InventoryService inventory) {
+        this.inventory = inventory;
+    }
+
+    /**
+     * 주문을 만든다. 상품마다 재고를 잠그고 차감한 뒤, 끝나면 잠금을 푼다.
+     */
+    public Order createOrder(long userId, List<OrderItem> items) throws InterruptedException {
+        Order order = new Order(userId);
+        List<Long> locked = new ArrayList<>();
+        try {
+            for (OrderItem item : items) {
+                // 상품마다 재고를 잠그고 차감한다
+                inventory.lock(item.productId());
+                locked.add(item.productId());
+                Db.simulateLatency();
+                inventory.decrease(item.productId(), item.quantity());
+                order.add(item);
+            }
+            return order;
+        } finally {
+            for (Long productId : locked) {
+                inventory.unlock(productId);
+            }
+        }
+    }
+}
+",,text/x-java,1084,VISIBLE,false
+9,1,src/shop/OutOfStockException.java,"package shop;
+
+public class OutOfStockException extends RuntimeException {
+
+    public OutOfStockException(long productId, int count, int requested) {
+        super(""재고 부족: product="" + productId + "", 남은 수량="" + count + "", 요청="" + requested);
+    }
+}
+",,text/x-java,268,VISIBLE,false
+10,1,src/shop/Stock.java,"package shop;
+
+import java.util.concurrent.locks.ReentrantLock;
+
+public class Stock {
+
+    private final long productId;
+    private final ReentrantLock lock = new ReentrantLock();
+    private int count;
+
+    public Stock(long productId, int count) {
+        this.productId = productId;
+        this.count = count;
+    }
+
+    public long productId() {
+        return productId;
+    }
+
+    public int count() {
+        return count;
+    }
+
+    ReentrantLock lock() {
+        return lock;
+    }
+
+    void decrease(int quantity) {
+        if (count < quantity) {
+            throw new OutOfStockException(productId, count, quantity);
+        }
+        count -= quantity;
+    }
+
+    void increase(int quantity) {
+        count += quantity;
+    }
+}
+",,text/x-java,744,VISIBLE,false
+11,1,test/shop/OrderServiceTest.java,"package shop;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+class OrderServiceTest {
+
+    @Test
+    void createOrder_singleItem() throws Exception {
+        InventoryService inventory = new InventoryService();
+        inventory.register(10L, 5);
+        OrderService orderService = new OrderService(inventory);
+
+        Order order = orderService.createOrder(1L, List.of(new OrderItem(10L, 1)));
+
+        assertEquals(1, order.totalQuantity());
+        assertEquals(4, inventory.countOf(10L));
+    }
+}
+",,text/x-java,579,VISIBLE,false
+12,1,answer.md,"# 개발 과제 정답 설명 (응시자에게 보이지 않음, 채점 모델 참고용)
+
+## 핵심 원인 1: 잠금 순서 불일치로 인한 교착 (가장 중요)
+- `OrderService.createOrder`가 주문 항목 순서대로 상품 잠금을 잡는다.
+- 주문 A는 상품 10 → 22, 주문 B는 22 → 10 순서로 잠그면, 서로 상대가 가진 잠금을 기다리다 둘 다 3초 뒤 `LockTimeoutException`으로 실패한다.
+- 로그 근거: 21:02:09에 `items=[10:1, 22:2]`와 `items=[22:1, 10:1]` 주문이 거의 동시에 들어오고, 3초 뒤 두 주문이 각각 10, 22에서 타임아웃.
+- 해결: 상품 ID 정렬 등으로 모든 주문이 같은 순서로 잠근다. 타임아웃을 늘리거나 풀을 키우는 것은 증상 완화일 뿐이다.
+
+## 핵심 원인 2: 실패 시 재고를 되돌리지 않음
+- 잠금을 하나 잡고 바로 차감하므로, 뒤 상품에서 실패하면 앞 상품 재고만 줄어든 채 주문이 실패한다.
+- 로그 근거: `stock check: product_id=22 expected=118 actual=116`, `product_id=10 expected=240 actual=239`.
+- 해결: 모든 잠금을 먼저 얻은 뒤 차감하거나, 실패 시 차감한 재고를 원복한다.
+
+## 원인 설명 판정 기준 (D4)
+- 원인 1(잠금 순서 불일치, 교착, 역순 주문)을 설명했으면 핵심 원인을 맞힌 것으로 본다.
+- 원인 2만 설명하거나 ""타임아웃이 짧아서"", ""예외 처리가 없어서""처럼 증상만 설명하면 핵심 원인을 놓친 것이다.
+",,text/markdown,1501,HIDDEN,true
+13,1,shop/HiddenOrderTest.java,"package shop;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import org.junit.jupiter.api.Test;
+
+/** 채점용 숨은 테스트. 응시자에게 보이지 않는다. */
+class HiddenOrderTest {
+
+    /** 필수 1: 상품 순서가 반대인 주문이 동시에 와도 교착 없이 모두 끝난다. */
+    @Test
+    void required_reverseOrderConcurrent_noDeadlock() {
+        assertTimeoutPreemptively(Duration.ofSeconds(15), () -> {
+            InventoryService inventory = new InventoryService();
+            inventory.register(10L, 1000);
+            inventory.register(22L, 1000);
+            OrderService service = new OrderService(inventory);
+            ExecutorService pool = Executors.newFixedThreadPool(2);
+            try {
+                int rounds = 10;
+                for (int i = 0; i < rounds; i++) {
+                    CountDownLatch start = new CountDownLatch(1);
+                    Future<Order> a = pool.submit(() -> {
+                        start.await();
+                        return service.createOrder(1L, List.of(new OrderItem(10L, 1), new OrderItem(22L, 1)));
+                    });
+                    Future<Order> b = pool.submit(() -> {
+                        start.await();
+                        return service.createOrder(2L, List.of(new OrderItem(22L, 1), new OrderItem(10L, 1)));
+                    });
+                    start.countDown();
+                    a.get();
+                    b.get();
+                }
+                assertEquals(1000 - rounds * 2, inventory.countOf(10L));
+                assertEquals(1000 - rounds * 2, inventory.countOf(22L));
+            } finally {
+                pool.shutdownNow();
+            }
+        });
+    }
+
+    /** 필수 2: 한 주문에 같은 상품이 두 번 들어와도 수량만큼 정확히 차감된다. */
+    @Test
+    void required_duplicateItems_decreaseTotal() {
+        assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+            InventoryService inventory = new InventoryService();
+            inventory.register(10L, 5);
+            OrderService service = new OrderService(inventory);
+
+            Order order = service.createOrder(1L, List.of(new OrderItem(10L, 1), new OrderItem(10L, 2)));
+
+            assertEquals(3, order.totalQuantity());
+            assertEquals(2, inventory.countOf(10L));
+        });
+    }
+
+    /** 필수 3: 재고가 부족해 주문이 실패하면 다른 상품 재고도 원래대로 돌아온다. */
+    @Test
+    void required_outOfStock_rollsBackOtherItems() {
+        assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+            InventoryService inventory = new InventoryService();
+            inventory.register(10L, 5);
+            inventory.register(22L, 1);
+            OrderService service = new OrderService(inventory);
+
+            assertThrows(OutOfStockException.class,
+                    () -> service.createOrder(1L, List.of(new OrderItem(10L, 2), new OrderItem(22L, 3))));
+
+            assertEquals(5, inventory.countOf(10L));
+            assertEquals(1, inventory.countOf(22L));
+        });
+    }
+
+    /** 필수 4: 실패한 주문 뒤에도 잠금이 남지 않아 다음 주문이 바로 처리된다. */
+    @Test
+    void required_locksReleasedAfterFailure() {
+        assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+            InventoryService inventory = new InventoryService();
+            inventory.register(10L, 5);
+            inventory.register(22L, 0);
+            OrderService service = new OrderService(inventory);
+
+            assertThrows(OutOfStockException.class,
+                    () -> service.createOrder(1L, List.of(new OrderItem(10L, 1), new OrderItem(22L, 1))));
+
+            long started = System.nanoTime();
+            ExecutorService pool = Executors.newSingleThreadExecutor();
+            try {
+                Order next = pool.submit(() -> service.createOrder(2L, List.of(new OrderItem(10L, 1)))).get();
+                assertEquals(1, next.totalQuantity());
+            } finally {
+                pool.shutdownNow();
+            }
+            assertTrue(Duration.ofNanos(System.nanoTime() - started).toMillis() < 2000, ""다음 주문이 잠금 때문에 지연됨"");
+        });
+    }
+
+    /** 선택: 여러 스레드가 겹치는 상품을 섞어 주문해도 총 재고가 맞다. */
+    @Test
+    void optional_manyThreads_stockConsistent() {
+        assertTimeoutPreemptively(Duration.ofSeconds(20), () -> {
+            InventoryService inventory = new InventoryService();
+            long[] ids = {10L, 22L, 31L};
+            for (long id : ids) inventory.register(id, 10_000);
+            OrderService service = new OrderService(inventory);
+            ExecutorService pool = Executors.newFixedThreadPool(4);
+            try {
+                List<Future<Order>> futures = new ArrayList<>();
+                for (int i = 0; i < 24; i++) {
+                    long a = ids[i % 3];
+                    long b = ids[(i + 1) % 3];
+                    long c = ids[(i + 2) % 3];
+                    long user = i;
+                    futures.add(pool.submit(() -> service.createOrder(user,
+                            List.of(new OrderItem(a, 1), new OrderItem(b, 1), new OrderItem(c, 1)))));
+                }
+                for (Future<Order> f : futures) f.get();
+                for (long id : ids) assertEquals(10_000 - 24, inventory.countOf(id));
+            } finally {
+                pool.shutdownNow();
+            }
+        });
+    }
+}
+",,text/x-java,5931,HIDDEN,true
+14,2,기획안.md,"# 저가 요금제(라이트) 출시 기획안
+
+## 결론
+
+## 근거
+
+## 예상 효과
+
+## 리스크와 대응
+",,text/markdown,111,VISIBLE,false
+15,2,자료/요금제별_매출.pdf,,tasks/pricing-plan/자료/요금제별_매출.pdf,application/pdf,906,VISIBLE,true
+16,2,자료/이탈_설문_요약.pdf,,tasks/pricing-plan/자료/이탈_설문_요약.pdf,application/pdf,1394,VISIBLE,true
+17,2,checklist.md,"# 비개발 과제 채점 체크리스트 (응시자에게 보이지 않음)
+
+## 필수 항목 (D1)
+1. 결론: 출시 찬성, 반대, 조건부 중 하나를 분명하게 밝혔다.
+2. 근거 3개: 근거가 3개 이상이고, 각 근거가 제공 자료(설문 요약, 매출 CSV)의 수치를 인용한다.
+3. 잠식 효과: 기존 베이직, 스탠다드 이용자가 라이트로 옮겨 가는 매출 감소(카니발라이제이션)를 다룬다.
+   - 참고 계산: 10월 기준 베이직 62,000명 × 34% × (9,900 - 5,900) ≈ 월 8,430만 원 감소 가능,
+     이탈 방지 효과는 월 이탈 약 6,810명 × 38% × 41% ≈ 1,060명 × 5,900원 ≈ 월 630만 원.
+   - 의향을 실제 전환율(50~60%)로 보정했는지는 가점 요소.
+4. 리스크와 대응: 리스크를 1개 이상 들고 대응 방안을 제시한다.
+5. 수치 정확성: 문서의 수치가 자료와 일치한다. 자료에 없는 수치(시장 규모, 경쟁사 가격 등)를 근거 없이 쓰지 않았다.
+
+## 좋은 답의 예
+- 라이트를 그대로 출시하면 잠식 손실이 이탈 방지 효과보다 10배 이상 커서 매출이 줄어든다.
+- 그래서 반대하거나, 기능 제한(광고 포함, 화질 제한, 신규 가입자 전용 등)으로 잠식을 줄이는 조건부 출시를 제안한다.
+
+## 흔한 함정
+- AI가 만든 그럴듯한 수치(예: ""업계 평균 이탈률 3%"", ""라이트 도입 시 이탈률 30% 감소"")를 그대로 쓴다.
+- 이탈 고객 설문만 보고 찬성 결론을 낸다(현재 이용자 설문의 잠식 신호를 놓친다).
+",,text/markdown,1581,HIDDEN,true
