@@ -1,0 +1,37 @@
+{
+  "round" : 1,
+  "units" : [ {
+    "source" : "sample",
+    "id" : "att-261111-1841-avn",
+    "n" : 1
+  }, {
+    "source" : "sample",
+    "id" : "att-261111-1842-2q",
+    "n" : 1
+  } ],
+  "batches" : { },
+  "known" : {
+    "u0-openai-1" : {
+      "ok" : true,
+      "text" : "{\"verdicts\":[{\"code\":\"U1\",\"count\":0,\"evidence\":[],\"reason\":\"첫 질문에서 주문 장애의 근본 원인을 찾는 목표를 밝혔습니다.\",\"violated\":false},{\"code\":\"U2\",\"count\":0,\"evidence\":[\"#T09\",\"#T10\"],\"reason\":\"테스트 요청에 OrderService 생성자 정보를 제공하지 않아 AI가 생성자 사용법을 추정했습니다.\",\"violated\":true},{\"code\":\"U3\",\"count\":0,\"evidence\":[],\"reason\":\"질문마다 답변의 범위나 형식을 지정했습니다.\",\"violated\":false},{\"code\":\"U5\",\"count\":0,\"evidence\":[],\"reason\":\"같은 질문을 반복하지 않고 분석과 수정, 테스트로 진행했습니다.\",\"violated\":false},{\"code\":\"U6\",\"count\":0,\"evidence\":[],\"reason\":\"앞선 원인 후보를 코드와 대조하고 타임아웃 대안도 확인했습니다.\",\"violated\":false},{\"code\":\"U7\",\"count\":0,\"evidence\":[],\"reason\":\"핵심 수정 지시에 정렬 잠금과 재고 원복을 구체적으로 명시했습니다.\",\"violated\":false},{\"code\":\"C1\",\"count\":0,\"evidence\":[],\"reason\":\"코드와 테스트를 저장한 뒤 테스트를 실행해 통과를 확인했습니다.\",\"violated\":false},{\"code\":\"C2\",\"count\":0,\"evidence\":[],\"reason\":\"AI의 오답이나 근거 없는 수치가 최종 파일에 남은 흔적은 없습니다.\",\"violated\":false},{\"code\":\"C3\",\"count\":0,\"evidence\":[],\"reason\":\"타임아웃 연장 방안을 따져 보고 채택하지 않았습니다.\",\"violated\":false},{\"code\":\"C4\",\"count\":0,\"evidence\":[],\"reason\":\"잠금 순서 문제와 타임아웃 연장에 대한 근거를 질문했습니다.\",\"violated\":false},{\"code\":\"K1\",\"count\":0,\"evidence\":[],\"reason\":\"원인 후보 확인, 코드 검토, 수정, 테스트를 나누어 진행했습니다.\",\"violated\":false},{\"code\":\"K2\",\"count\":0,\"evidence\":[],\"reason\":\"로그와 코드로 원인을 확인한 뒤 수정 방안을 요청했습니다.\",\"violated\":false},{\"code\":\"K3\",\"count\":0,\"evidence\":[],\"reason\":\"원인과 대안을 확인하는 지점에서 단계를 나누었습니다.\",\"violated\":false},{\"code\":\"J1\",\"count\":0,\"evidence\":[],\"reason\":\"타임아웃 대안을 따져 보고 로그와 코드를 근거로 원인과 수정 방향을 정했습니다.\",\"violated\":false},{\"code\":\"J2\",\"count\":0,\"evidence\":[],\"reason\":\"파일의 단순 사실을 반복해 묻지 않고 로그와 코드의 해석을 요청했습니다.\",\"violated\":false},{\"code\":\"J3\",\"count\":0,\"evidence\":[],\"reason\":\"반복 작업을 AI 도움 없이 오래 직접 편집한 흐름은 확인되지 않습니다.\",\"violated\":false},{\"code\":\"D4\",\"count\":0,\"evidence\":[],\"reason\":\"NOTES.md에 역순 잠금으로 인한 교착과 로그 근거를 설명했습니다.\",\"violated\":false},{\"code\":\"P1\",\"count\":0,\"evidence\":[],\"reason\":\"후속 답변에서 원인과 판단 근거, 진행 순서를 구체적으로 설명했습니다.\",\"violated\":false},{\"code\":\"P2\",\"count\":0,\"evidence\":[],\"reason\":\"스스로 검토한 타임아웃 연장 대안과 채택하지 않은 이유를 설명했습니다.\",\"violated\":false},{\"code\":\"P3\",\"count\":0,\"evidence\":[],\"reason\":\"테스트 실패 후 원인 확인 없이 반복 실행한 흐름은 없습니다.\",\"violated\":false},{\"code\":\"P4\",\"count\":0,\"evidence\":[],\"reason\":\"실제 DB의 행 잠금 순서를 추가로 확인해야 한다는 한계를 언급했습니다.\",\"violated\":false}]}",
+      "inputTokens" : 7293,
+      "outputTokens" : 1531,
+      "cachedInputTokens" : 0,
+      "finishReason" : "stop",
+      "error" : null
+    },
+    "u1-openai-1" : {
+      "ok" : true,
+      "text" : "{\"verdicts\":[{\"code\":\"U1\",\"count\":0,\"evidence\":[],\"reason\":\"첫 질문에서 주문 시 타임아웃 해결이라는 목표를 밝혔습니다.\",\"violated\":false},{\"code\":\"U2\",\"count\":0,\"evidence\":[\"#T01\",\"#T02\",\"#T03\"],\"reason\":\"코드와 로그를 제공하지 않고 해결책을 물어 AI가 제한된 정보로 답했습니다.\",\"violated\":true},{\"code\":\"U3\",\"count\":0,\"evidence\":[],\"reason\":\"타임아웃 수치와 수정 코드만이라는 답변 범위를 각각 지정했습니다.\",\"violated\":false},{\"code\":\"U5\",\"count\":0,\"evidence\":[],\"reason\":\"거의 같은 질문을 세 번 이상 반복하지 않았습니다.\",\"violated\":false},{\"code\":\"U6\",\"count\":0,\"evidence\":[],\"reason\":\"첫 답변에 이어 synchronized가 확실한 해결책인지 확인했습니다.\",\"violated\":false},{\"code\":\"U7\",\"count\":0,\"evidence\":[],\"reason\":\"핵심 질문에서 대상과 원하는 수정 내용을 알아볼 수 있습니다.\",\"violated\":false},{\"code\":\"C1\",\"count\":0,\"evidence\":[],\"reason\":\"코드 수정 후 테스트를 실행한 기록이 있습니다.\",\"violated\":false},{\"code\":\"C2\",\"count\":0,\"evidence\":[\"#T02\",\"src/shop/InventoryService.java\",\"NOTES.md\"],\"reason\":\"AI가 근거 없이 제시한 범위의 10초를 최종 코드와 판단 근거에 남겼습니다.\",\"violated\":true},{\"code\":\"C3\",\"count\":0,\"evidence\":[\"#T02\",\"#T04\",\"NOTES.md\",\"src/shop/OrderService.java\"],\"reason\":\"AI가 해결을 장담할 수 없다고 경고한 타임아웃 증가와 synchronized를 근본 해결책으로 채택했습니다.\",\"violated\":true},{\"code\":\"C4\",\"count\":0,\"evidence\":[],\"reason\":\"synchronized가 확실히 해결하는지 확인 질문을 했습니다.\",\"violated\":false},{\"code\":\"K1\",\"count\":0,\"evidence\":[\"#T01\",\"#T03\"],\"reason\":\"원인 분석과 수정 방향을 확인하는 단계 없이 해결 코드만 요청했습니다.\",\"violated\":true},{\"code\":\"K2\",\"count\":0,\"evidence\":[\"#T01\",\"#T03\"],\"reason\":\"코드와 로그로 원인을 확인하기 전에 타임아웃 증가와 synchronized 적용부터 요청했습니다.\",\"violated\":true},{\"code\":\"K3\",\"count\":0,\"evidence\":[],\"reason\":\"단순 작업을 불필요하게 여러 턴으로 쪼갠 흐름은 없습니다.\",\"violated\":false},{\"code\":\"J1\",\"count\":0,\"evidence\":[],\"reason\":\"AI가 근본 원인으로 제시하지 않은 타임아웃 부족을 응시자가 직접 결론으로 삼았습니다.\",\"violated\":false},{\"code\":\"J2\",\"count\":0,\"evidence\":[],\"reason\":\"파일에 그대로 있는 내용이나 단순 계산을 두 번 이상 묻지 않았습니다.\",\"violated\":false},{\"code\":\"J3\",\"count\":0,\"evidence\":[],\"reason\":\"반복 작업을 AI 도움 없이 오래 직접 편집한 근거가 없습니다.\",\"violated\":false},{\"code\":\"D4\",\"count\":0,\"evidence\":[\"NOTES.md\",\"Q1\"],\"reason\":\"잠금 순서 불일치로 인한 교착을 설명하지 않고 대기 시간이 짧다고 설명했습니다.\",\"violated\":true},{\"code\":\"P1\",\"count\":0,\"evidence\":[],\"reason\":\"후속 답변에서 판단 근거와 선택 이유를 함께 설명했습니다.\",\"violated\":false},{\"code\":\"P2\",\"count\":0,\"evidence\":[],\"reason\":\"채택하지 않은 원인 분석 권고와 시간이 부족했던 이유를 밝혔습니다.\",\"violated\":false},{\"code\":\"P3\",\"count\":0,\"evidence\":[],\"reason\":\"테스트 실패 후 원인 확인 없이 같은 시도를 반복한 기록이 없습니다.\",\"violated\":false},{\"code\":\"P4\",\"count\":0,\"evidence\":[\"NOTES.md\",\"Q1\",\"Q2\",\"Q3\"],\"reason\":\"결과의 한계나 남은 위험, 추가 확인 사항을 언급하지 않았습니다.\",\"violated\":true}]}",
+      "inputTokens" : 5398,
+      "outputTokens" : 1594,
+      "cachedInputTokens" : 3157,
+      "finishReason" : "stop",
+      "error" : null
+    }
+  },
+  "errors" : [ ],
+  "roundStartedAt" : "2026-11-16T03:12:39.681708900Z",
+  "waitMinutes" : 5,
+  "fallback" : true
+}

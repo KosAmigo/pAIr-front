@@ -40,7 +40,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 /**
  * 채점 툴의 실험 채점. 응시 여러 개를 골라 프롬프트 버전과 설정으로 N번씩 채점하고,
- * 결과는 응시자 리포트와 따로 pilot-data/grader/runs/{runId}/ 에 저장한다.
+ * 결과는 응시자 리포트와 따로 grader/runs/{runId}/ 에 저장한다. git 으로 팀원과 공유한다(2026-11-16).
  * 응시는 두 곳에서 고른다: 샘플(grader/samples, git 공유)과 내 응시(pilot-data/attempts).
  */
 @Service
@@ -84,7 +84,7 @@ public class GraderService {
         this.mine = mine;
         this.samplesDir = Path.of(props.grader().dir(), "samples").toAbsolutePath();
         this.samples = new AttemptStore(samplesDir, json);
-        this.runsDir = Path.of(props.dataDir(), "grader", "runs").toAbsolutePath();
+        this.runsDir = Path.of(props.grader().dir(), "runs").toAbsolutePath();
         this.props = props;
         this.json = json;
         this.pretty = json.copy().enable(SerializationFeature.INDENT_OUTPUT);

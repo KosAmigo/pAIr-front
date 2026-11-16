@@ -1,0 +1,15 @@
+{
+  "round" : 1,
+  "units" : [ {
+    "source" : "sample",
+    "id" : "att-261111-1842-l5r",
+    "n" : 1
+  } ],
+  "batches" : {
+    "openai:gpt-6-luna" : "batch_6af5256fced881908047d2e1826a1ab7",
+    "openai:gpt-6.1-terra" : "batch_6af5257159148190b74ca2c491e558f8",
+    "claude" : "msgbatch_013quwRv6Pb7eXywUf2cxM7U"
+  },
+  "known" : { },
+  "errors" : [ ]
+}
