@@ -9,6 +9,7 @@ import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
 import { splitReply } from '../lib/edits'
+import { useAntiCheating, ViolationCounter, WarningModal } from '../anti-cheating'
 
 // 실제 응시 화면: 백엔드 API 에 연결된 버전. 레이아웃은 DESIGN.md §7-3 응시 화면을 따른다.
 
@@ -524,6 +525,10 @@ export default function RealExam() {
   const [fuIndex, setFuIndex] = useState(0)
   const [fuAnswers, setFuAnswers] = useState<string[] | null>(null)
   const [refTab, setRefTab] = useState<'prompts' | 'file'>('prompts')
+  const antiCheating = useAntiCheating({
+    sessionId,
+    active: Boolean(view && (view.attempt.status === 'SOLVING' || view.attempt.status === 'FOLLOWUP')),
+  })
 
   // 처음 불러오기
   useEffect(() => {
@@ -738,6 +743,7 @@ export default function RealExam() {
     setActionError(null)
     try {
       await api.followUps(sessionId, answers)
+      await antiCheating.finish()
       navigate(`/report/${sessionId}`)
     } catch (e) {
       setActionError((e as ApiError).message)
@@ -763,6 +769,14 @@ export default function RealExam() {
           </span>
         </div>
         <div className="flex items-center justify-end gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void antiCheating.requestFullscreen().catch(() => setActionError('전체 화면으로 전환할 수 없습니다.'))}
+          >
+            전체 화면 시작
+          </Button>
+          <ViolationCounter count={antiCheating.count} />
           <span className="font-mono text-[12px] text-text-faint">{view.attempt.model}</span>
           {!locked && (
             <Button variant="primary" size="sm" onClick={() => setConfirm(true)}>
@@ -1055,6 +1069,7 @@ export default function RealExam() {
         )}
       </div>
 
+      <WarningModal violation={antiCheating.warning} count={antiCheating.count} onClose={antiCheating.dismissWarning} />
       {confirm && <ConfirmModal busy={busy} onCancel={() => setConfirm(false)} onConfirm={() => void doSubmit()} />}
       {viewing && viewingEdit && (
         <EditModal

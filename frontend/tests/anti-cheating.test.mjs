@@ -1,0 +1,167 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { BrowserEventDetector } from '../src/anti-cheating/core/BrowserEventDetector.ts'
+import { ViolationManager } from '../src/anti-cheating/core/ViolationManager.ts'
+import { DEFAULT_ANTI_CHEATING_CONFIG } from '../src/anti-cheating/core/types.ts'
+import { ViolationOutbox } from '../src/anti-cheating/storage/ViolationOutbox.ts'
+
+class FakeDocument extends EventTarget {
+  documentElement = new EventTarget()
+  visibilityState = 'visible'
+  fullscreenElement = null
+}
+class FakeWindow extends EventTarget {}
+
+function harness(config = DEFAULT_ANTI_CHEATING_CONFIG) {
+  const documentTarget = new FakeDocument()
+  const windowTarget = new FakeWindow()
+  let incidents = []
+  const manager = new ViolationManager('att-test', config, 0, (violation, isNew) => {
+    incidents = isNew
+      ? [...incidents, violation]
+      : incidents.map((item) => (item.violationId === violation.violationId ? violation : item))
+  })
+  const detector = new BrowserEventDetector(
+    (type) => manager.signal(type),
+    (reason) => manager.resume(reason),
+    config,
+    { documentTarget, windowTarget },
+  )
+  detector.start()
+  return { manager, detector, documentTarget, windowTarget, incidents: () => incidents }
+}
+
+test('movement inside the exam page creates no warning', () => {
+  const h = harness()
+  h.documentTarget.documentElement.dispatchEvent(new Event('pointermove'))
+  assert.equal(h.manager.count, 0)
+  assert.equal(h.incidents().length, 0)
+  h.detector.stop()
+})
+
+test('leaving the document emits MOUSE_LEAVE and return starts a new incident next time', () => {
+  const h = harness()
+  h.documentTarget.documentElement.dispatchEvent(new Event('mouseleave'))
+  assert.equal(h.manager.count, 1)
+  assert.equal(h.incidents()[0].signals[0].type, 'MOUSE_LEAVE')
+  h.documentTarget.documentElement.dispatchEvent(new Event('mouseenter'))
+  h.documentTarget.documentElement.dispatchEvent(new Event('mouseleave'))
+  assert.equal(h.manager.count, 2)
+  h.detector.stop()
+})
+
+test('tab hidden is recorded and visible return closes that incident', () => {
+  const h = harness()
+  h.documentTarget.visibilityState = 'hidden'
+  h.documentTarget.dispatchEvent(new Event('visibilitychange'))
+  assert.equal(h.incidents()[0].signals[0].type, 'TAB_HIDDEN')
+  h.documentTarget.visibilityState = 'visible'
+  h.documentTarget.dispatchEvent(new Event('visibilitychange'))
+  h.documentTarget.visibilityState = 'hidden'
+  h.documentTarget.dispatchEvent(new Event('visibilitychange'))
+  assert.equal(h.manager.count, 2)
+  h.detector.stop()
+})
+
+test('mouse leave, blur, and hidden signals merge until every return state recovers', () => {
+  const h = harness()
+  h.documentTarget.documentElement.dispatchEvent(new Event('mouseleave'))
+  h.windowTarget.dispatchEvent(new Event('blur'))
+  h.documentTarget.visibilityState = 'hidden'
+  h.documentTarget.dispatchEvent(new Event('visibilitychange'))
+  assert.equal(h.manager.count, 1)
+  assert.deepEqual(h.incidents()[0].signals.map((signal) => signal.type), ['MOUSE_LEAVE', 'WINDOW_BLUR', 'TAB_HIDDEN'])
+
+  h.windowTarget.dispatchEvent(new Event('focus'))
+  h.documentTarget.visibilityState = 'visible'
+  h.documentTarget.dispatchEvent(new Event('visibilitychange'))
+  h.documentTarget.documentElement.dispatchEvent(new Event('mouseenter'))
+  h.documentTarget.documentElement.dispatchEvent(new Event('mouseleave'))
+  assert.equal(h.manager.count, 2)
+  h.detector.stop()
+})
+
+test('fullscreen exit is detected only after fullscreen was entered', () => {
+  const h = harness()
+  h.documentTarget.fullscreenElement = {}
+  h.documentTarget.dispatchEvent(new Event('fullscreenchange'))
+  h.documentTarget.fullscreenElement = null
+  h.documentTarget.dispatchEvent(new Event('fullscreenchange'))
+  assert.equal(h.incidents()[0].signals[0].type, 'FULLSCREEN_EXIT')
+  h.documentTarget.dispatchEvent(new Event('keydown'))
+  h.documentTarget.fullscreenElement = {}
+  h.documentTarget.dispatchEvent(new Event('fullscreenchange'))
+  h.documentTarget.fullscreenElement = null
+  h.documentTarget.dispatchEvent(new Event('fullscreenchange'))
+  assert.equal(h.manager.count, 2)
+  h.detector.stop()
+})
+
+test('disabled signal types are ignored and a finished manager ignores new events', () => {
+  const config = {
+    ...DEFAULT_ANTI_CHEATING_CONFIG,
+    signals: { ...DEFAULT_ANTI_CHEATING_CONFIG.signals, MOUSE_LEAVE: false },
+  }
+  const h = harness(config)
+  h.documentTarget.documentElement.dispatchEvent(new Event('mouseleave'))
+  assert.equal(h.manager.count, 0)
+  h.manager.finish()
+  h.windowTarget.dispatchEvent(new Event('blur'))
+  assert.equal(h.manager.count, 0)
+  h.detector.stop()
+})
+
+class MemoryStorage {
+  values = new Map()
+  get length() { return this.values.size }
+  key(index) { return [...this.values.keys()][index] ?? null }
+  getItem(key) { return this.values.get(key) ?? null }
+  setItem(key, value) { this.values.set(key, value) }
+  removeItem(key) { this.values.delete(key) }
+}
+
+class FakeApi {
+  online = false
+  saved = new Map()
+  count = 0
+  async startSession(sessionId) {
+    if (!this.online) throw new Error('offline')
+    return { sessionId, startedAt: new Date().toISOString(), endedAt: null, violationCount: this.count, active: true }
+  }
+  async getSession(sessionId) {
+    if (!this.online) throw new Error('offline')
+    return { sessionId, startedAt: new Date().toISOString(), endedAt: null, violationCount: this.count, active: true }
+  }
+  async getEvents() {
+    if (!this.online) throw new Error('offline')
+    return { events: [], violationIds: [...this.saved.keys()] }
+  }
+  async saveViolation(sessionId, violation) {
+    if (!this.online) throw new Error('offline')
+    if (!this.saved.has(violation.violationId)) this.count += 1
+    this.saved.set(violation.violationId, violation)
+    return { sessionId, startedAt: new Date().toISOString(), endedAt: null, violationCount: this.count, active: true }
+  }
+  async finishSession(sessionId) {
+    if (!this.online) throw new Error('offline')
+    return { sessionId, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), violationCount: this.count, active: false }
+  }
+}
+
+test('offline violations retry after reconnection without incrementing twice', async () => {
+  const storage = new MemoryStorage()
+  const api = new FakeApi()
+  const outbox = new ViolationOutbox('att-offline', DEFAULT_ANTI_CHEATING_CONFIG, storage)
+  const h = harness()
+  h.documentTarget.documentElement.dispatchEvent(new Event('mouseleave'))
+  outbox.enqueue(h.incidents()[0], 1)
+
+  assert.equal(await outbox.sync(api), null)
+  assert.equal(outbox.pendingCount, 1)
+  api.online = true
+  assert.equal(await outbox.sync(api), 1)
+  assert.equal(outbox.pendingCount, 0)
+  assert.equal(await outbox.sync(api), 1)
+  assert.equal(api.saved.size, 1)
+  h.detector.stop()
+})
