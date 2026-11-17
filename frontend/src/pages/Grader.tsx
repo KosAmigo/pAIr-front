@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Download, ExternalLink, Info, Loader2, Play, Save, Square, Star } from 'lucide-react'
-import { Button, cx, Logo, Tabs } from '../components/ui'
+import { cx } from '../components/cx'
+import { Button, Logo, Tabs } from '../components/ui'
 import {
   ApiError,
   grader,
@@ -60,7 +61,9 @@ function Loading() {
 function VersionsTab({ rubric, onChanged }: { rubric: GraderRubric; onChanged: () => void }) {
   const [rows, setRows] = useState<PromptVersionRow[] | null>(null)
   const [sel, setSel] = useState<string | null>(null)
-  const [v, setV] = useState<PromptVersion | null>(null)
+  const [loadedV, setV] = useState<PromptVersion | null>(null)
+  // 버전을 바꾸면 새 내용이 올 때까지 이전 내용을 숨긴다 (effect 안에서 비우지 않고 여기서 거른다)
+  const v = loadedV?.id === sel ? loadedV : null
   const [draft, setDraft] = useState<PromptVersion | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -77,7 +80,6 @@ function VersionsTab({ rubric, onChanged }: { rubric: GraderRubric; onChanged: (
   useEffect(load, [load])
   useEffect(() => {
     if (!sel) return
-    setV(null)
     grader.version(sel).then(setV).catch((e: ApiError) => setErr(e.message))
   }, [sel])
 
@@ -317,7 +319,7 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
   const BATCH_WAIT_DEFAULT = 10
   const [batchWait, setBatchWait] = useState(BATCH_WAIT_DEFAULT)
 
-  const [est, setEst] = useState<GraderEstimate | null>(null)
+  const [loadedEst, setEst] = useState<GraderEstimate | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -343,11 +345,10 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
     [refs, versionId, count, judgeRepeat, mode, batchWait],
   )
 
+  // 고른 응시가 없으면 예상 비용을 보여 주지 않는다 (effect 안에서 비우지 않고 여기서 거른다)
+  const est = refs.length ? loadedEst : null
   useEffect(() => {
-    if (!refs.length) {
-      setEst(null)
-      return
-    }
+    if (!refs.length) return
     const id = setTimeout(() => {
       grader.estimate(req).then(setEst).catch((e: ApiError) => setErr(e.message))
     }, 250)
@@ -620,9 +621,12 @@ const stats = (xs: number[]) => {
 
 function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect: (id: string) => void }) {
   const [runs, setRuns] = useState<GraderRun[] | null>(null)
-  const [data, setData] = useState<{ meta: GraderRun; results: GraderResult[] } | null>(null)
+  const [loadedData, setData] = useState<{ meta: GraderRun; results: GraderResult[] } | null>(null)
   const [compareId, setCompareId] = useState('')
-  const [compare, setCompare] = useState<{ meta: GraderRun; results: GraderResult[] } | null>(null)
+  const [loadedCompare, setCompare] = useState<{ meta: GraderRun; results: GraderResult[] } | null>(null)
+  // 고른 실험과 다른 결과(이전에 고른 것)는 보여 주지 않는다 (effect 안에서 비우지 않고 여기서 거른다)
+  const data = loadedData?.meta.id === selected ? loadedData : null
+  const compare = compareId && loadedCompare?.meta.id === compareId ? loadedCompare : null
   const [err, setErr] = useState<string | null>(null)
 
   const loadRuns = useCallback(() => {
@@ -652,7 +656,6 @@ function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect:
         .catch((e: ApiError) => setErr(e.message))
     }
     const loadRunsQuiet = () => grader.runs().then((r) => alive && setRuns(r)).catch(() => {})
-    setData(null)
     tick()
     return () => {
       alive = false
@@ -661,10 +664,7 @@ function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect:
   }, [selected])
 
   useEffect(() => {
-    if (!compareId) {
-      setCompare(null)
-      return
-    }
+    if (!compareId) return
     grader.run(compareId).then(setCompare).catch((e: ApiError) => setErr(e.message))
   }, [compareId])
 

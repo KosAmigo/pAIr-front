@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Bot, ChevronDown, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
-import { Button, ButtonLink, cx, Panel, Sep } from '../components/ui'
+import { cx } from '../components/cx'
+import { Button, ButtonLink, Panel, Sep } from '../components/ui'
 import { api, ApiError, type CheckResult, type Report, type ReportResponse, type Turn } from '../api'
 
 // 실제 응시 결과 리포트. 감점식 채점(docs/evaluation/채점_기준표.md): 6개 항목, 총점 100점.

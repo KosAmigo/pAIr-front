@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, FlaskConical, History, TicketCheck } from 'lucide-react'
-import { cx, Logo, Sep } from '../components/ui'
+import { cx } from '../components/cx'
+import { Logo, Sep } from '../components/ui'
 
 // DESIGN.md §7-1 초기화면
 const tiles = [

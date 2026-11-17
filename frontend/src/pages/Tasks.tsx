@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Clock } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
-import { cx, Sep, Tabs } from '../components/ui'
+import { cx } from '../components/cx'
+import { Sep, Tabs } from '../components/ui'
 import { CATALOG, KINDS, type CatalogTask, type Track } from '../data/catalog'
 
 // DESIGN.md §7-2a 과제 목록: 직군 탭(개발 직군 / 비개발 직군) 안에서 과제 형태별 섹션을 세로로 쌓는다

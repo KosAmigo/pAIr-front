@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { cx, Logo, ModeBadge } from './ui'
+import { cx } from './cx'
+import { Logo, ModeBadge } from './ui'
 import { user } from '../data/mock'
 
 // DESIGN.md §7 공통 셸: 자가진단 화면은 상단 탭(과제 / 대시보드 / 내 기록)으로 이동한다.

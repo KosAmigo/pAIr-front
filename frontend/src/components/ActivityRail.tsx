@@ -1,6 +1,6 @@
 import { Bot, ClipboardList, Files, PanelBottom } from 'lucide-react'
 import type { ComponentType } from 'react'
-import { cx } from './ui'
+import { cx } from './cx'
 
 // DESIGN.md §6.14 Activity Rail: 응시 화면 맨 왼쪽 48px 아이콘 레일 (VS Code 의 activity bar 문법).
 // 위: 사이드 패널 전환(과제, 파일). 같은 아이콘을 다시 누르면 패널이 접힌다.
