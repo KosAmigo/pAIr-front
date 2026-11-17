@@ -17,10 +17,11 @@ OUT = os.path.join(BASE, "pair_sample.xlsx")
 SCHEMA = os.path.join(BASE, "..", "pair_schema.sql")
 
 # load.sh 와 같은 외래 키 순서 (부모 테이블이 먼저)
-ORDER = """users tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys
+ORDER = """companies users tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys
 question_sources rubric_items rubric_checks prompt_versions prompt_check_hints attempts attempt_files chat_turns
 chat_attachments attempt_events question_answers answer_choices checkpoints checkpoint_files scorings judge_calls
-check_results judge_verdicts verdict_evidences question_results""".split()
+check_results judge_verdicts verdict_evidences question_results exam_sessions exam_participants proctor_consents
+proctor_events""".split()
 
 CELL_MAX = 32767  # 엑셀 셀 하나에 들어가는 최대 글자 수
 FONT = "Arial"

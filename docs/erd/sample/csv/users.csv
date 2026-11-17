@@ -1,4 +1,5 @@
-user_id,email,password_hash,name,role,created_at
-1,admin@pair.test,$2a$10$sampleAdminHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,관리자,ADMIN,2026-11-01T00:00:00Z
-2,a@pair.test,$2a$10$sampleUserAHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,응시자A,USER,2026-11-02T00:00:00Z
-3,b@pair.test,$2a$10$sampleUserBHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,응시자B,USER,2026-11-03T00:00:00Z
+user_id,email,password_hash,name,role,company_id,created_at
+1,admin@pair.test,$2a$10$sampleAdminHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,관리자,ADMIN,,2026-11-01T00:00:00Z
+2,a@pair.test,$2a$10$sampleUserAHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,응시자A,USER,,2026-11-02T00:00:00Z
+3,b@pair.test,$2a$10$sampleUserBHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,응시자B,USER,,2026-11-03T00:00:00Z
+4,hr@example-tech.test,$2a$10$sampleCompanyHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,예시테크 담당자,COMPANY,1,2026-11-04T00:00:00Z

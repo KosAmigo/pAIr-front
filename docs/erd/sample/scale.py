@@ -18,7 +18,7 @@ SRC = os.path.join(BASE, "csv")
 DST = os.path.join(BASE, f"csv{N}")
 
 # 모두가 함께 쓰는 데이터: 그대로 복사
-SHARED = ["tasks", "task_files", "document_pages", "document_chunks", "task_questions", "question_choices",
+SHARED = ["companies", "tasks", "task_files", "document_pages", "document_chunks", "task_questions", "question_choices",
           "short_answer_keys", "question_sources", "rubric_items", "rubric_checks", "prompt_versions",
           "prompt_check_hints"]
 
@@ -40,6 +40,10 @@ COPY = {
     "judge_verdicts": {"verdict_id": "verdict", "result_id": "result", "judge_call_id": "judge_call"},
     "verdict_evidences": {"verdict_id": "verdict"},
     "question_results": {"scoring_id": "scoring"},
+    "exam_sessions": {"session_id": "session", "created_by": "user"},
+    "exam_participants": {"participant_id": "participant", "session_id": "session", "user_id": "user", "attempt_id": "attempt"},
+    "proctor_consents": {"attempt_id": "attempt"},
+    "proctor_events": {"proctor_event_id": "proctor_event", "attempt_id": "attempt"},
 }
 # 각 번호 계열의 기준 테이블과 PK
 SERIES = {"user": ("users", "user_id"), "attempt": ("attempts", "attempt_id"),
@@ -47,9 +51,10 @@ SERIES = {"user": ("users", "user_id"), "attempt": ("attempts", "attempt_id"),
           "attachment": ("chat_attachments", "attachment_id"), "event": ("attempt_events", "event_id"),
           "answer": ("question_answers", "answer_id"), "checkpoint": ("checkpoints", "checkpoint_id"),
           "scoring": ("scorings", "scoring_id"), "judge_call": ("judge_calls", "judge_call_id"),
-          "result": ("check_results", "result_id"), "verdict": ("judge_verdicts", "verdict_id")}
+          "result": ("check_results", "result_id"), "verdict": ("judge_verdicts", "verdict_id"),
+          "session": ("exam_sessions", "session_id"), "participant": ("exam_participants", "participant_id"), "proctor_event": ("proctor_events", "proctor_event_id")}
 TIME_COLS = {"created_at", "started_at", "submitted_at", "followups_done_at", "updated_at", "answered_at",
-             "finished_at"}
+             "finished_at", "invited_at", "entered_at", "consented_at", "snapshot_deleted_at", "starts_at", "ends_at"}
 
 
 def read(name):
@@ -90,8 +95,12 @@ for name, cols in COPY.items():
             for i, c in enumerate(head):
                 if c in TIME_COLS:
                     r[i] = shift_time(r[i], k)
-            if name == "users" and k:
+            if name in ("users", "exam_participants") and k:  # 이메일·초대 토큰은 겹치면 안 된다
                 r[head.index("email")] = f"copy{k}." + r[head.index("email")]
+                if name == "exam_participants":
+                    r[head.index("invite_token")] += f"_{k}"
+            if name == "exam_sessions" and k:
+                r[head.index("entry_code")] += f"-{k}"
             out.append(r)
     with open(os.path.join(DST, name + ".csv"), "w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
