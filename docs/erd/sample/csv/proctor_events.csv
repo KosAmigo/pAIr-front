@@ -1,0 +1,6 @@
+proctor_event_id,attempt_id,type,started_at,duration_ms,confidence,detail,snapshot_key,snapshot_deleted_at
+1,4,TAB_HIDDEN,2026-11-11T09:42:10Z,12000,,,,
+2,4,PASTE,2026-11-11T09:42:12Z,0,,"{""chars"": 840, ""fromAssistant"": false}",,
+3,4,NO_FACE,2026-11-11T09:42:13Z,7000,0.93,"{""faces"": 0}",proctor/4/3.jpg,
+4,5,HEAD_TURN,2026-11-11T09:42:01Z,3500,0.71,"{""yawDeg"": 48}",proctor/5/4.jpg,2026-12-11T00:00:00Z
+5,5,WINDOW_BLUR,2026-11-11T09:42:05Z,2000,,,,

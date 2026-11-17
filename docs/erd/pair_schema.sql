@@ -6,20 +6,35 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ───────── 1. 회원 · 과제 ─────────
 
+CREATE TABLE companies (
+    company_id   BIGSERIAL    PRIMARY KEY,
+    name         VARCHAR(100) NOT NULL,
+    business_no  VARCHAR(20)  UNIQUE,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE  companies IS '회사(실전 시험을 여는 기업)';
+COMMENT ON COLUMN companies.company_id IS '회사 ID';
+COMMENT ON COLUMN companies.name IS '회사 이름';
+COMMENT ON COLUMN companies.business_no IS '사업자등록번호';
+COMMENT ON COLUMN companies.created_at IS '등록 시각';
+
 CREATE TABLE users (
     user_id        BIGSERIAL    PRIMARY KEY,
     email          VARCHAR(255) NOT NULL UNIQUE,
     password_hash  VARCHAR(100) NOT NULL,
     name           VARCHAR(50)  NOT NULL,
     role           VARCHAR(10)  NOT NULL DEFAULT 'USER',
-    created_at     TIMESTAMPTZ  NOT NULL DEFAULT now()
+    company_id     BIGINT       REFERENCES companies (company_id),
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK (role <> 'COMPANY' OR company_id IS NOT NULL)
 );
 COMMENT ON TABLE  users IS '회원';
 COMMENT ON COLUMN users.user_id IS '회원 ID';
 COMMENT ON COLUMN users.email IS '이메일(로그인 ID)';
 COMMENT ON COLUMN users.password_hash IS '비밀번호 해시(BCrypt)';
 COMMENT ON COLUMN users.name IS '이름';
-COMMENT ON COLUMN users.role IS '권한(USER/ADMIN)';
+COMMENT ON COLUMN users.role IS '권한(USER/COMPANY/ADMIN)';
+COMMENT ON COLUMN users.company_id IS '소속 회사 ID(기업 담당자만)';
 COMMENT ON COLUMN users.created_at IS '가입 시각';
 
 CREATE TABLE tasks (
@@ -179,7 +194,7 @@ COMMENT ON TABLE  attempts IS '응시';
 COMMENT ON COLUMN attempts.attempt_id IS '응시 ID';
 COMMENT ON COLUMN attempts.user_id IS '회원 ID';
 COMMENT ON COLUMN attempts.task_id IS '과제 ID';
-COMMENT ON COLUMN attempts.mode IS '모드(SELF/LIVE)';
+COMMENT ON COLUMN attempts.mode IS '모드(SELF 자가진단/LIVE 실전)';
 COMMENT ON COLUMN attempts.status IS '상태';
 COMMENT ON COLUMN attempts.assistant_model IS '어시스턴트 모델';
 COMMENT ON COLUMN attempts.forked_from_checkpoint_id IS '롤백 출발 체크포인트 ID';
@@ -468,7 +483,94 @@ COMMENT ON COLUMN question_results.score IS '얻은 점수';
 COMMENT ON COLUMN question_results.method IS '채점 방식(AUTO/JUDGE)';
 COMMENT ON COLUMN question_results.reason IS '판정 이유';
 
--- ───────── 6. 조회용 인덱스 ─────────
+-- ───────── 6. 실전 시험 · 감독 ─────────
+-- 실전 응시(attempts.mode = 'LIVE')에만 쓴다. 자가진단(SELF)은 회차·감독 없이 응시한다.
+-- 감독 영상은 서버로 보내지 않는다. 브라우저에서 분석하고, 이상이 생긴 순간의 이벤트와 스냅샷 1장만 저장한다.
+
+CREATE TABLE exam_sessions (
+    session_id    BIGSERIAL    PRIMARY KEY,
+    company_id    BIGINT       NOT NULL REFERENCES companies (company_id),
+    task_id       BIGINT       NOT NULL REFERENCES tasks (task_id),
+    title         VARCHAR(100) NOT NULL,
+    entry_code    VARCHAR(20)  NOT NULL UNIQUE,
+    starts_at     TIMESTAMPTZ  NOT NULL,
+    ends_at       TIMESTAMPTZ  NOT NULL,
+    proctoring    BOOLEAN      NOT NULL DEFAULT true,
+    created_by    BIGINT       NOT NULL REFERENCES users (user_id),
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK (ends_at > starts_at)
+);
+COMMENT ON TABLE  exam_sessions IS '시험 회차';
+COMMENT ON COLUMN exam_sessions.session_id IS '회차 ID';
+COMMENT ON COLUMN exam_sessions.company_id IS '회사 ID(회차를 연 회사)';
+COMMENT ON COLUMN exam_sessions.task_id IS '과제 ID';
+COMMENT ON COLUMN exam_sessions.title IS '회차 이름';
+COMMENT ON COLUMN exam_sessions.entry_code IS '입장 코드';
+COMMENT ON COLUMN exam_sessions.starts_at IS '시작 시각(전원 동시)';
+COMMENT ON COLUMN exam_sessions.ends_at IS '종료 시각(전원 동시)';
+COMMENT ON COLUMN exam_sessions.proctoring IS '감독 사용 여부';
+COMMENT ON COLUMN exam_sessions.created_by IS '만든 관리자 회원 ID';
+COMMENT ON COLUMN exam_sessions.created_at IS '생성 시각';
+
+CREATE TABLE exam_participants (
+    participant_id  BIGSERIAL    PRIMARY KEY,
+    session_id      BIGINT       NOT NULL REFERENCES exam_sessions (session_id),
+    email           VARCHAR(255) NOT NULL,
+    name            VARCHAR(50)  NOT NULL,
+    invite_token    VARCHAR(64)  NOT NULL UNIQUE,
+    user_id         BIGINT       REFERENCES users (user_id),
+    attempt_id      BIGINT       UNIQUE REFERENCES attempts (attempt_id),
+    invited_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    entered_at      TIMESTAMPTZ,
+    UNIQUE (session_id, email)
+);
+COMMENT ON TABLE  exam_participants IS '회차 응시 대상자';
+COMMENT ON COLUMN exam_participants.participant_id IS '대상자 ID';
+COMMENT ON COLUMN exam_participants.session_id IS '회차 ID';
+COMMENT ON COLUMN exam_participants.email IS '초대 이메일';
+COMMENT ON COLUMN exam_participants.name IS '이름';
+COMMENT ON COLUMN exam_participants.invite_token IS '메일 입장 링크 토큰';
+COMMENT ON COLUMN exam_participants.user_id IS '회원 ID(입장 시 연결)';
+COMMENT ON COLUMN exam_participants.attempt_id IS '응시 ID(입장 시 생성)';
+COMMENT ON COLUMN exam_participants.invited_at IS '초대 시각';
+COMMENT ON COLUMN exam_participants.entered_at IS '입장 시각';
+
+CREATE TABLE proctor_consents (
+    attempt_id       BIGINT       PRIMARY KEY REFERENCES attempts (attempt_id),
+    consent_version  VARCHAR(20)  NOT NULL,
+    env_check        JSONB        NOT NULL,
+    consented_at     TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE  proctor_consents IS '감독 동의·환경 점검';
+COMMENT ON COLUMN proctor_consents.attempt_id IS '응시 ID';
+COMMENT ON COLUMN proctor_consents.consent_version IS '동의서 버전';
+COMMENT ON COLUMN proctor_consents.env_check IS '환경 점검 결과(카메라, 브라우저, 전체화면)';
+COMMENT ON COLUMN proctor_consents.consented_at IS '동의 시각';
+
+CREATE TABLE proctor_events (
+    proctor_event_id     BIGSERIAL     PRIMARY KEY,
+    attempt_id           BIGINT        NOT NULL REFERENCES attempts (attempt_id),
+    type                 VARCHAR(20)   NOT NULL CHECK (type IN ('TAB_HIDDEN', 'WINDOW_BLUR', 'PASTE', 'FULLSCREEN_EXIT',
+                                                               'NO_FACE', 'MULTI_FACE', 'HEAD_TURN', 'PHONE')),
+    started_at           TIMESTAMPTZ   NOT NULL,
+    duration_ms          INT           NOT NULL DEFAULT 0 CHECK (duration_ms >= 0),
+    confidence           NUMERIC(4, 3) CHECK (confidence BETWEEN 0 AND 1),
+    detail               JSONB,
+    snapshot_key         VARCHAR(255),
+    snapshot_deleted_at  TIMESTAMPTZ
+);
+COMMENT ON TABLE  proctor_events IS '감독 이벤트';
+COMMENT ON COLUMN proctor_events.proctor_event_id IS '감독 이벤트 ID';
+COMMENT ON COLUMN proctor_events.attempt_id IS '응시 ID';
+COMMENT ON COLUMN proctor_events.type IS '종류(TAB_HIDDEN/WINDOW_BLUR/PASTE/FULLSCREEN_EXIT/NO_FACE/MULTI_FACE/HEAD_TURN/PHONE)';
+COMMENT ON COLUMN proctor_events.started_at IS '시작 시각';
+COMMENT ON COLUMN proctor_events.duration_ms IS '지속 시간(ms)';
+COMMENT ON COLUMN proctor_events.confidence IS '확신도(0~1, 카메라 감지만)';
+COMMENT ON COLUMN proctor_events.detail IS '상세 내용(붙여넣은 글자 수, 얼굴 수, 고개 각도 등)';
+COMMENT ON COLUMN proctor_events.snapshot_key IS '스냅샷 저장 위치';
+COMMENT ON COLUMN proctor_events.snapshot_deleted_at IS '스냅샷 삭제 시각(보관 기간 만료)';
+
+-- ───────── 7. 조회용 인덱스 ─────────
 -- PostgreSQL 은 외래 키에 인덱스를 자동으로 만들지 않는다. 자주 따라가는 외래 키에만 건다.
 -- (UNIQUE 나 복합 PK 의 첫 컬럼인 외래 키는 그 인덱스를 함께 쓰므로 따로 만들지 않는다)
 CREATE INDEX idx_attempts_user_id          ON attempts (user_id);           -- 내 응시 목록
@@ -478,3 +580,6 @@ CREATE INDEX idx_chat_attachments_turn_id  ON chat_attachments (turn_id);   -- �
 CREATE INDEX idx_scorings_attempt_id       ON scorings (attempt_id);        -- 응시의 채점 → 리포트
 CREATE INDEX idx_judge_calls_scoring_id    ON judge_calls (scoring_id);     -- 채점의 모델 호출(토큰)
 CREATE INDEX idx_judge_verdicts_result_id  ON judge_verdicts (result_id);   -- 체크 결과의 모델별 판정 → 리포트
+CREATE INDEX idx_exam_sessions_company_id  ON exam_sessions (company_id);   -- 회사의 회차 목록(관리자 화면)
+CREATE INDEX idx_exam_participants_user_id ON exam_participants (user_id);  -- 내 실전 시험 목록
+CREATE INDEX idx_proctor_events_attempt_id ON proctor_events (attempt_id);  -- 응시의 감독 이벤트 → 리포트·관리자 화면

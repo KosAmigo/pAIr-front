@@ -2,7 +2,7 @@
 
 실제 데이터: 과제 2개(task.json, 파일), 샘플 응시 7건(grader/samples), 6개 역량 채점 결과(grader/runs),
 채점 프롬프트 버전(grader/versions).
-만든 데이터: 회원, 객관식·단답형 문항과 답, 대화 첨부, 체크포인트(아직 실제 데이터가 없는 기능).
+만든 데이터: 회원, 객관식·단답형 문항과 답, 대화 첨부, 체크포인트, 실전 시험 회차·감독(아직 실제 데이터가 없는 기능).
 자료 파일 2개는 PDF라고 가정하고 페이지로 나눈다.
 
 실행: python docs/erd/sample/make_sample.py  →  docs/erd/sample/csv/*.csv
@@ -40,11 +40,13 @@ def b(v):
     return "true" if v else "false"
 
 
-# ── 회원 ──
-U = ["user_id", "email", "password_hash", "name", "role", "created_at"]
-put("users", U, [1, "admin@pair.test", "$2a$10$sampleAdminHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "관리자", "ADMIN", "2026-11-01T00:00:00Z"])
-put("users", U, [2, "a@pair.test", "$2a$10$sampleUserAHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "응시자A", "USER", "2026-11-02T00:00:00Z"])
-put("users", U, [3, "b@pair.test", "$2a$10$sampleUserBHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "응시자B", "USER", "2026-11-03T00:00:00Z"])
+# ── 회사 · 회원 ──
+put("companies", ["company_id", "name", "business_no", "created_at"], [1, "예시테크", "123-45-67890", "2026-11-01T00:00:00Z"])
+U = ["user_id", "email", "password_hash", "name", "role", "company_id", "created_at"]
+put("users", U, [1, "admin@pair.test", "$2a$10$sampleAdminHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "관리자", "ADMIN", None, "2026-11-01T00:00:00Z"])
+put("users", U, [2, "a@pair.test", "$2a$10$sampleUserAHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "응시자A", "USER", None, "2026-11-02T00:00:00Z"])
+put("users", U, [3, "b@pair.test", "$2a$10$sampleUserBHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "응시자B", "USER", None, "2026-11-03T00:00:00Z"])
+put("users", U, [4, "hr@example-tech.test", "$2a$10$sampleCompanyHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "예시테크 담당자", "COMPANY", 1, "2026-11-04T00:00:00Z"])
 
 # ── 과제 ──
 CATALOG = {
@@ -174,13 +176,15 @@ EV = {"start": "START", "save": "SAVE", "run": "RUN", "build": "BUILD", "chat": 
       "aiEdit": "AI_EDIT", "submit": "SUBMIT", "followups": "FOLLOWUPS", "firstValid": "FIRST_VALID"}
 tid = eid = afid = aid_ans = 0
 turn_ids = {}
+LIVE = (4, 5)  # 개발 응시 2건은 실전 시험 회차에서 본 것으로 가정 (아래 실전 시험 · 감독)
 for n, s in enumerate(idx, 1):
     a = rj(os.path.join(SAMPLES, s["id"], "attempt.json"))
     attempt_id[s["id"]] = n
     att_code[s["id"]] = a["taskId"]
     put("attempts", ["attempt_id", "user_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
                      "started_at", "submitted_at", "followups_done_at"],
-        [n, 2 if n % 2 else 3, task_id[a["taskId"]], "SELF", "DONE", a["model"], None, a["startedAt"], a["submittedAt"], a["followupsDoneAt"]])
+        [n, 2 if n % 2 else 3, task_id[a["taskId"]], "LIVE" if n in LIVE else "SELF", "DONE", a["model"], None,
+         a["startedAt"], a["submittedAt"], a["followupsDoneAt"]])
     ws = os.path.join(SAMPLES, s["id"], "workspace")
     for p in sorted(glob.glob(os.path.join(ws, "**", "*"), recursive=True)):
         if os.path.isdir(p) or "자료" in p:
@@ -231,6 +235,28 @@ put("checkpoint_files", ["checkpoint_id", "path", "content"], [1, "NOTES.md", op
 put("attempts", ["attempt_id", "user_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
                  "started_at", "submitted_at", "followups_done_at"],
     [len(idx) + 1, 2, task_id["order-deadlock"], "SELF", "SOLVING", "gpt-6-luna", 1, "2026-11-12T10:00:00Z", None, None])
+
+# ── 실전 시험 · 감독 (예시) ──
+# 예시테크 담당자가 개발 과제로 회차 1개를 열고 3명을 초대. 2명은 입장해 응시(4, 5번), 1명은 입장하지 않음.
+put("exam_sessions", ["session_id", "company_id", "task_id", "title", "entry_code", "starts_at", "ends_at", "proctoring", "created_by", "created_at"],
+    [1, 1, task_id["order-deadlock"], "2026 하반기 백엔드 신입 실전", "PAIR-7K2Q", "2026-11-11T09:40:00Z", "2026-11-11T10:40:00Z",
+     "true", 4, "2026-11-10T12:00:00Z"])
+P = ["participant_id", "session_id", "email", "name", "invite_token", "user_id", "attempt_id", "invited_at", "entered_at"]
+put("exam_participants", P, [1, 1, "b@pair.test", "응시자B", "inv_8f3a1c9e2b7d4f60", 3, 4, "2026-11-10T12:05:00Z", "2026-11-11T09:42:08Z"])
+put("exam_participants", P, [2, 1, "a@pair.test", "응시자A", "inv_2d9c47a1e5b83f02", 2, 5, "2026-11-10T12:05:00Z", "2026-11-11T09:41:57Z"])
+put("exam_participants", P, [3, 1, "c@pair.test", "응시자C", "inv_71e0b4d6c3a95f18", None, None, "2026-11-10T12:05:00Z", None])
+ENV = json.dumps({"camera": True, "fullscreen": True, "browser": "Chrome 142"})
+for n in LIVE:
+    put("proctor_consents", ["attempt_id", "consent_version", "env_check", "consented_at"], [n, "v1", ENV, "2026-11-11T09:41:50Z"])
+PE = ["proctor_event_id", "attempt_id", "type", "started_at", "duration_ms", "confidence", "detail", "snapshot_key", "snapshot_deleted_at"]
+put("proctor_events", PE, [1, 4, "TAB_HIDDEN", "2026-11-11T09:42:10Z", 12000, None, None, None, None])
+put("proctor_events", PE, [2, 4, "PASTE", "2026-11-11T09:42:12Z", 0, None,
+                           json.dumps({"chars": 840, "fromAssistant": False}), None, None])
+put("proctor_events", PE, [3, 4, "NO_FACE", "2026-11-11T09:42:13Z", 7000, 0.93, json.dumps({"faces": 0}),
+                           "proctor/4/3.jpg", None])
+put("proctor_events", PE, [4, 5, "HEAD_TURN", "2026-11-11T09:42:01Z", 3500, 0.71, json.dumps({"yawDeg": 48}),
+                           "proctor/5/4.jpg", "2026-12-11T00:00:00Z"])
+put("proctor_events", PE, [5, 5, "WINDOW_BLUR", "2026-11-11T09:42:05Z", 2000, None, None, None, None])
 
 # ── 채점 결과 (K1 보완 버전, 실제 결과) ──
 sc = jc = rid = vid_n = 0
