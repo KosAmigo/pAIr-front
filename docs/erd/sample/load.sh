@@ -10,7 +10,7 @@ docker cp "$CSV_DIR" pair-erd-pg:/sample
 
 ORDER="companies users tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys question_sources
 rubric_items rubric_checks prompt_versions prompt_check_hints
-attempts attempt_files chat_turns chat_attachments attempt_events question_answers answer_choices checkpoints checkpoint_files
+attempts attempt_files chat_turns chat_attachments attempt_events text_answers choice_answers checkpoints checkpoint_files
 exam_sessions exam_participants proctor_consents proctor_events
 scorings judge_calls check_results judge_verdicts verdict_evidences question_results"
 

@@ -174,8 +174,9 @@ idx = rj(os.path.join(SAMPLES, "index.json"))
 attempt_id, att_code = {}, {}
 EV = {"start": "START", "save": "SAVE", "run": "RUN", "build": "BUILD", "chat": "CHAT", "chatEmpty": "CHAT_EMPTY",
       "aiEdit": "AI_EDIT", "submit": "SUBMIT", "followups": "FOLLOWUPS", "firstValid": "FIRST_VALID"}
-tid = eid = afid = aid_ans = 0
+tid = eid = afid = ta_id = 0
 turn_ids = {}
+TA = ["text_answer_id", "attempt_id", "question_id", "question_type", "content", "answered_at"]
 LIVE = (4, 5)  # 개발 응시 2건은 실전 시험 회차에서 본 것으로 가정 (아래 실전 시험 · 감독)
 for n, s in enumerate(idx, 1):
     a = rj(os.path.join(SAMPLES, s["id"], "attempt.json"))
@@ -205,20 +206,18 @@ for n, s in enumerate(idx, 1):
         put("attempt_events", ["event_id", "attempt_id", "type", "payload", "created_at"],
             [eid, n, EV.get(e["type"], e["type"].upper()), json.dumps(payload, ensure_ascii=False) if payload else None, e["at"]])
     for qn, ans in enumerate(a.get("followUpAnswers") or [], 1):
-        aid_ans += 1
-        put("question_answers", ["answer_id", "attempt_id", "question_id", "text_answer", "answered_at"],
-            [aid_ans, n, followup_q[(a["taskId"], qn)], ans or "(무응답)", a["followupsDoneAt"]])
+        ta_id += 1
+        put("text_answers", TA, [ta_id, n, followup_q[(a["taskId"], qn)], "ESSAY", ans or "(무응답)", a["followupsDoneAt"]])
 
 # 비개발 응시 2건에 객관식·단답형 답 (모범 응시는 정답, 자료 없이 붙인 응시는 오답)
 answer_rows = {}
 for att, mcq_choice, short in [("att-261111-1842-l5r", 2, "베이직"), ("att-261111-1843-anp", 1, "스탠다드")]:
     n = attempt_id[att]
-    aid_ans += 1
-    put("question_answers", ["answer_id", "attempt_id", "question_id", "text_answer", "answered_at"], [aid_ans, n, MCQ, None, "2026-11-11T09:43:00Z"])
-    put("answer_choices", ["answer_id", "choice_id"], [aid_ans, mcq_choice])
+    put("choice_answers", ["attempt_id", "question_id", "question_type", "choice_id", "answered_at"],
+        [n, MCQ, "SINGLE", mcq_choice, "2026-11-11T09:43:00Z"])
     answer_rows[(n, MCQ)] = mcq_choice == 2
-    aid_ans += 1
-    put("question_answers", ["answer_id", "attempt_id", "question_id", "text_answer", "answered_at"], [aid_ans, n, SHORT, short, "2026-11-11T09:43:05Z"])
+    ta_id += 1
+    put("text_answers", TA, [ta_id, n, SHORT, "SHORT", short, "2026-11-11T09:43:05Z"])
     answer_rows[(n, SHORT)] = short in ("베이직", "베이직 요금제")
 
 # 대화 첨부: 모범 비개발 응시가 첫 질문에 설문 2쪽을 첨부했다고 가정
