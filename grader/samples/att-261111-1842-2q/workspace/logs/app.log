@@ -1,0 +1,12 @@
+2026-11-10 21:02:09.114 INFO  [order-7]  POST /orders user=4812 items=[10:1, 22:2]
+2026-11-10 21:02:09.131 INFO  [order-9]  POST /orders user=5120 items=[22:1, 10:1]
+2026-11-10 21:02:12.140 ERROR [order-9]  POST /orders 500 shop.LockTimeoutException: Lock wait timeout exceeded (stock.product_id=10)
+2026-11-10 21:02:12.141 ERROR [order-7]  POST /orders 500 shop.LockTimeoutException: Lock wait timeout exceeded (stock.product_id=22)
+2026-11-10 21:02:15.402 INFO  [order-3]  POST /orders user=771 items=[31:1]
+2026-11-10 21:02:15.459 INFO  [order-3]  POST /orders 200 (57ms)
+2026-11-10 21:03:40.010 INFO  [order-2]  POST /orders user=903 items=[10:2, 31:1, 22:1]
+2026-11-10 21:03:40.022 INFO  [order-5]  POST /orders user=1288 items=[31:1, 10:1]
+2026-11-10 21:03:43.031 ERROR [order-5]  POST /orders 500 shop.LockTimeoutException: Lock wait timeout exceeded (stock.product_id=10)
+2026-11-10 21:03:43.188 INFO  [order-2]  POST /orders 200 (3178ms)
+2026-11-10 21:05:02.500 WARN  [batch]    stock check: product_id=22 expected=118 actual=116 (diff -2)
+2026-11-10 21:05:02.501 WARN  [batch]    stock check: product_id=10 expected=240 actual=239 (diff -1)

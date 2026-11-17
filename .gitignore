@@ -18,6 +18,11 @@ out/
 logs/
 *.log
 npm-debug.log*
+# 단, 과제 자료와 채점 샘플 안의 로그는 응시자가 보는 과제 파일이라 올린다
+!backend/src/main/resources/tasks/**/logs/
+!backend/src/main/resources/tasks/**/*.log
+!grader/samples/**/logs/
+!grader/samples/**/*.log
 
 # 파일럿 응시 기록과 채점 원본 데이터 (개인 정보가 들어갈 수 있음)
 pilot-data/
