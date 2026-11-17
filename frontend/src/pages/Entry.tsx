@@ -14,7 +14,8 @@ import {
   RefreshCw,
   Wifi,
 } from 'lucide-react'
-import { Button, cx, Logo, Sep, StatusDot, type Status } from '../components/ui'
+import { cx } from '../components/cx'
+import { Button, Logo, Sep, StatusDot, type Status } from '../components/ui'
 import { examInfo } from '../data/mock'
 
 // DESIGN.md §7-6 시험 입장 + §6.10 Stepper

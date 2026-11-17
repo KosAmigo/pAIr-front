@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, FilePlus2, FileCode2, Maximize2, X } from 'lucide-react'
 import type { EditProposal } from '../api'
 import { diffStat, lineDiff, type DiffLine } from '../lib/edits'
-import { Button, cx, IconButton } from './ui'
+import { cx } from './cx'
+import { Button, IconButton } from './ui'
 
 // AI 수정 제안: 채팅 안의 카드와, 넓게 보는 코드 보기 팝업. DESIGN.md §6.15
 

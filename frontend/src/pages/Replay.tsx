@@ -2,7 +2,8 @@ import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileBarChart2, GitBranch, GitCompareArrows, RotateCcw, X } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
-import { Button, ButtonLink, cx, IconButton, ScoreChip } from '../components/ui'
+import { cx } from '../components/cx'
+import { Button, ButtonLink, IconButton, ScoreChip } from '../components/ui'
 import { branches, COMPETENCIES, treeNodes, type TreeNode } from '../data/mock'
 
 // DESIGN.md §7-5 복기 트리 + §6.13 노드 & 선

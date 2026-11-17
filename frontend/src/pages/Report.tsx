@@ -4,7 +4,8 @@ import { isRealAttempt } from '../api'
 import RealReport from './RealReport'
 import { Bot, ChevronDown, CircleAlert, CircleCheck, GitBranch, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
-import { Button, ButtonLink, cx, Delta, Panel, Sep } from '../components/ui'
+import { cx } from '../components/cx'
+import { Button, ButtonLink, Delta, Panel, Sep } from '../components/ui'
 import { COMPETENCIES, density, moments, report, timelineEvents, type ChatMsg } from '../data/mock'
 
 // DESIGN.md §7-4 결과 리포트, §6.11 Timeline, §6.12 Quote Block

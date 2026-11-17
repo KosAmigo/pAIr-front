@@ -2,9 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router-dom'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 
-export function cx(...c: (string | false | null | undefined)[]) {
-  return c.filter(Boolean).join(' ')
-}
+import { cx } from './cx'
 
 // ── 6.1 Button ──────────────────────────────
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -20,7 +18,7 @@ const sizeCls: Record<Size, string> = {
   md: 'h-9 px-3.5 gap-2 text-[15px]',
   lg: 'h-11 px-5 gap-2 text-[16px]',
 }
-export function buttonCls(variant: Variant = 'secondary', size: Size = 'md', extra?: string) {
+function buttonCls(variant: Variant = 'secondary', size: Size = 'md', extra?: string) {
   return cx(
     'inline-flex shrink-0 items-center justify-center rounded-md font-semibold whitespace-nowrap',
     'transition-[background-color,border-color,color,filter] duration-[120ms] ease-out',
@@ -143,7 +141,7 @@ export function Tabs<T extends string>({
 }
 
 // ── 6.6 Score Chip ──────────────────────────
-export function scoreTone(score: number) {
+function scoreTone(score: number) {
   if (score >= 80) return 'signal'
   if (score >= 60) return 'info'
   if (score >= 40) return 'caution'

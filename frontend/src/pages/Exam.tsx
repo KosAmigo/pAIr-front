@@ -14,7 +14,8 @@ import {
   Save,
   X,
 } from 'lucide-react'
-import { Button, cx, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
+import { cx } from '../components/cx'
+import { Button, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { CodeEditor } from '../components/CodeEditor'
 import { SendKey } from '../components/SendKey'

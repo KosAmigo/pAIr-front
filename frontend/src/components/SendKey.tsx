@@ -1,5 +1,5 @@
 import { CornerDownLeft } from 'lucide-react'
-import { cx } from './ui'
+import { cx } from './cx'
 
 // DESIGN.md §6.8 AI Chat 전송 버튼: 키보드 엔터 키처럼 보이는 키캡 모양.
 // 보낼 내용이 있으면 signal 색으로 켜지고, 없거나 막혀 있으면 흐리게 둔다.

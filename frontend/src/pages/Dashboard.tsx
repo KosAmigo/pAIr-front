@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Clock, FileBarChart2, GitBranch, Play } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
-import { ButtonLink, cx, MetricTile, Panel, ScoreChip, Sep, Tabs } from '../components/ui'
+import { cx } from '../components/cx'
+import { ButtonLink, MetricTile, Panel, ScoreChip, Sep, Tabs } from '../components/ui'
 import { attempts, COMPETENCIES, recommended, trend, user, type CompetencyKey } from '../data/mock'
 
 // DESIGN.md §7-2 개인 대시보드
