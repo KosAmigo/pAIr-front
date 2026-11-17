@@ -7,6 +7,7 @@ import os
 import re
 
 from openpyxl import Workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
@@ -28,6 +29,7 @@ INT = re.compile(r"-?\d{1,15}")
 
 schema = open(SCHEMA, encoding="utf-8").read()
 korean = dict(re.findall(r"COMMENT ON TABLE\s+(\w+) IS '([^']*)'", schema))
+col_korean = {(t, c): k for t, c, k in re.findall(r"COMMENT ON COLUMN\s+(\w+)\.(\w+) IS '([^']*)'", schema)}
 
 wb = Workbook()
 toc = wb.active
@@ -40,7 +42,13 @@ for name in ORDER:
         rows = list(csv.reader(fh))
     head, body = rows[0], rows[1:]
     ws = wb.create_sheet(name)  # 탭 이름 = 테이블 이름 (가장 긴 것도 31자 이내)
-    ws.append(head)
+    # 머리줄은 한글 컬럼명(스키마 COMMENT), 영문 컬럼명은 메모로 남긴다
+    missing = [h for h in head if (name, h) not in col_korean]
+    if missing:
+        raise SystemExit(f"{name}: 한글 컬럼명 없음 {missing}")
+    ws.append([col_korean[(name, h)] for h in head])
+    for c, h in zip(ws[1], head):
+        c.comment = Comment(h, "pAIr")
     cut = 0
     for r in body:
         out = []
@@ -65,7 +73,7 @@ for name in ORDER:
             c.font = Font(name=FONT)
             c.alignment = Alignment(vertical="top")
     for i, h in enumerate(head, 1):
-        longest = max([len(h)] + [len(str(r[i - 1]).split("\n")[0]) for r in body[:200]])
+        longest = max([len(col_korean[(name, h)]) * 2] + [len(str(r[i - 1]).split("\n")[0]) for r in body[:200]])
         ws.column_dimensions[get_column_letter(i)].width = min(max(longest + 2, 8), 60)
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
@@ -87,6 +95,7 @@ toc.column_dimensions["C"].width = 8
 toc.column_dimensions["D"].width = 22
 toc.append([])
 toc.append(["안내"])
+toc.append(["컬럼 이름은 한글로 표시했고, 머리줄 칸에 마우스를 올리면 영문 컬럼명이 보인다."])
 toc.append(["빈 칸은 NULL. 원본은 csv/ 폴더의 테이블별 CSV이고, 이 파일은 보기 편하게 합친 사본이다."])
 toc.freeze_panes = "A2"
 
