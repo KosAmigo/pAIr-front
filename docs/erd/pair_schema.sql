@@ -157,11 +157,13 @@ COMMENT ON COLUMN question_choices.content IS '보기 내용';
 COMMENT ON COLUMN question_choices.is_correct IS '정답 여부';
 
 CREATE TABLE short_answer_keys (
-    question_id  BIGINT       NOT NULL REFERENCES task_questions (question_id),
-    accepted     VARCHAR(200) NOT NULL,
-    PRIMARY KEY (question_id, accepted)
+    answer_key_id  BIGSERIAL    PRIMARY KEY,
+    question_id    BIGINT       NOT NULL REFERENCES task_questions (question_id),
+    accepted       VARCHAR(200) NOT NULL,
+    UNIQUE (question_id, accepted)
 );
 COMMENT ON TABLE  short_answer_keys IS '단답형 정답(코드로 비교해 채점)';
+COMMENT ON COLUMN short_answer_keys.answer_key_id IS '답안 ID';
 COMMENT ON COLUMN short_answer_keys.question_id IS '문항 ID';
 COMMENT ON COLUMN short_answer_keys.accepted IS '인정 답안';
 

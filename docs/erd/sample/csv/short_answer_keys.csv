@@ -1,3 +1,3 @@
-question_id,accepted
-8,베이직
-8,베이직 요금제
+answer_key_id,question_id,accepted
+1,8,베이직
+2,8,베이직 요금제

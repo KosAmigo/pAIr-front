@@ -120,8 +120,8 @@ put("task_questions", QC, [SHORT, task_id["pricing-plan"], "TASK", "SHORT", 2,
 CH = ["choice_id", "question_id", "seq", "content", "is_correct"]
 for cid, (txt, ok) in enumerate([("약 21,080명", False), ("약 11,590명", True), ("약 7,030명", False), ("약 3,400명", False)], 1):
     put("question_choices", CH, [cid, MCQ, cid, txt, b(ok)])
-for acc in ["베이직", "베이직 요금제"]:
-    put("short_answer_keys", ["question_id", "accepted"], [SHORT, acc])
+for kid, acc in enumerate(["베이직", "베이직 요금제"], 1):
+    put("short_answer_keys", ["answer_key_id", "question_id", "accepted"], [kid, SHORT, acc])
 QS = ["question_id", "task_file_id", "pages", "note"]
 put("question_sources", QS, [MCQ, SURVEY, "2, 3", "베이직 전환 의향 34%(2쪽)와 실제 전환율 50~60%(3쪽)"])
 put("question_sources", QS, [MCQ, SALES, "1", "10월 베이직 월말 가입자 62,000명"])
