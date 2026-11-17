@@ -34,14 +34,24 @@ col_korean = {(t, c): k for t, c, k in re.findall(r"COMMENT ON COLUMN\s+(\w+)\.(
 wb = Workbook()
 toc = wb.active
 toc.title = "목차"
-toc.append(["테이블", "설명", "행 수", "비고"])
+toc.append(["탭", "테이블", "설명", "행 수", "비고"])
 cut_total = 0
+
+
+def tab_name(table):
+    """탭 이름 = 테이블 한글명에서 괄호 설명을 뺀 것. 엑셀 탭은 31자 이내, []:*?/\\ 금지."""
+    tab = re.sub(r"\(.*\)$", "", korean[table]).strip()
+    if len(tab) > 31 or re.search(r"[\[\]:*?/\\]", tab):
+        raise SystemExit(f"{table}: 탭 이름으로 못 씀 '{tab}'")
+    return tab
+
 
 for name in ORDER:
     with open(os.path.join(SRC, name + ".csv"), encoding="utf-8", newline="") as fh:
         rows = list(csv.reader(fh))
     head, body = rows[0], rows[1:]
-    ws = wb.create_sheet(name)  # 탭 이름 = 테이블 이름 (가장 긴 것도 31자 이내)
+    tab = tab_name(name)
+    ws = wb.create_sheet(tab)
     # 머리줄은 한글 컬럼명(스키마 COMMENT), 영문 컬럼명은 메모로 남긴다
     missing = [h for h in head if (name, h) not in col_korean]
     if missing:
@@ -78,9 +88,9 @@ for name in ORDER:
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
 
-    toc.append([name, korean.get(name, ""), len(body), f"긴 값 {cut}개 잘림" if cut else None])
+    toc.append([tab, name, korean[name], len(body), f"긴 값 {cut}개 잘림" if cut else None])
     link = toc.cell(row=toc.max_row, column=1)
-    link.hyperlink = f"#'{name}'!A1"
+    link.hyperlink = f"#'{tab}'!A1"
     link.font = Font(name=FONT, color="0563C1", underline="single")
 
 for c in toc[1]:
@@ -89,10 +99,11 @@ for c in toc[1]:
 for row in toc.iter_rows(min_row=2):
     for c in row[1:]:
         c.font = Font(name=FONT)
-toc.column_dimensions["A"].width = 22
-toc.column_dimensions["B"].width = 50
-toc.column_dimensions["C"].width = 8
-toc.column_dimensions["D"].width = 22
+toc.column_dimensions["A"].width = 20
+toc.column_dimensions["B"].width = 22
+toc.column_dimensions["C"].width = 55
+toc.column_dimensions["D"].width = 8
+toc.column_dimensions["E"].width = 18
 toc.append([])
 toc.append(["안내"])
 toc.append(["컬럼 이름은 한글로 표시했고, 머리줄 칸에 마우스를 올리면 영문 컬럼명이 보인다."])
