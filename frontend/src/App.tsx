@@ -12,6 +12,7 @@ import History from './pages/History'
 import Grader from './pages/Grader'
 import GraderResult from './pages/GraderResult'
 import { isRealAttempt } from './api'
+import { AntiCheatingSync } from './anti-cheating'
 
 // 실제 응시 ID(att-...)는 백엔드에 연결된 응시 화면, 그 밖의 ID는 기존 목업 화면
 function ExamRoute() {
@@ -22,6 +23,7 @@ function ExamRoute() {
 export default function App() {
   return (
     <BrowserRouter>
+      <AntiCheatingSync />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/tasks" element={<Tasks />} />
