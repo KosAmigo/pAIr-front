@@ -127,7 +127,8 @@ CREATE TABLE task_questions (
     content        TEXT        NOT NULL,
     points         INT,
     answer_guide   TEXT,
-    active         BOOLEAN     NOT NULL DEFAULT TRUE
+    active         BOOLEAN     NOT NULL DEFAULT TRUE,
+    UNIQUE (question_id, question_type)
 );
 COMMENT ON TABLE  task_questions IS '문항';
 COMMENT ON COLUMN task_questions.question_id IS '문항 ID';
@@ -145,7 +146,8 @@ CREATE TABLE question_choices (
     question_id  BIGINT    NOT NULL REFERENCES task_questions (question_id),
     seq          INT       NOT NULL,
     content      TEXT      NOT NULL,
-    is_correct   BOOLEAN   NOT NULL DEFAULT FALSE
+    is_correct   BOOLEAN   NOT NULL DEFAULT FALSE,
+    UNIQUE (choice_id, question_id)
 );
 COMMENT ON TABLE  question_choices IS '객관식 보기';
 COMMENT ON COLUMN question_choices.choice_id IS '보기 ID';
@@ -254,29 +256,45 @@ COMMENT ON COLUMN attempt_events.type IS '종류(SAVE/BUILD/RUN/AI_EDIT/SUBMIT)'
 COMMENT ON COLUMN attempt_events.payload IS '상세 내용';
 COMMENT ON COLUMN attempt_events.created_at IS '발생 시각';
 
-CREATE TABLE question_answers (
-    answer_id    BIGSERIAL    PRIMARY KEY,
-    attempt_id   BIGINT       NOT NULL REFERENCES attempts (attempt_id),
-    question_id  BIGINT       NOT NULL REFERENCES task_questions (question_id),
-    text_answer  TEXT,
-    answered_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    UNIQUE (attempt_id, question_id)
-);
-COMMENT ON TABLE  question_answers IS '문항 답변';
-COMMENT ON COLUMN question_answers.answer_id IS '답변 ID';
-COMMENT ON COLUMN question_answers.attempt_id IS '응시 ID';
-COMMENT ON COLUMN question_answers.question_id IS '문항 ID';
-COMMENT ON COLUMN question_answers.text_answer IS '답변 글(객관식은 없음)';
-COMMENT ON COLUMN question_answers.answered_at IS '답변 시각';
+-- 답변은 답하는 방식에 따라 두 테이블로 나눈다. 어느 쪽에 들어갈지는 문항 유형이 정하고,
+-- (문항 ID, 유형) 복합 외래 키로 문항의 실제 유형과 어긋난 답이 들어오지 못하게 한다.
 
-CREATE TABLE answer_choices (
-    answer_id  BIGINT NOT NULL REFERENCES question_answers (answer_id),
-    choice_id  BIGINT NOT NULL REFERENCES question_choices (choice_id),
-    PRIMARY KEY (answer_id, choice_id)
+CREATE TABLE choice_answers (
+    attempt_id     BIGINT       NOT NULL REFERENCES attempts (attempt_id),
+    question_id    BIGINT       NOT NULL,
+    question_type  VARCHAR(10)  NOT NULL CHECK (question_type IN ('SINGLE', 'MULTI')),
+    choice_id      BIGINT       NOT NULL,
+    answered_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    PRIMARY KEY (attempt_id, choice_id),
+    FOREIGN KEY (question_id, question_type) REFERENCES task_questions (question_id, question_type),
+    FOREIGN KEY (choice_id, question_id) REFERENCES question_choices (choice_id, question_id)
 );
-COMMENT ON TABLE  answer_choices IS '선택한 보기';
-COMMENT ON COLUMN answer_choices.answer_id IS '답변 ID';
-COMMENT ON COLUMN answer_choices.choice_id IS '보기 ID';
+-- 하나만 고르는 객관식(SINGLE)은 한 응시에서 보기를 하나만 고를 수 있다
+CREATE UNIQUE INDEX uq_choice_answers_single ON choice_answers (attempt_id, question_id) WHERE question_type = 'SINGLE';
+COMMENT ON TABLE  choice_answers IS '객관식 답변(선택한 보기)';
+COMMENT ON COLUMN choice_answers.attempt_id IS '응시 ID';
+COMMENT ON COLUMN choice_answers.question_id IS '문항 ID';
+COMMENT ON COLUMN choice_answers.question_type IS '문항 유형(SINGLE/MULTI)';
+COMMENT ON COLUMN choice_answers.choice_id IS '선택한 보기 ID';
+COMMENT ON COLUMN choice_answers.answered_at IS '답변 시각';
+
+CREATE TABLE text_answers (
+    text_answer_id  BIGSERIAL    PRIMARY KEY,
+    attempt_id      BIGINT       NOT NULL REFERENCES attempts (attempt_id),
+    question_id     BIGINT       NOT NULL,
+    question_type   VARCHAR(10)  NOT NULL CHECK (question_type IN ('SHORT', 'ESSAY')),
+    content         TEXT         NOT NULL,
+    answered_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    UNIQUE (attempt_id, question_id),
+    FOREIGN KEY (question_id, question_type) REFERENCES task_questions (question_id, question_type)
+);
+COMMENT ON TABLE  text_answers IS '단답형·서술형 답변';
+COMMENT ON COLUMN text_answers.text_answer_id IS '글 답변 ID';
+COMMENT ON COLUMN text_answers.attempt_id IS '응시 ID';
+COMMENT ON COLUMN text_answers.question_id IS '문항 ID';
+COMMENT ON COLUMN text_answers.question_type IS '문항 유형(SHORT/ESSAY)';
+COMMENT ON COLUMN text_answers.content IS '답변 글';
+COMMENT ON COLUMN text_answers.answered_at IS '답변 시각';
 
 CREATE TABLE chat_attachments (
     attachment_id  BIGSERIAL    PRIMARY KEY,

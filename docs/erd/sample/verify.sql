@@ -27,12 +27,12 @@ UNION ALL SELECT '롤백 응시와 체크포인트 주인이 다른 회원', COU
   WHERE o.user_id <> a.user_id
 UNION ALL SELECT '체크포인트 턴이 원래 응시에 없음', COUNT(*) FROM checkpoints c
   WHERE NOT EXISTS (SELECT 1 FROM chat_turns t WHERE t.attempt_id = c.attempt_id AND t.turn_no = c.turn_no)
-UNION ALL SELECT '선택한 보기가 다른 문항 것', COUNT(*) FROM answer_choices ac
-  JOIN question_answers qa ON qa.answer_id = ac.answer_id JOIN question_choices qc ON qc.choice_id = ac.choice_id
-  WHERE qc.question_id <> qa.question_id
-UNION ALL SELECT '답변 문항이 응시 과제와 다름', COUNT(*) FROM question_answers qa
-  JOIN attempts a ON a.attempt_id = qa.attempt_id JOIN task_questions q ON q.question_id = qa.question_id
+UNION ALL SELECT '답변 문항이 응시 과제와 다름', COUNT(*) FROM (
+    SELECT attempt_id, question_id FROM text_answers UNION ALL SELECT attempt_id, question_id FROM choice_answers) x
+  JOIN attempts a ON a.attempt_id = x.attempt_id JOIN task_questions q ON q.question_id = x.question_id
   WHERE q.task_id <> a.task_id
+UNION ALL SELECT '한 문항에 객관식·글 답변이 둘 다', COUNT(*) FROM text_answers t
+  JOIN choice_answers c ON c.attempt_id = t.attempt_id AND c.question_id = t.question_id
 UNION ALL SELECT '첨부한 과제 자료가 응시 과제와 다름', COUNT(*) FROM chat_attachments ca
   JOIN chat_turns t ON t.turn_id = ca.turn_id JOIN attempts a ON a.attempt_id = t.attempt_id
   JOIN task_files f ON f.task_file_id = ca.task_file_id WHERE f.task_id <> a.task_id
@@ -58,14 +58,23 @@ DECLARE a bigint := (SELECT max(attempt_id) FROM attempts);
         t bigint := (SELECT max(turn_id) FROM chat_turns);
         tn int   := (SELECT turn_no FROM chat_turns WHERE turn_id = (SELECT max(turn_id) FROM chat_turns));
         ta bigint := (SELECT attempt_id FROM chat_turns WHERE turn_id = (SELECT max(turn_id) FROM chat_turns));
-        qa record := (SELECT qa FROM question_answers qa ORDER BY answer_id DESC LIMIT 1);
+        qa record := (SELECT qa FROM text_answers qa ORDER BY text_answer_id DESC LIMIT 1);
+        ca record := (SELECT ca FROM choice_answers ca WHERE question_type = 'SINGLE' LIMIT 1);
+        other_choice bigint := (SELECT choice_id FROM question_choices WHERE question_id = (SELECT question_id FROM choice_answers WHERE question_type = 'SINGLE' LIMIT 1)
+                                AND choice_id NOT IN (SELECT choice_id FROM choice_answers WHERE attempt_id = (SELECT attempt_id FROM choice_answers WHERE question_type = 'SINGLE' LIMIT 1)) LIMIT 1);
+        mcq bigint := (SELECT question_id FROM task_questions WHERE question_type = 'SINGLE' LIMIT 1);
+        shortq bigint := (SELECT question_id FROM task_questions WHERE question_type = 'SHORT' LIMIT 1);
         rc record := (SELECT rc FROM rubric_checks rc LIMIT 1);
         tests text[][] := ARRAY[
   ['외부 업로드 첨부', format($q$INSERT INTO chat_attachments(turn_id,source_type,file_name,mime_type,sent_text) VALUES (%s,'UPLOAD','x.pdf','application/pdf','x')$q$, t)],
   ['원본 없는 과제 자료 첨부', format($q$INSERT INTO chat_attachments(turn_id,source_type,file_name,mime_type,sent_text) VALUES (%s,'TASK_FILE','x.pdf','application/pdf','x')$q$, t)],
   ['같은 응시에 중복 턴 번호', format($q$INSERT INTO chat_turns(attempt_id,turn_no,role,content) VALUES (%s,%s,'USER','x')$q$, ta, tn)],
-  ['없는 응시에 답변', format($q$INSERT INTO question_answers(attempt_id,question_id) VALUES (%s,1)$q$, a + 1000)],
-  ['같은 문항에 두 번 답', format($q$INSERT INTO question_answers(attempt_id,question_id) VALUES (%s,%s)$q$, (qa).attempt_id, (qa).question_id)],
+  ['없는 응시에 답변', format($q$INSERT INTO text_answers(attempt_id,question_id,question_type,content) VALUES (%s,1,'ESSAY','x')$q$, a + 1000)],
+  ['같은 문항에 두 번 답', format($q$INSERT INTO text_answers(attempt_id,question_id,question_type,content) VALUES (%s,%s,%L,'x')$q$, (qa).attempt_id, (qa).question_id, (qa).question_type)],
+  ['객관식 문항에 글 답변', format($q$INSERT INTO text_answers(attempt_id,question_id,question_type,content) VALUES (1,%s,'SINGLE','x')$q$, mcq)],
+  ['객관식 문항을 단답형이라 속여 글 답변', format($q$INSERT INTO text_answers(attempt_id,question_id,question_type,content) VALUES (1,%s,'SHORT','x')$q$, mcq)],
+  ['단답형 문항을 객관식이라 속여 보기 선택', format($q$INSERT INTO choice_answers(attempt_id,question_id,question_type,choice_id) SELECT 1,%s,'SINGLE',choice_id FROM question_choices LIMIT 1$q$, shortq)],
+  ['한 개만 고르는 문항에 보기 두 개', format($q$INSERT INTO choice_answers(attempt_id,question_id,question_type,choice_id) VALUES (%s,%s,'SINGLE',%s)$q$, (ca).attempt_id, (ca).question_id, other_choice)],
   ['같은 코드·직군 체크', format($q$INSERT INTO rubric_checks(item_key,code,track,method,points,label) VALUES (%L,%L,%L,%L,1,'x')$q$, (rc).item_key, (rc).code, (rc).track, (rc).method)],
   ['없는 페이지의 조각', $q$INSERT INTO document_chunks(task_file_id,page_no,chunk_no,content,token_count,embedding) SELECT task_file_id,999,1,'x',1,embedding FROM document_chunks LIMIT 1$q$],
   ['차원이 다른 벡터', $q$INSERT INTO document_chunks(task_file_id,page_no,chunk_no,content,token_count,embedding) SELECT task_file_id,page_no,99,'x',1,'[1,2,3]' FROM document_chunks LIMIT 1$q$],
