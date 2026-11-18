@@ -193,7 +193,7 @@ for n, s in enumerate(idx, 1):
     att_code[s["id"]] = a["taskId"]
     put("attempts", ["attempt_id", "user_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
                      "started_at", "submitted_at", "followups_done_at"],
-        [n, 2 if n % 2 else 3, task_id[a["taskId"]], "LIVE" if n in LIVE else "SELF", "DONE", a["model"], None,
+        [n, None if n in LIVE else (2 if n % 2 else 3), task_id[a["taskId"]], "LIVE" if n in LIVE else "SELF", "DONE", a["model"], None,
          a["startedAt"], a["submittedAt"], a["followupsDoneAt"]])
     ws = os.path.join(SAMPLES, s["id"], "workspace")
     for p in sorted(glob.glob(os.path.join(ws, "**", "*"), recursive=True)):
@@ -249,22 +249,27 @@ put("attempts", ["attempt_id", "user_id", "task_id", "mode", "status", "assistan
 put("exam_sessions", ["session_id", "company_id", "task_id", "title", "entry_code", "starts_at", "ends_at", "proctoring", "created_by", "created_at"],
     [1, 1, task_id["order-deadlock"], "2026 하반기 백엔드 신입 실전", "PAIR-7K2Q", "2026-11-11T09:40:00Z", "2026-11-11T10:40:00Z",
      "true", 4, "2026-11-10T12:00:00Z"])
-P = ["participant_id", "session_id", "email", "name", "invite_token", "user_id", "attempt_id", "invited_at", "entered_at"]
-put("exam_participants", P, [1, 1, "b@pair.test", "응시자B", "inv_8f3a1c9e2b7d4f60", 3, 4, "2026-11-10T12:05:00Z", "2026-11-11T09:42:08Z"])
-put("exam_participants", P, [2, 1, "a@pair.test", "응시자A", "inv_2d9c47a1e5b83f02", 2, 5, "2026-11-10T12:05:00Z", "2026-11-11T09:41:57Z"])
-put("exam_participants", P, [3, 1, "c@pair.test", "응시자C", "inv_71e0b4d6c3a95f18", None, None, "2026-11-10T12:05:00Z", None])
+# 실전 시험은 로그인 없이 보므로 대상자와 응시에 회원을 연결하지 않는다
+P = ["participant_id", "session_id", "email", "name", "invite_token", "attempt_id", "invited_at", "entered_at"]
+put("exam_participants", P, [1, 1, "b@pair.test", "응시자B", "inv_8f3a1c9e2b7d4f60", 4, "2026-11-10T12:05:00Z", "2026-11-11T09:42:08Z"])
+put("exam_participants", P, [2, 1, "a@pair.test", "응시자A", "inv_2d9c47a1e5b83f02", 5, "2026-11-10T12:05:00Z", "2026-11-11T09:41:57Z"])
+put("exam_participants", P, [3, 1, "c@pair.test", "응시자C", "inv_71e0b4d6c3a95f18", None, "2026-11-10T12:05:00Z", None])
 ENV = json.dumps({"camera": True, "fullscreen": True, "browser": "Chrome 142"})
 for n in LIVE:
     put("proctor_consents", ["attempt_id", "consent_version", "env_check", "consented_at"], [n, "v1", ENV, "2026-11-11T09:41:50Z"])
-PE = ["proctor_event_id", "attempt_id", "type", "started_at", "duration_ms", "confidence", "detail", "snapshot_key", "snapshot_deleted_at"]
-put("proctor_events", PE, [1, 4, "TAB_HIDDEN", "2026-11-11T09:42:10Z", 12000, None, None, None, None])
+PE = ["proctor_event_id", "attempt_id", "type", "started_at", "duration_ms", "confidence", "detail", "snapshot_key", "snapshot_deleted_at",
+      "review", "review_note", "reviewed_by", "reviewed_at"]
+NR = [None, None, None, None]  # 아직 확인하지 않은 이벤트
+put("proctor_events", PE, [1, 4, "TAB_HIDDEN", "2026-11-11T09:42:10Z", 12000, None, None, None, None,
+                           "OK", "응시자 문의: 감독 프로그램 알림을 닫다가 탭이 바뀜", 4, "2026-11-11T11:05:00Z"])
 put("proctor_events", PE, [2, 4, "PASTE", "2026-11-11T09:42:12Z", 0, None,
-                           json.dumps({"chars": 840, "fromAssistant": False}), None, None])
+                           json.dumps({"chars": 840, "fromAssistant": False}), None, None,
+                           "SUSPECT", "외부에서 840자 붙여넣기. 리포트 대화와 대조 필요", 4, "2026-11-11T11:07:00Z"])
 put("proctor_events", PE, [3, 4, "NO_FACE", "2026-11-11T09:42:13Z", 7000, 0.93, json.dumps({"faces": 0}),
-                           "proctor/4/3.jpg", None])
+                           "proctor/4/3.jpg", None, *NR])
 put("proctor_events", PE, [4, 5, "HEAD_TURN", "2026-11-11T09:42:01Z", 3500, 0.71, json.dumps({"yawDeg": 48}),
-                           "proctor/5/4.jpg", "2026-12-11T00:00:00Z"])
-put("proctor_events", PE, [5, 5, "WINDOW_BLUR", "2026-11-11T09:42:05Z", 2000, None, None, None, None])
+                           "proctor/5/4.jpg", "2026-12-11T00:00:00Z", *NR])
+put("proctor_events", PE, [5, 5, "WINDOW_BLUR", "2026-11-11T09:42:05Z", 2000, None, None, None, None, *NR])
 
 # ── 채점 결과 (K1 보완 버전, 실제 결과) ──
 sc = jc = rid = vid_n = 0

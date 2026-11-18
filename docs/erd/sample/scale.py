@@ -41,9 +41,9 @@ COPY = {
     "verdict_evidences": {"verdict_id": "verdict"},
     "question_results": {"scoring_id": "scoring"},
     "exam_sessions": {"session_id": "session", "created_by": "user"},
-    "exam_participants": {"participant_id": "participant", "session_id": "session", "user_id": "user", "attempt_id": "attempt"},
+    "exam_participants": {"participant_id": "participant", "session_id": "session", "attempt_id": "attempt"},
     "proctor_consents": {"attempt_id": "attempt"},
-    "proctor_events": {"proctor_event_id": "proctor_event", "attempt_id": "attempt"},
+    "proctor_events": {"proctor_event_id": "proctor_event", "attempt_id": "attempt", "reviewed_by": "user"},
 }
 # 각 번호 계열의 기준 테이블과 PK
 SERIES = {"user": ("users", "user_id"), "attempt": ("attempts", "attempt_id"),
@@ -54,7 +54,7 @@ SERIES = {"user": ("users", "user_id"), "attempt": ("attempts", "attempt_id"),
           "result": ("check_results", "result_id"), "verdict": ("judge_verdicts", "verdict_id"),
           "session": ("exam_sessions", "session_id"), "participant": ("exam_participants", "participant_id"), "proctor_event": ("proctor_events", "proctor_event_id")}
 TIME_COLS = {"created_at", "started_at", "submitted_at", "followups_done_at", "updated_at", "answered_at",
-             "finished_at", "invited_at", "entered_at", "consented_at", "snapshot_deleted_at", "starts_at", "ends_at"}
+             "finished_at", "invited_at", "entered_at", "consented_at", "snapshot_deleted_at", "reviewed_at", "starts_at", "ends_at"}
 
 
 def read(name):
