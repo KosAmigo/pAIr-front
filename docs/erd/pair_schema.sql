@@ -48,7 +48,13 @@ CREATE TABLE tasks (
     category        VARCHAR(30)  NOT NULL,
     difficulty      VARCHAR(10)  NOT NULL,
     time_limit_min  INT          NOT NULL,
-    status          VARCHAR(20)  NOT NULL DEFAULT 'OPEN'
+    status          VARCHAR(20)  NOT NULL DEFAULT 'CLOSED' CHECK (status IN ('OPEN', 'COMING_SOON', 'CLOSED')),
+    parent_task_id  BIGINT       REFERENCES tasks (task_id),
+    created_by      BIGINT       NOT NULL REFERENCES users (user_id),
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    published_at    TIMESTAMPTZ,
+    CHECK (status = 'CLOSED' OR published_at IS NOT NULL)
 );
 COMMENT ON TABLE  tasks IS '과제';
 COMMENT ON COLUMN tasks.task_id IS '과제 ID';
@@ -61,7 +67,15 @@ COMMENT ON COLUMN tasks.track IS '직군(DEV/BIZ)';
 COMMENT ON COLUMN tasks.category IS '과제 형태';
 COMMENT ON COLUMN tasks.difficulty IS '난이도';
 COMMENT ON COLUMN tasks.time_limit_min IS '제한 시간(분)';
-COMMENT ON COLUMN tasks.status IS '상태(OPEN/COMING_SOON)';
+COMMENT ON COLUMN tasks.status IS '상태(OPEN 공개/COMING_SOON 준비 중/CLOSED 숨김)';
+COMMENT ON COLUMN tasks.parent_task_id IS '복제 원본 과제 ID';
+COMMENT ON COLUMN tasks.created_by IS '만든 관리자 회원 ID';
+COMMENT ON COLUMN tasks.created_at IS '생성 시각';
+COMMENT ON COLUMN tasks.updated_at IS '수정 시각';
+COMMENT ON COLUMN tasks.published_at IS '처음 공개한 시각(없으면 한 번도 공개 안 됨)';
+
+-- 관리자가 AI로 만든 과제도 여기에 숨김(CLOSED)으로 들어가고, 검수 후 공개(OPEN)한다. 생성 요청 기록은 따로 두지 않는다.
+
 
 CREATE TABLE task_files (
     task_file_id  BIGSERIAL    PRIMARY KEY,
