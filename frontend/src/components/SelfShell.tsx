@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
+import { LayoutDashboard } from 'lucide-react'
+import { useAuth } from '../auth/auth'
 import { cx } from './cx'
 import { Logo, ModeBadge } from './ui'
-import { user } from '../data/mock'
+import { UserMenu } from './UserMenu'
 
 // DESIGN.md §7 공통 셸: 자가진단 화면은 상단 탭(과제 / 대시보드 / 내 기록)으로 이동한다.
 // 왼쪽 아이콘 레일은 응시 화면 전용이다 (components/ActivityRail.tsx).
@@ -14,6 +16,7 @@ const tabs = [
 
 export function SelfShell({ children, header }: { children: ReactNode; header?: ReactNode }) {
   const { pathname } = useLocation()
+  const { user } = useAuth()
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-stretch border-b border-line bg-panel px-8">
@@ -44,13 +47,16 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
           })}
         </nav>
         <div className="ml-auto flex items-center">
-          <div
-            className="flex size-8 items-center justify-center rounded-full bg-panel-raised text-[14px] font-semibold text-text"
-            title={`${user.name} (자가진단)`}
-            aria-label={`${user.name} 프로필`}
-          >
-            {user.name.slice(0, 1)}
-          </div>
+          {user && user.role !== 'USER' && (
+            <Link
+              to="/console"
+              title="콘솔: 과제 만들기, 시험 회차와 감독"
+              className="mr-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-line px-3 text-[14px] font-medium text-text-muted transition-colors hover:border-line-strong hover:bg-panel-raised hover:text-text"
+            >
+              <LayoutDashboard size={15} aria-hidden /> 콘솔
+            </Link>
+          )}
+          <UserMenu />
         </div>
       </header>
       {header}
