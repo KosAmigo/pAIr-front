@@ -33,7 +33,7 @@ function Quote({ m, selected }: { m: Turn; selected: boolean }) {
       className={cx(
         'rounded-sm border-l-2 px-4 py-3 transition-colors duration-[180ms]',
         ai ? 'border-info' : 'border-text-muted',
-        selected ? 'bg-panel-raised ring-1 ring-signal' : 'bg-panel-raised/60',
+        selected ? 'bg-panel-raised ring-1 ring-brand' : 'bg-panel-raised/60',
       )}
     >
       <div className="flex items-center gap-2 font-mono text-[12px] text-text-muted">
@@ -363,7 +363,7 @@ export default function RealReport() {
         <div className="mx-auto mt-16 max-w-[640px] rounded-md border border-line bg-panel p-8">
           <span className="label">SCORING</span>
           <h2 className="mt-2 flex items-center gap-2 text-h2 font-semibold">
-            <Loader2 size={20} className="animate-spin text-signal" aria-hidden /> 채점하고 있습니다
+            <Loader2 size={20} className="animate-spin text-brand" aria-hidden /> 채점하고 있습니다
           </h2>
           <ul className="mt-4 space-y-1 text-[15px] leading-6 text-text-muted">
             <li>숨은 테스트 실행 (개발 과제)</li>

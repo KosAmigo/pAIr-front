@@ -23,7 +23,7 @@ function RailButton({ label, icon: Icon, active, onClick }: Omit<Item, 'key'>) {
         active ? 'text-text' : 'text-text-faint hover:text-text',
       )}
     >
-      {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-signal" aria-hidden />}
+      {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand" aria-hidden />}
       <Icon size={22} strokeWidth={1.75} aria-hidden />
     </button>
   )
