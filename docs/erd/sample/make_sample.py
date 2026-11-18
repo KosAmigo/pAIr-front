@@ -9,6 +9,7 @@
 """
 import csv
 import glob
+import hashlib
 import json
 import os
 import re
@@ -21,11 +22,20 @@ SAMPLES = os.path.join(ROOT, "grader", "samples")
 RUN = os.path.join(ROOT, "grader", "runs", "20261113-105312", "results")  # K1 보완 버전으로 채점한 6개 역량 결과
 VERSIONS = os.path.join(ROOT, "grader", "versions")
 
-rows = {}
+rows = {}  # 테이블 → (컬럼 순서, 행 dict 목록). 행마다 컬럼이 달라도 되고, 없는 컬럼은 NULL
 
 
 def put(table, cols, row):
-    rows.setdefault(table, (cols, []))[1].append(row)
+    order, rs = rows.setdefault(table, ([], []))
+    for c in cols:
+        if c not in order:
+            order.append(c)
+    rs.append(dict(zip(cols, row)))
+
+
+def sha(v):
+    """토큰 원문은 메일·링크에만 두고 DB에는 SHA-256 해시(16진수 64자)만 넣는다."""
+    return hashlib.sha256(v.encode()).hexdigest()
 
 
 def rj(path):
@@ -46,14 +56,40 @@ U = ["user_id", "email", "password_hash", "name", "role", "company_id", "created
 put("users", U, [1, "admin@pair.test", "$2a$10$sampleAdminHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "관리자", "ADMIN", None, "2026-11-01T00:00:00Z"])
 put("users", U, [2, "a@pair.test", "$2a$10$sampleUserAHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "응시자A", "USER", None, "2026-11-02T00:00:00Z"])
 put("users", U, [3, "b@pair.test", "$2a$10$sampleUserBHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "응시자B", "USER", None, "2026-11-03T00:00:00Z"])
-put("users", U, [4, "hr@example-tech.test", "$2a$10$sampleCompanyHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "예시테크 담당자", "COMPANY", 1, "2026-11-04T00:00:00Z"])
+# 기업 회원: MANAGER(회차 만들기·과제 고르기·대상자·결과), PROCTOR(감독만)
+put("users", U, [4, "hr@example-tech.test", "$2a$10$sampleCompanyHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "예시테크 매니저", "MANAGER", 1, "2026-11-04T00:00:00Z"])
+# 탈퇴 회원: 이메일·이름·비밀번호를 익명값으로 바꾸고 기록(크레딧 원장)은 남긴다
+put("users", U + ["deleted_at"], [5, "deleted-5@deleted.pair.invalid", "!", "탈퇴 회원", "USER", None, "2026-11-05T00:00:00Z", "2026-11-15T00:00:00Z"])
+
+put("users", U, [6, "proctor@example-tech.test", "$2a$10$sampleProctorHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "예시테크 감독관", "PROCTOR", 1, "2026-11-06T00:00:00Z"])
+
+# ── 기업 도입 문의 → 승인 → 담당자 초대 ──
+IQ = ["inquiry_id", "company_name", "business_no", "contact_name", "contact_email", "message", "status", "company_id", "handled_by", "handled_at", "created_at"]
+put("company_inquiries", IQ, [1, "예시테크", "123-45-67890", "예시테크 담당자", "hr@example-tech.test", "하반기 신입 공채에 AI 활용 평가를 넣고 싶습니다.",
+                              "APPROVED", 1, 1, "2026-11-01T00:00:00Z", "2026-10-30T09:00:00Z"])
+put("company_inquiries", IQ, [2, "샘플랩", "222-33-44444", "샘플랩 인사팀", "people@samplelab.test", "도입 비용이 궁금합니다.",
+                              "PENDING", None, None, None, "2026-11-16T10:00:00Z"])
+put("company_inquiries", IQ, [3, "테스트상사", "999-99-99999", "홍길동", "hong@test-corp.test", None,
+                              "REJECTED", None, 1, "2026-11-12T00:00:00Z", "2026-11-11T00:00:00Z"])
+# 관리자가 첫 매니저를 초대하고, 매니저가 자기 회사 감독관을 초대한다
+CI = ["invite_id", "company_id", "email", "role", "token_hash", "invited_by", "expires_at", "accepted_user_id", "accepted_at", "created_at"]
+put("company_invites", CI, [1, 1, "hr@example-tech.test", "MANAGER", sha("cinv_sample_1"), 1, "2026-11-08T00:00:00Z", 4, "2026-11-04T00:00:00Z", "2026-11-01T00:00:00Z"])
+put("company_invites", CI, [2, 1, "proctor@example-tech.test", "PROCTOR", sha("cinv_sample_2"), 4, "2026-11-12T00:00:00Z", 6, "2026-11-06T00:00:00Z", "2026-11-05T00:00:00Z"])
+put("company_invites", CI, [3, 1, "proctor2@example-tech.test", "PROCTOR", sha("cinv_sample_3"), 4, "2026-11-24T00:00:00Z", None, None, "2026-11-17T00:00:00Z"])
+
+# ── 크레딧 구매 (테스트 결제) ──
+CP = ["purchase_id", "user_id", "credits", "amount_krw", "status", "pg_payment_key", "created_at", "paid_at"]
+put("credit_purchases", CP, [1, 2, 200, 9900, "PAID", "tpay_sample_0001", "2026-11-05T10:00:00Z", "2026-11-05T10:00:30Z"])
+put("credit_purchases", CP, [2, 3, 200, 9900, "PAID", "tpay_sample_0002", "2026-11-05T11:00:00Z", "2026-11-05T11:00:20Z"])
+put("credit_purchases", CP, [3, 2, 500, 19900, "FAILED", None, "2026-11-06T09:00:00Z", None])
+put("credit_purchases", CP, [4, 3, 200, 9900, "READY", None, "2026-11-17T09:00:00Z", None])
 
 # ── 과제 ──
 CATALOG = {
     "order-deadlock": ("주문이 3초 넘게 멈췄다가 실패합니다. 잠금 순서와 재고 정합성 문제를 찾아 고치세요.", "DEV", "장애 분석", "중급"),
     "pricing-plan": ("이탈 설문과 매출 자료로 저가 요금제 출시 여부를 판단하는 1페이지 기획안을 씁니다.", "BIZ", "기획서", "중급"),
 }
-TK = ["task_id", "code", "title", "summary", "description", "requirements", "track", "category", "difficulty", "time_limit_min", "status",
+TK = ["task_id", "code", "title", "summary", "description", "requirements", "track", "category", "difficulty", "time_limit_min", "usage", "status",
       "parent_task_id", "created_by", "created_at", "updated_at", "published_at"]
 task_id = {}
 for i, code in enumerate(["order-deadlock", "pricing-plan"], 1):
@@ -61,7 +97,7 @@ for i, code in enumerate(["order-deadlock", "pricing-plan"], 1):
     s, track, cat, lvl = CATALOG[code]
     task_id[code] = i
     put("tasks", TK, [i, code, t["title"], s, "\n".join(t["description"]), "\n".join("- " + r for r in t["requirements"]), track, cat, lvl,
-                      t["minutes"], "OPEN", None, 1, "2026-11-08T00:00:00Z", "2026-11-10T00:00:00Z", "2026-11-10T00:00:00Z"])
+                      t["minutes"], "SELF", "OPEN", None, 1, "2026-11-08T00:00:00Z", "2026-11-10T00:00:00Z", "2026-11-10T00:00:00Z"])
 
 # ── 과제 파일 (자료 2개는 PDF로 가정) ──
 MIME = {".java": "text/x-java", ".md": "text/markdown", ".log": "text/plain", ".csv": "text/csv"}
@@ -91,8 +127,16 @@ for code in ["order-deadlock", "pricing-plan"]:
 
 # ── AI로 만든 숨김 초안 과제 (예시): 검수 전이라 CLOSED, 공개 시각 없음 ──
 put("tasks", TK, [3, "inventory-sync", "재고 동기화 지연 원인 분석", "주문 직후 재고가 늦게 줄어드는 문제를 찾아 고치세요.", "(AI 생성 초안) 주문 서비스와 재고 서비스 사이 이벤트 처리가 늦어 …",
-                  "- 지연 원인을 찾아 NOTES.md에 정리\n- 지연을 없애는 수정\n- 회귀 테스트 추가", "DEV", "장애 분석", "중급", 60, "CLOSED", None, 1,
+                  "- 지연 원인을 찾아 NOTES.md에 정리\n- 지연을 없애는 수정\n- 회귀 테스트 추가", "DEV", "장애 분석", "중급", 60, "SELF", "CLOSED", None, 1,
                   "2026-11-16T03:00:00Z", "2026-11-16T03:00:00Z", None])
+# ── 기업용(LIVE) 과제: 자가진단 목록에 나오지 않는다. 자가진단 과제를 바탕으로 복제했다고 가정(복제 원본 = 1, 2번) ──
+put("tasks", TK, [4, "payment-lock-live", "결제 승인 교착 원인 분석", "결제 승인 요청이 몰리면 멈춥니다. 잠금 순서를 찾아 고치세요.", "(기업용) 결제 승인과 포인트 차감이 서로 잠금을 기다리며 …",
+                  "- 교착 원인을 찾아 NOTES.md에 정리\n- 교착 없이 동작하도록 수정\n- 동시성 테스트 추가", "DEV", "장애 분석", "중급", 60, "LIVE", "OPEN", 1, 1,
+                  "2026-11-09T00:00:00Z", "2026-11-09T00:00:00Z", "2026-11-09T00:00:00Z"])
+put("tasks", TK, [5, "bundle-plan-live", "번들 요금제 출시 기획안", "설문과 매출 자료로 번들 요금제 출시 여부를 판단하는 기획안을 씁니다.", "(기업용) 통신·OTT 번들 요금제를 내놓을지 …",
+                  "- 결론과 근거 3개\n- 리스크와 대응\n- 수치는 자료와 일치", "BIZ", "기획서", "중급", 40, "LIVE", "OPEN", 2, 1,
+                  "2026-11-09T00:00:00Z", "2026-11-09T00:00:00Z", "2026-11-09T00:00:00Z"])
+LIVE_DEV, LIVE_BIZ = 4, 5
 put("task_files", ["task_file_id", "task_id", "path", "content", "storage_key", "mime_type", "size_bytes", "visibility", "read_only"],
     [fid + 1, 3, "NOTES.md", "# 원인 분석\n", None, "text/markdown", 14, "VISIBLE", "false"])
 
@@ -186,15 +230,17 @@ EV = {"start": "START", "save": "SAVE", "run": "RUN", "build": "BUILD", "chat": 
 tid = eid = afid = ta_id = 0
 turn_ids = {}
 TA = ["text_answer_id", "attempt_id", "question_id", "question_type", "content", "answered_at"]
-LIVE = {4: 1, 5: 2}  # 개발 응시 2건은 실전 시험 회차에서 본 것으로 가정: 응시 번호 → 대상자 번호 (아래 실전 시험 · 감독)
+user_turns = []  # (응시 번호, 턴 ID, 시각): 자가진단 채팅 턴마다 크레딧 1 사용
+owner = lambda n: 2 if n % 2 else 3  # 샘플 응시는 응시자 A·B가 번갈아 푼 것으로 가정
 for n, s in enumerate(idx, 1):
     a = rj(os.path.join(SAMPLES, s["id"], "attempt.json"))
     attempt_id[s["id"]] = n
     att_code[s["id"]] = a["taskId"]
+    shared = [sha("share_sample_1"), "2026-11-13T00:00:00Z"] if n == 1 else [None, None]  # 1번 응시는 리포트 공유 링크를 켰다
     put("attempts", ["attempt_id", "user_id", "participant_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
-                     "started_at", "submitted_at", "followups_done_at"],
-        [n, None if n in LIVE else (2 if n % 2 else 3), LIVE.get(n), task_id[a["taskId"]], "LIVE" if n in LIVE else "SELF", "DONE", a["model"], None,
-         a["startedAt"], a["submittedAt"], a["followupsDoneAt"]])
+                     "started_at", "submitted_at", "followups_done_at", "share_token_hash", "shared_at"],
+        [n, owner(n), None, task_id[a["taskId"]], "SELF", "DONE", a["model"], None,
+         a["startedAt"], a["submittedAt"], a["followupsDoneAt"], *shared])
     ws = os.path.join(SAMPLES, s["id"], "workspace")
     for p in sorted(glob.glob(os.path.join(ws, "**", "*"), recursive=True)):
         if os.path.isdir(p) or "자료" in p:
@@ -206,6 +252,8 @@ for n, s in enumerate(idx, 1):
         tid += 1
         turn_ids[(n, t["turn"])] = tid
         ai = t["role"] == "ai"
+        if not ai:
+            user_turns.append((n, tid, t["at"]))
         put("chat_turns", ["turn_id", "attempt_id", "turn_no", "role", "content", "model", "input_tokens", "output_tokens", "created_at"],
             [tid, n, t["turn"], "AI" if ai else "USER", t["text"], t.get("model") if ai else None,
              t.get("inputTokens") if ai else None, t.get("outputTokens") if ai else None, t["at"]])
@@ -245,37 +293,47 @@ put("attempts", ["attempt_id", "user_id", "participant_id", "task_id", "mode", "
     [len(idx) + 1, 2, None, task_id["order-deadlock"], "SELF", "SOLVING", "gpt-6-luna", 1, "2026-11-12T10:00:00Z", None, None])
 
 # ── 실전 시험 · 감독 (예시) ──
-# 예시테크 담당자가 과제 2개(개발, 비개발)로 회차 1개를 열고 3명을 초대. 2명은 입장해 개발 과제를 풀었고(4, 5번),
-# 응시자A는 비개발 과제도 시작했다(풀던 중). 1명은 입장하지 않음. 시간은 회차 전체로 본다.
+# 예시테크 담당자가 기업용 과제 2개(개발, 비개발)로 회차 1개를 열고 3명을 초대. 2명은 입장해 개발 과제를 냈고,
+# 응시자A는 비개발 과제도 시작했다(풀던 중). 1명은 입장하지 않음. 시간은 회차 전체로 본다. 취소한 회차 1개도 있다.
 put("exam_sessions", ["session_id", "company_id", "title", "starts_at", "ends_at", "proctoring", "created_by", "created_at"],
     [1, 1, "2026 하반기 백엔드 신입 실전", "2026-11-11T09:40:00Z", "2026-11-11T10:40:00Z",
      "true", 4, "2026-11-10T12:00:00Z"])
-put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [1, task_id["order-deadlock"], 1])
-put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [1, task_id["pricing-plan"], 2])
+put("exam_sessions", ["session_id", "company_id", "title", "starts_at", "ends_at", "proctoring", "created_by", "created_at", "canceled_at"],
+    [2, 1, "2026 하반기 백엔드 신입 실전 (일정 변경으로 취소)", "2026-11-20T05:00:00Z", "2026-11-20T06:00:00Z",
+     "true", 4, "2026-11-12T00:00:00Z", "2026-11-14T00:00:00Z"])
+put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [1, LIVE_DEV, 1])
+put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [1, LIVE_BIZ, 2])
+put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [2, LIVE_DEV, 1])
 # 실전 시험은 로그인 없이 보므로 대상자와 응시에 회원을 연결하지 않는다. 응시가 대상자를 가리킨다(attempts.participant_id).
-P = ["participant_id", "session_id", "email", "name", "invite_token", "invited_at", "entered_at"]
-put("exam_participants", P, [1, 1, "b@pair.test", "응시자B", "inv_8f3a1c9e2b7d4f60", "2026-11-10T12:05:00Z", "2026-11-11T09:42:08Z"])
-put("exam_participants", P, [2, 1, "a@pair.test", "응시자A", "inv_2d9c47a1e5b83f02", "2026-11-10T12:05:00Z", "2026-11-11T09:41:57Z"])
-put("exam_participants", P, [3, 1, "c@pair.test", "응시자C", "inv_71e0b4d6c3a95f18", "2026-11-10T12:05:00Z", None])
-put("attempts", ["attempt_id", "user_id", "participant_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
-                 "started_at", "submitted_at", "followups_done_at"],
-    [len(idx) + 2, None, 2, task_id["pricing-plan"], "LIVE", "SOLVING", "gpt-6-luna", None, "2026-11-11T09:55:00Z", None, None])
+# 입장 링크 토큰 원문(inv_...)은 메일에만 있고 DB에는 해시만 저장한다. 하루 전 알림 메일도 보냈다.
+P = ["participant_id", "session_id", "email", "name", "invite_token_hash", "invited_at", "reminded_at", "entered_at"]
+put("exam_participants", P, [1, 1, "b@pair.test", "응시자B", sha("inv_8f3a1c9e2b7d4f60"), "2026-11-10T12:05:00Z", "2026-11-10T09:40:00Z", "2026-11-11T09:42:08Z"])
+put("exam_participants", P, [2, 1, "a@pair.test", "응시자A", sha("inv_2d9c47a1e5b83f02"), "2026-11-10T12:05:00Z", "2026-11-10T09:40:00Z", "2026-11-11T09:41:57Z"])
+put("exam_participants", P, [3, 1, "c@pair.test", "응시자C", sha("inv_71e0b4d6c3a95f18"), "2026-11-10T12:05:00Z", "2026-11-10T09:40:00Z", None])
+# 실전 응시: 기업용 과제를 푼다(과제 용도 = 응시 모드). 대상자 1·2는 개발 과제를 냈고(채점 중), 대상자 2는 비개발 과제를 푸는 중
+LA = ["attempt_id", "user_id", "participant_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
+      "started_at", "submitted_at", "followups_done_at"]
+L1, L2, L3 = len(idx) + 2, len(idx) + 3, len(idx) + 4
+put("attempts", LA, [L1, None, 1, LIVE_DEV, "LIVE", "SCORING", "gpt-6-luna", None, "2026-11-11T09:42:08Z", "2026-11-11T10:30:00Z", "2026-11-11T10:34:00Z"])
+put("attempts", LA, [L2, None, 2, LIVE_DEV, "LIVE", "SCORING", "gpt-6-luna", None, "2026-11-11T09:41:57Z", "2026-11-11T10:20:00Z", "2026-11-11T10:25:00Z"])
+put("attempts", LA, [L3, None, 2, LIVE_BIZ, "LIVE", "SOLVING", "gpt-6-luna", None, "2026-11-11T10:26:00Z", None, None])
+LIVE = {L1: 1, L2: 2, L3: 2}  # 응시 번호 → 대상자 번호
 ENV = json.dumps({"camera": True, "fullscreen": True, "browser": "Chrome 142"})
-for p in sorted(LIVE.values()):  # 감독 동의는 대상자마다 회차당 1번
+for p in sorted(set(LIVE.values())):  # 감독 동의는 대상자마다 회차당 1번
     put("proctor_consents", ["participant_id", "consent_version", "env_check", "consented_at"], [p, "v1", ENV, "2026-11-11T09:41:50Z"])
 PE = ["proctor_event_id", "attempt_id", "type", "started_at", "duration_ms", "confidence", "detail", "snapshot_key", "snapshot_deleted_at",
       "review", "review_note", "reviewed_by", "reviewed_at"]
 NR = [None, None, None, None]  # 아직 확인하지 않은 이벤트
-put("proctor_events", PE, [1, 4, "TAB_HIDDEN", "2026-11-11T09:42:10Z", 12000, None, None, None, None,
-                           "OK", "응시자 문의: 감독 프로그램 알림을 닫다가 탭이 바뀜", 4, "2026-11-11T11:05:00Z"])
-put("proctor_events", PE, [2, 4, "PASTE", "2026-11-11T09:42:12Z", 0, None,
+put("proctor_events", PE, [1, L1, "TAB_HIDDEN", "2026-11-11T09:42:10Z", 12000, None, None, None, None,
+                           "OK", "응시자 문의: 감독 프로그램 알림을 닫다가 탭이 바뀜", 6, "2026-11-11T11:05:00Z"])
+put("proctor_events", PE, [2, L1, "PASTE", "2026-11-11T09:42:12Z", 0, None,
                            json.dumps({"chars": 840, "fromAssistant": False}), None, None,
-                           "SUSPECT", "외부에서 840자 붙여넣기. 리포트 대화와 대조 필요", 4, "2026-11-11T11:07:00Z"])
-put("proctor_events", PE, [3, 4, "NO_FACE", "2026-11-11T09:42:13Z", 7000, 0.93, json.dumps({"faces": 0}),
-                           "proctor/4/3.jpg", None, *NR])
-put("proctor_events", PE, [4, 5, "HEAD_TURN", "2026-11-11T09:42:01Z", 3500, 0.71, json.dumps({"yawDeg": 48}),
-                           "proctor/5/4.jpg", "2026-12-11T00:00:00Z", *NR])
-put("proctor_events", PE, [5, 5, "WINDOW_BLUR", "2026-11-11T09:42:05Z", 2000, None, None, None, None, *NR])
+                           "SUSPECT", "외부에서 840자 붙여넣기. 리포트 대화와 대조 필요", 6, "2026-11-11T11:07:00Z"])
+put("proctor_events", PE, [3, L1, "NO_FACE", "2026-11-11T09:42:13Z", 7000, 0.93, json.dumps({"faces": 0}),
+                           f"proctor/{L1}/3.jpg", None, *NR])
+put("proctor_events", PE, [4, L2, "HEAD_TURN", "2026-11-11T09:42:01Z", 3500, 0.71, json.dumps({"yawDeg": 48}),
+                           f"proctor/{L2}/4.jpg", "2026-12-11T00:00:00Z", *NR])
+put("proctor_events", PE, [5, L2, "WINDOW_BLUR", "2026-11-11T09:42:05Z", 2000, None, None, None, None, *NR])
 
 # ── 채점 결과 (K1 보완 버전, 실제 결과) ──
 sc = jc = rid = vid_n = 0
@@ -310,11 +368,28 @@ for s in idx:
             put("question_results", ["scoring_id", "question_id", "score", "method", "reason"],
                 [sc, q, pts if answer_rows[(n, q)] else 0, "AUTO", "정답" if answer_rows[(n, q)] else "오답"])
 
+# ── 크레딧 원장: 가입 30 지급, 구매 적립, 응시 시작 10, 롤백 5, 채팅 턴 1. 시간순으로 잔액을 쌓는다 ──
+COST = {"SIGNUP": 30, "ATTEMPT_START": -10, "ROLLBACK": -5, "CHAT_TURN": -1}
+ev = [(u, at, "SIGNUP", COST["SIGNUP"], None, None, None) for u, at in [(2, "2026-11-02T00:00:00Z"), (3, "2026-11-03T00:00:00Z"), (5, "2026-11-05T00:00:00Z")]]
+ev += [(u, at, "PURCHASE", cr, pid, None, None) for pid, u, cr, at in [(1, 2, 200, "2026-11-05T10:00:30Z"), (2, 3, 200, "2026-11-05T11:00:20Z")]]
+for s in idx:
+    n = attempt_id[s["id"]]
+    ev.append((owner(n), rj(os.path.join(SAMPLES, s["id"], "attempt.json"))["startedAt"], "ATTEMPT_START", COST["ATTEMPT_START"], None, n, None))
+ev.append((2, "2026-11-12T10:00:00Z", "ROLLBACK", COST["ROLLBACK"], None, len(idx) + 1, None))
+ev += [(owner(n), at, "CHAT_TURN", COST["CHAT_TURN"], None, None, tid) for n, tid, at in user_turns]
+bal, lid = {}, 0
+for u, at, reason, amt, pid, att, tid in sorted(ev, key=lambda e: (e[1], e[0])):
+    lid += 1
+    bal[u] = bal.get(u, 0) + amt
+    assert bal[u] >= 0, (u, at, bal[u])
+    put("credit_ledger", ["ledger_id", "user_id", "amount", "balance_after", "reason", "purchase_id", "attempt_id", "turn_id", "created_at"],
+        [lid, u, amt, bal[u], reason, pid, att, tid, at])
+
 for table, (cols, rs) in rows.items():
     with open(os.path.join(OUT, table + ".csv"), "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(cols)
         for r in rs:
-            w.writerow(["" if v is None else v for v in r])
+            w.writerow(["" if r.get(c) is None else r[c] for c in cols])
 print({t: len(rs) for t, (_, rs) in rows.items()})
 json.dump({f"{f}:{p}": t for (f, p), t in page_text.items()}, open(os.path.join(OUT, "_pages.json"), "w", encoding="utf-8"), ensure_ascii=False)

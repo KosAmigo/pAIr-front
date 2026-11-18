@@ -23,19 +23,97 @@ CREATE TABLE users (
     email          VARCHAR(255) NOT NULL UNIQUE,
     password_hash  VARCHAR(100) NOT NULL,
     name           VARCHAR(50)  NOT NULL,
-    role           VARCHAR(10)  NOT NULL DEFAULT 'USER',
+    role           VARCHAR(10)  NOT NULL DEFAULT 'USER' CHECK (role IN ('USER', 'MANAGER', 'PROCTOR', 'ADMIN')),
     company_id     BIGINT       REFERENCES companies (company_id),
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    CHECK (role <> 'COMPANY' OR company_id IS NOT NULL)
+    deleted_at     TIMESTAMPTZ,
+    CHECK ((role IN ('MANAGER', 'PROCTOR')) = (company_id IS NOT NULL))
 );
 COMMENT ON TABLE  users IS '회원';
 COMMENT ON COLUMN users.user_id IS '회원 ID';
 COMMENT ON COLUMN users.email IS '이메일(로그인 ID)';
 COMMENT ON COLUMN users.password_hash IS '비밀번호 해시(BCrypt)';
 COMMENT ON COLUMN users.name IS '이름';
-COMMENT ON COLUMN users.role IS '권한(USER/COMPANY/ADMIN)';
-COMMENT ON COLUMN users.company_id IS '소속 회사 ID(기업 담당자만)';
+COMMENT ON COLUMN users.role IS '권한(USER 응시자/MANAGER 기업 매니저/PROCTOR 기업 감독관/ADMIN 관리자)';
+COMMENT ON COLUMN users.company_id IS '소속 회사 ID(MANAGER·PROCTOR만)';
 COMMENT ON COLUMN users.created_at IS '가입 시각';
+COMMENT ON COLUMN users.deleted_at IS '탈퇴 시각(탈퇴하면 이메일·이름을 익명값으로 바꾸고 기록은 남김)';
+
+CREATE TABLE company_inquiries (
+    inquiry_id     BIGSERIAL    PRIMARY KEY,
+    company_name   VARCHAR(100) NOT NULL,
+    business_no    VARCHAR(20)  NOT NULL,
+    contact_name   VARCHAR(50)  NOT NULL,
+    contact_email  VARCHAR(255) NOT NULL,
+    message        TEXT,
+    status         VARCHAR(10)  NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    company_id     BIGINT       REFERENCES companies (company_id),
+    handled_by     BIGINT       REFERENCES users (user_id),
+    handled_at     TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK ((status = 'APPROVED') = (company_id IS NOT NULL)),
+    CHECK ((status = 'PENDING') = (handled_by IS NULL)),
+    CHECK ((handled_by IS NULL) = (handled_at IS NULL))
+);
+COMMENT ON TABLE  company_inquiries IS '기업 도입 문의';
+COMMENT ON COLUMN company_inquiries.inquiry_id IS '문의 ID';
+COMMENT ON COLUMN company_inquiries.company_name IS '회사 이름';
+COMMENT ON COLUMN company_inquiries.business_no IS '사업자등록번호';
+COMMENT ON COLUMN company_inquiries.contact_name IS '담당자 이름';
+COMMENT ON COLUMN company_inquiries.contact_email IS '담당자 이메일';
+COMMENT ON COLUMN company_inquiries.message IS '문의 내용';
+COMMENT ON COLUMN company_inquiries.status IS '처리 상태(PENDING 대기/APPROVED 승인/REJECTED 거절)';
+COMMENT ON COLUMN company_inquiries.company_id IS '승인하며 등록한 회사 ID';
+COMMENT ON COLUMN company_inquiries.handled_by IS '처리한 관리자 회원 ID';
+COMMENT ON COLUMN company_inquiries.handled_at IS '처리 시각';
+COMMENT ON COLUMN company_inquiries.created_at IS '문의 시각';
+
+CREATE TABLE company_invites (
+    invite_id         BIGSERIAL    PRIMARY KEY,
+    company_id        BIGINT       NOT NULL REFERENCES companies (company_id),
+    email             VARCHAR(255) NOT NULL,
+    role              VARCHAR(10)  NOT NULL CHECK (role IN ('MANAGER', 'PROCTOR')),
+    token_hash        CHAR(64)     NOT NULL UNIQUE,
+    invited_by        BIGINT       NOT NULL REFERENCES users (user_id),
+    expires_at        TIMESTAMPTZ  NOT NULL,
+    accepted_user_id  BIGINT       UNIQUE REFERENCES users (user_id),
+    accepted_at       TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK (expires_at > created_at),
+    CHECK ((accepted_user_id IS NULL) = (accepted_at IS NULL))
+);
+COMMENT ON TABLE  company_invites IS '기업 담당자 초대';
+COMMENT ON COLUMN company_invites.invite_id IS '초대 ID';
+COMMENT ON COLUMN company_invites.company_id IS '회사 ID';
+COMMENT ON COLUMN company_invites.email IS '초대 이메일';
+COMMENT ON COLUMN company_invites.role IS '초대 권한(MANAGER/PROCTOR)';
+COMMENT ON COLUMN company_invites.token_hash IS '초대 링크 토큰 해시(SHA-256)';
+COMMENT ON COLUMN company_invites.invited_by IS '초대한 회원 ID(관리자, 또는 감독관을 초대하는 같은 회사 매니저)';
+COMMENT ON COLUMN company_invites.expires_at IS '만료 시각';
+COMMENT ON COLUMN company_invites.accepted_user_id IS '가입한 담당자 회원 ID';
+COMMENT ON COLUMN company_invites.accepted_at IS '가입 시각';
+COMMENT ON COLUMN company_invites.created_at IS '초대 시각';
+
+CREATE TABLE credit_purchases (
+    purchase_id     BIGSERIAL    PRIMARY KEY,
+    user_id         BIGINT       NOT NULL REFERENCES users (user_id),
+    credits         INT          NOT NULL CHECK (credits > 0),
+    amount_krw      INT          NOT NULL CHECK (amount_krw >= 0),
+    status          VARCHAR(10)  NOT NULL DEFAULT 'READY' CHECK (status IN ('READY', 'PAID', 'FAILED', 'CANCELED')),
+    pg_payment_key  VARCHAR(200) UNIQUE,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    paid_at         TIMESTAMPTZ,
+    CHECK (status <> 'PAID' OR (paid_at IS NOT NULL AND pg_payment_key IS NOT NULL))
+);
+COMMENT ON TABLE  credit_purchases IS '크레딧 구매';
+COMMENT ON COLUMN credit_purchases.purchase_id IS '구매 ID';
+COMMENT ON COLUMN credit_purchases.user_id IS '회원 ID';
+COMMENT ON COLUMN credit_purchases.credits IS '구매 크레딧';
+COMMENT ON COLUMN credit_purchases.amount_krw IS '결제 금액(원)';
+COMMENT ON COLUMN credit_purchases.status IS '결제 상태(READY 결제 전/PAID 완료/FAILED 실패/CANCELED 취소)';
+COMMENT ON COLUMN credit_purchases.pg_payment_key IS '결제 대행사 결제 키';
+COMMENT ON COLUMN credit_purchases.created_at IS '주문 시각';
+COMMENT ON COLUMN credit_purchases.paid_at IS '결제 완료 시각';
 
 CREATE TABLE tasks (
     task_id         BIGSERIAL    PRIMARY KEY,
@@ -48,13 +126,15 @@ CREATE TABLE tasks (
     category        VARCHAR(30)  NOT NULL,
     difficulty      VARCHAR(10)  NOT NULL,
     time_limit_min  INT          NOT NULL,
+    usage           VARCHAR(10)  NOT NULL CHECK (usage IN ('SELF', 'LIVE')),
     status          VARCHAR(20)  NOT NULL DEFAULT 'CLOSED' CHECK (status IN ('OPEN', 'CLOSED')),
     parent_task_id  BIGINT       REFERENCES tasks (task_id),
     created_by      BIGINT       NOT NULL REFERENCES users (user_id),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     published_at    TIMESTAMPTZ,
-    CHECK (status = 'CLOSED' OR published_at IS NOT NULL)
+    CHECK (status = 'CLOSED' OR published_at IS NOT NULL),
+    UNIQUE (task_id, usage)
 );
 COMMENT ON TABLE  tasks IS '과제';
 COMMENT ON COLUMN tasks.task_id IS '과제 ID';
@@ -67,6 +147,7 @@ COMMENT ON COLUMN tasks.track IS '직군(DEV/BIZ)';
 COMMENT ON COLUMN tasks.category IS '과제 형태';
 COMMENT ON COLUMN tasks.difficulty IS '난이도';
 COMMENT ON COLUMN tasks.time_limit_min IS '제한 시간(분)';
+COMMENT ON COLUMN tasks.usage IS '용도(SELF 자가진단/LIVE 기업 실전)';
 COMMENT ON COLUMN tasks.status IS '상태(OPEN 공개/CLOSED 숨김)';
 COMMENT ON COLUMN tasks.parent_task_id IS '복제 원본 과제 ID';
 COMMENT ON COLUMN tasks.created_by IS '만든 관리자 회원 ID';
@@ -200,15 +281,20 @@ CREATE TABLE attempts (
     attempt_id                 BIGSERIAL    PRIMARY KEY,
     user_id                    BIGINT       REFERENCES users (user_id),
     participant_id             BIGINT,
-    task_id                    BIGINT       NOT NULL REFERENCES tasks (task_id),
-    mode                       VARCHAR(10)  NOT NULL,
+    task_id                    BIGINT       NOT NULL,
+    mode                       VARCHAR(10)  NOT NULL CHECK (mode IN ('SELF', 'LIVE')),
     status                     VARCHAR(20)  NOT NULL,
     assistant_model            VARCHAR(50)  NOT NULL,
     forked_from_checkpoint_id  BIGINT,
     started_at                 TIMESTAMPTZ  NOT NULL DEFAULT now(),
     submitted_at               TIMESTAMPTZ,
     followups_done_at          TIMESTAMPTZ,
+    share_token_hash           CHAR(64)     UNIQUE,
+    shared_at                  TIMESTAMPTZ,
+    FOREIGN KEY (task_id, mode) REFERENCES tasks (task_id, usage),
     CHECK ((mode = 'SELF') = (user_id IS NOT NULL)),
+    CHECK (share_token_hash IS NULL OR mode = 'SELF'),
+    CHECK ((share_token_hash IS NULL) = (shared_at IS NULL)),
     CHECK ((mode = 'LIVE') = (participant_id IS NOT NULL)),
     UNIQUE (participant_id, task_id)
 );
@@ -217,13 +303,15 @@ COMMENT ON COLUMN attempts.attempt_id IS '응시 ID';
 COMMENT ON COLUMN attempts.user_id IS '회원 ID(자가진단만. 실전 응시는 로그인 없이 보므로 비어 있음)';
 COMMENT ON COLUMN attempts.participant_id IS '대상자 ID(실전만. 회차 과제마다 응시 1건)';
 COMMENT ON COLUMN attempts.task_id IS '과제 ID';
-COMMENT ON COLUMN attempts.mode IS '모드(SELF 자가진단/LIVE 실전)';
+COMMENT ON COLUMN attempts.mode IS '모드(SELF 자가진단/LIVE 실전, 과제 용도와 같아야 함)';
 COMMENT ON COLUMN attempts.status IS '상태';
 COMMENT ON COLUMN attempts.assistant_model IS '어시스턴트 모델';
 COMMENT ON COLUMN attempts.forked_from_checkpoint_id IS '롤백 출발 체크포인트 ID';
 COMMENT ON COLUMN attempts.started_at IS '시작 시각';
 COMMENT ON COLUMN attempts.submitted_at IS '제출 시각';
 COMMENT ON COLUMN attempts.followups_done_at IS '후속 질문 완료 시각';
+COMMENT ON COLUMN attempts.share_token_hash IS '리포트 공유 링크 토큰 해시(자가진단만, 끄면 비움)';
+COMMENT ON COLUMN attempts.shared_at IS '공유 시작 시각';
 
 CREATE TABLE attempt_files (
     attempt_file_id  BIGSERIAL    PRIMARY KEY,
@@ -316,6 +404,32 @@ COMMENT ON COLUMN text_answers.question_id IS '문항 ID';
 COMMENT ON COLUMN text_answers.question_type IS '문항 유형(SHORT/ESSAY)';
 COMMENT ON COLUMN text_answers.content IS '답변 글';
 COMMENT ON COLUMN text_answers.answered_at IS '답변 시각';
+
+CREATE TABLE credit_ledger (
+    ledger_id      BIGSERIAL    PRIMARY KEY,
+    user_id        BIGINT       NOT NULL REFERENCES users (user_id),
+    amount         INT          NOT NULL CHECK (amount <> 0),
+    balance_after  INT          NOT NULL CHECK (balance_after >= 0),
+    reason         VARCHAR(20)  NOT NULL CHECK (reason IN ('SIGNUP', 'PURCHASE', 'ATTEMPT_START', 'ROLLBACK', 'CHAT_TURN')),
+    purchase_id    BIGINT       UNIQUE REFERENCES credit_purchases (purchase_id),
+    attempt_id     BIGINT       UNIQUE REFERENCES attempts (attempt_id),
+    turn_id        BIGINT       UNIQUE REFERENCES chat_turns (turn_id),
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK ((reason IN ('SIGNUP', 'PURCHASE')) = (amount > 0)),
+    CHECK ((reason = 'PURCHASE') = (purchase_id IS NOT NULL)),
+    CHECK ((reason IN ('ATTEMPT_START', 'ROLLBACK')) = (attempt_id IS NOT NULL)),
+    CHECK ((reason = 'CHAT_TURN') = (turn_id IS NOT NULL))
+);
+COMMENT ON TABLE  credit_ledger IS '크레딧 원장';
+COMMENT ON COLUMN credit_ledger.ledger_id IS '원장 ID';
+COMMENT ON COLUMN credit_ledger.user_id IS '회원 ID';
+COMMENT ON COLUMN credit_ledger.amount IS '증감(+ 적립/- 사용)';
+COMMENT ON COLUMN credit_ledger.balance_after IS '처리 후 잔액';
+COMMENT ON COLUMN credit_ledger.reason IS '사유(SIGNUP 가입/PURCHASE 구매/ATTEMPT_START 응시 시작/ROLLBACK 롤백/CHAT_TURN 채팅 턴)';
+COMMENT ON COLUMN credit_ledger.purchase_id IS '구매 ID(구매 적립만)';
+COMMENT ON COLUMN credit_ledger.attempt_id IS '응시 ID(응시 시작·롤백만)';
+COMMENT ON COLUMN credit_ledger.turn_id IS '대화 턴 ID(채팅 턴만)';
+COMMENT ON COLUMN credit_ledger.created_at IS '처리 시각';
 
 CREATE TABLE chat_attachments (
     attachment_id  BIGSERIAL    PRIMARY KEY,
@@ -538,7 +652,9 @@ CREATE TABLE exam_sessions (
     proctoring    BOOLEAN      NOT NULL DEFAULT true,
     created_by    BIGINT       NOT NULL REFERENCES users (user_id),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    CHECK (ends_at > starts_at)
+    canceled_at   TIMESTAMPTZ,
+    CHECK (ends_at > starts_at),
+    CHECK (canceled_at IS NULL OR canceled_at < starts_at)
 );
 COMMENT ON TABLE  exam_sessions IS '시험 회차';
 COMMENT ON COLUMN exam_sessions.session_id IS '회차 ID';
@@ -547,19 +663,23 @@ COMMENT ON COLUMN exam_sessions.title IS '회차 이름';
 COMMENT ON COLUMN exam_sessions.starts_at IS '시작 시각(전원 동시)';
 COMMENT ON COLUMN exam_sessions.ends_at IS '종료 시각(전원 동시)';
 COMMENT ON COLUMN exam_sessions.proctoring IS '감독 사용 여부';
-COMMENT ON COLUMN exam_sessions.created_by IS '만든 관리자 회원 ID';
+COMMENT ON COLUMN exam_sessions.created_by IS '만든 회원 ID(같은 회사 MANAGER 또는 관리자)';
 COMMENT ON COLUMN exam_sessions.created_at IS '생성 시각';
+COMMENT ON COLUMN exam_sessions.canceled_at IS '취소 시각(시작 전에만 취소 가능)';
 
 CREATE TABLE exam_session_tasks (
     session_id  BIGINT    NOT NULL REFERENCES exam_sessions (session_id),
-    task_id     BIGINT    NOT NULL REFERENCES tasks (task_id),
-    sort_order  SMALLINT  NOT NULL CHECK (sort_order > 0),
+    task_id     BIGINT       NOT NULL,
+    task_usage  VARCHAR(10)  NOT NULL DEFAULT 'LIVE' CHECK (task_usage = 'LIVE'),
+    sort_order  SMALLINT     NOT NULL CHECK (sort_order > 0),
     PRIMARY KEY (session_id, task_id),
+    FOREIGN KEY (task_id, task_usage) REFERENCES tasks (task_id, usage),
     UNIQUE (session_id, sort_order)
 );
 COMMENT ON TABLE  exam_session_tasks IS '회차 과제';
 COMMENT ON COLUMN exam_session_tasks.session_id IS '회차 ID';
 COMMENT ON COLUMN exam_session_tasks.task_id IS '과제 ID';
+COMMENT ON COLUMN exam_session_tasks.task_usage IS '과제 용도(항상 LIVE, 기업용 과제만 걸리게 하는 FK용)';
 COMMENT ON COLUMN exam_session_tasks.sort_order IS '순서';
 
 CREATE TABLE exam_participants (
@@ -567,8 +687,9 @@ CREATE TABLE exam_participants (
     session_id      BIGINT       NOT NULL REFERENCES exam_sessions (session_id),
     email           VARCHAR(255) NOT NULL,
     name            VARCHAR(50)  NOT NULL,
-    invite_token    VARCHAR(64)  NOT NULL UNIQUE,
+    invite_token_hash  CHAR(64)  NOT NULL UNIQUE,
     invited_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    reminded_at     TIMESTAMPTZ,
     entered_at      TIMESTAMPTZ,
     UNIQUE (session_id, email)
 );
@@ -577,8 +698,9 @@ COMMENT ON COLUMN exam_participants.participant_id IS '대상자 ID';
 COMMENT ON COLUMN exam_participants.session_id IS '회차 ID';
 COMMENT ON COLUMN exam_participants.email IS '초대 이메일';
 COMMENT ON COLUMN exam_participants.name IS '이름';
-COMMENT ON COLUMN exam_participants.invite_token IS '입장 링크 토큰(유일한 입장 방법)';
-COMMENT ON COLUMN exam_participants.invited_at IS '초대 시각';
+COMMENT ON COLUMN exam_participants.invite_token_hash IS '입장 링크 토큰 해시(SHA-256, 원문은 메일에만)';
+COMMENT ON COLUMN exam_participants.invited_at IS '초대 메일 발송 시각(다시 보내면 갱신)';
+COMMENT ON COLUMN exam_participants.reminded_at IS '시작 하루 전 알림 메일 발송 시각';
 COMMENT ON COLUMN exam_participants.entered_at IS '입장 시각';
 
 ALTER TABLE attempts
@@ -626,7 +748,7 @@ COMMENT ON COLUMN proctor_events.snapshot_key IS '스냅샷 저장 위치';
 COMMENT ON COLUMN proctor_events.snapshot_deleted_at IS '스냅샷 삭제 시각(보관 기간 만료)';
 COMMENT ON COLUMN proctor_events.review IS '담당자 판단(OK 문제 없음/SUSPECT 부정 의심, 없으면 미확인)';
 COMMENT ON COLUMN proctor_events.review_note IS '판단 메모';
-COMMENT ON COLUMN proctor_events.reviewed_by IS '판단한 회원 ID(기업 담당자 또는 관리자)';
+COMMENT ON COLUMN proctor_events.reviewed_by IS '판단한 회원 ID(같은 회사 PROCTOR 또는 관리자)';
 COMMENT ON COLUMN proctor_events.reviewed_at IS '판단 시각';
 
 -- ───────── 7. 조회용 인덱스 ─────────
@@ -640,4 +762,5 @@ CREATE INDEX idx_scorings_attempt_id       ON scorings (attempt_id);        -- �
 CREATE INDEX idx_judge_calls_scoring_id    ON judge_calls (scoring_id);     -- 채점의 모델 호출(토큰)
 CREATE INDEX idx_judge_verdicts_result_id  ON judge_verdicts (result_id);   -- 체크 결과의 모델별 판정 → 리포트
 CREATE INDEX idx_exam_sessions_company_id  ON exam_sessions (company_id);   -- 회사의 회차 목록(관리자 화면)
+CREATE INDEX idx_credit_ledger_user_id      ON credit_ledger (user_id, ledger_id); -- 회원의 최신 잔액·사용 내역
 CREATE INDEX idx_proctor_events_attempt_id ON proctor_events (attempt_id);  -- 응시의 감독 이벤트 → 리포트·관리자 화면

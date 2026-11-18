@@ -36,8 +36,8 @@ UNION ALL SELECT '첨부한 과제 자료가 응시 과제와 다름', COUNT(*) 
   JOIN task_files f ON f.task_file_id = ca.task_file_id WHERE f.task_id <> a.task_id
 UNION ALL SELECT '관리자가 아닌 회원이 만든 과제', COUNT(*) FROM tasks t
   JOIN users u ON u.user_id = t.created_by WHERE u.role <> 'ADMIN'
-UNION ALL SELECT '회차를 연 담당자가 다른 회사 소속', COUNT(*) FROM exam_sessions s
-  JOIN users u ON u.user_id = s.created_by WHERE u.role = 'COMPANY' AND u.company_id <> s.company_id
+UNION ALL SELECT '회차를 만든 사람이 같은 회사 매니저·관리자가 아님', COUNT(*) FROM exam_sessions s
+  JOIN users u ON u.user_id = s.created_by WHERE NOT (u.role = 'ADMIN' OR (u.role = 'MANAGER' AND u.company_id = s.company_id))
 UNION ALL SELECT '실전 응시 과제가 회차 과제에 없음', COUNT(*) FROM attempts a
   JOIN exam_participants p ON p.participant_id = a.participant_id
   WHERE NOT EXISTS (SELECT 1 FROM exam_session_tasks st WHERE st.session_id = p.session_id AND st.task_id = a.task_id)
@@ -46,10 +46,10 @@ UNION ALL SELECT '실전 응시인데 입장 기록 없음', COUNT(*) FROM attem
 UNION ALL SELECT '실전 응시가 시험 시간 밖에 시작', COUNT(*) FROM attempts a
   JOIN exam_participants p ON p.participant_id = a.participant_id JOIN exam_sessions s ON s.session_id = p.session_id
   WHERE a.started_at NOT BETWEEN s.starts_at AND s.ends_at
-UNION ALL SELECT '감독 판단자가 다른 회사 담당자', COUNT(*) FROM proctor_events e
+UNION ALL SELECT '감독 판단자가 같은 회사 감독관·관리자가 아님', COUNT(*) FROM proctor_events e
   JOIN attempts a ON a.attempt_id = e.attempt_id JOIN exam_participants p ON p.participant_id = a.participant_id
   JOIN exam_sessions s ON s.session_id = p.session_id
-  JOIN users u ON u.user_id = e.reviewed_by WHERE u.role = 'COMPANY' AND u.company_id <> s.company_id
+  JOIN users u ON u.user_id = e.reviewed_by WHERE NOT (u.role = 'ADMIN' OR (u.role = 'PROCTOR' AND u.company_id = s.company_id))
 UNION ALL SELECT '감독 회차인데 동의 없이 응시', COUNT(*) FROM attempts a
   JOIN exam_participants p ON p.participant_id = a.participant_id JOIN exam_sessions s ON s.session_id = p.session_id
   WHERE s.proctoring AND NOT EXISTS (SELECT 1 FROM proctor_consents c WHERE c.participant_id = p.participant_id)
@@ -58,7 +58,36 @@ UNION ALL SELECT '감독 이벤트가 실전 응시가 아님', COUNT(*) FROM pr
 UNION ALL SELECT '감독 이벤트가 시험 시간 밖', COUNT(*) FROM proctor_events e
   JOIN attempts a ON a.attempt_id = e.attempt_id JOIN exam_participants p ON p.participant_id = a.participant_id
   JOIN exam_sessions s ON s.session_id = p.session_id
-  WHERE e.started_at NOT BETWEEN s.starts_at AND s.ends_at;
+  WHERE e.started_at NOT BETWEEN s.starts_at AND s.ends_at
+UNION ALL SELECT '취소된 회차에 입장·응시 기록', COUNT(*) FROM exam_participants p
+  JOIN exam_sessions s ON s.session_id = p.session_id WHERE s.canceled_at IS NOT NULL AND p.entered_at IS NOT NULL
+UNION ALL SELECT '원장 잔액 ≠ 이전 잔액 + 증감', COUNT(*) FROM (
+    SELECT balance_after, amount, LAG(balance_after, 1, 0) OVER (PARTITION BY user_id ORDER BY ledger_id) AS prev FROM credit_ledger) x
+  WHERE x.balance_after <> x.prev + x.amount
+UNION ALL SELECT '원장 응시가 다른 회원 것', COUNT(*) FROM credit_ledger l
+  JOIN attempts a ON a.attempt_id = l.attempt_id WHERE a.user_id IS DISTINCT FROM l.user_id
+UNION ALL SELECT '원장 채팅 턴이 다른 회원 것이거나 AI 턴', COUNT(*) FROM credit_ledger l
+  JOIN chat_turns t ON t.turn_id = l.turn_id JOIN attempts a ON a.attempt_id = t.attempt_id
+  WHERE a.user_id IS DISTINCT FROM l.user_id OR t.role <> 'USER'
+UNION ALL SELECT '롤백 차감인데 롤백 응시가 아님(또는 반대)', COUNT(*) FROM credit_ledger l
+  JOIN attempts a ON a.attempt_id = l.attempt_id WHERE (l.reason = 'ROLLBACK') <> (a.forked_from_checkpoint_id IS NOT NULL)
+UNION ALL SELECT '자가진단 응시인데 시작 차감 없음', COUNT(*) FROM attempts a
+  WHERE a.mode = 'SELF' AND NOT EXISTS (SELECT 1 FROM credit_ledger l WHERE l.attempt_id = a.attempt_id)
+UNION ALL SELECT '구매 적립이 결제 완료 건이 아니거나 다른 회원', COUNT(*) FROM credit_ledger l
+  JOIN credit_purchases p ON p.purchase_id = l.purchase_id
+  WHERE p.status <> 'PAID' OR p.user_id <> l.user_id OR p.credits <> l.amount
+UNION ALL SELECT '결제 완료인데 적립 없음', COUNT(*) FROM credit_purchases p
+  WHERE p.status = 'PAID' AND NOT EXISTS (SELECT 1 FROM credit_ledger l WHERE l.purchase_id = p.purchase_id)
+UNION ALL SELECT '문의 처리자가 관리자가 아님', COUNT(*) FROM company_inquiries q
+  JOIN users u ON u.user_id = q.handled_by WHERE u.role <> 'ADMIN'
+UNION ALL SELECT '초대 권한 없음(관리자, 또는 같은 회사 매니저의 감독관 초대만)', COUNT(*) FROM company_invites i
+  JOIN users u ON u.user_id = i.invited_by
+  WHERE NOT (u.role = 'ADMIN' OR (u.role = 'MANAGER' AND u.company_id = i.company_id AND i.role = 'PROCTOR'))
+UNION ALL SELECT '초대로 가입한 담당자의 회사·이메일이 초대와 다름', COUNT(*) FROM company_invites i
+  JOIN users u ON u.user_id = i.accepted_user_id
+  WHERE u.role <> i.role OR u.company_id <> i.company_id OR u.email <> i.email
+UNION ALL SELECT '탈퇴 회원에 개인정보가 남음', COUNT(*) FROM users
+  WHERE deleted_at IS NOT NULL AND (email NOT LIKE 'deleted-%' OR name <> '탈퇴 회원');
 
 \echo '== 4. 잘못된 데이터가 막히는지 =='
 CREATE TEMP TABLE bad (검사 text, 결과 text);
@@ -92,23 +121,43 @@ DECLARE a bigint := (SELECT max(attempt_id) FROM attempts);
   ['없는 페이지의 조각', $q$INSERT INTO document_chunks(task_file_id,page_no,chunk_no,content,token_count,embedding) SELECT task_file_id,999,1,'x',1,embedding FROM document_chunks LIMIT 1$q$],
   ['차원이 다른 벡터', $q$INSERT INTO document_chunks(task_file_id,page_no,chunk_no,content,token_count,embedding) SELECT task_file_id,page_no,99,'x',1,'[1,2,3]' FROM document_chunks LIMIT 1$q$],
   ['같은 이메일 회원', $q$INSERT INTO users(email,password_hash,name,role) SELECT email,'x','x','USER' FROM users LIMIT 1$q$],
-  ['회사 없는 기업 담당자', $q$INSERT INTO users(email,password_hash,name,role) VALUES ('nocompany@x','x','x','COMPANY')$q$],
+  ['회사 없는 매니저', $q$INSERT INTO users(email,password_hash,name,role) VALUES ('nocompany@x','x','x','MANAGER')$q$],
+  ['회사 없는 감독관', $q$INSERT INTO users(email,password_hash,name,role) VALUES ('nocompany2@x','x','x','PROCTOR')$q$],
+  ['회사에 속한 일반 회원', $q$INSERT INTO users(email,password_hash,name,role,company_id) VALUES ('usercompany@x','x','x','USER',1)$q$],
+  ['없는 권한(COMPANY)', $q$INSERT INTO users(email,password_hash,name,role,company_id) VALUES ('oldrole@x','x','x','COMPANY',1)$q$],
+  ['응시자 권한으로 기업 초대', $q$INSERT INTO company_invites(company_id,email,role,token_hash,invited_by,expires_at) VALUES (1,'x@x','USER',repeat('b',64),1,now() + interval '7 days')$q$],
   ['회사 없는 회차', $q$INSERT INTO exam_sessions(title,starts_at,ends_at,created_by) SELECT 'x',starts_at,ends_at,created_by FROM exam_sessions LIMIT 1$q$],
-  ['같은 입장 링크 토큰', $q$INSERT INTO exam_participants(session_id,email,name,invite_token) SELECT session_id,'new@x','x',invite_token FROM exam_participants LIMIT 1$q$],
+  ['같은 입장 링크 토큰', $q$INSERT INTO exam_participants(session_id,email,name,invite_token_hash) SELECT session_id,'new@x','x',invite_token_hash FROM exam_participants LIMIT 1$q$],
   ['종료가 시작보다 이른 회차', $q$INSERT INTO exam_sessions(company_id,title,starts_at,ends_at,created_by) SELECT company_id,'x',ends_at,starts_at,created_by FROM exam_sessions LIMIT 1$q$],
   ['같은 회차에 같은 과제 두 번', $q$INSERT INTO exam_session_tasks(session_id,task_id,sort_order) SELECT session_id,task_id,99 FROM exam_session_tasks LIMIT 1$q$],
-  ['같은 회차에 같은 순서 두 번', $q$INSERT INTO exam_session_tasks(session_id,task_id,sort_order) SELECT st.session_id,t.task_id,st.sort_order FROM exam_session_tasks st, tasks t WHERE t.task_id NOT IN (SELECT task_id FROM exam_session_tasks) LIMIT 1$q$],
+  ['같은 회차에 같은 순서 두 번', $q$INSERT INTO exam_session_tasks(session_id,task_id,sort_order) SELECT st.session_id,t.task_id,st.sort_order FROM exam_session_tasks st JOIN tasks t ON t.usage = 'LIVE' WHERE NOT EXISTS (SELECT 1 FROM exam_session_tasks x WHERE x.session_id = st.session_id AND x.task_id = t.task_id) LIMIT 1$q$],
   ['같은 대상자가 같은 과제 두 번 응시', $q$INSERT INTO attempts(participant_id,task_id,mode,status,assistant_model) SELECT participant_id,task_id,'LIVE','SOLVING','x' FROM attempts WHERE participant_id IS NOT NULL LIMIT 1$q$],
-  ['대상자 없는 실전 응시', $q$INSERT INTO attempts(task_id,mode,status,assistant_model) SELECT task_id,'LIVE','SOLVING','x' FROM attempts LIMIT 1$q$],
+  ['대상자 없는 실전 응시', $q$INSERT INTO attempts(task_id,mode,status,assistant_model) SELECT (SELECT task_id FROM tasks WHERE usage = 'LIVE' LIMIT 1),'LIVE','SOLVING','x'$q$],
   ['대상자가 연결된 자가진단 응시', $q$INSERT INTO attempts(user_id,participant_id,task_id,mode,status,assistant_model) SELECT 2,3,task_id,'SELF','SOLVING','x' FROM attempts LIMIT 1$q$],
-  ['같은 회차에 같은 이메일 초대', $q$INSERT INTO exam_participants(session_id,email,name,invite_token) SELECT session_id,email,'x','new_token' FROM exam_participants LIMIT 1$q$],
+  ['같은 회차에 같은 이메일 초대', $q$INSERT INTO exam_participants(session_id,email,name,invite_token_hash) SELECT session_id,email,'x',repeat('0',64) FROM exam_participants LIMIT 1$q$],
   ['같은 대상자에 감독 동의 두 번', $q$INSERT INTO proctor_consents(participant_id,consent_version,env_check) SELECT participant_id,'v2','{}' FROM proctor_consents LIMIT 1$q$],
   ['없는 감독 이벤트 종류', $q$INSERT INTO proctor_events(attempt_id,type,started_at) SELECT attempt_id,'SCREENSHOT',started_at FROM proctor_events LIMIT 1$q$],
   ['확신도 1 초과', $q$INSERT INTO proctor_events(attempt_id,type,started_at,confidence) SELECT attempt_id,'NO_FACE',started_at,1.5 FROM proctor_events LIMIT 1$q$],
-  ['회원이 연결된 실전 응시', $q$INSERT INTO attempts(user_id,participant_id,task_id,mode,status,assistant_model) SELECT 2,3,task_id,'LIVE','SOLVING','x' FROM attempts LIMIT 1$q$],
+  ['회원이 연결된 실전 응시', $q$INSERT INTO attempts(user_id,participant_id,task_id,mode,status,assistant_model) SELECT 2,3,(SELECT task_id FROM tasks WHERE usage = 'LIVE' LIMIT 1),'LIVE','SOLVING','x'$q$],
   ['회원 없는 자가진단 응시', $q$INSERT INTO attempts(task_id,mode,status,assistant_model) SELECT task_id,'SELF','SOLVING','x' FROM attempts LIMIT 1$q$],
   ['없는 감독 판단', $q$UPDATE proctor_events SET review='MAYBE', reviewed_by=4, reviewed_at=now() WHERE proctor_event_id=(SELECT min(proctor_event_id) FROM proctor_events)$q$],
-  ['판단자 없는 감독 판단', $q$UPDATE proctor_events SET review='OK', reviewed_by=NULL, reviewed_at=NULL WHERE proctor_event_id=(SELECT max(proctor_event_id) FROM proctor_events)$q$]];
+  ['판단자 없는 감독 판단', $q$UPDATE proctor_events SET review='OK', reviewed_by=NULL, reviewed_at=NULL WHERE proctor_event_id=(SELECT max(proctor_event_id) FROM proctor_events)$q$],
+  ['자가진단 과제로 실전 응시', $q$INSERT INTO attempts(participant_id,task_id,mode,status,assistant_model) SELECT 3,(SELECT task_id FROM tasks WHERE usage = 'SELF' LIMIT 1),'LIVE','SOLVING','x'$q$],
+  ['기업용 과제로 자가진단 응시', $q$INSERT INTO attempts(user_id,task_id,mode,status,assistant_model) SELECT 2,(SELECT task_id FROM tasks WHERE usage = 'LIVE' LIMIT 1),'SELF','SOLVING','x'$q$],
+  ['자가진단 과제를 회차에 걸기', $q$INSERT INTO exam_session_tasks(session_id,task_id,sort_order) SELECT 1,(SELECT task_id FROM tasks WHERE usage = 'SELF' LIMIT 1),9$q$],
+  ['회차 과제 용도를 SELF로', $q$INSERT INTO exam_session_tasks(session_id,task_id,task_usage,sort_order) SELECT 1,(SELECT task_id FROM tasks WHERE usage = 'SELF' LIMIT 1),'SELF',9$q$],
+  ['없는 과제 용도', $q$UPDATE tasks SET usage = 'BOTH' WHERE task_id = (SELECT max(task_id) FROM tasks)$q$],
+  ['실전 응시에 공유 링크', $q$UPDATE attempts SET share_token_hash = repeat('a',64), shared_at = now() WHERE attempt_id = (SELECT max(attempt_id) FROM attempts WHERE mode = 'LIVE')$q$],
+  ['시작한 뒤 회차 취소', $q$UPDATE exam_sessions SET canceled_at = starts_at + interval '1 minute' WHERE session_id = 1$q$],
+  ['잔액이 음수가 되는 차감', $q$INSERT INTO credit_ledger(user_id,amount,balance_after,reason,attempt_id) SELECT 2,-10,-1,'ATTEMPT_START',max(attempt_id) FROM attempts WHERE mode = 'SELF' AND attempt_id NOT IN (SELECT attempt_id FROM credit_ledger WHERE attempt_id IS NOT NULL)$q$],
+  ['같은 채팅 턴 두 번 차감', $q$INSERT INTO credit_ledger(user_id,amount,balance_after,reason,turn_id) SELECT user_id,-1,0,'CHAT_TURN',turn_id FROM credit_ledger WHERE turn_id IS NOT NULL LIMIT 1$q$],
+  ['같은 응시 시작 두 번 차감', $q$INSERT INTO credit_ledger(user_id,amount,balance_after,reason,attempt_id) SELECT user_id,-10,0,'ATTEMPT_START',attempt_id FROM credit_ledger WHERE reason = 'ATTEMPT_START' LIMIT 1$q$],
+  ['사용인데 양수', $q$INSERT INTO credit_ledger(user_id,amount,balance_after,reason,turn_id) SELECT 2,5,5,'CHAT_TURN',max(turn_id) FROM chat_turns$q$],
+  ['구매 없이 구매 적립', $q$INSERT INTO credit_ledger(user_id,amount,balance_after,reason) VALUES (2,100,100,'PURCHASE')$q$],
+  ['결제 키 없이 결제 완료', $q$UPDATE credit_purchases SET status = 'PAID', paid_at = now() WHERE status = 'READY'$q$],
+  ['회사 없이 문의 승인', $q$UPDATE company_inquiries SET status = 'APPROVED', handled_by = 1, handled_at = now() WHERE status = 'PENDING'$q$],
+  ['처리자 없이 문의 거절', $q$UPDATE company_inquiries SET status = 'REJECTED' WHERE status = 'PENDING'$q$],
+  ['같은 기업 초대 토큰', $q$INSERT INTO company_invites(company_id,email,role,token_hash,invited_by,expires_at) SELECT company_id,'new@x',role,token_hash,invited_by,now() + interval '7 days' FROM company_invites LIMIT 1$q$]];
 BEGIN
   FOR i IN 1..array_length(tests, 1) LOOP
     BEGIN
@@ -116,7 +165,9 @@ BEGIN
       INSERT INTO bad VALUES (tests[i][1], '안 막힘 ✗');
       RAISE EXCEPTION 'undo';
     EXCEPTION WHEN OTHERS THEN
-      IF SQLERRM <> 'undo' THEN INSERT INTO bad VALUES (tests[i][1], '막힘 (' || SQLSTATE || ')'); END IF;
+      IF SQLERRM <> 'undo' THEN
+        INSERT INTO bad VALUES (tests[i][1], CASE WHEN SQLSTATE LIKE '42%' THEN '검사 SQL 오류 ✗ ' || SQLERRM ELSE '막힘 (' || SQLSTATE || ')' END);
+      END IF;
     END;
   END LOOP;
 END $$;
@@ -160,6 +211,12 @@ FROM exam_participants p JOIN exam_session_tasks st ON st.session_id = p.session
 LEFT JOIN attempts a ON a.participant_id = p.participant_id AND a.task_id = st.task_id ORDER BY p.participant_id, st.sort_order;
 \echo '-- 응시별 감독 주의 구간 (리포트용, 앞 10개)'
 SELECT attempt_id, type, started_at, duration_ms, confidence FROM proctor_events ORDER BY attempt_id, started_at LIMIT 10;
+\echo '-- 회원별 크레딧 잔액과 사용 내역 (최신 원장의 처리 후 잔액)'
+SELECT DISTINCT ON (l.user_id) l.user_id AS 회원, u.name AS 이름, l.balance_after AS 잔액,
+       (SELECT COUNT(*) FROM credit_ledger x WHERE x.user_id = l.user_id AND x.reason = 'CHAT_TURN') AS 채팅_턴
+FROM credit_ledger l JOIN users u ON u.user_id = l.user_id ORDER BY l.user_id, l.ledger_id DESC;
+\echo '-- 자가진단 과제 목록 (기업용 과제는 나오지 않아야 함)'
+SELECT task_id, code, usage, status FROM tasks WHERE usage = 'SELF' AND status = 'OPEN' ORDER BY task_id;
 \echo '-- 채점 모델별 토큰 합계'
 SELECT model, SUM(input_tokens) AS 입력, SUM(output_tokens) AS 출력, SUM(cached_tokens) AS 캐시 FROM judge_calls GROUP BY model;
 

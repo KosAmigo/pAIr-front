@@ -8,9 +8,9 @@ export MSYS_NO_PATHCONV=1   # Windows Git Bash 가 /sample 을 C:/Program Files/
 docker exec pair-erd-pg rm -rf /sample
 docker cp "$CSV_DIR" pair-erd-pg:/sample
 
-ORDER="companies users tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys question_sources
+ORDER="companies users company_inquiries company_invites credit_purchases tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys question_sources
 rubric_items rubric_checks prompt_versions prompt_check_hints exam_sessions exam_session_tasks exam_participants
-attempts attempt_files chat_turns chat_attachments attempt_events text_answers choice_answers checkpoints checkpoint_files
+attempts attempt_files chat_turns credit_ledger chat_attachments attempt_events text_answers choice_answers checkpoints checkpoint_files
 proctor_consents proctor_events
 scorings judge_calls check_results judge_verdicts verdict_evidences question_results"
 
@@ -24,7 +24,7 @@ for t in $ORDER; do
     SQL+="
 CREATE TEMP TABLE attempts_in (LIKE attempts);
 COPY attempts_in ($cols) FROM '/sample/attempts.csv' CSV HEADER;
-INSERT INTO attempts SELECT attempt_id, user_id, participant_id, task_id, mode, status, assistant_model, NULL, started_at, submitted_at, followups_done_at FROM attempts_in;"
+INSERT INTO attempts SELECT attempt_id, user_id, participant_id, task_id, mode, status, assistant_model, NULL, started_at, submitted_at, followups_done_at, share_token_hash, shared_at FROM attempts_in;"
   else
     SQL+="
 COPY $t ($cols) FROM '/sample/$t.csv' CSV HEADER;"
