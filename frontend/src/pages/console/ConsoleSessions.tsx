@@ -76,7 +76,7 @@ export default function ConsoleSessions() {
               <thead>
                 <tr className="h-10 border-b border-line text-left">
                   {['회차', '과제', '일시', '입장 코드', '대상자', '감독', '상태', ''].map((h, i) => (
-                    <th key={i} className={cx('label px-4 font-medium', i === 4 && 'text-right')}>
+                    <th key={i} className={cx('px-4 text-[13px] font-semibold text-text-muted', i === 4 && 'text-right')}>
                       {h}
                     </th>
                   ))}

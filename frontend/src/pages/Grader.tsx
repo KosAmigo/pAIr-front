@@ -206,11 +206,11 @@ function VersionsTab({ rubric, onChanged }: { rubric: GraderRubric; onChanged: (
                 {editing ? (
                   <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
                     <label className="flex flex-col gap-1">
-                      <span className="label">이름</span>
+                      <span className="text-[13px] font-semibold text-text-muted">이름</span>
                       <input className={inputCls} value={draft.name} maxLength={30} placeholder="예: U2기준수정" onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
                     </label>
                     <label className="flex flex-col gap-1">
-                      <span className="label">메모 (무엇을 왜 바꿨는지)</span>
+                      <span className="text-[13px] font-semibold text-text-muted">메모 (무엇을 왜 바꿨는지)</span>
                       <input className={inputCls} value={draft.note} placeholder="예: U2 판정이 흔들려서 '추측' 기준을 구체화" onChange={(e) => setDraft({ ...draft, note: e.target.value })} />
                     </label>
                   </div>
@@ -489,7 +489,7 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
         >
           <div className="space-y-3 p-4">
             <div className="flex flex-col gap-1">
-              <span className="label">호출 방식</span>
+              <span className="text-[13px] font-semibold text-text-muted">호출 방식</span>
               <div role="radiogroup" aria-label="호출 방식" className="grid grid-cols-2 gap-1 rounded-md border border-line-strong bg-panel-sunken p-1">
                 {(
                   [
@@ -520,7 +520,7 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
               )}
             </div>
             <label className="flex flex-col gap-1">
-              <span className="label">프롬프트 버전</span>
+              <span className="text-[13px] font-semibold text-text-muted">프롬프트 버전</span>
               <select className={inputCls} value={versionId} onChange={(e) => setVersionId(e.target.value)}>
                 {versions.map((v) => (
                   <option key={v.id} value={v.id}>

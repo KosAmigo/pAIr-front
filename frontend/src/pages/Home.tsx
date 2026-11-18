@@ -3,11 +3,12 @@
 import { useEffect, useRef } from 'react'
 import Lenis from 'lenis'
 import './home/home.css'
-import Finale from './home/Finale'
+import CreateSection from './home/CreateSection'
 import Hero from './home/Hero'
 import HomeFooter from './home/HomeFooter'
 import HomeHeader from './home/HomeHeader'
 import LiveSection from './home/LiveSection'
+import ProctorSection from './home/ProctorSection'
 import ReplaySection from './home/ReplaySection'
 import ReportSection from './home/ReportSection'
 import Spine from './home/Spine'
@@ -75,7 +76,8 @@ export default function Home() {
             <ReplaySection />
             <ReportSection />
             <LiveSection />
-            <Finale />
+            <CreateSection />
+            <ProctorSection />
           </div>
         </main>
 

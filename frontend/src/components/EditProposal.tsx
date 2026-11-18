@@ -174,7 +174,7 @@ export function EditModal({
           {mode === 'diff' ? (
             diffs.map((d, i) => (
               <section key={i}>
-                {diffs.length > 1 && <h3 className="label mb-1.5">변경 {i + 1}</h3>}
+                {diffs.length > 1 && <h3 className="mb-1.5 text-[13px] font-semibold text-text-muted">변경 {i + 1}</h3>}
                 <DiffBlock lines={d} />
               </section>
             ))

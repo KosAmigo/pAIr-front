@@ -19,6 +19,8 @@ const NODES: NodeDef[] = [
   { at: 'report', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:31' },
   { at: 'live', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:42' },
   { at: 'live-end', lane: 1, color: 'var(--color-branch-3)', label: 'b3', score: 91 },
+  { at: 'create', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:47' },
+  { at: 'proctor', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:50' },
   { at: 'finale', lane: 0, color: 'var(--color-brand-blue)', label: 'main', time: '00:52' },
 ]
 
@@ -27,19 +29,9 @@ const BRANCHES = [
   { from: 'live', to: 'live-end', color: 'var(--color-branch-3)' },
 ]
 
-// 마무리 두 갈래: 줄기를 따라 내려오다 각 줄 버튼의 가운데 높이에서 오른쪽으로 꺾여 줄 왼쪽 끝에 닿는다.
-const SPLITS = [
-  { to: 'card-self', color: 'url(#spine-grad-h)' },
-  { to: 'card-live', color: 'var(--color-alert)' },
-]
 
 function branchPath(x: number, a: Pt, b: Pt) {
   return `M ${x} ${a.y} L ${x + LANE} ${a.y + LANE} L ${x + LANE} ${b.y}`
-}
-
-function splitPath(x: number, from: Pt, to: Pt) {
-  const r = 24
-  return `M ${x} ${from.y} L ${x} ${to.y - r} Q ${x} ${to.y} ${x + r} ${to.y} L ${to.x} ${to.y}`
 }
 
 export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | null> }) {
@@ -131,17 +123,12 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
           <stop offset="45%" stopColor="#6c47ff" />
           <stop offset="100%" stopColor="#2f5bea" />
         </linearGradient>
-        <linearGradient id="spine-grad-h" gradientUnits="userSpaceOnUse" x1={x} y1="0" x2={x + 600} y2="0">
-          <stop offset="0%" stopColor="#2f5bea" />
-          <stop offset="100%" stopColor="#8b5cf6" />
-        </linearGradient>
       </defs>
 
       {/* 아직 지나지 않은 길: 점선으로 미리 보인다 */}
       <g stroke="var(--color-line-strong)" strokeWidth={1} strokeDasharray="3 6" fill="none">
         <line x1={x} y1={y0} x2={x} y2={y1} />
         {BRANCHES.map((b) => pts[b.from] && pts[b.to] && <path key={b.to} d={branchPath(x, pts[b.from], pts[b.to])} />)}
-        {SPLITS.map((s) => pts[s.to] && <path key={s.to} d={splitPath(x, pts.finale, pts[s.to])} />)}
       </g>
 
       {/* 그려지는 선 */}
@@ -168,20 +155,6 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
                 stroke={b.color}
                 strokeWidth={2.5}
                 style={{ filter: `drop-shadow(0 0 6px color-mix(in srgb, ${b.color} 45%, transparent))` }}
-              />
-            ),
-        )}
-        {SPLITS.map(
-          (s) =>
-            pts[s.to] && (
-              <path
-                key={s.to}
-                data-draw
-                data-y0={y1}
-                data-y1={pts[s.to].y}
-                d={splitPath(x, pts.finale, pts[s.to])}
-                stroke={s.color}
-                strokeWidth={3}
               />
             ),
         )}

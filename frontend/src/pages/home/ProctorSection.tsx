@@ -1,0 +1,203 @@
+// DESIGN.md §7-1 ⑥ 감독관 콘솔: 기업 담당자가 보는 실시간 현황 + 감독 판단 화면을 줄여서 보여준다.
+// 화면에 보이는 동안 응시자 상태와 이벤트 피드가 몇 초마다 바뀌고, 이벤트 카드 하나에 "부정 의심" 판단이 찍힌다.
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { Camera, ClipboardPaste, ShieldAlert, ShieldCheck, Users } from 'lucide-react'
+import { cx } from '../../components/cx'
+import SectionHead, { Grad } from './SectionHead'
+import { MOTION_OK, gsap, prefersReducedMotion, useGSAP } from './motion'
+
+type St = 'solving' | 'followup' | 'submitted' | 'lost'
+const ST: Record<St, { label: string; dot: string; text: string }> = {
+  solving: { label: '응시 중', dot: 'bg-brand', text: 'text-brand' },
+  followup: { label: '후속 질문', dot: 'bg-info', text: 'text-info' },
+  submitted: { label: '제출', dot: 'bg-signal', text: 'text-signal' },
+  lost: { label: '연결 끊김', dot: 'bg-alert', text: 'text-alert' },
+}
+const PEOPLE: { name: string; st: St; turns: number; ev: number }[] = [
+  { name: '오세린', st: 'solving', turns: 7, ev: 0 },
+  { name: '윤태호', st: 'solving', turns: 4, ev: 1 },
+  { name: '강다은', st: 'followup', turns: 9, ev: 0 },
+  { name: '서준혁', st: 'lost', turns: 2, ev: 1 },
+  { name: '임채원', st: 'solving', turns: 5, ev: 0 },
+]
+const FEED = [
+  { who: '윤태호', what: '탭 전환', cam: false, at: '14:09:12' },
+  { who: '서준혁', what: '얼굴 없음', cam: true, at: '14:17:40' },
+  { who: '임채원', what: '외부 붙여넣기', cam: false, at: '14:21:03' },
+  { who: '오세린', what: '고개 돌림', cam: true, at: '14:23:55' },
+  { who: '강다은', what: '창 이탈', cam: false, at: '14:26:18' },
+]
+
+const POINTS = [
+  { icon: Users, title: '전원의 상태를 한눈에', body: '입장, 응시 중, 후속 질문, 제출, 연결 끊김을 5초마다 갱신합니다.' },
+  { icon: Camera, title: '영상 대신 의심 순간만', body: '영상은 저장하지 않습니다. 탭 이탈이나 얼굴 없음 같은 순간과 사진 1장만 남깁니다.' },
+  { icon: ShieldCheck, title: '판단은 사람이', body: '자동 탈락은 없습니다. 담당자가 이벤트마다 문제 없음, 부정 의심을 메모와 함께 남깁니다.' },
+]
+
+/** 화면에 보이는 동안 몇 초마다 한 걸음씩 진행되는 장면 번호 */
+function useTicker(ref: RefObject<HTMLElement | null>, every: number, max: number) {
+  const [n, setN] = useState(() => (prefersReducedMotion() ? max : 0))
+  useEffect(() => {
+    if (prefersReducedMotion() || !ref.current) return
+    let id = 0
+    const io = new IntersectionObserver(([e]) => {
+      window.clearInterval(id)
+      if (e.isIntersecting) id = window.setInterval(() => setN((v) => (v >= max ? 0 : v + 1)), every)
+    })
+    io.observe(ref.current)
+    return () => {
+      io.disconnect()
+      window.clearInterval(id)
+    }
+  }, [ref, every, max])
+  return n
+}
+
+export default function ProctorSection() {
+  const root = useRef<HTMLElement>(null)
+  const board = useRef<HTMLDivElement>(null)
+  const step = useTicker(board, 2200, FEED.length + 2)
+
+  useGSAP(
+    () => {
+      const mm = gsap.matchMedia()
+      mm.add(MOTION_OK, () => {
+        gsap.from('[data-board]', { y: 80, opacity: 0, duration: 1.1, ease: 'expo.out', scrollTrigger: { trigger: '[data-board]', start: 'top 85%' } })
+        gsap.from('[data-ppoint]', { y: 32, opacity: 0, duration: 0.7, stagger: 0.1, ease: 'expo.out', scrollTrigger: { trigger: '[data-ppoints]', start: 'top 85%' } })
+      })
+    },
+    { scope: root },
+  )
+
+  // 장면에 따라 바뀌는 값
+  const feed = FEED.slice(0, Math.min(FEED.length, step + 1)).reverse()
+  const people = PEOPLE.map((p, i) => {
+    if (i === 2 && step >= 3) return { ...p, st: 'submitted' as St }
+    if (i === 3 && step >= 2) return { ...p, st: 'solving' as St }
+    return { ...p, turns: p.turns + Math.floor((step + i) / 3), ev: p.ev + (FEED.slice(0, step + 1).filter((f) => f.who === p.name).length > p.ev ? 1 : 0) }
+  })
+  const reviewed = step >= FEED.length
+  const left = 35 * 60 - step * 37
+
+  return (
+    <section ref={root} id="proctor" className="relative pt-40 md:pl-[120px]">
+      <div data-spine="proctor" aria-hidden className="h-0" />
+      <SectionHead
+        label="CONSOLE"
+        title={
+          <>
+            감독은 <Grad>한 화면</Grad>에서,
+            <br />
+            판단은 사람이
+          </>
+        }
+        lead="기업 담당자는 콘솔에서 회차를 열고, 시험 중에는 실시간 현황을, 끝나면 응시자별 리포트와 감독 기록을 봅니다."
+      />
+
+      {/* 콘솔 실시간 현황 축소판 */}
+      <div ref={board} data-board className="relative mt-16" role="img" aria-label="감독관 콘솔: 응시자 상태 표, 남은 시간, 감독 이벤트 피드, 이벤트에 부정 의심 판단을 남기는 카드">
+        <div aria-hidden className="absolute inset-x-[15%] top-[10%] bottom-0 rounded-full bg-info/15 blur-[100px]" />
+        <div className="relative overflow-hidden rounded-[28px] border border-line bg-panel shadow-lg">
+          <div className="flex flex-wrap items-center gap-4 border-b border-line px-6 py-4">
+            <span className="inline-flex h-[22px] items-center gap-1.5 rounded-sm bg-alert/10 px-2 text-[12px] font-semibold text-alert">
+              <i className="rec-pulse size-1.5 rounded-full bg-alert" aria-hidden /> 진행 중
+            </span>
+            <span className="text-[16px] font-bold text-text">2026 하반기 백엔드 경력 실전 2차</span>
+            <span className="tnum ml-auto font-mono text-[28px] leading-none font-semibold text-text">
+              00:{String(Math.floor(left / 60)).padStart(2, '0')}:{String(left % 60).padStart(2, '0')}
+            </span>
+          </div>
+
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
+            <table className="w-full text-[14px]">
+              <thead>
+                <tr className="h-10 border-b border-line text-left text-[13px] font-semibold text-text-muted">
+                  <th className="px-6 font-semibold">이름</th>
+                  <th className="px-4 font-semibold">상태</th>
+                  <th className="px-4 text-right font-semibold">AI 질문</th>
+                  <th className="px-6 text-right font-semibold">감독 이벤트</th>
+                </tr>
+              </thead>
+              <tbody>
+                {people.map((p) => (
+                  <tr key={p.name} className="h-12 border-b border-line last:border-0">
+                    <td className="px-6 font-semibold text-text">{p.name}</td>
+                    <td className="px-4">
+                      <span className={cx('inline-flex items-center gap-1.5 font-semibold transition-colors duration-500', ST[p.st].text)}>
+                        <i className={cx('size-2 rounded-full transition-colors duration-500', ST[p.st].dot, p.st === 'solving' && 'rec-pulse')} aria-hidden />
+                        {ST[p.st].label}
+                      </span>
+                    </td>
+                    <td className="tnum px-4 text-right font-mono text-text">{p.turns}</td>
+                    <td className="px-6 text-right">
+                      {p.ev ? <span className="tnum rounded-sm bg-caution/12 px-1.5 py-0.5 font-mono text-[12px] font-semibold text-caution">{p.ev}</span> : <span className="text-text-faint">0</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="border-line max-lg:border-t lg:border-l">
+              <div className="flex h-10 items-center border-b border-line px-4 text-[13px] font-semibold text-text-muted">이벤트 피드</div>
+              <ol className="h-[200px] overflow-hidden">
+                {feed.map((f, i) => (
+                  <li key={f.at} className={cx('flex items-start gap-3 border-b border-line px-4 py-3 transition-colors duration-700', i === 0 && step < FEED.length && 'bg-brand-dim')}>
+                    <i className={cx('mt-1.5 size-2 shrink-0', f.cam ? 'rounded-full bg-alert' : 'rotate-45 bg-caution')} aria-hidden />
+                    <span>
+                      <span className="block text-[14px] text-text">
+                        <b className="font-semibold">{f.who}</b> {f.what}
+                      </span>
+                      <span className="tnum font-mono text-[12px] text-text-muted">{f.at}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        {/* 감독 판단 카드: 보드 위에 떠 있다 */}
+        <div className="glass relative z-10 mx-6 -mt-8 w-auto rounded-2xl p-4 shadow-md md:absolute md:right-[-28px] md:-bottom-16 md:mx-0 md:mt-0 md:w-[320px]">
+          <div className="flex gap-3">
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-caution/10 text-caution">
+              <ClipboardPaste size={18} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[15px] font-bold text-text">임채원 외부 붙여넣기</p>
+              <p className="tnum font-mono text-[12px] text-text-muted">00:21:03 │ 840자</p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <span className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-line-strong bg-panel text-[13px] font-semibold text-text-muted">
+              <ShieldCheck size={14} aria-hidden /> 문제 없음
+            </span>
+            <span
+              className={cx(
+                'inline-flex h-8 items-center justify-center gap-1.5 rounded-md border text-[13px] font-semibold transition-all duration-500',
+                reviewed ? 'scale-100 border-alert bg-alert/10 text-alert' : 'border-line-strong bg-panel text-text-muted',
+              )}
+            >
+              <ShieldAlert size={14} aria-hidden /> 부정 의심
+            </span>
+          </div>
+          <p className={cx('mt-2 text-[12px] text-text-muted transition-opacity duration-500', reviewed ? 'opacity-100' : 'opacity-0')}>
+            예시테크 담당자 │ 리포트 대화와 대조 필요
+          </p>
+        </div>
+      </div>
+
+      <ul data-ppoints className="mt-28 grid gap-8 md:grid-cols-3">
+        {POINTS.map((p) => (
+          <li key={p.title} data-ppoint className="flex flex-col gap-3">
+            <span className="inline-flex size-11 items-center justify-center rounded-md bg-info/10 text-info">
+              <p.icon size={22} strokeWidth={1.75} aria-hidden />
+            </span>
+            <p className="text-[19px] font-bold text-text">{p.title}</p>
+            <p className="text-[16px] leading-7 text-text-muted">{p.body}</p>
+          </li>
+        ))}
+      </ul>
+      <div data-spine="finale" aria-hidden className="mt-24 h-0" />
+    </section>
+  )
+}

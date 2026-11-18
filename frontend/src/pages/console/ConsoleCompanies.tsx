@@ -68,7 +68,7 @@ export default function ConsoleCompanies() {
               <thead>
                 <tr className="h-10 border-b border-line text-left">
                   {['회사', '사업자등록번호', '담당자', '회차', '등록 시각', ''].map((h, i) => (
-                    <th key={i} className={cx('label px-4 font-medium', (i === 2 || i === 3) && 'text-right')}>
+                    <th key={i} className={cx('px-4 text-[13px] font-semibold text-text-muted', (i === 2 || i === 3) && 'text-right')}>
                       {h}
                     </th>
                   ))}
@@ -228,7 +228,7 @@ function CompanyDetail({ c }: { c: Company }) {
                 <thead>
                   <tr className="h-9 border-b border-line text-left">
                     {['이름', '이메일', '만든 시각', ''].map((h) => (
-                      <th key={h} className="label px-4 font-medium">
+                      <th key={h} className="px-4 text-[13px] font-semibold text-text-muted">
                         {h}
                       </th>
                     ))}

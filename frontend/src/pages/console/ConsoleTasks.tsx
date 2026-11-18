@@ -111,7 +111,7 @@ export default function ConsoleTasks() {
               <thead>
                 <tr className="h-10 border-b border-line text-left">
                   {['과제', '직군', '형태', '난이도', '시간', '파일', '문항', '수정 시각', ''].map((h, i) => (
-                    <th key={i} className={cx('label px-4 font-medium', i >= 4 && i <= 6 && 'text-right')}>
+                    <th key={i} className={cx('px-4 text-[13px] font-semibold text-text-muted', i >= 4 && i <= 6 && 'text-right')}>
                       {h}
                     </th>
                   ))}
