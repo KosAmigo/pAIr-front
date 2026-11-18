@@ -3,11 +3,12 @@ import { motion } from 'motion/react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { isRealAttempt } from '../api'
 import RealReport from './RealReport'
-import { Bot, ChevronDown, CircleAlert, CircleCheck, GitBranch, RotateCcw, User } from 'lucide-react'
+import { Bot, CircleAlert, CircleCheck, GitBranch, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
 import { Button, ButtonLink, Panel, ScoreBar } from '../components/ui'
 import { ScoreHero, StageSep } from '../components/report/ScoreHero'
+import { CompetencyCards } from '../components/report/CompetencyCards'
 import { duration, easing } from '../lib/motion'
 import { COMPETENCIES, density, moments, report, timelineEvents, type ChatMsg } from '../data/mock'
 
@@ -146,7 +147,6 @@ export default function Report() {
 
 function MockReport() {
   const [sel, setSel] = useState(moments[0].id)
-  const [open, setOpen] = useState<Set<string>>(new Set())
   const navigate = useNavigate()
   const m = moments.find((x) => x.id === sel)!
   const comp = COMPETENCIES.find((c) => c.key === m.competency)!
@@ -193,64 +193,38 @@ function MockReport() {
           seenKey={`mock-${report.task}-${report.date}`}
         />
 
-        {/* 1행: 항목별 점수 */}
-        <Panel reveal label="BREAKDOWN" title="항목별 점수" className="col-span-12" flush>
-          <ul className="divide-y divide-line">
-            {report.scores.map((s) => {
-              const c = COMPETENCIES.find((x) => x.key === s.key)!
-              const isOpen = open.has(s.key)
-              return (
-                <li key={s.key}>
-                  <div className="grid grid-cols-[168px_280px_48px_1fr_128px] items-center gap-6 px-4 py-3">
-                    <span className="text-[15px] font-medium">{c.name}</span>
-                    <ScoreBar value={s.score / 100} color={c.color} />
-                    <span className="tnum text-right font-mono text-[16px] font-semibold">{s.score}</span>
-                    <span className="text-[14px] text-text-muted">{s.note}</span>
-                    {s.sub ? (
-                      <button
-                        type="button"
-                        aria-expanded={isOpen}
-                        aria-controls={`sub-${s.key}`}
-                        onClick={() => {
-                          const n = new Set(open)
-                          if (isOpen) n.delete(s.key)
-                          else n.add(s.key)
-                          setOpen(n)
-                        }}
-                        className="inline-flex h-7 items-center justify-end gap-1 justify-self-end rounded-md px-2 text-[14px] text-text-muted transition-colors duration-[120ms] hover:bg-panel-raised hover:text-text"
-                      >
-                        하위 기준 {s.sub.length}개
-                        <ChevronDown size={16} className={cx('transition-transform duration-[180ms]', isOpen && 'rotate-180')} aria-hidden />
-                      </button>
-                    ) : (
-                      <span />
-                    )}
-                  </div>
-                  {s.sub && isOpen && (
-                    <ul id={`sub-${s.key}`} className="fade-in border-t border-line bg-panel-sunken py-1">
-                      {s.sub.map((d) => (
-                        <li key={d.code} className="grid grid-cols-[168px_280px_48px_1fr_128px] items-center gap-6 px-4 py-2">
-                          <span className="flex items-baseline gap-2 pl-3 text-[14px]">
-                            <span className="font-mono text-[12px] text-text-muted">{d.code}</span>
-                            {d.name}
-                          </span>
-                          <div className="flex items-center gap-3">
-                            <div className="h-1 flex-1 rounded-full bg-panel-raised">
-                              <div className="h-full rounded-full opacity-70" style={{ width: `${d.score}%`, background: c.color }} />
-                            </div>
-                            <span className="tnum w-16 font-mono text-[12px] text-text-muted">가중 {d.weight}%</span>
-                          </div>
-                          <span className="tnum text-right font-mono text-[14px] font-semibold">{d.score}</span>
-                          <span className="col-span-2 text-[14px] text-text-muted">{d.note}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        </Panel>
+        {/* 1행: 항목별 점수 (점수 고리 카드, 누르면 하위 기준) */}
+        <CompetencyCards
+          items={report.scores.map((s) => {
+            const c = COMPETENCIES.find((x) => x.key === s.key)!
+            return {
+              key: s.key,
+              name: c.name,
+              score: s.score,
+              max: 100,
+              color: c.color,
+              note: s.note,
+              detail: s.sub ? (
+                <ul className="fx-rows divide-y divide-line bg-panel-sunken">
+                  {s.sub.map((d) => (
+                    <li key={d.code} className="grid grid-cols-[220px_260px_56px_1fr] items-center gap-6 px-5 py-3">
+                      <span className="flex items-baseline gap-2 text-[14px]">
+                        <span className="font-mono text-[12px] text-text-muted">{d.code}</span>
+                        {d.name}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <ScoreBar value={d.score / 100} color={c.color} className="h-1 flex-1" />
+                        <span className="tnum w-16 font-mono text-[12px] text-text-muted">가중 {d.weight}%</span>
+                      </div>
+                      <span className="tnum text-right font-mono text-[14px] font-semibold">{d.score}</span>
+                      <span className="text-[14px] text-text-muted">{d.note}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : undefined,
+            }
+          })}
+        />
 
         {/* 2행: 타임라인 */}
         <Panel

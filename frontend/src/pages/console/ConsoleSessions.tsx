@@ -1,11 +1,16 @@
 // DESIGN.md §7-9-4 회차 목록 (ADMIN, MANAGER, PROCTOR). 회차 만들기는 ADMIN·MANAGER만
+// 2026-11-19 개편 "관제 보드": 위에 단계 카드 3장(진행 중 / 예정 / 종료)이 탭 역할을 한다.
+// 진행 중을 고르면 이 화면의 다크 무대에 진행 중 회차가 큰 카드로 뜬다(남은 시간, 진행 막대, 입장, 미확인 이벤트).
+// 예정·종료는 표 그대로(표 안쪽은 깨끗하게).
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarClock, Camera, ChevronRight, Plus } from 'lucide-react'
+import { CalendarCheck, CalendarClock, Camera, ChevronRight, CircleAlert, Plus, Radio, Users } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { PageHeader } from '../../components/SelfShell'
-import { ButtonLink, Tabs } from '../../components/ui'
-import { companyName, phaseOf, useCompanies, useSessions, type Session, type SessionPhase } from '../../data/consoleSessions'
+import { ButtonLink } from '../../components/ui'
+import { Reveal, RevealGroup, RevealItem, Spotlight, StageSection } from '../../components/fx'
+import { StatTabs } from './StatTabs'
+import { companyName, phaseOf, unreviewed, useCompanies, useSessions, type Session, type SessionPhase } from '../../data/consoleSessions'
 import { fmtHm, fmtLeft, fmtShort, useMyCompanyId, useNow } from './format'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
@@ -33,24 +38,27 @@ export default function ConsoleSessions() {
           </ButtonLink>
         )}
       </PageHeader>
-      <div className="p-8">
-        <div className="flex flex-wrap items-end gap-4 border-b border-line">
-          <Tabs
+      <div className="flex flex-col gap-6 p-8">
+        {/* 단계 카드 3장 = 탭 */}
+        <div className="flex items-end gap-4">
+          <StatTabs
+            id="session-phase"
+            label="회차 단계"
             value={tab}
             onChange={setTab}
             tabs={[
-              { value: 'live', label: <>진행 중 <Count n={count('live')} live /></> },
-              { value: 'upcoming', label: <>예정 <Count n={count('upcoming')} /></> },
-              { value: 'ended', label: <>종료 <Count n={count('ended')} /></> },
+              { value: 'live', label: '진행 중', hint: '지금 응시가 열려 있는 회차', icon: Radio, n: count('live'), tone: 'alert' },
+              { value: 'upcoming', label: '예정', hint: '시작 전 회차', icon: CalendarClock, n: count('upcoming') },
+              { value: 'ended', label: '종료', hint: '결과를 볼 수 있는 회차', icon: CalendarCheck, n: count('ended') },
             ]}
           />
           {mine == null && (
-            <label className="ml-auto flex items-center gap-2 pb-2 text-[14px] text-text-muted">
+            <label className="flex items-center gap-2 pb-1 text-[14px] text-text-muted">
               회사
               <select
                 value={company}
                 onChange={(e) => setCompany(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-                className="h-8 rounded-md border border-line-strong bg-panel px-2 text-[14px] text-text outline-none focus:border-brand"
+                className="h-9 rounded-md border border-line-strong bg-panel px-2 text-[14px] text-text outline-none focus:border-brand"
               >
                 <option value="ALL">전체</option>
                 {companies.map((c) => (
@@ -63,7 +71,10 @@ export default function ConsoleSessions() {
           )}
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+        {tab === 'live' && rows.length > 0 && <LiveBoard rows={rows} now={now} showCompany={mine == null} onOpen={(id) => nav(`/console/sessions/${id}`)} />}
+
+        {!(tab === 'live' && rows.length > 0) && (
+        <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
               <CalendarClock size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
@@ -85,7 +96,7 @@ export default function ConsoleSessions() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="fx-rows">
                 {rows.map((s) => (
                   <Row
                     key={s.id}
@@ -98,7 +109,8 @@ export default function ConsoleSessions() {
               </tbody>
             </table>
           )}
-        </div>
+        </Reveal>
+        )}
       </div>
     </>
   )
@@ -141,6 +153,72 @@ function Row({ s, now, showCompany, onOpen }: { s: Session; now: number; showCom
   )
 }
 
-function Count({ n, live }: { n: number; live?: boolean }) {
-  return <span className={cx('tnum ml-1 rounded-sm px-1.5 font-mono text-[12px]', live && n > 0 ? 'bg-alert/10 text-alert' : 'bg-panel-raised text-text-muted')}>{n}</span>
+/** 진행 중 회차: 다크 무대 위 큰 카드 */
+function LiveBoard({ rows, now, showCompany, onOpen }: { rows: Session[]; now: number; showCompany: boolean; onOpen: (id: string) => void }) {
+  return (
+    <StageSection aria-label="진행 중 회차">
+      <div className="px-8 py-7">
+        <p className="flex items-center gap-2 font-mono text-[12px] font-semibold tracking-[0.12em] text-stage-alert">
+          <i className="rec-pulse size-2 rounded-full bg-stage-alert" aria-hidden /> LIVE NOW
+        </p>
+        <RevealGroup className="mt-4 grid grid-cols-2 gap-4">
+          {rows.map((s) => {
+            const left = Date.parse(s.endsAt) - now
+            const total = Date.parse(s.endsAt) - Date.parse(s.startsAt)
+            const entered = s.participants.filter((p) => p.enteredAt).length
+            const open = s.participants.reduce((n, p) => n + unreviewed(p), 0)
+            return (
+              <RevealItem key={s.id} className="flex">
+                <Spotlight
+                  as="button"
+                  type="button"
+                  onClick={() => onOpen(s.id)}
+                  className="glass-stage flex w-full flex-col gap-4 rounded-xl p-5 text-left transition-[transform,box-shadow] duration-150 hover:-translate-y-1 hover:shadow-[0_0_0_1px_color-mix(in_srgb,var(--color-stage-brand)_50%,transparent),0_0_48px_color-mix(in_srgb,var(--color-stage-brand)_30%,transparent)]"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[18px] font-bold text-stage-text">{s.title}</p>
+                      <p className="truncate text-[13px] text-stage-muted">
+                        {showCompany && `${companyName(s.companyId)} │ `}
+                        {s.taskTitle}
+                      </p>
+                    </div>
+                    <ChevronRight size={18} className="text-stage-muted" aria-hidden />
+                  </div>
+                  <div className="flex items-end gap-6">
+                    <div>
+                      <span className="label text-stage-muted">REMAINING</span>
+                      <p className={cx('tnum font-mono text-[44px] leading-[48px] font-semibold', left <= 3 * 60_000 ? 'text-stage-alert' : left <= 10 * 60_000 ? 'text-stage-caution' : 'text-stage-text')}>
+                        {fmtLeft(left)}
+                      </p>
+                    </div>
+                    <div className="ml-auto flex shrink-0 gap-4 pb-1.5 text-[14px] whitespace-nowrap text-stage-muted">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Users size={16} aria-hidden />
+                        <b className="tnum font-mono text-stage-text">{entered}</b>/{s.participants.length}
+                      </span>
+                      <span className={cx('inline-flex items-center gap-1.5', open > 0 && 'text-stage-caution')}>
+                        <CircleAlert size={16} aria-hidden />
+                        미확인 <b className="tnum font-mono">{open}</b>
+                      </span>
+                      {s.proctoring && <Camera size={16} aria-label="감독 사용" />}
+                    </div>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-stage-raised">
+                    <div
+                      className="bg-brand-gradient h-full w-full origin-left rounded-full transition-transform duration-1000"
+                      style={{ transform: `scaleX(${Math.min(1, Math.max(0, (total - left) / total))})` }}
+                    />
+                  </div>
+                  <p className="tnum font-mono text-[12px] text-stage-faint">
+                    {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
+                  </p>
+                </Spotlight>
+              </RevealItem>
+            )
+          })}
+        </RevealGroup>
+      </div>
+    </StageSection>
+  )
 }

@@ -248,6 +248,58 @@
     border: 1px solid rgb(255 255 255 / 0.08);
   }
 
+  /* 표 행 순차 등장 (DESIGN.md §3.7 Reveal 의 CSS 판). 처음 그려질 때 한 번, 첫 10행만 40ms씩 늦춘다 */
+  .fx-rows > tr {
+    animation: fx-row-in var(--duration-slow) var(--ease-expo) both;
+  }
+  .fx-rows > tr:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .fx-rows > tr:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .fx-rows > tr:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .fx-rows > tr:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .fx-rows > tr:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .fx-rows > tr:nth-child(6) {
+    animation-delay: 200ms;
+  }
+  .fx-rows > tr:nth-child(7) {
+    animation-delay: 240ms;
+  }
+  .fx-rows > tr:nth-child(8) {
+    animation-delay: 280ms;
+  }
+  .fx-rows > tr:nth-child(9) {
+    animation-delay: 320ms;
+  }
+  .fx-rows > tr:nth-child(10) {
+    animation-delay: 360ms;
+  }
+  .fx-rows > tr:nth-child(n + 11) {
+    animation-delay: 400ms;
+  }
+
+  .hex-sweep {
+    animation: hex-sweep 8s linear infinite;
+  }
+  /* 과제 목록 추천 과제: 고리가 천천히 돌고, 역량 점이 궤도를 돈다 */
+  .quest-ring {
+    animation: hex-sweep 40s linear infinite;
+  }
+  .quest-ring-rev {
+    animation: hex-sweep 28s linear infinite reverse;
+  }
+  .quest-orbit {
+    margin: -6px 0 0 -6px;
+    animation: quest-orbit 18s linear infinite;
+  }
   /* 3.6 다크 무대 안 포커스 링 */
   .stage-scope :focus-visible {
     outline-color: var(--color-stage-brand);
@@ -449,6 +501,26 @@
 @keyframes fx-aurora-c {
   to {
     transform: translate(30%, -20%) scale(1.2);
+  }
+}
+/* 대시보드 육각형 레이더 스윕: 8초에 한 바퀴 */
+@keyframes hex-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes quest-orbit {
+  from {
+    transform: rotate(0deg) translateX(140px);
+  }
+  to {
+    transform: rotate(360deg) translateX(140px);
+  }
+}
+@keyframes fx-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }
 @keyframes fade-in {

@@ -1,10 +1,13 @@
 // DESIGN.md §7-9-1 과제 목록 (ADMIN): 검수 대기(HIDDEN) / 공개(OPEN) / 응시 마감(CLOSED)
+// 2026-11-19 개편: 상태 탭을 단계 카드(StatTabs)로. 검수 대기가 있으면 caution 으로 눈에 띄게.
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, FileStack, Search, Sparkles } from 'lucide-react'
+import { ChevronRight, FileCheck2, FileClock, FileStack, FileX2, Search, Sparkles } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { PageHeader } from '../../components/SelfShell'
-import { ButtonLink, Tabs } from '../../components/ui'
+import { ButtonLink } from '../../components/ui'
+import { StatTabs } from './StatTabs'
+import { Reveal } from '../../components/fx'
 import {
   activeSessionCount,
   duplicateTask,
@@ -48,18 +51,20 @@ export default function ConsoleTasks() {
         </ButtonLink>
       </PageHeader>
 
-      <div className="p-8">
-        <div className="flex flex-wrap items-end gap-4 border-b border-line">
-          <Tabs
-            value={tab}
-            onChange={setTab}
-            tabs={[
-              { value: 'draft', label: <>검수 대기 <Count n={counts.draft} warn /></> },
-              { value: 'open', label: <>공개 <Count n={counts.open} /></> },
-              { value: 'closed', label: <>응시 마감 <Count n={counts.closed} /></> },
-            ]}
-          />
-          <div className="ml-auto flex items-center gap-2 pb-2">
+      <div className="flex flex-col gap-4 p-8">
+        <StatTabs
+          id="task-status"
+          label="과제 상태"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { value: 'draft', label: '검수 대기', hint: 'AI가 만든 초안, 사람이 확인 전', icon: FileClock, n: counts.draft, tone: 'caution' },
+            { value: 'open', label: '공개', hint: '회차에 쓸 수 있는 과제', icon: FileCheck2, n: counts.open },
+            { value: 'closed', label: '응시 마감', hint: '더 이상 새 회차에 못 쓰는 과제', icon: FileX2, n: counts.closed },
+          ]}
+        />
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="ml-auto flex items-center gap-2">
             <div role="radiogroup" aria-label="직군" className="flex rounded-md border border-line bg-panel p-0.5">
               {(
                 [
@@ -93,7 +98,7 @@ export default function ConsoleTasks() {
           </div>
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+        <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
               <FileStack size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
@@ -117,7 +122,7 @@ export default function ConsoleTasks() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="fx-rows">
                 {rows.map((t) => (
                   <tr
                     key={t.id}
@@ -179,7 +184,7 @@ export default function ConsoleTasks() {
               </tbody>
             </table>
           )}
-        </div>
+        </Reveal>
       </div>
 
       {closing && (
@@ -207,11 +212,5 @@ export default function ConsoleTasks() {
       )}
       {toast.node}
     </>
-  )
-}
-
-function Count({ n, warn }: { n: number; warn?: boolean }) {
-  return (
-    <span className={cx('tnum ml-1 rounded-sm px-1.5 font-mono text-[12px]', warn && n > 0 ? 'bg-caution/12 text-caution' : 'bg-panel-raised text-text-muted')}>{n}</span>
   )
 }

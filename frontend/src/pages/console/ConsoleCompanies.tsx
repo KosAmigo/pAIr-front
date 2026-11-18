@@ -6,6 +6,7 @@ import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
+import { Reveal } from '../../components/fx'
 import {
   addManager,
   createCompany,
@@ -57,7 +58,7 @@ export default function ConsoleCompanies() {
         </Button>
       </PageHeader>
       <div className="p-8">
-        <div className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+        <Reveal className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
           {companies.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
               <Building2 size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
@@ -74,7 +75,7 @@ export default function ConsoleCompanies() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="fx-rows">
                 {companies.map((c) => {
                   const mine = sessions.filter((s) => s.companyId === c.id)
                   const live = mine.filter((s) => phaseOf(s) === 'live').length
@@ -102,7 +103,7 @@ export default function ConsoleCompanies() {
               </tbody>
             </table>
           )}
-        </div>
+        </Reveal>
       </div>
       {adding && <AddCompanyModal onClose={() => setAdding(false)} onDone={(id) => nav(`/console/companies/${id}`)} />}
     </>
@@ -234,7 +235,7 @@ function CompanyDetail({ c }: { c: Company }) {
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="fx-rows">
                   {c.managers.map((m) => (
                     <tr key={m.id} className="h-12 border-b border-line last:border-0">
                       <td className="px-4 font-medium text-text">{m.name}</td>

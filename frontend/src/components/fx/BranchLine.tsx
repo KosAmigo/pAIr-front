@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { motion, useInView } from 'motion/react'
 import { cx } from '../cx'
 import { duration, easing, useShouldAnimate } from '../../lib/motion'
@@ -27,26 +27,35 @@ export function BranchLine({
   const inView = useInView(ref, { once: true })
   const run = useShouldAnimate()
   const target = progress ?? (inView || !run ? 1 : 0)
-  const W = 1000
+  // viewBox 를 실제 픽셀 폭에 맞춘다. 늘려 그리면(preserveAspectRatio none) pathLength 대시가 깨진다
+  const [W, setW] = useState(1000)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => e.contentRect.width > 0 && setW(Math.round(e.contentRect.width)))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const branchColors = ['var(--color-branch-2)', 'var(--color-branch-3)', 'var(--color-branch-4)', 'var(--color-branch-5)']
   const t = { duration: run ? duration.crawl : 0, ease: easing.expo }
   return (
-    <svg ref={ref} viewBox={`0 0 ${W} 24`} preserveAspectRatio="none" aria-hidden className={cx('h-6 w-full overflow-visible', className)}>
+    <svg ref={ref} viewBox={`0 0 ${W} 24`} aria-hidden className={cx('h-6 w-full overflow-visible', className)}>
       <defs>
-        <linearGradient id={`${id}-g`} x1="0" x2="1" y1="0" y2="0">
+        {/* 높이 0 인 가로선은 objectBoundingBox 그라데이션이 칠해지지 않으므로 userSpaceOnUse 로 */}
+        <linearGradient id={`${id}-g`} gradientUnits="userSpaceOnUse" x1="0" x2={W} y1="0" y2="0">
           <stop offset="0" style={{ stopColor: 'var(--color-branch-3)' }} />
           <stop offset="0.45" style={{ stopColor: 'var(--color-brand)' }} />
           <stop offset="1" style={{ stopColor: 'var(--color-brand-blue)' }} />
         </linearGradient>
       </defs>
-      <line x1="0" y1="6" x2={W} y2="6" stroke="var(--color-line)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeDasharray="3 5" />
+      <line x1="0" y1="6" x2={W} y2="6" stroke="var(--color-line)" strokeWidth="2" strokeDasharray="3 5" />
       <motion.path
         d={`M0 6 H${W}`}
         stroke={`url(#${id}-g)`}
         strokeWidth="2.5"
         fill="none"
         strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
+       
         initial={{ pathLength: run ? 0 : target }}
         animate={{ pathLength: target }}
         transition={t}
@@ -63,7 +72,7 @@ export function BranchLine({
             fill="none"
             strokeLinecap="round"
             strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
+           
             initial={{ pathLength: run ? 0 : on ? 1 : 0 }}
             animate={{ pathLength: on ? 1 : 0 }}
             transition={{ ...t, delay: run ? at * duration.crawl : 0 }}
