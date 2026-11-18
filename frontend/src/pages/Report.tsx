@@ -3,13 +3,14 @@ import { motion } from 'motion/react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { isRealAttempt } from '../api'
 import RealReport from './RealReport'
-import { Bot, CircleAlert, CircleCheck, GitBranch, RotateCcw, User } from 'lucide-react'
+import { Bot, CircleAlert, CircleCheck, GitBranch, Link2, RotateCcw, Share2, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
 import { Button, ButtonLink, Panel, ScoreBar } from '../components/ui'
 import { ScoreHero, StageSep } from '../components/report/ScoreHero'
 import { CompetencyCards } from '../components/report/CompetencyCards'
 import { duration, easing } from '../lib/motion'
+import { disableShare, enableShare, shareLink, useShare } from '../data/shares'
 import { COMPETENCIES, density, moments, report, timelineEvents, type ChatMsg } from '../data/mock'
 
 // DESIGN.md §7-4 결과 리포트, §6.11 Timeline, §6.12 Quote Block
@@ -146,21 +147,29 @@ export default function Report() {
 }
 
 function MockReport() {
-  const [sel, setSel] = useState(moments[0].id)
-  const navigate = useNavigate()
-  const m = moments.find((x) => x.id === sel)!
-  const comp = COMPETENCIES.find((c) => c.key === m.competency)!
-
   return (
     <SelfShell
       header={
         <PageHeader label="SELF-CHECK REPORT" title="결과 리포트">
+          <ShareControl attemptId="a-1107" />
           <ButtonLink to="/replay/t-order-api" variant="primary">
             <GitBranch size={18} aria-hidden /> 복기 트리 보기
           </ButtonLink>
         </PageHeader>
       }
     >
+      <MockReportContent />
+    </SelfShell>
+  )
+}
+
+/** 목업 리포트 본문. readOnly 면 다시 풀기 버튼을 숨긴다 (공유 보기) */
+export function MockReportContent({ readOnly }: { readOnly?: boolean }) {
+  const [sel, setSel] = useState(moments[0].id)
+  const navigate = useNavigate()
+  const m = moments.find((x) => x.id === sel)!
+  const comp = COMPETENCIES.find((c) => c.key === m.competency)!
+  return (
       <div className="mx-auto grid max-w-[1440px] grid-cols-12 gap-2 p-8">
         {/* 헤더 요약 */}
         <ScoreHero
@@ -179,7 +188,7 @@ function MockReport() {
           max={100}
           items={report.scores.map((s) => {
             const c = COMPETENCIES.find((x) => x.key === s.key)!
-            return { key: s.key, name: c.name, score: s.score, max: 100, color: c.color }
+            return { key: s.key, name: c.name, score: s.score, max: c.max, color: c.color }
           })}
           aside={
             <span>
@@ -201,7 +210,7 @@ function MockReport() {
               key: s.key,
               name: c.name,
               score: s.score,
-              max: 100,
+              max: c.max,
               color: c.color,
               note: s.note,
               detail: s.sub ? (
@@ -280,12 +289,52 @@ function MockReport() {
               <span className="tnum font-mono">{m.time}</span> 시점의 코드와 AI 대화로 돌아가, 이 순간부터 다르게 풀어볼 수 있습니다.
             </p>
             <p className="mt-1 text-[14px] text-text-muted">새 분기가 만들어지고, 기존 풀이는 그대로 남습니다.</p>
-            <Button variant="secondary" className="mt-4" onClick={() => navigate(`/exam/t-order-api?mode=self&from=${m.id}`)}>
-              <RotateCcw size={18} aria-hidden /> 여기서 다시 풀기
-            </Button>
+            {!readOnly && (
+              <Button variant="secondary" className="mt-4" onClick={() => navigate(`/exam/t-order-api?mode=self&from=${m.id}`)}>
+                <RotateCcw size={18} aria-hidden /> 여기서 다시 풀기
+              </Button>
+            )}
           </div>
         </Panel>
       </div>
-    </SelfShell>
+  )
+}
+
+/**
+ * 리포트 공유 (기획_결정사항 §3). 켜면 읽기 전용 공유 링크가 생기고(이력서에 첨부 가능), 언제든 끌 수 있다.
+ * 다시 켜면 새 링크라 예전 링크는 더 이상 열리지 않는다.
+ */
+function ShareControl({ attemptId }: { attemptId: string }) {
+  const share = useShare(attemptId)
+  const [copied, setCopied] = useState(false)
+  if (!share)
+    return (
+      <Button onClick={() => enableShare(attemptId)}>
+        <Share2 size={16} aria-hidden /> 공유 링크 만들기
+      </Button>
+    )
+  const link = shareLink(share)
+  return (
+    <div className="flex items-center gap-1 rounded-lg border border-brand/40 bg-brand-dim py-1 pr-1 pl-3">
+      <Link2 size={15} className="text-brand" aria-hidden />
+      <span className="max-w-[220px] truncate font-mono text-[13px] text-text" title={link}>
+        {link.replace(/^https?:\/\//, '')}
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          navigator.clipboard?.writeText(link).then(() => {
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1500)
+          })
+        }}
+      >
+        {copied ? '복사됨' : '복사'}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => disableShare(attemptId)}>
+        공유 끄기
+      </Button>
+    </div>
   )
 }

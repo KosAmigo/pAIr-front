@@ -26,5 +26,4 @@ export const STAT_HISTORY: { date: string; task: string; scores: StatScores }[] 
 
 export const total = (s: StatScores) => STATS.reduce((n, st) => n + s[st.key], 0)
 
-/** 크레딧 잔액은 기획_결정사항 §3(크레딧 원장 합계). 목업 값이다 */
-export const PROFILE = { name: '김지원', credits: 1240 }
+export const PROFILE = { name: '김지원' }

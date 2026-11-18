@@ -10,6 +10,7 @@ import { MiniHex, StatHex, type HexStat } from '../components/dashboard/StatHex'
 import { PROFILE, STAT_HISTORY, STATS, total, type StatScores } from '../data/dashboard'
 import { recommended } from '../data/mock'
 import { duration, easing } from '../lib/motion'
+import { useCredits } from '../data/credits'
 
 // DESIGN.md §7-2 개인 대시보드 (2026-11-19 전면 개편: "역량 시트")
 // 위: 다크 무대에 역량 육각형, 총점과 등급, 6개 스탯 막대. 육각형과 막대는 마우스 강조를 함께 쓴다.
@@ -130,6 +131,7 @@ function GrowthChart({ focus }: { focus: string | null }) {
 
 export default function Dashboard() {
   const [active, setActive] = useState<string | null>(null)
+  const credits = useCredits()
   const score = total(latest.scores)
   const prevScore = total(previous.scores)
   const delta = score - prevScore
@@ -166,7 +168,7 @@ export default function Dashboard() {
                 <div className="flex items-baseline gap-2">
                   <CountUp
                     value={score}
-                    className="font-mono text-[104px] leading-[104px] font-semibold tracking-[-0.04em] text-stage-text [text-shadow:0_0_48px_color-mix(in_srgb,var(--color-stage-brand)_60%,transparent)]"
+                    className="font-mono text-[104px] leading-[104px] font-semibold tracking-[-0.04em] text-brand-gradient"
                   />
                   <span className="font-mono text-[18px] text-stage-muted">/100</span>
                 </div>
@@ -183,7 +185,7 @@ export default function Dashboard() {
                   <dt className="label text-stage-muted">CREDITS</dt>
                   <dd className="mt-0.5 flex items-center gap-1.5 text-[15px] text-stage-text">
                     <Coins size={16} className="text-stage-caution" aria-hidden />
-                    <CountUp value={PROFILE.credits} className="font-mono text-[22px] font-semibold" />
+                    <CountUp value={credits} className="font-mono text-[22px] font-semibold" />
                   </dd>
                 </div>
                 <div className="glass-stage rounded-lg px-3 py-2.5">

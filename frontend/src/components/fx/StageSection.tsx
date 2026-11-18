@@ -4,9 +4,9 @@ import { Aurora } from './Aurora'
 import { StageContext } from './stage'
 
 /**
- * DESIGN.md §3.6 다크 무대. bleed = 전체 폭, inset = 컨테이너 안 둥근 무대.
- * bleed 는 레이아웃은 컨테이너 안에 두고 어두운 바탕만 화면 좌우 끝까지 편다.
- * 안에서는 stage-* 토큰만 쓴다. 한 화면에 하나(초기화면만 둘). 무대 안 포커스 링은 stage-brand.
+ * DESIGN.md §3.6 스포트라이트(밝은 강조 영역). 2026-11-19: 어두운 무대를 없애고 밝은 카드로 바꿨다.
+ * 아주 옅은 보라 → 파랑 면 + 브랜드 기운 테두리 + 옅은 오로라 + 도트 그리드. bleed = 전체 폭, inset = 둥근 카드.
+ * 안에서는 stage-* 토큰(밝은 값)을 쓴다. 한 화면에 하나(초기화면만 둘).
  */
 export function StageSection({
   shape = 'inset',
@@ -36,7 +36,7 @@ export function StageSection({
     <Tag
       className={cx(
         'stage-scope relative isolate text-stage-text',
-        shape === 'inset' && 'overflow-hidden rounded-xl border border-stage-line bg-stage-bg shadow-lg',
+        shape === 'inset' && 'spotlight-surface overflow-hidden rounded-xl border border-stage-line shadow-md',
         className,
       )}
       {...rest}
@@ -44,7 +44,7 @@ export function StageSection({
       {shape === 'inset' ? (
         backdrop
       ) : (
-        <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden bg-stage-bg">
+        <div aria-hidden className="spotlight-surface pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden border-y border-stage-line">
           {backdrop}
         </div>
       )}

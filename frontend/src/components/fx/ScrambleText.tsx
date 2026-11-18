@@ -30,7 +30,12 @@ export function ScrambleText({ text, className }: { text: string; className?: st
       if (p < 1) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
+    // 안전장치: 애니메이션 프레임이 돌지 않는 환경(숨은 탭, 화면 없는 브라우저)에서도 원래 글자로 끝난다
+    const done = window.setTimeout(() => setShown(text), total + 400)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(done)
+    }
   }, [inView, run, text])
   return (
     <span ref={ref} className={className}>

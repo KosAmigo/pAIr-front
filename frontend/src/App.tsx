@@ -8,6 +8,7 @@ import Report from './pages/Report'
 import Replay from './pages/Replay'
 import Entry from './pages/Entry'
 import Submitted from './pages/Submitted'
+import SharedReport from './pages/SharedReport'
 import Tasks from './pages/Tasks'
 import History from './pages/History'
 import Grader from './pages/Grader'
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="/entry" element={<Entry />} />
           <Route path="/exam/:sessionId" element={<ExamRoute />} />
           <Route path="/exam/:sessionId/submitted" element={<Submitted />} />
+          <Route path="/share/:token" element={<SharedReport />} />
 
           {/* 자가진단: 로그인한 누구나 */}
           <Route element={<RequireAuth />}>

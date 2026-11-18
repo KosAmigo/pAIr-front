@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
+  Check,
   Bot,
   Camera,
   ChevronDown,
@@ -18,6 +19,7 @@ import { cx } from '../components/cx'
 import { Button, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { CodeEditor } from '../components/CodeEditor'
+import { CREDIT_COST, spendCredits, useCredits } from '../data/credits'
 import { SendKey } from '../components/SendKey'
 import {
   bizDoc,
@@ -59,6 +61,7 @@ function StatusBar({
   onSubmit,
   onCheckpoint,
   onTimerDemo,
+  submitLabel = '제출',
 }: {
   mode: 'self' | 'live'
   title: string
@@ -67,6 +70,7 @@ function StatusBar({
   onSubmit: () => void
   onCheckpoint: () => void
   onTimerDemo: () => void
+  submitLabel?: string
 }) {
   const tone = stage === 'followup' ? 'text-text' : left <= 180 ? 'text-alert' : left <= 600 ? 'text-caution' : 'text-text'
   return (
@@ -121,7 +125,7 @@ function StatusBar({
         )}
         {stage === 'solve' && (
           <Button variant="primary" size="sm" onClick={onSubmit}>
-            제출
+            {submitLabel}
           </Button>
         )}
       </div>
@@ -176,7 +180,10 @@ function FileTree({ nodes, depth = 0, active, onOpen }: { nodes: FileNode[]; dep
 // 목업 화면용 값. 실제 응시 화면은 백엔드 설정(application.yml)의 모델과 글자 수 제한을 쓴다.
 const CHAT_MODEL = 'gpt-6-luna'
 const CHAT_MAX_CHARS = 1000
-function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[] }) {
+function ChatPanel({ disabled, initial, paid }: { disabled: boolean; initial: ChatMsg[]; paid: boolean }) {
+  // 자가진단은 채팅 한 턴마다 크레딧을 쓴다 (실전은 쓰지 않는다). 바닥나면 채팅만 막고 편집·제출은 그대로
+  const credits = useCredits()
+  const broke = paid && credits < CREDIT_COST.CHAT_TURN
   const [msgs, setMsgs] = useState<ChatMsg[]>(initial)
   const [draft, setDraft] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -184,7 +191,8 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
   const over = count > CHAT_MAX_CHARS
   const send = () => {
     const text = draft.trim()
-    if (!text || over) return
+    if (!text || over || broke) return
+    if (paid && !spendCredits('CHAT_TURN')) return
     const turn = msgs.length + 1
     setMsgs([
       ...msgs,
@@ -246,7 +254,7 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
           <textarea
             id="chat-input"
             rows={3}
-            disabled={disabled}
+            disabled={disabled || broke}
             value={draft}
             maxLength={CHAT_MAX_CHARS}
             onChange={(e) => {
@@ -269,7 +277,7 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send()
             }}
-            placeholder="맥락을 충분히 담아 질문하세요"
+            placeholder={broke ? '크레딧이 부족해 AI 채팅을 쓸 수 없습니다. 편집과 제출은 그대로 됩니다' : '맥락을 충분히 담아 질문하세요'}
             className="block w-full resize-none bg-transparent px-3 pt-2 text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
           />
           <div className="flex items-center gap-2 px-2 pb-2">
@@ -277,7 +285,8 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
             <span className="ml-auto mr-3 truncate font-mono text-[12px] text-text-faint" title="이 시험에서 쓰는 AI 모델">
               {CHAT_MODEL}
             </span>
-            <SendKey ready={draft.trim().length > 0} disabled={disabled || over} onClick={send} />
+            {paid && <span className={cx('tnum font-mono text-[12px]', broke ? 'text-caution' : 'text-text-faint')}>잔액 {credits}</span>}
+            <SendKey ready={draft.trim().length > 0} disabled={disabled || over || broke} onClick={send} />
           </div>
         </div>
       </div>
@@ -334,7 +343,7 @@ function FollowUp({ onDone }: { onDone: () => void }) {
   )
 }
 
-function ConfirmModal({ live, onCancel, onConfirm }: { live: boolean; onCancel: () => void; onConfirm: () => void }) {
+function ConfirmModal({ live, perTask, onCancel, onConfirm }: { live: boolean; perTask?: boolean; onCancel: () => void; onConfirm: () => void }) {
   return (
     <div className="fade-in fixed inset-0 z-50 flex items-center justify-center bg-bg/70" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
       <div className="w-[440px] rounded-lg border border-line bg-panel shadow-modal">
@@ -346,11 +355,12 @@ function ConfirmModal({ live, onCancel, onConfirm }: { live: boolean; onCancel: 
         </header>
         <div className="p-6">
           <h2 id="confirm-title" className="text-h2 font-semibold">
-            풀이를 제출할까요?
+            {perTask ? '이 과제를 제출할까요?' : '풀이를 제출할까요?'}
           </h2>
           <p className="mt-2 text-[15px] leading-6 text-text-muted">
             제출하면 코드와 AI 대화가 잠기고, 후속 질문 3개가 이어집니다.
             {live && ' 실전 시험은 제출 후 수정할 수 없습니다.'}
+            {perTask && ' 다른 과제는 회차 시간 안에서 이어서 풀 수 있습니다.'}
           </p>
         </div>
         <footer className="flex justify-end gap-2 border-t border-line px-6 py-4">
@@ -366,15 +376,32 @@ function ConfirmModal({ live, onCancel, onConfirm }: { live: boolean; onCancel: 
   )
 }
 
-export default function Exam() {
-  const [params] = useSearchParams()
+/** 과제 하나의 작업 공간. 실전에서 과제가 여러 개면 과제마다 하나씩 띄워 두고 보이는 것만 바꾼다(편집 내용 유지) */
+function ExamWorkspace({
+  mode,
+  biz,
+  shared,
+  taskBar,
+  submitLabel,
+  onFinished,
+  className,
+}: {
+  mode: 'self' | 'live'
+  biz: boolean
+  /** 실전 회차 전체 시간 (기획_결정사항 §1: 과제별 시간 없이 회차 전체로 본다) */
+  shared?: { left: number; onTimerDemo: () => void }
+  taskBar?: ReactNode
+  submitLabel?: string
+  /** 후속 질문까지 끝났을 때. 없으면 리포트나 제출 완료로 이동 */
+  onFinished?: () => void
+  className?: string
+}) {
   const navigate = useNavigate()
-  const mode = params.get('mode') === 'live' ? 'live' : 'self'
-  const biz = params.get('track') === 'biz'
   const task = biz ? bizTask : devTask
   const tree = biz ? bizFiles : files
 
-  const [left, setLeft] = useCountdown(mode === 'live' ? 52 * 60 + 10 : 38 * 60 + 12)
+  const [ownLeft, setLeft] = useCountdown(mode === 'live' ? 52 * 60 + 10 : 38 * 60 + 12)
+  const left = shared?.left ?? ownLeft
   const [stage, setStage] = useState<'solve' | 'followup'>('solve')
   const [confirm, setConfirm] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -401,13 +428,13 @@ export default function Exam() {
     setToast(msg)
     setTimeout(() => setToast(null), 2000)
   }
-  const timerDemo = () => setLeft((s) => (s > 600 ? 9 * 60 + 30 : s > 180 ? 2 * 60 + 45 : 38 * 60 + 12))
+  const timerDemo = shared?.onTimerDemo ?? (() => setLeft((s) => (s > 600 ? 9 * 60 + 30 : s > 180 ? 2 * 60 + 45 : 38 * 60 + 12)))
 
   const source = useMemo(() => fileContents[active] ?? `# ${active}\n`, [active])
 
   return (
     // 집중 무대(DESIGN.md §0-1, §7-3): 들어올 때 짧은 페이드만, 꾸밈 연출은 focus-stage 로 끈다
-    <div className="focus-stage fade-in flex h-full flex-col bg-bg">
+    <div className={cx('focus-stage fade-in flex h-full flex-col bg-bg', className)}>
       <StatusBar
         mode={mode}
         title={task.title}
@@ -416,7 +443,9 @@ export default function Exam() {
         onSubmit={() => setConfirm(true)}
         onCheckpoint={() => flash('체크포인트 CP-04를 저장했습니다')}
         onTimerDemo={timerDemo}
+        submitLabel={submitLabel}
       />
+      {taskBar}
 
       <div
         className="grid min-h-0 flex-1"
@@ -475,7 +504,7 @@ export default function Exam() {
         {/* 가운데: 에디터 + 출력  |  후속 질문 */}
         <div className="flex min-h-0 min-w-0 flex-col">
           {locked ? (
-            <FollowUp onDone={() => navigate(mode === 'live' ? '/exam/live-k7q2mx/submitted' : '/report/a-1107')} />
+            <FollowUp onDone={() => (onFinished ? onFinished() : navigate(mode === 'live' ? '/exam/live-k7q2mx/submitted' : '/report/a-1107'))} />
           ) : (
             <>
               <div className="flex h-10 shrink-0 items-stretch border-b border-line bg-panel">
@@ -579,7 +608,7 @@ export default function Exam() {
         <div className="relative min-h-0">
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
-              <ChatPanel disabled={locked} initial={initialChat} />
+              <ChatPanel disabled={locked} initial={initialChat} paid={mode === 'self'} />
             </div>
           </div>
           {locked && (
@@ -594,6 +623,7 @@ export default function Exam() {
       {confirm && (
         <ConfirmModal
           live={mode === 'live'}
+          perTask={!!onFinished}
           onCancel={() => setConfirm(false)}
           onConfirm={() => {
             setConfirm(false)
@@ -610,5 +640,92 @@ export default function Exam() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function Exam() {
+  const [params] = useSearchParams()
+  const mode = params.get('mode') === 'live' ? 'live' : 'self'
+  if (mode === 'live') return <LiveExam />
+  return <ExamWorkspace mode="self" biz={params.get('track') === 'biz'} />
+}
+
+// ── 실전: 회차 과제 여러 개 (기획_결정사항 §1) ──
+// 응시자는 회차 시간 안에서 과제를 자유롭게 오가며 풀고, 과제마다 따로 제출한다(제출 후 그 과제의 후속 질문).
+// 시간은 회차 전체 하나. 종료 시각에 남은 과제는 자동 제출된다. 집중 무대라 과제 전환 줄도 차분하게 둔다.
+const LIVE_TASKS = [
+  { biz: false, title: devTask.title },
+  { biz: true, title: bizTask.title },
+]
+
+function LiveExam() {
+  const navigate = useNavigate()
+  const [left, setLeft] = useCountdown(52 * 60 + 10)
+  const [cur, setCur] = useState(0)
+  const [done, setDone] = useState<boolean[]>(() => LIVE_TASKS.map(() => false))
+  const timerDemo = () => setLeft((s) => (s > 600 ? 9 * 60 + 30 : s > 180 ? 2 * 60 + 45 : 52 * 60 + 10))
+  const finish = (i: number) => {
+    const next = done.map((d, j) => d || j === i)
+    setDone(next)
+    const rest = next.findIndex((d) => !d)
+    if (rest < 0) navigate('/exam/live-k7q2mx/submitted')
+    else setCur(rest)
+  }
+  const bar = (
+    <nav aria-label="회차 과제" className="flex h-10 shrink-0 items-stretch gap-1 border-b border-line bg-panel px-3">
+      {LIVE_TASKS.map((t, i) => (
+        <button
+          key={t.title}
+          type="button"
+          aria-current={cur === i ? 'page' : undefined}
+          onClick={() => setCur(i)}
+          className={cx(
+            'relative inline-flex items-center gap-2 px-3 text-[14px] font-medium transition-colors duration-150',
+            cur === i ? 'text-text' : 'text-text-muted hover:text-text',
+          )}
+        >
+          <span className="tnum font-mono text-[12px] text-text-muted">{i + 1}</span>
+          <span className="max-w-[260px] truncate">{t.title}</span>
+          {done[i] ? (
+            <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-signal">
+              <Check size={13} aria-hidden /> 제출 완료
+            </span>
+          ) : (
+            <span className="text-[12px] text-text-faint">풀이 중</span>
+          )}
+          {cur === i && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand" aria-hidden />}
+        </button>
+      ))}
+      <span className="ml-auto self-center text-[12px] text-text-muted">과제마다 따로 제출합니다. 종료 시각에 남은 과제는 자동 제출됩니다.</span>
+    </nav>
+  )
+  return (
+    <>
+      {LIVE_TASKS.map((t, i) =>
+        done[i] ? (
+          cur === i && (
+            <div key={t.title} className="focus-stage fade-in flex h-full flex-col bg-bg">
+              {bar}
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                <Check size={28} className="text-signal" aria-hidden />
+                <p className="text-[17px] font-semibold text-text">이 과제는 제출했습니다</p>
+                <p className="text-[14px] text-text-muted">남은 과제를 위 줄에서 골라 이어서 푸세요.</p>
+              </div>
+            </div>
+          )
+        ) : (
+          <ExamWorkspace
+            key={t.title}
+            mode="live"
+            biz={t.biz}
+            shared={{ left, onTimerDemo: timerDemo }}
+            taskBar={bar}
+            submitLabel="이 과제 제출"
+            onFinished={() => finish(i)}
+            className={cur === i ? undefined : 'hidden'}
+          />
+        ),
+      )}
+    </>
   )
 }

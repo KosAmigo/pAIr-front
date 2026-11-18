@@ -9,6 +9,7 @@ import { Aurora, Glass, GlowBorder, GradientText, Reveal, StageSection } from '.
 import { StatHex } from '../components/dashboard/StatHex'
 import { STAT_HISTORY, STATS, total } from '../data/dashboard'
 import { homeFor, useAuth } from '../auth/auth'
+import { submitInquiry } from '../data/inquiries'
 
 const inputCls =
   'h-11 w-full rounded-sm border border-line-strong bg-panel px-3 text-[16px] text-text outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-text-faint focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
@@ -181,7 +182,6 @@ export function Signup() {
   const [params, setParams] = useSearchParams()
   const next = safeNext(params.get('next'))
   const kind: Kind = params.get('type') === 'company' ? 'company' : 'user'
-  const [companyName, setCompanyName] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -196,8 +196,7 @@ export function Signup() {
     { ok: password.length >= 8, text: '8자 이상' },
     { ok: password.length > 0 && password === confirm, text: '비밀번호 확인과 같음' },
   ]
-  const companyOk = !isCompany || companyName.trim()
-  const valid = companyOk && name.trim() && email.trim() && rules.every((r) => r.ok) && agree
+  const valid = name.trim() && email.trim() && rules.every((r) => r.ok) && agree
 
   const pick = (k: Kind) => {
     const p = new URLSearchParams(params)
@@ -210,16 +209,12 @@ export function Signup() {
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!valid) return
-    if (!isCompany) {
-      const r = signup(name, email, password)
-      if (r.error) return setError(r.error)
-      return nav(next ?? '/tasks', { replace: true })
-    }
-    // 기업 회원: 회사 이름은 계정 정보로만 남긴다 (회사를 따로 등록하지 않는다)
-    const r = signup(name, email, password, companyName.trim())
+    const r = signup(name, email, password)
     if (r.error) return setError(r.error)
-    nav('/console/sessions', { replace: true })
+    nav(next ?? '/tasks', { replace: true })
   }
+
+  if (isCompany) return <CompanyInquiry onBack={() => pick('user')} />
 
   return (
     <AuthLayout
@@ -238,7 +233,7 @@ export function Signup() {
         {(
           [
             ['user', User, '일반 회원', '자가진단, 시험 응시'],
-            ['company', Building2, '기업 회원', '시험 회차, 감독'],
+            ['company', Building2, '기업 도입 문의', '승인 후 담당자 초대'],
           ] as const
         ).map(([k, Icon, label, sub]) => (
           <button
@@ -262,15 +257,10 @@ export function Signup() {
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
       <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
-        {isCompany && (
-          <Field id="company" label="회사 이름">
-            <input id="company" value={companyName} onChange={(e) => setCompanyName(e.target.value)} autoComplete="organization" required maxLength={100} className={inputCls} />
-          </Field>
-        )}
-        <Field id="name" label={isCompany ? '담당자 이름' : '이름'}>
+        <Field id="name" label="이름">
           <input id="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={50} className={inputCls} />
         </Field>
-        <Field id="email" label={isCompany ? '회사 이메일' : '이메일'} hint={isCompany ? '시험 회차 안내와 결과 알림을 받는 주소입니다.' : undefined}>
+        <Field id="email" label="이메일">
           <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className={inputCls} />
         </Field>
         <Field id="password" label="비밀번호">
@@ -292,9 +282,77 @@ export function Signup() {
           서비스 이용약관과 개인정보 처리방침에 동의합니다
         </label>
         <Button type="submit" variant="primary" size="lg" className="mt-2 w-full" disabled={!valid}>
-          {isCompany ? '기업 회원으로 가입하기' : '가입하기'}
+          가입하기
         </Button>
       </form>
+    </AuthLayout>
+  )
+}
+
+/**
+ * 기업 도입 문의 (기획_결정사항 §4, company_inquiries). 기업 회원은 자체 가입하지 않는다:
+ * 문의 → 관리자 승인(회사 등록) → 담당자에게 초대 메일 → 초대 링크로 계정을 만든다.
+ */
+function CompanyInquiry({ onBack }: { onBack: () => void }) {
+  const [f, setF] = useState({ companyName: '', businessNo: '', contactName: '', contactEmail: '', message: '' })
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }))
+  return (
+    <AuthLayout
+      title={done ? '문의를 받았습니다' : '기업 도입 문의'}
+      footer={
+        <button type="button" onClick={onBack} className="font-semibold text-brand hover:underline">
+          일반 회원가입으로
+        </button>
+      }
+    >
+      {done ? (
+        <div className="mt-6 flex flex-col gap-4 text-[15px] leading-7 text-text-muted">
+          <p className="flex items-center gap-2 font-semibold text-signal">
+            <Check size={18} aria-hidden /> 접수 완료
+          </p>
+          <p>
+            관리자가 확인하고 승인하면 <span className="font-semibold text-text">{f.contactEmail}</span>로 담당자 초대 메일을 보냅니다. 메일의 초대 링크로 계정을 만들면 콘솔에서 시험 회차를 열 수 있습니다.
+          </p>
+          <Link to="/" className="font-semibold text-brand hover:underline">
+            처음으로
+          </Link>
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 text-[14px] leading-6 text-text-muted">기업 계정은 직접 가입하지 않습니다. 문의를 남기면 관리자가 승인한 뒤 담당자에게 초대 메일을 보냅니다.</p>
+          {error && <ErrorBanner>{error}</ErrorBanner>}
+          <form
+            className="mt-6 flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const err = submitInquiry({ ...f, message: f.message.trim() || undefined })
+              setError(err)
+              if (!err) setDone(true)
+            }}
+          >
+            <Field id="iq-company" label="회사 이름">
+              <input id="iq-company" value={f.companyName} onChange={set('companyName')} autoComplete="organization" required maxLength={100} className={inputCls} />
+            </Field>
+            <Field id="iq-bno" label="사업자등록번호" hint="000-00-00000">
+              <input id="iq-bno" value={f.businessNo} onChange={set('businessNo')} required maxLength={20} className={cx(inputCls, 'tnum font-mono')} />
+            </Field>
+            <Field id="iq-name" label="담당자 이름">
+              <input id="iq-name" value={f.contactName} onChange={set('contactName')} autoComplete="name" required maxLength={50} className={inputCls} />
+            </Field>
+            <Field id="iq-email" label="담당자 이메일" hint="승인되면 이 주소로 초대 메일이 갑니다.">
+              <input id="iq-email" type="email" value={f.contactEmail} onChange={set('contactEmail')} autoComplete="email" required className={inputCls} />
+            </Field>
+            <Field id="iq-msg" label="문의 내용 (선택)">
+              <textarea id="iq-msg" rows={3} value={f.message} onChange={set('message')} className={cx(inputCls, 'h-auto py-2 leading-6')} />
+            </Field>
+            <Button type="submit" variant="primary" size="lg" className="mt-2 w-full">
+              문의 보내기
+            </Button>
+          </form>
+        </>
+      )}
     </AuthLayout>
   )
 }

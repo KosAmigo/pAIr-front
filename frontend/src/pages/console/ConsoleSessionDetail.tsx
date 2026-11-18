@@ -27,6 +27,7 @@ import {
   type Participant,
   type Session,
   type SessionPhase,
+  taskTitles,
 } from '../../data/consoleSessions'
 import { ConfirmModal, Modal, RowMenu } from './common'
 import { fmtAgo, fmtHm, fmtLeft, fmtShort, fmtTime, useMyCompanyId, useNow, useToast } from './format'
@@ -90,7 +91,7 @@ function Detail({ s }: { s: Session }) {
                 {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
               </span>
               <HeroSep />
-              <span className="font-sans">{s.taskTitle}</span>
+              <span className="font-sans">{taskTitles(s)}</span>
               {s.proctoring && (
                 <>
                   <HeroSep />
@@ -153,7 +154,7 @@ function Overview({ s, phase }: { s: Session; phase: SessionPhase }) {
   const [deleting, setDeleting] = useState(false)
   const rows: [string, ReactNode][] = [
     ['회사', <Link key="co" to={`/console/companies/${s.companyId}`} className="text-brand hover:underline">{companyName(s.companyId)}</Link>],
-    ['과제', <Link key="t" to={`/console/tasks/${s.taskId}`} className="text-brand hover:underline">{s.taskTitle}</Link>],
+    ['과제', <ol key="t" className="flex flex-col gap-1">{s.tasks.map((t, i) => (<li key={t.id} className="flex items-center gap-2"><span className="tnum font-mono text-[12px] text-text-muted">{i + 1}</span><Link to={`/console/tasks/${t.id}`} className="text-brand hover:underline">{t.title}</Link><span className="tnum font-mono text-[12px] text-text-muted">{t.minutes}분</span></li>))}</ol>],
     ['일시', <span key="d" className="tnum font-mono">{fmtTime(s.startsAt)} – {fmtHm(s.endsAt)}</span>],
     ['감독', s.proctoring ? '사용 (카메라, 브라우저 이탈 감지)' : '사용 안 함'],
     ['만든 시각', <span key="m" className="tnum font-mono">{fmtTime(s.createdAt)}</span>],
@@ -598,10 +599,16 @@ function Results({ s }: { s: Session }) {
   const rows = [...s.participants].sort((a, b) =>
     sort === 'name' ? a.name.localeCompare(b.name) : sort === 'open' ? unreviewed(b) - unreviewed(a) : (b.score ?? -1) - (a.score ?? -1),
   )
+  // 회차 안 순위 (기획_결정사항 §1: 기업은 회차 안 순위와 역량별 분포를 본다). 같은 점수는 같은 순위
+  const scored = s.participants.filter((p) => p.score != null).sort((a, b) => b.score! - a.score!)
+  const rankOf = (id: string) => {
+    const p = scored.find((x) => x.id === id)
+    return p ? scored.findIndex((x) => x.score === p.score) + 1 : null
+  }
   const exportCsv = () => {
-    const head = ['이름', '이메일', '상태', '총점', ...ITEM_KEYS.map((k) => k[1]), '감독 이벤트', '미확인', '부정 의심']
+    const head = ['순위', '이름', '이메일', '상태', '총점', ...ITEM_KEYS.map((k) => k[1]), '감독 이벤트', '미확인', '부정 의심']
     const lines = rows.map((p) =>
-      [p.name, p.email, PSTATE_LABEL[p.state], p.score ?? '', ...ITEM_KEYS.map((k) => p.items?.[k[0]] ?? ''), p.events.length, unreviewed(p), suspects(p)].join(','),
+      [rankOf(p.id) ?? '', p.name, p.email, PSTATE_LABEL[p.state], p.score ?? '', ...ITEM_KEYS.map((k) => p.items?.[k[0]] ?? ''), p.events.length, unreviewed(p), suspects(p)].join(','),
     )
     const blob = new Blob(['﻿' + [head.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
@@ -612,14 +619,17 @@ function Results({ s }: { s: Session }) {
   }
 
   return (
-    <section className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+    <div className="flex flex-col gap-6">
+    <Distribution participants={scored} />
+    <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
       <header className="flex h-12 items-center gap-3 border-b border-line px-4">
         <span className="label">RESULTS</span>
+        <span className="text-[13px] text-text-muted">채점 완료 {scored.length} / {s.participants.length}명</span>
         <label className="ml-auto flex items-center gap-1.5 text-[13px] text-text-muted">
           <ArrowDownUp size={14} aria-hidden />
           <span className="sr-only">정렬</span>
           <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-8 rounded-md border border-line-strong bg-panel px-2 text-[13px] text-text outline-none focus:border-brand">
-            <option value="score">총점 높은 순</option>
+            <option value="score">순위 순</option>
             <option value="name">이름 순</option>
             <option value="open">미확인 이벤트 많은 순</option>
           </select>
@@ -631,7 +641,7 @@ function Results({ s }: { s: Session }) {
       <table className="w-full text-[14px]">
         <thead>
           <tr className="h-9 border-b border-line text-left">
-            {['이름', '상태', '총점', '역량', '감독 이벤트', '부정 의심', ''].map((h, i) => (
+            {['순위', '이름', '상태', '총점', '역량', '감독 이벤트', '부정 의심', ''].map((h, i) => (
               <th key={i} className="px-4 text-[13px] font-semibold text-text-muted">
                 {h}
               </th>
@@ -647,6 +657,20 @@ function Results({ s }: { s: Session }) {
                 onClick={() => done && nav(`/console/sessions/${s.id}/attempts/${p.id}`)}
                 className={cx('h-14 border-b border-line last:border-0', done ? 'cursor-pointer hover:bg-panel-raised' : 'text-text-faint')}
               >
+                <td className="w-16 px-4">
+                  {rankOf(p.id) != null ? (
+                    <span
+                      className={cx(
+                        'tnum inline-flex size-8 items-center justify-center rounded-full font-mono text-[14px] font-semibold',
+                        rankOf(p.id) === 1 ? 'bg-brand-gradient text-on-accent shadow-[0_6px_16px_-6px_rgb(108_71_255/0.6)]' : 'bg-panel-raised text-text',
+                      )}
+                    >
+                      {rankOf(p.id)}
+                    </span>
+                  ) : (
+                    <span className="text-text-faint">—</span>
+                  )}
+                </td>
                 <td className="px-4">
                   <p className="font-medium text-text">{p.name}</p>
                   <p className="font-mono text-[12px] text-text-muted">{p.email}</p>
@@ -684,6 +708,61 @@ function Results({ s }: { s: Session }) {
           })}
         </tbody>
       </table>
+    </section>
+    </div>
+  )
+}
+
+/**
+ * 역량별 분포 (기획_결정사항 §1). 항목마다 0~배점 막대 위에 응시자 점을 찍고, 평균을 세로선으로 표시한다.
+ * 색은 항목을 뜻한다(§1.5). 점에 마우스를 올리면 이름과 점수.
+ */
+function Distribution({ participants }: { participants: Participant[] }) {
+  const withItems = participants.filter((p) => p.items)
+  if (withItems.length === 0) return null
+  const totalAvg = Math.round(participants.reduce((n, p) => n + (p.score ?? 0), 0) / Math.max(1, participants.length))
+  return (
+    <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm" aria-label="역량별 분포">
+      <header className="flex h-12 items-center gap-3 border-b border-line px-4">
+        <span className="label">DISTRIBUTION</span>
+        <span className="text-[15px] font-semibold text-text">역량별 분포</span>
+        <span className="tnum ml-auto font-mono text-[13px] text-text-muted">
+          평균 총점 <b className="text-text">{totalAvg}</b> │ {withItems.length}명
+        </span>
+      </header>
+      <ul className="flex flex-col gap-3 px-5 py-4">
+        {ITEM_KEYS.map(([key, name, max, color]) => {
+          const vals = withItems.map((p) => ({ p, v: p.items![key] }))
+          const avg = vals.reduce((n, x) => n + x.v, 0) / vals.length
+          return (
+            <li key={key} className="grid grid-cols-[120px_minmax(0,1fr)_88px] items-center gap-4">
+              <span className="flex items-center gap-2 text-[14px] font-medium text-text">
+                <span className="size-2 rounded-full" style={{ background: color }} aria-hidden />
+                {name}
+              </span>
+              <div className="relative h-6" role="img" aria-label={`${name} 분포: 평균 ${avg.toFixed(1)} / ${max}`}>
+                <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-panel-raised" aria-hidden />
+                <span
+                  className="absolute top-0 bottom-0 w-0.5 -translate-x-1/2 rounded-full bg-text/60"
+                  style={{ left: `${(avg / max) * 100}%` }}
+                  aria-hidden
+                />
+                {vals.map(({ p, v }) => (
+                  <span
+                    key={p.id}
+                    title={`${p.name} ${v} / ${max}`}
+                    className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-panel"
+                    style={{ left: `${(v / max) * 100}%`, background: color, boxShadow: `0 0 8px color-mix(in srgb, ${color} 50%, transparent)` }}
+                  />
+                ))}
+              </div>
+              <span className="tnum text-right font-mono text-[13px] text-text-muted">
+                평균 <b className="text-text">{avg.toFixed(1)}</b>/{max}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }
