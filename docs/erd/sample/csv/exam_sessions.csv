@@ -1,2 +1,2 @@
-session_id,company_id,task_id,title,entry_code,starts_at,ends_at,proctoring,created_by,created_at
-1,1,1,2026 하반기 백엔드 신입 실전,PAIR-7K2Q,2026-11-11T09:40:00Z,2026-11-11T10:40:00Z,true,4,2026-11-10T12:00:00Z
+session_id,company_id,title,entry_code,starts_at,ends_at,proctoring,created_by,created_at
+1,1,2026 하반기 백엔드 신입 실전,PAIR-7K2Q,2026-11-11T09:40:00Z,2026-11-11T10:40:00Z,true,4,2026-11-10T12:00:00Z
