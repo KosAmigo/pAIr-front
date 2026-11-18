@@ -419,3 +419,5 @@ class HiddenOrderTest {
 - AI가 만든 그럴듯한 수치(예: ""업계 평균 이탈률 3%"", ""라이트 도입 시 이탈률 30% 감소"")를 그대로 쓴다.
 - 이탈 고객 설문만 보고 찬성 결론을 낸다(현재 이용자 설문의 잠식 신호를 놓친다).
 ",,text/markdown,1581,HIDDEN,true
+18,3,NOTES.md,"# 원인 분석
+",,text/markdown,14,VISIBLE,false
