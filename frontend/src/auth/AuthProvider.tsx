@@ -40,11 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         set(found)
         return found
       },
-      signup: (name, email, password) => {
+      signup: (name, email, password, company) => {
         const e = email.trim().toLowerCase()
         if (ACCOUNTS.some((a) => a.email === e)) return { error: '이미 가입된 이메일입니다' }
         if (password.length < 8) return { error: '비밀번호는 8자 이상이어야 합니다' }
-        const u: AuthUser = { id: 100 + Math.floor(Math.random() * 900), email: e, name: name.trim(), role: 'USER' }
+        const u: AuthUser = {
+          id: 100 + Math.floor(Math.random() * 900),
+          email: e,
+          name: name.trim(),
+          ...(company ? { role: 'COMPANY' as const, companyName: company } : { role: 'USER' as const }),
+        }
         set(u)
         return { user: u }
       },

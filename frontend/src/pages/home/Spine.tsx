@@ -20,15 +20,18 @@ const NODES: NodeDef[] = [
   { at: 'live', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:42' },
   { at: 'live-end', lane: 1, color: 'var(--color-branch-3)', label: 'b3', score: 91 },
   { at: 'create', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:47' },
+  { at: 'create-end', lane: 1, color: 'var(--color-branch-4)', label: 'b4', score: 85 },
   { at: 'proctor', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:50' },
+  { at: 'proctor-end', lane: 1, color: 'var(--color-branch-5)', label: 'b5', score: 93 },
   { at: 'finale', lane: 0, color: 'var(--color-brand-blue)', label: 'main', time: '00:52' },
 ]
 
 const BRANCHES = [
   { from: 'replay', to: 'replay-end', color: 'var(--color-branch-2)' },
   { from: 'live', to: 'live-end', color: 'var(--color-branch-3)' },
+  { from: 'create', to: 'create-end', color: 'var(--color-branch-4)' },
+  { from: 'proctor', to: 'proctor-end', color: 'var(--color-branch-5)' },
 ]
-
 
 function branchPath(x: number, a: Pt, b: Pt) {
   return `M ${x} ${a.y} L ${x + LANE} ${a.y + LANE} L ${x + LANE} ${b.y}`

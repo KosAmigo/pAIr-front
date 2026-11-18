@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Camera, ClipboardPaste, ShieldAlert, ShieldCheck, Users } from 'lucide-react'
 import { cx } from '../../components/cx'
 import SectionHead, { Grad } from './SectionHead'
+import Points, { Glow } from './Points'
+import { floatCard, mockFrame } from './homeStyles'
 import { MOTION_OK, gsap, prefersReducedMotion, useGSAP } from './motion'
 
 type St = 'solving' | 'followup' | 'submitted' | 'lost'
@@ -63,7 +65,7 @@ export default function ProctorSection() {
       const mm = gsap.matchMedia()
       mm.add(MOTION_OK, () => {
         gsap.from('[data-board]', { y: 80, opacity: 0, duration: 1.1, ease: 'expo.out', scrollTrigger: { trigger: '[data-board]', start: 'top 85%' } })
-        gsap.from('[data-ppoint]', { y: 32, opacity: 0, duration: 0.7, stagger: 0.1, ease: 'expo.out', scrollTrigger: { trigger: '[data-ppoints]', start: 'top 85%' } })
+        gsap.from('[data-point]', { y: 32, opacity: 0, duration: 0.7, stagger: 0.1, ease: 'expo.out', scrollTrigger: { trigger: '[data-points]', start: 'top 80%' } })
       })
     },
     { scope: root },
@@ -83,7 +85,7 @@ export default function ProctorSection() {
     <section ref={root} id="proctor" className="relative pt-40 md:pl-[120px]">
       <div data-spine="proctor" aria-hidden className="h-0" />
       <SectionHead
-        label="CONSOLE"
+        label="PROCTOR"
         title={
           <>
             감독은 <Grad>한 화면</Grad>에서,
@@ -96,8 +98,8 @@ export default function ProctorSection() {
 
       {/* 콘솔 실시간 현황 축소판 */}
       <div ref={board} data-board className="relative mt-16" role="img" aria-label="감독관 콘솔: 응시자 상태 표, 남은 시간, 감독 이벤트 피드, 이벤트에 부정 의심 판단을 남기는 카드">
-        <div aria-hidden className="absolute inset-x-[15%] top-[10%] bottom-0 rounded-full bg-info/15 blur-[100px]" />
-        <div className="relative overflow-hidden rounded-[28px] border border-line bg-panel shadow-lg">
+        <Glow />
+        <div className={mockFrame}>
           <div className="flex flex-wrap items-center gap-4 border-b border-line px-6 py-4">
             <span className="inline-flex h-[22px] items-center gap-1.5 rounded-sm bg-alert/10 px-2 text-[12px] font-semibold text-alert">
               <i className="rec-pulse size-1.5 rounded-full bg-alert" aria-hidden /> 진행 중
@@ -157,7 +159,7 @@ export default function ProctorSection() {
         </div>
 
         {/* 감독 판단 카드: 보드 위에 떠 있다 */}
-        <div className="glass relative z-10 mx-6 -mt-8 w-auto rounded-2xl p-4 shadow-md md:absolute md:right-[-28px] md:-bottom-16 md:mx-0 md:mt-0 md:w-[320px]">
+        <div className={floatCard}>
           <div className="flex gap-3">
             <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-caution/10 text-caution">
               <ClipboardPaste size={18} aria-hidden />
@@ -186,17 +188,8 @@ export default function ProctorSection() {
         </div>
       </div>
 
-      <ul data-ppoints className="mt-28 grid gap-8 md:grid-cols-3">
-        {POINTS.map((p) => (
-          <li key={p.title} data-ppoint className="flex flex-col gap-3">
-            <span className="inline-flex size-11 items-center justify-center rounded-md bg-info/10 text-info">
-              <p.icon size={22} strokeWidth={1.75} aria-hidden />
-            </span>
-            <p className="text-[19px] font-bold text-text">{p.title}</p>
-            <p className="text-[16px] leading-7 text-text-muted">{p.body}</p>
-          </li>
-        ))}
-      </ul>
+      <Points items={POINTS} className="mt-24 md:grid-cols-3" />
+      <div data-spine="proctor-end" aria-hidden className="absolute bottom-24 left-0" />
       <div data-spine="finale" aria-hidden className="mt-24 h-0" />
     </section>
   )

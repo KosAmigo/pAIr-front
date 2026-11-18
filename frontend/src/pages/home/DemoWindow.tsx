@@ -109,7 +109,7 @@ export default function DemoWindow({ className }: { className?: string }) {
           <i className="size-3 rounded-full bg-line-strong" />
         </span>
         <span className="ml-2 text-[14px] font-semibold text-text">주문 API 장애 원인 분석</span>
-        <span className="rounded-sm bg-info/10 px-1.5 font-mono text-[11px] font-semibold tracking-[0.08em] text-info">SELF-CHECK</span>
+        <span className="rounded-sm bg-info/10 px-1.5 font-mono text-[12px] font-semibold tracking-[0.08em] text-info">SELF-CHECK</span>
         <span className="tnum mx-auto font-mono text-[15px] font-semibold text-text">
           {String(Math.floor(remain / 3600)).padStart(2, '0')}:{String(Math.floor((remain % 3600) / 60)).padStart(2, '0')}:
           {String(remain % 60).padStart(2, '0')}

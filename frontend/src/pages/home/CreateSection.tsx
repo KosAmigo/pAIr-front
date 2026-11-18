@@ -3,6 +3,8 @@
 import { useRef } from 'react'
 import { CircleCheck, FileText, ListChecks, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
 import SectionHead, { Grad } from './SectionHead'
+import Points, { Glow } from './Points'
+import { floatCard, mockFrame } from './homeStyles'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
 const STEPS = [
@@ -66,24 +68,12 @@ export default function CreateSection() {
       />
 
       <div className="mt-16 grid items-start gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <ul data-points className="flex flex-col gap-8 lg:pt-6">
-          {POINTS.map((p) => (
-            <li key={p.title} data-point className="flex gap-4">
-              <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-md bg-brand-dim text-brand">
-                <p.icon size={22} strokeWidth={1.75} aria-hidden />
-              </span>
-              <div>
-                <p className="text-[19px] font-bold text-text">{p.title}</p>
-                <p className="mt-1 text-[16px] leading-7 text-text-muted">{p.body}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <Points items={POINTS} className="lg:pt-6" />
 
         {/* 콘솔 "AI로 과제 만들기" 화면 축소판 */}
         <div data-gen className="relative" role="img" aria-label="AI가 과제 설명, 작업 파일, 문항, 후속 질문, 근거 문서를 차례로 만들고 검수 대기 초안이 만들어지는 화면">
-          <div aria-hidden className="absolute inset-x-[10%] top-[15%] bottom-0 rounded-full bg-brand/20 blur-[90px]" />
-          <div className="relative overflow-hidden rounded-[28px] border border-line bg-panel shadow-lg">
+          <Glow />
+          <div className={mockFrame}>
             <div className="h-1 bg-line">
               <div data-progress className="bg-brand-gradient h-full" />
             </div>
@@ -118,7 +108,7 @@ export default function CreateSection() {
           </div>
 
           {/* 완성된 초안 카드: 그림 오른쪽 아래에 떠오른다 */}
-          <div data-draft className="glass relative z-10 mx-6 -mt-10 rounded-2xl p-5 shadow-md md:absolute md:right-[-24px] md:-bottom-14 md:mx-0 md:mt-0 md:w-[340px]">
+          <div data-draft className={floatCard}>
             <div className="flex items-center gap-2">
               <span className="inline-flex h-[22px] items-center gap-1.5 rounded-sm bg-caution/10 px-2 text-[12px] font-semibold text-caution">
                 <i className="size-1.5 rounded-full bg-caution" aria-hidden /> 검수 대기
@@ -140,6 +130,7 @@ export default function CreateSection() {
           </div>
         </div>
       </div>
+      <div data-spine="create-end" aria-hidden className="absolute bottom-0 left-0" />
     </section>
   )
 }

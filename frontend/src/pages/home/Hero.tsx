@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, BarChart3, Bug, ClipboardCheck, FileText, FlaskConical, MessageSquareText, Search, Wrench } from 'lucide-react'
 import DemoWindow from './DemoWindow'
+import { Glow } from './Points'
 import { MOTION_OK, SplitText, gsap, useGSAP } from './motion'
 
 const KINDS = [
@@ -105,7 +106,7 @@ export default function Hero() {
 
       {/* 시험 화면 데모 */}
       <div data-hero-demo className="relative mx-auto mt-20 w-full md:w-[min(1080px,calc(100%-160px))] [perspective:1600px]">
-        <div aria-hidden className="absolute inset-x-[8%] top-[10%] bottom-0 rounded-full bg-brand/25 blur-[100px]" />
+        <Glow />
         <div data-hero-tilt className="relative origin-[50%_0%] will-change-transform">
           <DemoWindow />
         </div>
@@ -123,8 +124,8 @@ export default function Hero() {
         ))}
       </div>
 
-      {/* 과제 형태 띠 */}
-      <div className="mt-24 md:pl-[120px]">
+      {/* 과제 형태 띠: 데모 창과 같은 폭, 가운데 */}
+      <div className="mx-auto mt-24 w-full md:w-[min(1080px,calc(100%-160px))]">
         <div className="marquee overflow-hidden" aria-label="과제 형태">
           <ul className="marquee-track gap-3 pr-3">
             {[...KINDS, ...KINDS].map((k, i) => (

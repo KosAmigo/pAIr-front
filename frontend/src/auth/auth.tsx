@@ -31,7 +31,8 @@ export type AuthApi = {
   /** 직접 로그인했는지. 자동 접속이면 false */
   signedIn: boolean
   login: (email: string, password: string) => AuthUser | null
-  signup: (name: string, email: string, password: string) => { user?: AuthUser; error?: string }
+  /** company 를 주면 기업 회원(COMPANY)으로, 없으면 일반 회원(USER)으로 가입한다 */
+  signup: (name: string, email: string, password: string, company?: string) => { user?: AuthUser; error?: string }
   logout: () => void
   /** 목업 전용: 콘솔의 권한 전환 스위치 */
   switchRole: (role: Exclude<Role, 'USER'>) => void
