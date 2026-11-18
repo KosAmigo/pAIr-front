@@ -748,7 +748,7 @@ COMMENT ON COLUMN proctor_events.snapshot_key IS '스냅샷 저장 위치';
 COMMENT ON COLUMN proctor_events.snapshot_deleted_at IS '스냅샷 삭제 시각(보관 기간 만료)';
 COMMENT ON COLUMN proctor_events.review IS '담당자 판단(OK 문제 없음/SUSPECT 부정 의심, 없으면 미확인)';
 COMMENT ON COLUMN proctor_events.review_note IS '판단 메모';
-COMMENT ON COLUMN proctor_events.reviewed_by IS '판단한 회원 ID(같은 회사 PROCTOR 또는 관리자)';
+COMMENT ON COLUMN proctor_events.reviewed_by IS '판단한 회원 ID(같은 회사 PROCTOR·MANAGER 또는 관리자)';
 COMMENT ON COLUMN proctor_events.reviewed_at IS '판단 시각';
 
 -- ───────── 7. 조회용 인덱스 ─────────

@@ -88,11 +88,13 @@ export default function App() {
           <Route element={<RequireAuth roles={['ADMIN']} />}>
             <Route path="/console/tasks/:taskId/preview" element={<TaskPreview />} />
           </Route>
-          <Route element={<RequireAuth roles={['ADMIN', 'COMPANY']} />}>
+          <Route element={<RequireAuth roles={['ADMIN', 'MANAGER', 'PROCTOR']} />}>
             <Route path="/console" element={<ConsoleShell />}>
               <Route index element={<ConsoleHome />} />
               <Route path="sessions" element={<ConsoleSessions />} />
-              <Route path="sessions/new" element={<ConsoleSessionNew />} />
+              <Route element={<RequireAuth roles={['ADMIN', 'MANAGER']} />}>
+                <Route path="sessions/new" element={<ConsoleSessionNew />} />
+              </Route>
               <Route path="sessions/:sessionId" element={<ConsoleSessionDetail />} />
               <Route path="sessions/:sessionId/attempts/:attemptId" element={<ConsoleAttempt />} />
               <Route element={<RequireAuth roles={['ADMIN']} />}>

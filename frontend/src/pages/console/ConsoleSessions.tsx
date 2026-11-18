@@ -1,4 +1,4 @@
-// DESIGN.md §7-9-4 회차 목록 (ADMIN, COMPANY)
+// DESIGN.md §7-9-4 회차 목록 (ADMIN, MANAGER, PROCTOR). 회차 만들기는 ADMIN·MANAGER만
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarClock, Camera, ChevronRight, Plus } from 'lucide-react'
@@ -7,12 +7,14 @@ import { PageHeader } from '../../components/SelfShell'
 import { ButtonLink, Tabs } from '../../components/ui'
 import { companyName, phaseOf, useCompanies, useSessions, type Session, type SessionPhase } from '../../data/consoleSessions'
 import { fmtHm, fmtLeft, fmtShort, useMyCompanyId, useNow } from './format'
+import { canManageSessions, useAuth } from '../../auth/auth'
 
 export default function ConsoleSessions() {
   const all = useSessions()
   const now = useNow(1000)
   const nav = useNavigate()
   const mine = useMyCompanyId()
+  const canCreate = canManageSessions(useAuth().user?.role)
   const companies = useCompanies()
   const [company, setCompany] = useState<number | 'ALL'>('ALL')
   const visible = all.filter((s) => (mine != null ? s.companyId === mine : company === 'ALL' || s.companyId === company))
@@ -25,9 +27,11 @@ export default function ConsoleSessions() {
   return (
     <>
       <PageHeader label="SESSIONS" title="시험 회차">
-        <ButtonLink to="/console/sessions/new" variant="primary">
-          <Plus size={16} aria-hidden /> 회차 만들기
-        </ButtonLink>
+        {canCreate && (
+          <ButtonLink to="/console/sessions/new" variant="primary">
+            <Plus size={16} aria-hidden /> 회차 만들기
+          </ButtonLink>
+        )}
       </PageHeader>
       <div className="p-8">
         <div className="flex flex-wrap items-end gap-4 border-b border-line">
@@ -64,7 +68,7 @@ export default function ConsoleSessions() {
             <div className="flex flex-col items-center gap-3 py-20 text-center">
               <CalendarClock size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
               <p className="text-[15px] text-text-muted">{tab === 'live' ? '지금 진행 중인 회차가 없습니다.' : tab === 'upcoming' ? '예정된 회차가 없습니다.' : '끝난 회차가 없습니다.'}</p>
-              {tab !== 'ended' && (
+              {tab !== 'ended' && canCreate && (
                 <ButtonLink to="/console/sessions/new" variant="primary" size="sm">
                   <Plus size={14} aria-hidden /> 회차 만들기
                 </ButtonLink>

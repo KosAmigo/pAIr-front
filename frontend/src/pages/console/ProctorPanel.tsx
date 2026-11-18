@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cx } from '../../components/cx'
-import { useAuth } from '../../auth/auth'
+import { canReviewProctor, useAuth } from '../../auth/auth'
 import {
   EVENT_LABEL,
   isCameraEvent,
@@ -171,6 +171,8 @@ function EventCard({
   onReview: (r: Review | undefined, note: string | undefined, by: string) => void
 }) {
   const { user } = useAuth()
+  // 판단은 감독관·매니저·관리자 (모든 콘솔 권한). 권한이 늘면 canReviewProctor 에서 막는다
+  const canReview = canReviewProctor(user?.role)
   const [note, setNote] = useState(e.reviewNote ?? '')
   const Icon = ICON[e.type]
   const low = e.confidence != null && e.confidence < LOW
@@ -233,9 +235,11 @@ function EventCard({
               type="button"
               role="radio"
               aria-checked={e.review === v}
-              onClick={() => onReview(e.review === v ? undefined : v, note || undefined, user?.name ?? '담당자')}
+              disabled={!canReview}
+              title={canReview ? undefined : '감독관만 판단할 수 있습니다'}
+              onClick={() => onReview(e.review === v ? undefined : v, note || undefined, user?.name ?? '감독관')}
               className={cx(
-                'inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border text-[13px] font-semibold transition-colors',
+                'inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60',
                 e.review === v ? on : 'border-line-strong bg-panel text-text-muted hover:text-text',
               )}
             >
@@ -247,8 +251,9 @@ function EventCard({
           aria-label="판단 메모"
           value={note}
           onChange={(x) => setNote(x.target.value)}
-          onBlur={() => e.review && note !== (e.reviewNote ?? '') && onReview(e.review, note, user?.name ?? '담당자')}
-          placeholder="메모 (선택)"
+          onBlur={() => e.review && note !== (e.reviewNote ?? '') && onReview(e.review, note, user?.name ?? '감독관')}
+          readOnly={!canReview}
+          placeholder={canReview ? '메모 (선택)' : '감독관만 판단할 수 있습니다'}
           className="mt-2 h-8 w-full rounded-sm border border-line bg-panel px-2 text-[13px] outline-none focus:border-brand"
         />
         {e.review && e.reviewedAt && (

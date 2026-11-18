@@ -12,7 +12,7 @@ import { tabOf, useConsoleTasks } from '../data/consoleTasks'
 type MenuItem = { to: string; label: string; icon: typeof FileStack; roles: Role[]; count?: number }
 const MENU: MenuItem[] = [
   { to: '/console/tasks', label: '과제', icon: FileStack, roles: ['ADMIN'] },
-  { to: '/console/sessions', label: '회차', icon: CalendarClock, roles: ['ADMIN', 'COMPANY'] },
+  { to: '/console/sessions', label: '회차', icon: CalendarClock, roles: ['ADMIN', 'MANAGER', 'PROCTOR'] },
   { to: '/console/companies', label: '회사', icon: Building2, roles: ['ADMIN'] },
 ]
 
@@ -89,7 +89,7 @@ export function ConsoleShell() {
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <RoleSwitch
-              role={user.role === 'USER' ? 'COMPANY' : user.role}
+              role={user.role === 'USER' ? 'MANAGER' : user.role}
               onChange={(r) => {
                 switchRole(r)
                 nav(homeFor(r))
@@ -147,12 +147,13 @@ function MenuLink({ item }: { item: MenuItem }) {
   )
 }
 
+type ConsoleRole = Exclude<Role, 'USER'>
 /** 목업 전용 권한 전환 스위치 (DESIGN.md §7-9). 백엔드 인증이 붙으면 지운다. */
-function RoleSwitch({ role, onChange }: { role: 'ADMIN' | 'COMPANY'; onChange: (r: 'ADMIN' | 'COMPANY') => void }) {
+function RoleSwitch({ role, onChange }: { role: ConsoleRole; onChange: (r: ConsoleRole) => void }) {
   return (
     <div role="radiogroup" aria-label="목업 권한 전환" title="개발용: 권한 전환" className="flex items-center gap-0.5 rounded-md border border-dashed border-caution/70 p-0.5">
       <span className="px-1.5 font-mono text-[11px] text-caution">DEV</span>
-      {(['ADMIN', 'COMPANY'] as const).map((r) => (
+      {(['ADMIN', 'MANAGER', 'PROCTOR'] as const).map((r) => (
         <button
           key={r}
           type="button"

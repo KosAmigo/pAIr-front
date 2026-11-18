@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: 100 + Math.floor(Math.random() * 900),
           email: e,
           name: name.trim(),
-          ...(company ? { role: 'COMPANY' as const, companyName: company } : { role: 'USER' as const }),
+          ...(company ? { role: 'MANAGER' as const, companyName: company } : { role: 'USER' as const }),
         }
         set(u)
         return { user: u }

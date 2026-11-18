@@ -46,10 +46,10 @@ UNION ALL SELECT '실전 응시인데 입장 기록 없음', COUNT(*) FROM attem
 UNION ALL SELECT '실전 응시가 시험 시간 밖에 시작', COUNT(*) FROM attempts a
   JOIN exam_participants p ON p.participant_id = a.participant_id JOIN exam_sessions s ON s.session_id = p.session_id
   WHERE a.started_at NOT BETWEEN s.starts_at AND s.ends_at
-UNION ALL SELECT '감독 판단자가 같은 회사 감독관·관리자가 아님', COUNT(*) FROM proctor_events e
+UNION ALL SELECT '감독 판단자가 같은 회사 감독관·매니저·관리자가 아님', COUNT(*) FROM proctor_events e
   JOIN attempts a ON a.attempt_id = e.attempt_id JOIN exam_participants p ON p.participant_id = a.participant_id
   JOIN exam_sessions s ON s.session_id = p.session_id
-  JOIN users u ON u.user_id = e.reviewed_by WHERE NOT (u.role = 'ADMIN' OR (u.role = 'PROCTOR' AND u.company_id = s.company_id))
+  JOIN users u ON u.user_id = e.reviewed_by WHERE NOT (u.role = 'ADMIN' OR (u.role IN ('PROCTOR', 'MANAGER') AND u.company_id = s.company_id))
 UNION ALL SELECT '감독 회차인데 동의 없이 응시', COUNT(*) FROM attempts a
   JOIN exam_participants p ON p.participant_id = a.participant_id JOIN exam_sessions s ON s.session_id = p.session_id
   WHERE s.proctoring AND NOT EXISTS (SELECT 1 FROM proctor_consents c WHERE c.participant_id = p.participant_id)
