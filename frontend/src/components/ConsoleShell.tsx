@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react'
 import { CrumbContext } from './consoleCrumbs'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Building2, CalendarClock, FileStack, FlaskConical, ShieldCheck } from 'lucide-react'
+import { motion } from 'motion/react'
+import { springs } from '../lib/motion'
 import { cx } from './cx'
+import { Aurora, Glass, PageTransition } from './fx'
 import { Logo } from './ui'
 import { UserMenu } from './UserMenu'
 import { homeFor, useAuth, type Role } from '../auth/auth'
@@ -72,8 +75,9 @@ export function ConsoleShell() {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-8">
+      <div className="relative isolate flex min-w-0 flex-1 flex-col">
+        <Aurora variant="band" className="h-[360px]" />
+        <header className="glass relative z-20 flex h-14 shrink-0 items-center gap-3 rounded-none border-0 border-b border-line/70 px-8 shadow-none">
           <nav aria-label="현재 위치" className="flex items-center gap-2 text-[15px]">
             <Link to={`/console/${section}`} className={cx(crumbs.length ? 'text-text-muted hover:text-text' : 'font-semibold text-text')}>
               {SECTION[section] ?? '콘솔'}
@@ -106,17 +110,19 @@ export function ConsoleShell() {
             <UserMenu />
           </div>
         </header>
-        <main className="min-h-0 flex-1 overflow-auto">
+        <main className="relative z-10 min-h-0 flex-1 overflow-auto">
           <CrumbContext.Provider value={setCrumbs}>
-            <Outlet />
+            <PageTransition routeKey={pathname} className="min-h-full">
+              <Outlet />
+            </PageTransition>
           </CrumbContext.Provider>
         </main>
       </div>
 
       {toast && (
-        <div role="status" className="fade-in fixed bottom-6 left-1/2 -translate-x-1/2 rounded-md border border-line bg-panel px-4 py-2 text-[14px] text-text shadow-modal">
+        <Glass role="status" className="fade-in fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-md px-4 py-2 text-[14px] text-text shadow-modal!">
           {toast}
-        </div>
+        </Glass>
       )}
     </div>
   )
@@ -135,7 +141,9 @@ function MenuLink({ item }: { item: MenuItem }) {
     >
       {({ isActive }) => (
         <>
-          {isActive && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand" aria-hidden />}
+          {isActive && (
+            <motion.span layoutId="console-menu-active" transition={springs.snappy} className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand-gradient" aria-hidden />
+          )}
           <item.icon size={18} strokeWidth={1.75} aria-hidden />
           {item.label}
           {item.count != null && (
