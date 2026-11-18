@@ -29,7 +29,6 @@ import {
   newId,
   saveTask,
   setTaskStatus,
-  tabOf,
   useConsoleTask,
   type CFile,
   type CQuestion,
@@ -155,11 +154,11 @@ function Editor({ stored }: { stored: CTask }) {
           </Button>
           {draft.status === 'OPEN' ? (
             <Button variant="danger" onClick={() => setClosing(true)}>
-              내리기
+              공개 취소
             </Button>
           ) : (
             <Button variant="primary" onClick={publish}>
-              {tabOf(stored) === 'closed' ? '다시 공개하기' : '공개하기'}
+              공개하기
             </Button>
           )}
         </div>
@@ -218,22 +217,22 @@ function Editor({ stored }: { stored: CTask }) {
       )}
       {closing && (
         <ConfirmModal
-          title="과제를 내릴까요?"
+          title="공개를 취소할까요?"
           danger
-          confirm="내리기"
+          confirm="공개 취소"
           disabled={activeSessionCount(draft.id) > 0}
           onClose={() => setClosing(false)}
           onConfirm={() => {
             setTaskStatus(draft.id, 'CLOSED')
             setDraft((d) => ({ ...d, status: 'CLOSED' }))
             setClosing(false)
-            toast.show('과제를 내렸습니다')
+            toast.show('공개를 취소했습니다. 검수 대기로 옮겼습니다')
           }}
           body={
             activeSessionCount(draft.id) > 0 ? (
-              <span className="text-alert">진행 중이거나 예정된 회차 {activeSessionCount(draft.id)}개가 이 과제를 씁니다. 회차가 끝난 뒤에 내릴 수 있습니다.</span>
+              <span className="text-alert">진행 중이거나 예정된 회차 {activeSessionCount(draft.id)}개가 이 과제를 씁니다. 회차가 끝난 뒤에 공개를 취소할 수 있습니다.</span>
             ) : (
-              '내리면 자가진단 과제 목록과 회차 만들기에서 사라집니다. 지난 응시 기록은 그대로 남습니다.'
+              '검수 대기로 돌아가 자가진단 과제 목록과 회차 만들기에서 사라집니다. 지난 응시 기록은 그대로 남습니다.'
             )
           }
         />
