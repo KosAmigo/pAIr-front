@@ -450,7 +450,6 @@ export const treeNodes: TreeNode[] = [
 
 // ───────── 시험 입장 ─────────
 export const examInfo = {
-  code: 'K7Q2MX',
   company: '(주)넥스트커머스',
   title: '2026 하반기 신입 개발자 AI 활용 역량평가',
   start: '2026.11.10 15:00',

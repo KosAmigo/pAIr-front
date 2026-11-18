@@ -1,4 +1,4 @@
-// DESIGN.md §7-1 ④ 실전 시험: 입장 코드 → 녹화 시작 → 타이머 임박 → 이탈 감지 경고가 차례로 나온다.
+// DESIGN.md §7-1 ④ 실전 시험: 입장 링크 → 녹화 시작 → 타이머 임박 → 이탈 감지 경고가 차례로 나온다.
 // 다른 섹션과 같은 밝은 화면. 빨강은 "녹화 중", "시간 임박" 같은 상태에만 쓴다.
 import { useRef } from 'react'
 import { Camera, Mail, MonitorUp, ShieldAlert, TriangleAlert } from 'lucide-react'
@@ -7,9 +7,9 @@ import Points, { Glow } from './Points'
 import { floatCard, mockFrame } from './homeStyles'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
-const CODE = 'K7Q2M9'
+const TOKEN = 'inv_8f3a'
 const FEATURES = [
-  { icon: Mail, title: '입장 코드와 메일 링크', body: '기업이 발급한 6자리 코드나 응시자별 링크로 정해진 시간에 함께 입장합니다.' },
+  { icon: Mail, title: '메일로 받는 개인별 입장 링크', body: '회원가입 없이, 응시자마다 다른 링크 하나로 정해진 시간에 함께 입장합니다.' },
   { icon: Camera, title: '카메라와 화면 공유 감독', body: '응시 내내 카메라와 화면을 확인하고, 연결이 끊기면 바로 알려 줍니다.' },
   { icon: ShieldAlert, title: '이탈 감지와 기록', body: '창 이탈, 전체 화면 해제를 감지해 경고하고 감독 기록에 남깁니다.' },
 ]
@@ -70,7 +70,7 @@ export default function LiveSection() {
 
       <div className="mt-16 grid items-start gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         {/* 실전 시험 화면 축소판 */}
-        <div data-console className="relative" role="img" aria-label="실전 시험 화면: 입장 코드, 녹화 표시, 남은 시간 3분, 브라우저 이탈 감지 경고">
+        <div data-console className="relative" role="img" aria-label="실전 시험 화면: 입장 링크, 녹화 표시, 남은 시간 3분, 브라우저 이탈 감지 경고">
           <Glow />
           <div className={mockFrame}>
             <div className="flex flex-wrap items-center gap-4 border-b border-line px-6 py-4">
@@ -82,17 +82,17 @@ export default function LiveSection() {
             </div>
             <div className="grid gap-8 p-6 sm:grid-cols-2">
               <div>
-                <p className="label">ENTRY CODE</p>
-                <div className="mt-3 flex gap-2 [perspective:600px]">
-                  {CODE.split('').map((c, i) => (
-                    <span
-                      key={i}
-                      data-cell
-                      className="inline-flex h-14 w-11 items-center justify-center rounded-md border border-line-strong bg-panel-sunken font-mono text-[24px] font-semibold text-text"
-                    >
-                      {c}
-                    </span>
-                  ))}
+                <p className="label">INVITE LINK</p>
+                <div className="mt-3 flex h-14 items-center gap-2 overflow-hidden whitespace-nowrap rounded-md border border-line-strong bg-panel-sunken px-3 font-mono text-[15px] [perspective:600px]">
+                  <Mail size={16} className="shrink-0 text-info" aria-hidden />
+                  <span className="text-text-muted">invite=</span>
+                  <span className="flex font-semibold text-text">
+                    {TOKEN.split('').map((c, i) => (
+                      <span key={i} data-cell className="inline-block">
+                        {c}
+                      </span>
+                    ))}
+                  </span>
                 </div>
               </div>
               <div>
