@@ -1,6 +1,11 @@
 // DESIGN.md §7-9-2 AI로 과제 만들기 (ADMIN): 입력 → 만드는 중 → 검수 화면으로
+// 연출: "만드는 중" 영역이 이 화면의 다크 무대. 단계마다 BranchLine 이 다음 단계로 이어지고,
+// 끝난 단계에 체크가 튀어나오며, 다 만들어지면 무대 테두리에 GlowBorder 가 돈다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'motion/react'
+import { BranchLine, GlowBorder, StageSection } from '../../components/fx'
+import { springs } from '../../lib/motion'
 import { CircleAlert, CircleCheck, FileText, FileUp, Info, Loader2, Minus, Plus, Sparkles, X } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
@@ -314,13 +319,15 @@ function Generating({ input, onCancel, onDone }: { input: DraftInput; onCancel: 
     <>
       <PageHeader label="NEW TASK" title="AI로 과제 만들기" />
       <div className="p-8">
-        <div className="relative mx-auto max-w-[720px] overflow-hidden rounded-md border border-line bg-panel shadow-sm">
-          <div className="h-0.5 bg-line">
-            <div className="bg-brand-gradient h-full transition-[width] duration-500" style={{ width: `${progress * 100}%` }} />
+        <GlowBorder active={!!doneId} className="mx-auto max-w-[720px] rounded-xl">
+        <StageSection aria-label="과제 초안 만드는 중">
+          <div className="px-8 pt-6">
+            {/* 진행 막대: 갈라지는 선이 단계마다 가지를 내며 이어진다 */}
+            <BranchLine progress={progress} branches={STEPS.slice(1).map((_, i) => (i + 1) / STEPS.length)} />
           </div>
-          <div className="p-8">
-            <h2 className="text-h2 font-semibold text-text">{doneId ? '초안이 만들어졌습니다' : '초안을 만들고 있습니다'}</h2>
-            <p className="mt-1 text-[14px] text-text-muted">
+          <div className="px-8 pb-8">
+            <h2 className="text-h2 font-semibold text-stage-text">{doneId ? '초안이 만들어졌습니다' : '초안을 만들고 있습니다'}</h2>
+            <p className="mt-1 text-[14px] text-stage-muted">
               {doneId ? '잠시 뒤 검수 화면으로 이동합니다.' : '화면을 떠나도 되지만, 끝날 때까지 이 화면에 있으면 바로 검수로 넘어갑니다.'}
             </p>
             <ol className="mt-6 flex flex-col gap-1" aria-live="polite">
@@ -329,16 +336,20 @@ function Generating({ input, onCancel, onDone }: { input: DraftInput; onCancel: 
                 return (
                   <li key={s.key}>
                     <div className="flex h-10 items-center gap-3">
-                      {state === 'done' && <CircleCheck size={20} className="text-signal" aria-label="완료" />}
-                      {state === 'run' && <Loader2 size={20} className="animate-spin text-brand" aria-label="진행 중" />}
-                      {state === 'fail' && <CircleAlert size={20} className="text-alert" aria-label="실패" />}
-                      {state === 'wait' && <span className="size-5 rounded-full border-2 border-line-strong" aria-label="대기" />}
-                      <span className={cx('text-[15px] font-medium', state === 'wait' ? 'text-text-faint' : 'text-text')}>{s.name}</span>
-                      {state === 'done' && <span className="tnum ml-auto font-mono text-[13px] text-text-muted">{resultOf(s.key)}</span>}
+                      {state === 'done' && (
+                        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={springs.snappy} className="inline-flex">
+                          <CircleCheck size={20} className="text-stage-signal" aria-label="완료" />
+                        </motion.span>
+                      )}
+                      {state === 'run' && <Loader2 size={20} className="animate-spin text-stage-brand" aria-label="진행 중" />}
+                      {state === 'fail' && <CircleAlert size={20} className="text-stage-alert" aria-label="실패" />}
+                      {state === 'wait' && <span className="size-5 rounded-full border-2 border-stage-line-strong" aria-label="대기" />}
+                      <span className={cx('text-[15px] font-medium', state === 'wait' ? 'text-stage-faint' : 'text-stage-text')}>{s.name}</span>
+                      {state === 'done' && <span className="tnum ml-auto font-mono text-[13px] text-stage-muted">{resultOf(s.key)}</span>}
                     </div>
                     {state === 'run' && <StreamBox lines={lines} />}
                     {state === 'fail' && (
-                      <div className="ml-8 flex items-center gap-3 text-[13px] text-alert">
+                      <div className="ml-8 flex items-center gap-3 text-[13px] text-stage-alert">
                         모델 응답이 형식에 맞지 않았습니다.
                         <Button
                           size="sm"
@@ -356,19 +367,20 @@ function Generating({ input, onCancel, onDone }: { input: DraftInput; onCancel: 
                 )
               })}
             </ol>
-            <div className="mt-6 flex justify-end gap-2 border-t border-line pt-6">
+            <div className="mt-6 flex justify-end gap-2 border-t border-stage-line pt-6">
               {doneId ? (
                 <Button variant="primary" onClick={() => onDone(doneId)}>
                   검수하러 가기
                 </Button>
               ) : (
-                <Button variant="ghost" onClick={onCancel}>
+                <Button variant="ghost" className="text-stage-muted hover:bg-stage-raised hover:text-stage-text" onClick={onCancel}>
                   취소
                 </Button>
               )}
             </div>
           </div>
-        </div>
+        </StageSection>
+        </GlowBorder>
       </div>
     </>
   )
@@ -376,9 +388,9 @@ function Generating({ input, onCancel, onDone }: { input: DraftInput; onCancel: 
 
 function StreamBox({ lines }: { lines: string[] }): ReactNode {
   return (
-    <pre className="mb-2 ml-8 max-h-[150px] overflow-hidden rounded-md bg-panel-sunken px-3 py-2 font-mono text-[13px] leading-[22px] whitespace-pre-wrap text-text-muted">
+    <pre className="mb-2 ml-8 max-h-[150px] overflow-hidden rounded-md border border-stage-line bg-stage-raised px-3 py-2 font-mono text-[13px] leading-[22px] whitespace-pre-wrap text-stage-muted">
       {lines.slice(-6).join('\n')}
-      <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-brand align-middle" aria-hidden />
+      <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-stage-brand align-middle" aria-hidden />
     </pre>
   )
 }

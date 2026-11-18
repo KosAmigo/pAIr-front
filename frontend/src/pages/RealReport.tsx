@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Bot, ChevronDown, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
+import { Bot, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
-import { Button, ButtonLink, Panel, ScoreBar } from '../components/ui'
+import { Button, ButtonLink, Panel } from '../components/ui'
 import { ScoreHero, StageSep } from '../components/report/ScoreHero'
+import { CompetencyCards } from '../components/report/CompetencyCards'
 import { api, ApiError, type CheckResult, type Report, type ReportResponse, type Turn } from '../api'
 
 // 실제 응시 결과 리포트. 감점식 채점(docs/evaluation/채점_기준표.md): 6개 항목, 총점 100점.
@@ -116,7 +117,6 @@ function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number
 
 export function ReportView({ r }: { r: Report }) {
   const [selected, setSelected] = useState<number | null>(null)
-  const [open, setOpen] = useState<Set<string>>(() => new Set(r.items.map((i) => i.key)))
   const showTurn = (t: number) => {
     setSelected(t)
     document.getElementById(`turn-${t}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -147,64 +147,40 @@ export function ReportView({ r }: { r: Report }) {
         seenKey={`${r.taskTitle}-${r.startedAt}`}
       />
 
-      <Panel reveal label="BREAKDOWN" title="항목별 점수와 감점 내역" className="col-span-12" flush>
-        <ul className="divide-y divide-line">
-          {r.items.map((it) => {
-            const c = { key: it.key, name: it.name, color: ITEM_COLORS[it.key] ?? 'var(--color-text-muted)' }
-            const lost = it.checks.filter((k) => k.status === 'DEDUCTED')
-            const isOpen = open.has(c.key)
-            return (
-              <li key={c.key}>
-                <button
-                  type="button"
-                  aria-expanded={isOpen}
-                  onClick={() =>
-                    setOpen((o) => {
-                      const n = new Set(o)
-                      if (n.has(c.key)) n.delete(c.key)
-                      else n.add(c.key)
-                      return n
-                    })
-                  }
-                  className="grid w-full grid-cols-[180px_280px_96px_1fr_24px] items-center gap-6 px-4 py-3 text-left hover:bg-panel-raised"
-                >
-                  <span className="text-[15px] font-medium">{c.name}</span>
-                  <ScoreBar value={it.score / it.max} color={c.color} />
-                  <span className="tnum text-right font-mono text-[16px]">
-                    <span className="font-semibold">{it.score}</span>
-                    <span className="text-text-muted"> / {it.max}</span>
-                  </span>
-                  <span className="text-[14px] text-text-muted">{lost.length === 0 ? '감점 없음' : `감점 ${lost.length}건, -${it.max - it.score}점`}</span>
-                  <ChevronDown size={16} className={cx('text-text-muted transition-transform duration-[180ms]', isOpen && 'rotate-180')} aria-hidden />
-                </button>
-                {isOpen && (
-                  <div className="bg-panel-sunken pb-1">
-                    <table className="w-full">
-                      <thead>
-                        <tr>
-                          {['CODE', '체크 항목', '판정', '결과', '이유와 근거'].map((h, i) => (
-                            <th
-                              key={h}
-                              className={cx('label h-8 pr-4 text-left font-medium', i === 0 && 'w-16 pl-7', i === 2 && 'w-14', i === 3 && 'w-24 text-right')}
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {it.checks.map((k) => (
-                          <CheckRow key={k.code} c={k} onEvidence={showTurn} />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      </Panel>
+      <CompetencyCards
+        title="항목별 점수와 감점 내역"
+        items={r.items.map((it) => {
+          const lost = it.checks.filter((k) => k.status === 'DEDUCTED')
+          return {
+            key: it.key,
+            name: it.name,
+            score: it.score,
+            max: it.max,
+            color: ITEM_COLORS[it.key] ?? 'var(--color-text-muted)',
+            note: lost.length === 0 ? '감점 없음' : `감점 ${lost.length}건, -${it.max - it.score}점`,
+            detail: (
+              <div className="bg-panel-sunken pb-1">
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      {['CODE', '체크 항목', '판정', '결과', '이유와 근거'].map((h, i) => (
+                        <th key={h} className={cx('label h-8 pr-4 text-left font-medium', i === 0 && 'w-16 pl-7', i === 2 && 'w-14', i === 3 && 'w-24 text-right')}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="fx-rows">
+                    {it.checks.map((k) => (
+                      <CheckRow key={k.code} c={k} onEvidence={showTurn} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ),
+          }
+        })}
+      />
 
       <Panel reveal label="TRANSCRIPT" title="AI 대화 기록" className="col-span-7" bodyClassName="max-h-[720px] overflow-auto space-y-2">
         {r.transcript.length === 0 ? (

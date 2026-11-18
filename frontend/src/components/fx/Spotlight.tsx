@@ -3,7 +3,7 @@ import { cx } from '../cx'
 import { useFinePointer, useShouldAnimate } from '../../lib/motion'
 import { useOnStage } from './stage'
 
-type Props = HTMLAttributes<HTMLElement> & { as?: ElementType; to?: string }
+type Props = HTMLAttributes<HTMLElement> & { as?: ElementType; to?: string; type?: 'button' | 'submit' }
 
 /**
  * 커서를 따라 카드 면에 비치는 빛 (DESIGN.md §3.7). 누를 수 있는 카드에만 쓴다. 표 행·입력창 금지.

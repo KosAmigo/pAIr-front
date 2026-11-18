@@ -1,5 +1,7 @@
 // DESIGN.md §7-9-4 회차 상세: 개요 / 대상자 / 실시간 현황 / 결과
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { duration, easing } from '../../lib/motion'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowDownUp, Camera, CircleAlert, Download, FileUp, Pause, Play, UserPlus, X } from 'lucide-react'
 import { cx } from '../../components/cx'
@@ -123,7 +125,10 @@ function Detail({ s }: { s: Session }) {
 
 function PhaseBadge({ phase }: { phase: SessionPhase }) {
   return phase === 'live' ? (
-    <span className="inline-flex h-[22px] items-center gap-1.5 rounded-sm bg-alert/10 px-2 text-[13px] font-semibold text-alert">
+    <span
+      className="glow inline-flex h-[22px] items-center gap-1.5 rounded-sm bg-alert/10 px-2 text-[13px] font-semibold text-alert"
+      style={{ '--glow': 'var(--color-alert)' } as CSSProperties}
+    >
       <i className="rec-pulse size-1.5 rounded-full bg-alert" aria-hidden /> 진행 중
     </span>
   ) : phase === 'upcoming' ? (
@@ -434,14 +439,14 @@ function Live({ s, now }: { s: Session; now: number }) {
   }, [paused, s.id])
 
   const feed = s.participants.flatMap((p) => p.events.map((e) => ({ p, e }))).sort((a, b) => Date.parse(b.e.at) - Date.parse(a.e.at))
-  // 새로 생긴 이벤트는 2초 동안 강조한다
+  // 새로 생긴 이벤트는 위에서 밀려 들어오고 1초 동안 강조한다 (DESIGN.md §7-9)
   useEffect(() => {
     const ids = new Set(feed.map((f) => f.e.id))
     if (seenRef.current) {
       const added = [...ids].filter((id) => !seenRef.current!.has(id))
       if (added.length) {
         const t1 = window.setTimeout(() => setFresh(new Set(added)), 0)
-        const t2 = window.setTimeout(() => setFresh(new Set()), 2000)
+        const t2 = window.setTimeout(() => setFresh(new Set()), 1000)
         seenRef.current = ids
         return () => {
           window.clearTimeout(t1)
@@ -464,7 +469,10 @@ function Live({ s, now }: { s: Session; now: number }) {
           <p className="label">REMAINING</p>
           <p className={cx('tnum font-mono text-[56px] leading-[60px] font-semibold', left <= 3 * 60_000 ? 'text-alert' : left <= 10 * 60_000 ? 'text-caution' : 'text-text')}>{fmtLeft(left)}</p>
           <div className="mt-2 h-1 w-64 overflow-hidden rounded-full bg-panel-raised">
-            <div className="bg-brand-gradient h-full" style={{ width: `${Math.min(100, ((total - left) / total) * 100)}%` }} />
+            <div
+              className="bg-brand-gradient h-full w-full origin-left transition-transform duration-500"
+              style={{ transform: `scaleX(${Math.min(1, Math.max(0, (total - left) / total))})` }}
+            />
           </div>
         </div>
         <ul className="flex flex-wrap gap-2">
@@ -529,8 +537,14 @@ function Live({ s, now }: { s: Session; now: number }) {
           </header>
           <ol className="min-h-0 flex-1 overflow-auto">
             {feed.length === 0 && <li className="py-12 text-center text-[14px] text-text-muted">아직 감독 이벤트가 없습니다.</li>}
+            <AnimatePresence initial={false}>
             {feed.map(({ p, e }) => (
-              <li key={e.id}>
+              <motion.li
+                key={e.id}
+                initial={{ opacity: 0, y: -12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: duration.normal, ease: easing.expo }}
+              >
                 <button
                   type="button"
                   onClick={() => setOpen(p.id)}
@@ -547,8 +561,9 @@ function Live({ s, now }: { s: Session; now: number }) {
                     </span>
                   </span>
                 </button>
-              </li>
+              </motion.li>
             ))}
+            </AnimatePresence>
           </ol>
         </section>
       </div>
