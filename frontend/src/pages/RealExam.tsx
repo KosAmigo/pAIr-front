@@ -752,7 +752,8 @@ export default function RealExam() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-bg">
+    // 집중 무대(DESIGN.md §0-1, §7-3): 들어올 때 짧은 페이드만, 꾸밈 연출은 focus-stage 로 끈다
+    <div className="focus-stage fade-in flex h-full flex-col bg-bg">
       {/* 6.7 Status Bar */}
       <header className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-panel px-4">
         <div className="flex min-w-0 items-center gap-3">
