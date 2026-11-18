@@ -1,10 +1,7 @@
-// DESIGN.md §7-1 ③ 6가지 역량 리포트: 100vh 동안 고정, 장면 2개 (§4.3).
-// 장면 1: 레이더가 그려지고 총점이 올라간다. 장면 2: 역량 카드 6개가 차례로 켜지며 레이더에서 그 축이 강조된다.
-// 항목은 색으로 구분한다(§1.5). 768px 미만은 고정 없이 들어오면 차례로 등장.
-import { useEffect, useRef, useState } from 'react'
+// DESIGN.md §7-1 ③ 6가지 역량 리포트: 보통 섹션(2026-11-19: 화면 고정을 없앴다).
+// 화면에 들어오면 레이더가 그려지고 총점이 올라가며, 역량 카드 6개가 차례로 올라온다. 카드에 마우스를 올리면 레이더에서 그 축이 강조된다.
+import { useRef, useState } from 'react'
 import { Spotlight } from '../../components/fx'
-import SceneDots from './SceneDots'
-import { STACK_OK, useScenePin } from './scenePin'
 import { ListTree, Rocket, ShieldCheck, Sparkles, Split, TrendingUp } from 'lucide-react'
 import { cx } from '../../components/cx'
 import SectionHead, { Grad } from './SectionHead'
@@ -89,32 +86,9 @@ function Radar({ hover }: { hover: string | null }) {
   )
 }
 
-const SCENE_LABELS = ['6가지 역량 점수', '역량 항목 살펴보기']
-
 export default function ReportSection() {
   const root = useRef<HTMLElement>(null)
-  const pin = useRef<HTMLDivElement>(null)
-  const cardsTl = useRef<gsap.core.Timeline | null>(null)
   const [hover, setHover] = useState<string | null>(null)
-  const [tour, setTour] = useState<string | null>(null)
-  const { scene, pinned, st } = useScenePin(pin, 2, 100)
-
-  // 장면 2에 들어오면 카드를 차례로 켜고, 켜지는 카드의 축을 잠깐씩 강조한다. 장면 1로 돌아가면 카드를 다시 흐리게.
-  useEffect(() => {
-    const tl = cardsTl.current
-    if (!tl || !pinned) return
-    if (scene < 1) {
-      tl.tweenTo(0)
-      return
-    }
-    tl.tweenTo(tl.duration())
-    const timers = ITEMS.map((it, i) => window.setTimeout(() => setTour(it.key), 120 + i * 160))
-    timers.push(window.setTimeout(() => setTour(null), 120 + ITEMS.length * 160 + 300))
-    return () => {
-      timers.forEach(window.clearTimeout)
-      setTour(null)
-    }
-  }, [scene, pinned])
 
   useGSAP(
     () => {
@@ -129,16 +103,7 @@ export default function ReportSection() {
           .from(q('[data-pt]'), { opacity: 0, scale: 0, transformOrigin: 'center', stagger: 0.06, duration: 0.4, ease: 'back.out(2)' }, 0.6)
           .to(n, { v: TOTAL, duration: 1.2, ease: 'power2.out', onUpdate: () => (total.textContent = String(Math.round(n.v))) }, 0.25)
       })
-      // 고정 장면: 카드는 흐리게 기다리다가 장면 2에서 켜진다
-      mm.add('(min-width: 768px) and (prefers-reduced-motion: no-preference)', () => {
-        cardsTl.current = gsap
-          .timeline({ paused: true })
-          .fromTo(q('[data-card]'), { opacity: 0.35, y: 12 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.12, ease: 'expo.out' })
-        return () => {
-          cardsTl.current = null
-        }
-      })
-      mm.add(STACK_OK, () => {
+      mm.add(MOTION_OK, () => {
         gsap.from(q('[data-card]'), {
           y: 40,
           opacity: 0,
@@ -155,7 +120,7 @@ export default function ReportSection() {
   return (
     <section ref={root} id="report" className="relative pt-40 md:pl-[160px]">
       <div data-spine="report" aria-hidden className="h-0" />
-      <div ref={pin} className="relative">
+      <div className="relative">
       <SectionHead
         label="REPORT"
         title={
@@ -171,7 +136,7 @@ export default function ReportSection() {
         <div data-radar className="relative flex justify-center">
           <Glow />
           <div className="relative flex w-full max-w-[360px] justify-center">
-            <Radar hover={hover ?? tour} />
+            <Radar hover={hover} />
           </div>
         </div>
         <ul data-cards className="grid gap-3 sm:grid-cols-2">
@@ -184,7 +149,7 @@ export default function ReportSection() {
               onMouseLeave={() => setHover(null)}
               className={cx(
                 'glass rounded-2xl px-4 py-3.5 transition-[transform,box-shadow] duration-200',
-                (hover ?? tour) === it.key && '-translate-y-1 shadow-md',
+                (hover) === it.key && '-translate-y-1 shadow-md',
               )}
             >
               <div className="flex items-center gap-3">
@@ -202,7 +167,6 @@ export default function ReportSection() {
           ))}
         </ul>
       </div>
-      {pinned && <SceneDots count={2} scene={scene} st={st} labels={SCENE_LABELS} className="absolute right-0 -bottom-12" />}
       </div>
       <div data-spine="report-end" aria-hidden className="absolute bottom-0 left-0" />
     </section>
