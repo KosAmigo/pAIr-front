@@ -40,8 +40,7 @@ export default function Hero() {
           defaults: { ease: 'expo.out' },
           onComplete: () => splits.forEach((s) => s.revert()),
         })
-        tl.from('[data-hero-chip]', { y: 16, opacity: 0, duration: 0.6 })
-          .from(
+        tl.from(
             [...chars, '[data-hero-grad]'],
             { yPercent: 60, rotateX: -50, opacity: 0, duration: 0.9, stagger: 0.022, transformOrigin: '50% 100%' },
             0.1,
@@ -77,13 +76,7 @@ export default function Hero() {
     <section ref={root} className="relative pt-16 md:pt-24">
       <div data-spine="hero" aria-hidden className="h-0" />
       <div className="flex flex-col items-center text-center">
-        <span data-hero-chip className="glass inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[14px] font-medium text-text-muted">
-          <span className="size-2 rounded-full bg-brand shadow-[0_0_0_4px_rgb(108_71_255/0.15)]" aria-hidden />
-          <span className="font-mono text-[12px] font-semibold tracking-[0.08em] text-brand">NEW</span>
-          AI와 함께 푸는 실전형 역량 진단
-        </span>
-
-        <h1 className="mt-8 text-[length:var(--text-mega)] leading-[1.02] font-extrabold tracking-[-0.045em] text-text [perspective:800px]">
+        <h1 className="mt-4 text-[length:var(--text-mega)] leading-[1.02] font-extrabold tracking-[-0.045em] text-text [perspective:800px]">
           <span data-split>AI와 </span>
           <span data-hero-grad className="text-brand-gradient inline-block pb-[0.08em]">
             일하는 방식
@@ -130,10 +123,9 @@ export default function Hero() {
         ))}
       </div>
 
-      {/* 이런 과제를 풀어요 */}
+      {/* 과제 형태 띠 */}
       <div className="mt-24 md:pl-[120px]">
-        <p className="label text-center md:text-left">이런 과제를 풀어요</p>
-        <div className="marquee mt-5 overflow-hidden">
+        <div className="marquee overflow-hidden" aria-label="과제 형태">
           <ul className="marquee-track gap-3 pr-3">
             {[...KINDS, ...KINDS].map((k, i) => (
               <li

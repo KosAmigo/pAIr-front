@@ -28,7 +28,7 @@ export default function SectionHead({
       <h2
         className={cx(
           'mt-4 leading-[1.1] font-extrabold tracking-[-0.035em]',
-          compact ? 'text-[clamp(36px,3.4vw,52px)]' : 'text-[clamp(40px,4.4vw,64px)]',
+          compact ? 'text-[length:clamp(36px,3.4vw,52px)]' : 'text-[length:clamp(40px,4.4vw,64px)]',
           dark ? 'text-ink-text' : 'text-text',
         )}
       >
