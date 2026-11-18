@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard } from 'lucide-react'
+import { Coins, LayoutDashboard } from 'lucide-react'
+import { CREDIT_COST, useCredits } from '../data/credits'
 import { motion } from 'motion/react'
 import { useAuth } from '../auth/auth'
 import { springs } from '../lib/motion'
@@ -56,6 +57,7 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
           })}
         </nav>
         <div className="ml-auto flex items-center">
+          <CreditPill />
           {user && user.role !== 'USER' && (
             <Link
               to="/console"
@@ -88,5 +90,24 @@ export function PageHeader({ label, title, children }: { label: string; title: R
       </div>
       <div className="ml-auto flex items-center gap-2">{children}</div>
     </header>
+  )
+}
+
+/** 크레딧 잔액 (기획_결정사항 §3). 응시 시작 비용보다 적으면 caution */
+function CreditPill() {
+  const n = useCredits()
+  const low = n < CREDIT_COST.ATTEMPT_START
+  return (
+    <span
+      title={`응시 시작 ${CREDIT_COST.ATTEMPT_START}, 롤백 ${CREDIT_COST.ROLLBACK}, AI 채팅 한 턴 ${CREDIT_COST.CHAT_TURN} 크레딧`}
+      className={cx(
+        'mr-3 inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[14px] font-semibold',
+        low ? 'border-caution/40 bg-caution/10 text-caution' : 'border-line bg-panel/70 text-text',
+      )}
+    >
+      <Coins size={15} className={low ? 'text-caution' : 'text-brand'} aria-hidden />
+      <span className="tnum font-mono">{n}</span>
+      <span className="text-[12px] font-medium text-text-muted">크레딧</span>
+    </span>
   )
 }

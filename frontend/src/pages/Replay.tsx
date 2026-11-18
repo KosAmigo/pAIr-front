@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { StageSection } from '../components/fx'
+import { CREDIT_COST } from '../data/credits'
 import { duration, easing, springs } from '../lib/motion'
 import { FileBarChart2, GitBranch, GitCompareArrows, RotateCcw, X } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
@@ -169,7 +170,7 @@ function BranchGraph({
                 </ButtonLink>
               ) : (
                 <Button size="sm" variant="secondary" onClick={() => navigate(`/exam/t-order-api?mode=self&from=${node.id}`)}>
-                  <RotateCcw size={16} aria-hidden /> 여기서 다시 풀기
+                  <RotateCcw size={16} aria-hidden /> 여기서 다시 풀기 ({CREDIT_COST.ROLLBACK} 크레딧)
                 </Button>
               )}
             </div>
@@ -265,7 +266,7 @@ function Compare({ ids, onClear }: { ids: string[]; onClear: () => void }) {
                 <div className="h-2 overflow-hidden rounded-full bg-panel-raised">
                   <div
                     className="h-full w-full origin-right rounded-full transition-transform duration-300"
-                    style={{ transform: `scaleX(${va / 100})`, background: color(ai) }}
+                    style={{ transform: `scaleX(${va / c.max})`, background: color(ai) }}
                   />
                 </div>
                 <span
@@ -280,7 +281,7 @@ function Compare({ ids, onClear }: { ids: string[]; onClear: () => void }) {
                 <div className="h-2 overflow-hidden rounded-full bg-panel-raised">
                   <div
                     className="h-full w-full origin-left rounded-full transition-transform duration-300"
-                    style={{ transform: `scaleX(${vb / 100})`, background: color(bi) }}
+                    style={{ transform: `scaleX(${vb / c.max})`, background: color(bi) }}
                   />
                 </div>
               </div>
@@ -337,7 +338,7 @@ export default function Replay() {
       header={
         <PageHeader label="SELF-CHECK REPLAY" title="주문 API 장애 원인 분석 — 복기 트리">
           <ButtonLink to="/exam/t-order-api?mode=self" variant="primary">
-            <GitBranch size={18} aria-hidden /> 새 분기에서 다시 풀기
+            <GitBranch size={18} aria-hidden /> 새 분기에서 다시 풀기 ({CREDIT_COST.ROLLBACK} 크레딧)
           </ButtonLink>
         </PageHeader>
       }

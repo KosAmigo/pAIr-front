@@ -60,7 +60,7 @@ export function ScoreRadar({ items, size = 260 }: { items: RadarItem[]; size?: n
         stroke="var(--color-stage-brand)"
         strokeWidth={2}
         strokeLinejoin="round"
-        style={{ transformOrigin: `${c}px ${c}px`, filter: 'drop-shadow(0 0 12px rgb(167 139 250 / 0.55))' }}
+        style={{ transformOrigin: `${c}px ${c}px`, filter: 'drop-shadow(0 0 10px color-mix(in srgb, var(--color-stage-brand) 40%, transparent))' }}
         {...grow(0.25)}
       />
       {items.map((it, i) => {

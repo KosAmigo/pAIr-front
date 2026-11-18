@@ -130,12 +130,15 @@ export type Participant = {
   events: PEvent[]
 }
 
+export type SessionTask = { id: string; title: string; minutes: number }
+
 export type Session = {
   id: string
   companyId: number
-  taskId: string
-  taskTitle: string
-  taskMinutes: number
+  /** 회차 과제 (기획_결정사항 §1: 한 회차에 과제 여러 개, 응시자가 자유롭게 오가며 푼다. 순서 = sort_order) */
+  tasks: SessionTask[]
+  /** 대상자 CSV 원본 파일 이름 (DB 에는 S3 키 participants_csv_key) */
+  participantsCsv?: string
   title: string
   startsAt: string
   endsAt: string
@@ -233,9 +236,7 @@ function seed(): Session[] {
     {
       id: 's-2',
       companyId: 1,
-      taskId: 't-1',
-      taskTitle: '주문 처리 장애 원인 분석',
-      taskMinutes: 60,
+      tasks: [{ id: 't-1', title: '주문 처리 장애 원인 분석', minutes: 60 }],
       title: '2026 하반기 백엔드 경력 실전 2차',
       startsAt: iso(liveStart),
       endsAt: iso(liveStart + 60 * MIN),
@@ -246,9 +247,11 @@ function seed(): Session[] {
     {
       id: 's-3',
       companyId: 1,
-      taskId: 't-1',
-      taskTitle: '주문 처리 장애 원인 분석',
-      taskMinutes: 60,
+      tasks: [
+        { id: 't-1', title: '주문 처리 장애 원인 분석', minutes: 60 },
+        { id: 't-2', title: '신규 저가 요금제 출시 기획안', minutes: 60 },
+      ],
+      participantsCsv: '3차_대상자.csv',
       title: '2026 하반기 백엔드 경력 실전 3차',
       startsAt: iso(Math.ceil((now + 24 * 60 * MIN) / (60 * MIN)) * 60 * MIN),
       endsAt: iso(Math.ceil((now + 24 * 60 * MIN) / (60 * MIN)) * 60 * MIN + 60 * MIN),
@@ -262,9 +265,7 @@ function seed(): Session[] {
     {
       id: 's-1',
       companyId: 1,
-      taskId: 't-1',
-      taskTitle: '주문 처리 장애 원인 분석',
-      taskMinutes: 60,
+      tasks: [{ id: 't-1', title: '주문 처리 장애 원인 분석', minutes: 60 }],
       title: '2026 하반기 백엔드 신입 실전',
       startsAt: iso(ended1),
       endsAt: iso(ended1 + 60 * MIN),
@@ -275,9 +276,7 @@ function seed(): Session[] {
     {
       id: 's-4',
       companyId: 2,
-      taskId: 't-2',
-      taskTitle: '신규 저가 요금제 출시 기획안',
-      taskMinutes: 60,
+      tasks: [{ id: 't-2', title: '신규 저가 요금제 출시 기획안', minutes: 60 }],
       title: '서비스 기획 인턴 실전',
       startsAt: iso(ended2),
       endsAt: iso(ended2 + 60 * MIN),
@@ -302,6 +301,31 @@ const subscribe = (l: () => void) => {
 const patchSession = (id: string, f: (s: Session) => Session) => {
   sessions = sessions.map((s) => (s.id === id ? f(s) : s))
   emit()
+}
+
+/** 회차 과제 이름을 한 줄로 (목록·머리에 쓴다) */
+export const taskTitles = (s: Session) => (s.tasks.length <= 1 ? (s.tasks[0]?.title ?? '') : `${s.tasks[0].title} 외 ${s.tasks.length - 1}개`)
+
+/** 대상자 CSV 검사 (기획_결정사항 §1: 사이트 양식(이름,이메일)에 맞춘 CSV, 올리기 전에 중복·형식 오류를 미리 보여 준다) */
+export type CsvRow = { line: number; name: string; email: string; error?: string }
+export const CSV_TEMPLATE = '이름,이메일\n홍길동,gildong@example.com\n'
+export function parseParticipantsCsv(text: string): CsvRow[] {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).map((l) => l.trim())
+  const rows: CsvRow[] = []
+  const seen = new Set<string>()
+  lines.forEach((l, i) => {
+    if (!l || (i === 0 && /이름|name/i.test(l) && /이메일|email/i.test(l))) return
+    const [name = '', email = '', ...rest] = l.split(',').map((x) => x.trim())
+    const key = email.toLowerCase()
+    let error: string | undefined
+    if (rest.length) error = '열이 너무 많습니다 (이름,이메일 두 칸)'
+    else if (!name) error = '이름이 비었습니다'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) error = '이메일 형식이 아닙니다'
+    else if (seen.has(key)) error = '같은 이메일이 위에 있습니다'
+    seen.add(key)
+    rows.push({ line: i + 1, name, email, error })
+  })
+  return rows
 }
 
 export const getSessions = () => sessions

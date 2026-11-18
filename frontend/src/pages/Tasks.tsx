@@ -7,10 +7,11 @@ import { cx } from '../components/cx'
 import { GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
 import { CATALOG, KINDS, type CatalogTask, type Track } from '../data/catalog'
 import { distance, duration, easing, springs } from '../lib/motion'
+import { CREDIT_COST, useCredits } from '../data/credits'
 
 // DESIGN.md §7-2a 과제 목록 — "퀘스트 보드" (2026-11-19 전면 개편)
 // 위: 직군 스위치(미끄러지는 알약) + 난이도·시간 필터 칩(기획_결정사항 §2). 그 아래 다크 무대에 지금 바로 풀 수 있는 추천 과제를 크게.
-// 아래: 과제 형태별 카드. 풀 수 있는 카드는 Spotlight + 떠오름, 준비 중은 자물쇠와 흐림.
+// 아래: 과제 형태별 카드. OPEN 카드는 Spotlight + 떠오름, CLOSED(응시 마감)는 자물쇠와 흐림이고 시작이 막힌다.
 
 const KIND_ICON: Record<string, LucideIcon> = {
   incident: Bug,
@@ -45,6 +46,8 @@ function LevelPips({ level, stage }: { level: CatalogTask['level']; stage?: bool
 /** 추천 과제: 이 화면의 다크 무대 */
 function Featured({ t }: { t: CatalogTask }) {
   const kind = KINDS.find((k) => k.key === t.kind)!
+  const credits = useCredits()
+  const short = credits < CREDIT_COST.ATTEMPT_START
   const Icon = KIND_ICON[t.kind]
   return (
     <StageSection aria-label="추천 과제">
@@ -63,15 +66,22 @@ function Featured({ t }: { t: CatalogTask }) {
             </span>
             <LevelPips level={t.level} stage />
           </div>
-          <div className="mt-8">
-            <Magnetic>
-              <Link
-                to={t.start!}
-                className="btn-shimmer bg-brand-gradient inline-flex h-14 items-center gap-2 rounded-full px-8 text-[17px] font-semibold text-on-accent shadow-[0_12px_40px_-8px_rgb(108_71_255/0.7)]"
-              >
-                지금 도전하기 <ArrowRight size={18} aria-hidden />
-              </Link>
-            </Magnetic>
+          <div className="mt-8 flex items-center gap-4">
+            {short ? (
+              <span className="inline-flex h-14 items-center gap-2 rounded-full border border-stage-caution/50 px-6 text-[15px] font-semibold text-stage-caution">
+                크레딧이 부족합니다 (필요 {CREDIT_COST.ATTEMPT_START}, 잔액 {credits})
+              </span>
+            ) : (
+              <Magnetic>
+                <Link
+                  to={t.start!}
+                  className="btn-shimmer bg-brand-gradient inline-flex h-14 items-center gap-2 rounded-full px-8 text-[17px] font-semibold text-on-accent shadow-[0_12px_40px_-8px_rgb(108_71_255/0.7)]"
+                >
+                  지금 도전하기 <ArrowRight size={18} aria-hidden />
+                </Link>
+              </Magnetic>
+            )}
+            <span className="tnum font-mono text-[13px] text-stage-muted">응시 시작 {CREDIT_COST.ATTEMPT_START} 크레딧 (채점 포함)</span>
           </div>
         </div>
 
@@ -95,7 +105,7 @@ function Featured({ t }: { t: CatalogTask }) {
 }
 
 function TaskCard({ t }: { t: CatalogTask }) {
-  const ready = !!t.start
+  const ready = t.status === 'OPEN' && !!t.start
   const kind = KINDS.find((k) => k.key === t.kind)!
   const Icon = KIND_ICON[t.kind]
   const body = (
@@ -115,7 +125,7 @@ function TaskCard({ t }: { t: CatalogTask }) {
         </div>
         {!ready && (
           <span className="inline-flex h-7 items-center gap-1 rounded-full bg-panel-raised px-2.5 text-[12px] font-semibold text-text-muted">
-            <Lock size={12} aria-hidden /> 준비 중
+            <Lock size={12} aria-hidden /> 응시 마감
           </span>
         )}
       </div>
@@ -125,6 +135,7 @@ function TaskCard({ t }: { t: CatalogTask }) {
           <Clock size={14} aria-hidden /> {t.minutes}m
         </span>
         <LevelPips level={t.level} />
+        {ready && <span className="tnum font-mono text-[13px] text-text-muted">{CREDIT_COST.ATTEMPT_START} 크레딧</span>}
         {ready && (
           <span className="ml-auto inline-flex items-center gap-1 font-semibold text-brand">
             도전 <ArrowRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden />
@@ -189,8 +200,8 @@ export default function Tasks() {
   const tasks = CATALOG.filter(
     (t) => KINDS.find((k) => k.key === t.kind)?.track === track && (level === '전체' || t.level === level) && timeOk(t.minutes),
   )
-  const featured = tasks.find((t) => t.start)
-  const available = CATALOG.filter((t) => t.start).length
+  const featured = tasks.find((t) => t.status === 'OPEN' && t.start)
+  const available = CATALOG.filter((t) => t.status === 'OPEN').length
   return (
     <SelfShell
       header={

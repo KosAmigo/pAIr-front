@@ -1,14 +1,16 @@
 // 모든 데이터는 목업이다. API 호출 없음.
 
-export type CompetencyKey = 'usage' | 'control' | 'reproducibility' | 'delivery' | 'potential'
+// 역량 6개와 배점 (rubric_items, 2026-11-12: 재현성을 빼고 문제 분해력·위임 판단력 추가)
+export type CompetencyKey = 'usage' | 'control' | 'decomposition' | 'delegation' | 'delivery' | 'potential'
 
 // DESIGN.md §1.4 — 고정 순서, 고정 색 (프로그래머스 AI 역량평가에서 AI 기초 이해력을 뺀 5개 항목)
-export const COMPETENCIES: { key: CompetencyKey; name: string; color: string }[] = [
-  { key: 'usage', name: 'AI 활용력', color: 'var(--color-branch-2)' },
-  { key: 'control', name: 'AI 통제력', color: 'var(--color-branch-3)' },
-  { key: 'reproducibility', name: '재현성', color: 'var(--color-branch-4)' },
-  { key: 'delivery', name: 'AI 결과 도출력', color: 'var(--color-branch-5)' },
-  { key: 'potential', name: '성과 잠재력', color: 'var(--color-comp-6)' },
+export const COMPETENCIES: { key: CompetencyKey; name: string; max: number; color: string }[] = [
+  { key: 'usage', name: 'AI 활용력', max: 20, color: 'var(--color-branch-2)' },
+  { key: 'control', name: 'AI 통제력', max: 15, color: 'var(--color-branch-3)' },
+  { key: 'decomposition', name: '문제 분해력', max: 10, color: 'var(--color-branch-4)' },
+  { key: 'delegation', name: '위임 판단력', max: 10, color: 'var(--color-comp-7)' },
+  { key: 'delivery', name: 'AI 결과 도출력', max: 30, color: 'var(--color-branch-5)' },
+  { key: 'potential', name: '성과 잠재력', max: 15, color: 'var(--color-comp-6)' },
 ]
 
 export type Scores = Record<CompetencyKey, number>
@@ -16,12 +18,8 @@ export type Scores = Record<CompetencyKey, number>
 export const user = { name: '김지원', track: '개발' }
 
 export const trend: { date: string; scores: Scores }[] = [
-  { date: '09.02', scores: { usage: 52, control: 44, reproducibility: 42, delivery: 55, potential: 50 } },
-  { date: '09.16', scores: { usage: 58, control: 49, reproducibility: 47, delivery: 59, potential: 54 } },
-  { date: '09.30', scores: { usage: 63, control: 54, reproducibility: 53, delivery: 64, potential: 58 } },
-  { date: '10.14', scores: { usage: 70, control: 58, reproducibility: 60, delivery: 69, potential: 64 } },
-  { date: '10.28', scores: { usage: 74, control: 64, reproducibility: 66, delivery: 75, potential: 70 } },
-  { date: '11.07', scores: { usage: 81, control: 70, reproducibility: 72, delivery: 79, potential: 76 } },
+  { date: '10.28', scores: { usage: 15, control: 10, decomposition: 7, delegation: 7, delivery: 22, potential: 10 } },
+  { date: '11.07', scores: { usage: 17, control: 10, decomposition: 8, delegation: 8, delivery: 23, potential: 10 } },
 ]
 
 export const attempts = [
@@ -34,7 +32,7 @@ export const attempts = [
 
 export const recommended: Record<'개발' | '비개발', { title: string; focus: string; minutes: number; level: string }[]> = {
   개발: [
-    { title: '결제 모듈 JUnit 테스트 작성', focus: '재현성', minutes: 40, level: '중급' },
+    { title: '결제 모듈 JUnit 테스트 작성', focus: '문제 분해력', minutes: 40, level: '중급' },
     { title: 'React 주문 목록 렌더링 개선', focus: 'AI 결과 도출력', minutes: 50, level: '중급' },
     { title: 'AI가 만든 JPA 쿼리 검수', focus: 'AI 통제력', minutes: 30, level: '초급' },
   ],
@@ -260,7 +258,7 @@ export const followUps = [
 ]
 
 // ───────── 결과 리포트 ─────────
-// 하위 기준: docs/evaluation/재현성_AI결과도출력.md
+// 항목 점수는 배점 기준(감점식, 총점 100). 하위 기준: docs/evaluation/재현성_AI결과도출력.md 의 AI 결과 도출력 부분
 export type SubScore = { code: string; name: string; weight: number; score: number; note: string }
 export const report = {
   id: 'a-1107',
@@ -270,21 +268,13 @@ export const report = {
   total: 76,
   delta: 5,
   scores: [
-    { key: 'usage', score: 81, note: '로그와 파일 위치를 함께 제공해 첫 답변의 정확도를 높였습니다.' },
-    { key: 'control', score: 70, note: '커넥션 풀 증설 제안은 걸러냈지만, 정렬 코드는 검증 없이 적용했습니다.' },
-    {
-      key: 'reproducibility',
-      score: 72,
-      note: '핵심 지시는 명확했지만, 다시 실행하면 정렬 단계의 결과가 흔들립니다.',
-      sub: [
-        { code: 'R1', name: '지시 명세성', weight: 35, score: 84, note: '목표, 로그, 파일 위치를 첫 질문에 모두 담았습니다.' },
-        { code: 'R2', name: '출력 안정성', weight: 40, score: 66, note: '5회 다시 실행 중 2회는 중복 상품 처리가 빠진 코드가 나왔습니다.' },
-        { code: 'R3', name: '과정 일관성', weight: 25, score: 64, note: '후속 질문에서 설명한 순서와 실제 로그의 순서가 일부 다릅니다.' },
-      ],
-    },
+    { key: 'usage', score: 17, note: '로그와 파일 위치를 함께 제공해 첫 답변의 정확도를 높였습니다.' },
+    { key: 'control', score: 10, note: '커넥션 풀 증설 제안은 걸러냈지만, 정렬 코드는 검증 없이 적용했습니다.' },
+    { key: 'decomposition', score: 8, note: '원인 확인, 재현 테스트, 수정 순서로 나눠 AI에게 맡겼습니다.' },
+    { key: 'delegation', score: 8, note: '로그 해석은 AI에게 맡기고 잠금 순서 판단은 직접 했습니다.' },
     {
       key: 'delivery',
-      score: 79,
+      score: 23,
       note: '필수 요구사항을 모두 충족했습니다. AI 정렬 코드를 그대로 붙인 부분이 감점됐습니다.',
       sub: [
         { code: 'D1', name: '요구사항 충족', weight: 35, score: 88, note: '숨은 테스트 8개 중 7개를 통과했습니다.' },
@@ -294,7 +284,7 @@ export const report = {
         { code: 'D5', name: '결과 설명력', weight: 10, score: 85, note: '채택하지 않은 커넥션 풀 증설안과 그 이유를 설명했습니다.' },
       ],
     },
-    { key: 'potential', score: 76, note: '테스트 실패 후 스스로 원인을 찾아 동시성 테스트로 마무리했습니다.' },
+    { key: 'potential', score: 10, note: '테스트 실패 후 스스로 원인을 찾아 동시성 테스트로 마무리했습니다.' },
   ] as { key: CompetencyKey; score: number; note: string; sub?: SubScore[] }[],
 }
 
@@ -398,7 +388,7 @@ export const branches: Branch[] = [
     id: 'main',
     name: 'main',
     total: 76,
-    scores: { usage: 81, control: 70, reproducibility: 72, delivery: 79, potential: 76 },
+    scores: { usage: 17, control: 10, decomposition: 8, delegation: 8, delivery: 23, potential: 10 },
     summary: ['AI 정렬 코드를 그대로 적용', '테스트 실패 후 8분 디버깅', '동시성 테스트로 최종 확인'],
   },
   {
@@ -407,7 +397,7 @@ export const branches: Branch[] = [
     parent: 0,
     forkFromRow: 4,
     total: 84,
-    scores: { usage: 81, control: 84, reproducibility: 83, delivery: 86, potential: 88 },
+    scores: { usage: 17, control: 13, decomposition: 9, delegation: 8, delivery: 26, potential: 11 },
     summary: ['정렬 코드에 중복 상품 케이스를 직접 질문', '적용 전 단위 테스트 먼저 작성', '디버깅 없이 22분 단축'],
   },
   {
@@ -416,7 +406,7 @@ export const branches: Branch[] = [
     parent: 0,
     forkFromRow: 2,
     total: 61,
-    scores: { usage: 80, control: 52, reproducibility: 55, delivery: 50, potential: 53 },
+    scores: { usage: 16, control: 7, decomposition: 6, delegation: 7, delivery: 17, potential: 8 },
     summary: ['커넥션 풀 증설안을 채택', '응답 시간은 개선됐으나 교착은 남음', '근본 원인 미해결로 제출'],
   },
   {
@@ -425,7 +415,7 @@ export const branches: Branch[] = [
     parent: 1,
     forkFromRow: 7,
     total: 88,
-    scores: { usage: 84, control: 88, reproducibility: 90, delivery: 91, potential: 90 },
+    scores: { usage: 18, control: 13, decomposition: 9, delegation: 9, delivery: 27, potential: 12 },
     summary: ['b2에서 이어서 NOTES.md 근거 보강', '재고 부족 예외 테스트 추가', '최고 점수 분기'],
   },
 ]

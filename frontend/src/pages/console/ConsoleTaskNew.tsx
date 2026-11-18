@@ -1,12 +1,12 @@
 // DESIGN.md §7-9-2 AI로 과제 만들기 (ADMIN): 입력 → 만드는 중 → 검수 화면으로
 // 연출: "만드는 중" 영역이 이 화면의 다크 무대. 단계마다 BranchLine 이 다음 단계로 이어지고,
 // 끝난 단계에 체크가 튀어나오며, 다 만들어지면 무대 테두리에 GlowBorder 가 돈다.
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { BranchLine, GlowBorder, StageSection } from '../../components/fx'
 import { springs } from '../../lib/motion'
-import { CircleAlert, CircleCheck, FileText, FileUp, Info, Loader2, Minus, Plus, Sparkles, X } from 'lucide-react'
+import { CircleAlert, CircleCheck, Info, Loader2, Minus, Plus, Sparkles } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
@@ -40,20 +40,12 @@ export default function ConsoleTaskNew() {
   const [category, setCategory] = useState('incident')
   const [difficulty, setDifficulty] = useState<Difficulty>('중급')
   const [minutes, setMinutes] = useState(60)
-  const [pdfs, setPdfs] = useState<{ name: string; pages: number }[]>([])
-  const [instruction, setInstruction] = useState('')
+  const [topic, setTopic] = useState('')
+  const [trap, setTrap] = useState('')
   const [counts, setCounts] = useState({ SINGLE: 0, SHORT: 0, ESSAY: 1, FOLLOWUP: 3 })
-  const [drag, setDrag] = useState(false)
   const [run, setRun] = useState<{ input: DraftInput; failAt?: number } | null>(null)
-  const fileInput = useRef<HTMLInputElement>(null)
 
   const kinds = KINDS.filter((k) => k.track === (track === 'DEV' ? 'dev' : 'biz'))
-  const addFiles = (list: FileList | null) => {
-    if (!list) return
-    // 목업: 실제 PDF를 읽지 않고 이름과 크기로 페이지 수를 정한다
-    const next = [...list].filter((f) => f.name.toLowerCase().endsWith('.pdf')).map((f) => ({ name: f.name, pages: Math.max(1, Math.round(f.size / 60_000)) }))
-    setPdfs((p) => [...p, ...next])
-  }
 
   if (run) return <Generating input={run.input} onCancel={() => setRun(null)} onDone={(id) => nav(`/console/tasks/${id}`)} />
 
@@ -66,7 +58,7 @@ export default function ConsoleTaskNew() {
           className="glass flex flex-col gap-7 rounded-2xl bg-white/90! p-8 shadow-md!"
           onSubmit={(e) => {
             e.preventDefault()
-            setRun({ input: { track, category, difficulty, minutes, pdfs, instruction, counts } })
+            setRun({ input: { track, category, difficulty, minutes, topic, trap, counts } })
           }}
         >
           <div className={field}>
@@ -115,7 +107,7 @@ export default function ConsoleTaskNew() {
               <label htmlFor="minutes" className={fieldLabel}>
                 제한 시간
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   id="minutes"
                   type="number"
@@ -141,67 +133,32 @@ export default function ConsoleTaskNew() {
           </div>
 
           <div className={field}>
-            <span className={fieldLabel}>
-              {track === 'BIZ' ? '참고 자료 (권장)' : '참고 코드나 문서 (선택)'}
-            </span>
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => fileInput.current?.click()}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInput.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDrag(true)
-              }}
-              onDragLeave={() => setDrag(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDrag(false)
-                addFiles(e.dataTransfer.files)
-              }}
-              className={cx(
-                'flex h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed text-[14px] transition-colors',
-                drag ? 'border-brand bg-brand-dim text-brand' : 'border-line-strong text-text-muted hover:border-text-muted',
-              )}
-            >
-              <FileUp size={22} strokeWidth={1.75} aria-hidden />
-              PDF를 끌어다 놓거나 눌러서 고르세요
-            </div>
-            <input ref={fileInput} type="file" accept="application/pdf" multiple hidden onChange={(e) => addFiles(e.target.files)} />
-            {pdfs.length > 0 && (
-              <ul className="divide-y divide-line rounded-md border border-line">
-                {pdfs.map((p, i) => (
-                  <li key={i} className="flex items-center gap-3 px-3 py-2 text-[14px]">
-                    <FileText size={16} className="text-info" aria-hidden />
-                    <span className="truncate font-mono text-[13px] text-text">{p.name}</span>
-                    <span className="tnum font-mono text-[12px] text-text-muted">{p.pages}쪽</span>
-                    <button
-                      type="button"
-                      aria-label={`${p.name} 빼기`}
-                      title="빼기"
-                      onClick={() => setPdfs((l) => l.filter((_, j) => j !== i))}
-                      className="ml-auto inline-flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-raised hover:text-text"
-                    >
-                      <X size={14} aria-hidden />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <label htmlFor="topic" className={fieldLabel}>
+              주제
+            </label>
+            <input
+              id="topic"
+              required
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder={track === 'DEV' ? '예: 주문 결제 API의 동시성 장애' : '예: 저가 요금제 출시 여부 판단'}
+              className="h-11 rounded-lg border border-line-strong bg-panel px-3 text-[15px] outline-none placeholder:text-text-faint focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]"
+            />
           </div>
 
           <div className={field}>
-            <label htmlFor="inst" className={fieldLabel}>
-              추가 지시 (선택)
+            <label htmlFor="trap" className={fieldLabel}>
+              함정 (선택)
             </label>
             <textarea
-              id="inst"
+              id="trap"
               rows={3}
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              placeholder="예: 결제 도메인, 동시성 문제가 드러나게"
-              className="resize-y rounded-sm border border-line-strong bg-panel p-3 text-[15px] leading-6 outline-none placeholder:text-text-faint focus:border-brand"
+              value={trap}
+              onChange={(e) => setTrap(e.target.value)}
+              placeholder="응시자가 AI 답을 그대로 믿으면 빠지는 지점. 예: AI가 락 순서를 반대로 제안하도록 로그를 꾸민다"
+              className="resize-y rounded-lg border border-line-strong bg-panel p-3 text-[15px] leading-6 outline-none placeholder:text-text-faint focus:border-brand"
             />
+            <p className="text-[13px] text-text-muted">참고 파일은 올리지 않습니다. 과제 자료와 근거 문서까지 AI가 글로 받은 정의로 만듭니다.</p>
           </div>
 
           <div className={field}>
@@ -373,7 +330,7 @@ function Generating({ input, onCancel, onDone }: { input: DraftInput; onCancel: 
 
   const qCount = input.counts.SINGLE + input.counts.SHORT + input.counts.ESSAY
   const resultOf = (k: string) =>
-    k === 'files' ? `파일 ${input.track === 'DEV' ? 3 + input.pdfs.length : 1 + input.pdfs.length}개` : k === 'questions' ? `문항 ${qCount}개` : k === 'followups' ? `${input.counts.FOLLOWUP}개` : k === 'sources' ? `${input.pdfs.length ? qCount : 0}건` : '완료'
+    k === 'files' ? `파일 ${input.track === 'DEV' ? 4 : 2}개` : k === 'questions' ? `문항 ${qCount}개` : k === 'followups' ? `${input.counts.FOLLOWUP}개` : k === 'sources' ? `${qCount}건` : '완료'
   const progress = doneId ? 1 : Math.min(step, STEPS.length) / STEPS.length
 
   return (

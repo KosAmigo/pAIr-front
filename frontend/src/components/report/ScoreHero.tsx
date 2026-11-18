@@ -61,7 +61,7 @@ export function ScoreHero({
           <div className="flex items-baseline gap-2">
             <CountUp
               value={total}
-              className="font-mono text-[120px] leading-[120px] font-semibold tracking-[-0.04em] text-stage-text [text-shadow:0_0_48px_rgb(167_139_250/0.55)]"
+              className="font-mono text-[120px] leading-[120px] font-semibold tracking-[-0.04em] text-brand-gradient"
             />
             <span className="font-mono text-[20px] text-stage-muted">/{max}</span>
           </div>

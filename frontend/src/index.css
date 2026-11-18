@@ -44,20 +44,21 @@
   --color-code-method: #1d4ed8;
   --color-code-field: #1e5f99;
 
-  /* 1.1a 다크 무대(Stage): StageSection 안에서만 */
-  --color-stage-bg: #0b0a1f;
-  --color-stage-panel: #15132e;
-  --color-stage-raised: #1f1c40;
-  --color-stage-line: #2e2a57;
-  --color-stage-line-strong: #625d99;
-  --color-stage-text: #f4f3ff;
-  --color-stage-muted: #a9a6c9;
-  --color-stage-faint: #6f6b94;
-  --color-stage-brand: #a78bfa;
-  --color-stage-blue: #7fa3ff;
-  --color-stage-signal: #34d399;
-  --color-stage-caution: #fbbf24;
-  --color-stage-alert: #fb7185;
+  /* 1.1a 스포트라이트(Stage) 토큰: StageSection(밝은 강조 카드) 안에서 쓴다.
+     2026-11-19: 어두운 무대를 없앴다. 이름은 그대로 두고 밝은 테마의 같은 역할 값을 가리킨다 */
+  --color-stage-bg: #ffffff;
+  --color-stage-panel: #ffffff;
+  --color-stage-raised: #f4f1ff;
+  --color-stage-line: #e3dcff;
+  --color-stage-line-strong: #c9bdf7;
+  --color-stage-text: #14142b;
+  --color-stage-muted: #585e73;
+  --color-stage-faint: #8e93a6;
+  --color-stage-brand: #6c47ff;
+  --color-stage-blue: #2f5bea;
+  --color-stage-signal: #077a51;
+  --color-stage-caution: #a35f00;
+  --color-stage-alert: #cc2636;
 
   /* 2.1 Fonts */
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', sans-serif;
@@ -115,8 +116,10 @@
 
   /* 1.2 브랜드 그라데이션 (클래스: bg-brand-gradient, text-brand-gradient) */
   --gradient-brand: linear-gradient(120deg, #8b5cf6 0%, #6c47ff 45%, #2f5bea 100%);
-  /* 1.1a 다크 무대 위 그라데이션 글씨 */
-  --gradient-brand-stage: linear-gradient(120deg, #c4b5fd 0%, #a78bfa 45%, #7fa3ff 100%);
+  /* 스포트라이트 카드 안 그라데이션 글씨 = 브랜드 그라데이션 */
+  --gradient-brand-stage: linear-gradient(120deg, #8b5cf6 0%, #6c47ff 45%, #2f5bea 100%);
+  /* 스포트라이트 카드 면: 아주 옅은 보라 → 파랑 */
+  --gradient-spotlight: linear-gradient(135deg, #f6f2ff 0%, #ffffff 45%, #eef3ff 100%);
 }
 
 /* GlowBorder 회전 각도 (conic-gradient 애니메이션용) */
@@ -242,10 +245,17 @@
       var(--shadow-sm);
   }
   .glass-stage {
-    background: rgb(21 19 46 / 0.6);
+    background: rgb(255 255 255 / 0.72);
     backdrop-filter: blur(20px) saturate(160%);
     -webkit-backdrop-filter: blur(20px) saturate(160%);
-    border: 1px solid rgb(255 255 255 / 0.08);
+    border: 1px solid rgb(255 255 255 / 0.8);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--color-stage-line) 70%, transparent),
+      var(--shadow-sm);
+  }
+  /* 스포트라이트 카드 면 (StageSection) */
+  .spotlight-surface {
+    background-image: var(--gradient-spotlight);
   }
 
   /* 표 행 순차 등장 (DESIGN.md §3.7 Reveal 의 CSS 판). 처음 그려질 때 한 번, 첫 10행만 40ms씩 늦춘다 */
@@ -393,13 +403,13 @@
     mask-image: linear-gradient(to bottom, black 40%, transparent);
   }
   .fx-aurora[data-variant='stage'] > i:nth-child(1) {
-    background: rgb(124 58 237 / 0.45);
+    background: rgb(196 181 253 / 0.5);
   }
   .fx-aurora[data-variant='stage'] > i:nth-child(2) {
-    background: rgb(47 91 234 / 0.4);
+    background: rgb(147 197 253 / 0.45);
   }
   .fx-aurora[data-variant='stage'] > i:nth-child(3) {
-    background: rgb(192 38 211 / 0.25);
+    background: rgb(240 171 252 / 0.3);
   }
   .fx-aurora[data-paused='true'] > i {
     animation-play-state: paused;
@@ -463,12 +473,12 @@
     background: radial-gradient(320px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgb(108 71 255 / 0.08), transparent 70%);
   }
   .fx-spotlight[data-tone='stage']::before {
-    background: radial-gradient(320px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgb(167 139 250 / 0.14), transparent 70%);
+    background: radial-gradient(320px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgb(108 71 255 / 0.1), transparent 70%);
   }
 
-  /* 다크 무대 안에서는 선이 진짜로 빛나 보이게 더 넓게 번진다 (§3.4 shadow-glow-stage) */
+  /* 스포트라이트 카드 안 선 빛 */
   .stage-scope .glow-svg {
-    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--glow) 75%, transparent));
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--glow) 55%, transparent));
   }
   .glow-svg {
     filter: drop-shadow(0 0 6px color-mix(in srgb, var(--glow) 55%, transparent));

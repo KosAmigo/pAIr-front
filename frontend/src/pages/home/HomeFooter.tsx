@@ -9,7 +9,7 @@ const GROUPS = [
       { label: '테스트 응시', to: '/entry' },
       { label: '내 기록', to: '/history' },
       { label: '회원가입', to: '/signup' },
-      { label: '기업 회원가입', to: '/signup?type=company' },
+      { label: '기업 도입 문의', to: '/signup?type=company' },
     ],
   },
   {

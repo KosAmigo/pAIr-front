@@ -1,13 +1,14 @@
 // DESIGN.md §7-9-5 회사 (ADMIN): 목록 + 등록 모달, 상세(회사 정보, 담당자 계정, 회차)
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Building2, ChevronRight, CircleAlert, Plus, UserPlus } from 'lucide-react'
+import { Building2, Check, ChevronRight, CircleAlert, Inbox, Plus, UserPlus, X } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
 import { Reveal } from '../../components/fx'
 import { ConsoleHero, HeroSep } from './ConsoleHero'
+import { approveInquiry, rejectInquiry, useInquiries } from '../../data/inquiries'
 import {
   addManager,
   createCompany,
@@ -15,6 +16,7 @@ import {
   removeManager,
   updateCompany,
   useCompanies,
+  taskTitles,
   useSessions,
   type Company,
   type Manager,
@@ -58,6 +60,9 @@ export default function ConsoleCompanies() {
           <Plus size={16} aria-hidden /> 회사 등록
         </Button>
       </PageHeader>
+      <div className="px-8 pt-6">
+        <InquiryInbox />
+      </div>
       <div className="p-8">
         <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
           {companies.length === 0 ? (
@@ -301,7 +306,7 @@ function CompanyDetail({ c }: { c: Company }) {
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[15px] font-semibold text-text">{s.title}</span>
-                          <span className="text-[13px] text-text-muted">{s.taskTitle}</span>
+                          <span className="text-[13px] text-text-muted">{taskTitles(s)}</span>
                         </span>
                         <span className="tnum font-mono text-[13px] text-text-muted">
                           {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
@@ -382,5 +387,64 @@ function AddManagerModal({ companyId, onClose, onDone }: { companyId: number; on
       </form>
       <ErrorLine text={error} />
     </Modal>
+  )
+}
+
+/**
+ * 도입 문의 받은편지함 (기획_결정사항 §4, company_inquiries). 승인하면 회사를 등록하고 담당자를 첫 MANAGER 로 초대한다.
+ * 처리한 문의는 기록으로 아래에 흐리게 남는다.
+ */
+function InquiryInbox() {
+  const list = useInquiries()
+  const toast = useToast()
+  const pending = list.filter((q) => q.status === 'PENDING')
+  const handled = list.filter((q) => q.status !== 'PENDING').slice(0, 3)
+  return (
+    <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm" aria-label="도입 문의">
+      <header className="flex h-12 items-center gap-2 border-b border-line bg-[linear-gradient(120deg,var(--color-brand-dim),transparent_70%)] px-4">
+        <Inbox size={16} className="text-brand" aria-hidden />
+        <span className="label">INQUIRIES</span>
+        <span className="text-[15px] font-semibold text-text">도입 문의</span>
+        <span className={cx('tnum ml-1 rounded-full px-2 font-mono text-[12px] font-semibold', pending.length ? 'bg-caution/12 text-caution' : 'bg-panel-raised text-text-muted')}>{pending.length}</span>
+        <span className="ml-auto text-[13px] text-text-muted">승인하면 회사를 등록하고 담당자에게 초대 메일을 보냅니다</span>
+      </header>
+      {pending.length === 0 && handled.length === 0 && <p className="px-4 py-6 text-center text-[14px] text-text-muted">새 문의가 없습니다.</p>}
+      <ul className="fx-cards divide-y divide-line">
+        {[...pending, ...handled].map((q) => (
+          <li key={q.id} className={cx('flex items-start gap-4 px-4 py-3', q.status !== 'PENDING' && 'opacity-60')}>
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-2 text-[15px] font-semibold text-text">
+                {q.companyName}
+                <span className="tnum font-mono text-[12px] font-normal text-text-muted">{q.businessNo}</span>
+              </p>
+              <p className="text-[13px] text-text-muted">
+                {q.contactName} │ <span className="font-mono">{q.contactEmail}</span> │ {fmtTime(q.createdAt)}
+              </p>
+              {q.message && <p className="mt-1 text-[14px] leading-6 text-text">{q.message}</p>}
+            </div>
+            {q.status === 'PENDING' ? (
+              <div className="flex shrink-0 gap-2">
+                <Button size="sm" variant="ghost" onClick={() => rejectInquiry(q.id)}>
+                  <X size={14} aria-hidden /> 거절
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => {
+                    const err = approveInquiry(q.id)
+                    toast.show(err ?? `회사 등록 완료: ${q.companyName}. 담당자 초대 메일을 ${q.contactEmail} 주소로 보냈습니다`)
+                  }}
+                >
+                  <Check size={14} aria-hidden /> 승인
+                </Button>
+              </div>
+            ) : (
+              <span className={cx('shrink-0 text-[13px] font-semibold', q.status === 'APPROVED' ? 'text-signal' : 'text-text-muted')}>{q.status === 'APPROVED' ? '승인됨' : '거절됨'}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {toast.node}
+    </section>
   )
 }

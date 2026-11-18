@@ -10,7 +10,7 @@ import { PageHeader } from '../../components/SelfShell'
 import { ButtonLink } from '../../components/ui'
 import { Reveal, RevealGroup, RevealItem, Spotlight, StageSection } from '../../components/fx'
 import { StatTabs } from './StatTabs'
-import { companyName, phaseOf, unreviewed, useCompanies, useSessions, type Session, type SessionPhase } from '../../data/consoleSessions'
+import { companyName, phaseOf, taskTitles, unreviewed, useCompanies, useSessions, type Session, type SessionPhase } from '../../data/consoleSessions'
 import { fmtHm, fmtLeft, fmtShort, useMyCompanyId, useNow } from './format'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
@@ -125,7 +125,7 @@ function Row({ s, now, showCompany, onOpen }: { s: Session; now: number; showCom
         <p className="text-[15px] font-semibold text-text">{s.title}</p>
         {showCompany && <p className="text-[12px] text-text-muted">{companyName(s.companyId)}</p>}
       </td>
-      <td className="px-4 text-text-muted">{s.taskTitle}</td>
+      <td className="px-4 text-text-muted">{taskTitles(s)}</td>
       <td className="tnum px-4 font-mono text-[13px] text-text-muted">
         {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
       </td>
@@ -180,7 +180,7 @@ function LiveBoard({ rows, now, showCompany, onOpen }: { rows: Session[]; now: n
                       <p className="truncate text-[18px] font-bold text-stage-text">{s.title}</p>
                       <p className="truncate text-[13px] text-stage-muted">
                         {showCompany && `${companyName(s.companyId)} │ `}
-                        {s.taskTitle}
+                        {taskTitles(s)}
                       </p>
                     </div>
                     <ChevronRight size={18} className="text-stage-muted" aria-hidden />

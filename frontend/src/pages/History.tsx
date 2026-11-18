@@ -126,9 +126,10 @@ export default function History() {
     api.list().then(setRows).catch((e: ApiError) => setError(e.message))
   }, [])
 
-  // 요약: 실제 응시가 있으면 그것으로, 없으면 예시로 계산
-  const scored = rows?.length ? rows.filter((r) => r.total != null && !r.legacyReport).map((r) => Math.round(r.total!)) : mockAttempts.map((a) => a.score)
-  const count = rows?.length ? rows.length : mockAttempts.length
+  // 요약: 백엔드가 응답하면 실제 응시로(0건이면 0), 백엔드에 닿지 못하면 예시로 계산하고 그렇다고 밝힌다
+  const fromExamples = rows === null
+  const scored = !fromExamples ? rows.filter((r) => r.total != null && !r.legacyReport).map((r) => Math.round(r.total!)) : mockAttempts.map((a) => a.score)
+  const count = !fromExamples ? rows.length : mockAttempts.length
   const best = scored.length ? Math.max(...scored) : null
   const avg = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null
   const latest = scored.length ? scored[0] : null
@@ -205,8 +206,17 @@ export default function History() {
       <div className="mx-auto flex max-w-[1200px] flex-col gap-10 px-8 py-8">
         <div>
           <p className="text-[28px] leading-9 font-bold tracking-[-0.02em] text-text">
-            지금까지 <GradientText>{count}번</GradientText> 풀었어요
+            {count > 0 ? (
+              <>
+                지금까지 <GradientText>{count}번</GradientText> 풀었어요
+              </>
+            ) : (
+              <>
+                아직 <GradientText>첫 기록</GradientText>을 기다리고 있어요
+              </>
+            )}
           </p>
+          {error && <p className="mt-1 text-[14px] text-text-muted">응시 기록을 불러오지 못해 아래 예시 기록으로 계산했습니다.</p>}
           <RevealGroup className="mt-5 grid grid-cols-4 gap-3">
             <RevealItem>
               <Stat label="ATTEMPTS" value={count} unit="회" />

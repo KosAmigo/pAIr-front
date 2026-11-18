@@ -316,24 +316,26 @@ export function duplicateTask(id: string) {
 }
 
 /** 이 과제를 쓰는 진행 중이거나 예정된 회차 수 */
-export const activeSessionCount = (id: string) => getSessions().filter((x) => x.taskId === id && phaseOf(x) !== 'ended').length
+export const activeSessionCount = (id: string) => getSessions().filter((x) => x.tasks.some((t) => t.id === id) && phaseOf(x) !== 'ended').length
 
 export type DraftInput = {
   track: Track
   category: string
   difficulty: Difficulty
   minutes: number
-  pdfs: { name: string; pages: number }[]
-  instruction: string
+  /** 주제 (기획_결정사항 §2: 관리자가 글로만 정의. 참고 파일 업로드는 없다) */
+  topic: string
+  /** 응시자가 빠지기 쉬운 함정 (선택) */
+  trap: string
   counts: { SINGLE: number; SHORT: number; ESSAY: number; FOLLOWUP: number }
 }
 
 /** AI 초안 생성 (목업): 입력에 맞는 그럴듯한 초안을 만들어 검수 대기로 넣는다 */
 export function createDraft(input: DraftInput) {
   const kind = kindName(input.category)
-  const pdfs = input.pdfs.map((p) =>
-    pdfFile(`자료/${p.name}`, Array.from({ length: p.pages }, (_, i) => `${p.name} ${i + 1}쪽에서 추출한 텍스트`)),
-  )
+  // 근거 문서도 AI가 만든다 (업로드 없음). 문항 근거는 이 자료의 쪽을 가리킨다
+  const topic = input.topic.trim() || kind
+  const pdfs = [pdfFile('자료/참고자료.pdf', [`${topic} 배경과 상황 (AI 생성)`, `${topic} 수치와 근거 (AI 생성)`, input.trap.trim() ? `함정: ${input.trap.trim()}` : '추가 자료 (AI 생성)'])]
   const files =
     input.track === 'DEV'
       ? [
@@ -380,9 +382,9 @@ export function createDraft(input: DraftInput) {
   const t: CTask = {
     id: newId('t'),
     code: `${input.category}-ai${seq}`,
-    title: `${kind} 과제 (AI 초안)`,
-    summary: input.instruction.trim() || `${kind} 역량을 보는 ${input.difficulty} 과제입니다.`,
-    description: `AI가 만든 초안입니다. 상황 설명을 검수하세요.\n\n추가 지시: ${input.instruction.trim() || '없음'}`,
+    title: input.topic.trim() ? `${input.topic.trim()} (AI 초안)` : `${kind} 과제 (AI 초안)`,
+    summary: input.topic.trim() || `${kind} 역량을 보는 ${input.difficulty} 과제입니다.`,
+    description: `AI가 만든 초안입니다. 상황 설명을 검수하세요.\n\n주제: ${input.topic.trim() || kind}\n함정: ${input.trap.trim() || '없음'}`,
     requirements: ['요구사항 1을 검수하세요.', '요구사항 2를 검수하세요.'],
     track: input.track,
     category: input.category,
