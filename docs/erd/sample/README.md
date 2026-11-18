@@ -94,3 +94,6 @@ tasks 에 상태 CHECK(OPEN/COMING_SOON/CLOSED), 복제 원본, 만든 사람, �
 | 새 차단 2종: 없는 상태값(DRAFT), 공개 시각 없이 공개 | 모두 차단 (잘못된 데이터 차단은 모두 25종) |
 
 생성 프롬프트 버전(task_generation_prompts)과 생성 요청 기록(task_generations)은 검토했다가 필요 없다고 판단해 넣지 않았다.
+
+## 체크포인트 파일 대리키 (2026-11-18)
+checkpoint_files 의 PK 를 (체크포인트, 경로) 복합 키에서 대리키 checkpoint_file_id 로 바꾸고, (체크포인트, 경로)는 UNIQUE 로 남겼다(긴 문자열을 PK 에 넣지 않는 원칙, attempt_files 와 같은 구조). 검증 SQL에 "같은 체크포인트에 같은 경로 파일 두 번" 차단을 추가했다.
