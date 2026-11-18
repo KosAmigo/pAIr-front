@@ -17,9 +17,9 @@ OUT = os.path.join(BASE, "pair_sample.xlsx")
 SCHEMA = os.path.join(BASE, "..", "pair_schema.sql")
 
 # load.sh 와 같은 외래 키 순서 (부모 테이블이 먼저)
-ORDER = """companies users tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys
+ORDER = """companies users company_inquiries company_invites credit_purchases tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys
 question_sources rubric_items rubric_checks prompt_versions prompt_check_hints exam_sessions exam_session_tasks
-exam_participants attempts attempt_files chat_turns chat_attachments attempt_events text_answers choice_answers
+exam_participants attempts attempt_files chat_turns credit_ledger chat_attachments attempt_events text_answers choice_answers
 checkpoints checkpoint_files scorings judge_calls check_results judge_verdicts verdict_evidences question_results
 proctor_consents proctor_events""".split()
 
