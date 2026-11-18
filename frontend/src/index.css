@@ -389,6 +389,10 @@
     background: radial-gradient(320px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgb(167 139 250 / 0.14), transparent 70%);
   }
 
+  /* 다크 무대 안에서는 선이 진짜로 빛나 보이게 더 넓게 번진다 (§3.4 shadow-glow-stage) */
+  .stage-scope .glow-svg {
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--glow) 75%, transparent));
+  }
   .glow-svg {
     filter: drop-shadow(0 0 6px color-mix(in srgb, var(--glow) 55%, transparent));
   }

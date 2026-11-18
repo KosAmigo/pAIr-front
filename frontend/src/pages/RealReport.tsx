@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom'
 import { Bot, ChevronDown, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
-import { Button, ButtonLink, Panel, Sep } from '../components/ui'
+import { Button, ButtonLink, Panel, ScoreBar } from '../components/ui'
+import { ScoreHero, StageSep } from '../components/report/ScoreHero'
 import { api, ApiError, type CheckResult, type Report, type ReportResponse, type Turn } from '../api'
 
 // 실제 응시 결과 리포트. 감점식 채점(docs/evaluation/채점_기준표.md): 6개 항목, 총점 100점.
@@ -123,33 +124,30 @@ export function ReportView({ r }: { r: Report }) {
   const tokens = Object.entries(r.tokens ?? {})
   return (
     <div className="mx-auto grid max-w-[1440px] grid-cols-12 gap-2 p-8">
-      <section className="col-span-12 flex items-end gap-10 rounded-md border border-line bg-panel px-6 py-5">
-        <div className="min-w-0 flex-1">
-          <span className="label">{r.taskType === 'dev' ? 'DEV TASK' : 'BIZ TASK'}</span>
-          <h2 className="mt-1 text-h1 font-bold">{r.taskTitle}</h2>
-          <div className="tnum mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[14px] text-text-muted">
+      <ScoreHero
+        kind={r.taskType === 'dev' ? 'DEV TASK' : 'BIZ TASK'}
+        title={r.taskTitle}
+        meta={
+          <>
             <span>{new Date(r.startedAt).toLocaleString('ko-KR')}</span>
-            <Sep />
+            <StageSep />
             <span>소요 {fmtDuration(r.durationSec)}</span>
-            <Sep />
+            <StageSep />
             <span>AI 대화 {r.chatTurns}턴</span>
-            <Sep />
+            <StageSep />
             <span>어시스턴트 {r.assistant}</span>
-            <Sep />
+            <StageSep />
             <span>채점 {r.judgeModel}</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end">
-          <span className="label">TOTAL SCORE</span>
-          <div className="flex items-baseline gap-2">
-            <span className="tnum font-mono text-display font-semibold">{r.total}</span>
-            <span className="font-mono text-[16px] text-text-muted">/{r.max}</span>
-          </div>
-          <span className="text-[14px] text-text-muted">감점식, {r.items.length}개 항목</span>
-        </div>
-      </section>
+          </>
+        }
+        total={r.total}
+        max={r.max}
+        items={r.items.map((it) => ({ key: it.key, name: it.name, score: it.score, max: it.max, color: ITEM_COLORS[it.key] ?? 'var(--color-stage-muted)' }))}
+        aside={`감점식, ${r.items.length}개 항목`}
+        seenKey={`${r.taskTitle}-${r.startedAt}`}
+      />
 
-      <Panel label="BREAKDOWN" title="항목별 점수와 감점 내역" className="col-span-12" flush>
+      <Panel reveal label="BREAKDOWN" title="항목별 점수와 감점 내역" className="col-span-12" flush>
         <ul className="divide-y divide-line">
           {r.items.map((it) => {
             const c = { key: it.key, name: it.name, color: ITEM_COLORS[it.key] ?? 'var(--color-text-muted)' }
@@ -171,9 +169,7 @@ export function ReportView({ r }: { r: Report }) {
                   className="grid w-full grid-cols-[180px_280px_96px_1fr_24px] items-center gap-6 px-4 py-3 text-left hover:bg-panel-raised"
                 >
                   <span className="text-[15px] font-medium">{c.name}</span>
-                  <div className="h-1.5 rounded-full bg-panel-raised">
-                    <div className="h-full rounded-full" style={{ width: `${(it.score / it.max) * 100}%`, background: c.color }} />
-                  </div>
+                  <ScoreBar value={it.score / it.max} color={c.color} />
                   <span className="tnum text-right font-mono text-[16px]">
                     <span className="font-semibold">{it.score}</span>
                     <span className="text-text-muted"> / {it.max}</span>
@@ -210,7 +206,7 @@ export function ReportView({ r }: { r: Report }) {
         </ul>
       </Panel>
 
-      <Panel label="TRANSCRIPT" title="AI 대화 기록" className="col-span-7" bodyClassName="max-h-[720px] overflow-auto space-y-2">
+      <Panel reveal label="TRANSCRIPT" title="AI 대화 기록" className="col-span-7" bodyClassName="max-h-[720px] overflow-auto space-y-2">
         {r.transcript.length === 0 ? (
           <p className="text-[15px] text-text-muted">AI와 나눈 대화가 없습니다.</p>
         ) : (
@@ -220,7 +216,7 @@ export function ReportView({ r }: { r: Report }) {
 
       <div className="col-span-5 flex flex-col gap-2">
         {r.r2KeyTurns && r.r2KeyTurns.length > 0 && (
-          <Panel label="R1 REPLAY" title="재현성: 다시 실행 판정">
+          <Panel reveal label="R1 REPLAY" title="재현성: 다시 실행 판정">
             <ul className="space-y-3">
               {r.r2KeyTurns.map((k) => (
                 <li key={k.turn}>
@@ -248,7 +244,7 @@ export function ReportView({ r }: { r: Report }) {
         )}
 
         {r.hiddenTests && (
-          <Panel label="HIDDEN TESTS" title="숨은 테스트 결과">
+          <Panel reveal label="HIDDEN TESTS" title="숨은 테스트 결과">
             <ul className="space-y-1 font-mono text-[13px]">
               {r.hiddenTests.map((t) => (
                 <li key={t.name} className={t.passed ? 'text-signal' : 'text-alert'}>
@@ -259,7 +255,7 @@ export function ReportView({ r }: { r: Report }) {
           </Panel>
         )}
 
-        <Panel label="NOTES" title="채점 메모">
+        <Panel reveal label="NOTES" title="채점 메모">
           <ul className="space-y-2">
             {r.notes.map((n) => (
               <li key={n} className="border-l-2 border-line-strong pl-3 text-[14px] leading-5 text-text-muted">

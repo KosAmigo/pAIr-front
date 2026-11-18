@@ -4,8 +4,9 @@ import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { motion } from 'motion/react'
 
 import { cx } from './cx'
-import { springs } from '../lib/motion'
+import { distance, duration, easing, springs } from '../lib/motion'
 import { CountUp } from './fx/CountUp'
+import { useOnStage } from './fx/stage'
 
 // ── 6.1 Button ──────────────────────────────
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -82,6 +83,7 @@ export function Panel({
   className,
   bodyClassName,
   flush,
+  reveal,
 }: {
   label: string
   title?: ReactNode
@@ -90,16 +92,43 @@ export function Panel({
   className?: string
   bodyClassName?: string
   flush?: boolean
+  /** 표현 무대: 화면에 들어올 때 한 번 아래에서 올라온다 (DESIGN.md §3.7 Reveal). 집중 무대에서는 쓰지 않는다. */
+  reveal?: boolean
 }) {
+  const Tag = reveal ? motion.section : 'section'
+  const revealProps = reveal
+    ? {
+        initial: { opacity: 0, y: distance.app },
+        whileInView: { opacity: 1, y: 0 },
+        viewport: { once: true, margin: '0px 0px -40px 0px' },
+        transition: { duration: duration.slow, ease: easing.expo },
+      }
+    : {}
   return (
-    <section className={cx('flex min-h-0 flex-col rounded-md border border-line bg-panel shadow-sm', className)}>
+    <Tag className={cx('flex min-h-0 flex-col rounded-md border border-line bg-panel shadow-sm', className)} {...revealProps}>
       <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
         <span className="label">{label}</span>
         {title && <h2 className="truncate text-[16px] leading-[22px] font-semibold text-text">{title}</h2>}
         {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}
       </header>
       <div className={cx('min-h-0 flex-1', !flush && 'p-4', bodyClassName)}>{children}</div>
-    </section>
+    </Tag>
+  )
+}
+
+/** 점수 막대: 화면에 들어오면 왼쪽에서 차오른다 (width 대신 scaleX, §4.1) */
+export function ScoreBar({ value, color, className }: { value: number; color: string; className?: string }) {
+  return (
+    <div className={cx('h-1.5 overflow-hidden rounded-full bg-panel-raised', className)}>
+      <motion.div
+        className="h-full w-full origin-left rounded-full"
+        style={{ background: color }}
+        initial={{ scaleX: 0 }}
+        whileInView={{ scaleX: Math.max(0, Math.min(1, value)) }}
+        viewport={{ once: true }}
+        transition={{ duration: duration.crawl, ease: easing.expo }}
+      />
+    </div>
   )
 }
 
@@ -157,12 +186,20 @@ const chipCls = {
   caution: 'bg-caution/12 text-caution',
   alert: 'bg-alert/12 text-alert',
 }
+// 다크 무대 위 (§1.1a)
+const chipStageCls = {
+  signal: 'bg-stage-signal/15 text-stage-signal',
+  info: 'bg-stage-blue/15 text-stage-blue',
+  caution: 'bg-stage-caution/15 text-stage-caution',
+  alert: 'bg-stage-alert/15 text-stage-alert',
+}
 export function ScoreChip({ score, className }: { score: number; className?: string }) {
+  const stage = useOnStage()
   return (
     <span
       className={cx(
         'tnum inline-flex h-[22px] items-center rounded-sm px-1.5 font-mono text-[13px] font-semibold',
-        chipCls[scoreTone(score)],
+        (stage ? chipStageCls : chipCls)[scoreTone(score)],
         className,
       )}
     >
