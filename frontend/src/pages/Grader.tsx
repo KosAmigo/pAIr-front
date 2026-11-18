@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom'
 import { CheckCircle2, Download, ExternalLink, FlaskConical, Info, Loader2, Play, Save, Square, Star } from 'lucide-react'
 import { cx } from '../components/cx'
 import { Button, Logo } from '../components/ui'
-import { Aurora, BranchLine, CountUp, Reveal, StageSection } from '../components/fx'
+import { Aurora, BranchLine, CountUp, Glass, Reveal, StageSection } from '../components/fx'
+import { motion } from 'motion/react'
+import { duration, easing, stagger } from '../lib/motion'
+import { COMPETENCIES } from '../data/mock'
 import { PillTabs } from './console/ConsoleHero'
 import {
   ApiError,
@@ -37,11 +40,34 @@ const inputCls = 'h-9 rounded-md border border-line-strong bg-panel-raised px-3 
 const areaCls = 'w-full rounded-md border border-line-strong bg-panel-raised p-3 font-mono text-[13px] leading-5 text-text outline-none focus:border-brand'
 const th = 'label h-9 px-3 text-left font-medium'
 
-function Box({ label, title, actions, children, className }: { label: string; title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+/** 채점 항목 키 → 역량 색 (§1.5). 모르는 키는 브랜드 색 */
+const compColor = (key: string) => COMPETENCIES.find((c) => c.key === key.toLowerCase())?.color ?? 'var(--color-brand)'
+
+function Box({
+  label,
+  title,
+  actions,
+  children,
+  className,
+  id,
+  accent,
+}: {
+  label: string
+  title?: ReactNode
+  actions?: ReactNode
+  children: ReactNode
+  className?: string
+  id?: string
+  /** 역량 색. 머리 왼쪽 막대와 라벨에 쓴다 */
+  accent?: string
+}) {
   return (
-    <section className={cx('overflow-hidden rounded-xl border border-line bg-panel shadow-sm', className)}>
-      <header className="flex h-10 items-center gap-3 border-b border-line px-4">
-        <span className="label">{label}</span>
+    <section id={id} className={cx('scroll-mt-24 overflow-hidden rounded-xl border border-line bg-panel shadow-sm', className)}>
+      <header className="relative flex h-10 items-center gap-3 border-b border-line px-4">
+        {accent && <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: accent }} />}
+        <span className="label" style={accent ? { color: accent } : undefined}>
+          {label}
+        </span>
         {title && <h2 className="truncate text-[16px] font-semibold">{title}</h2>}
         {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
       </header>
@@ -228,8 +254,9 @@ function VersionsTab({ rubric, onChanged }: { rubric: GraderRubric; onChanged: (
               </div>
             </Box>
 
+            <RubricMap rubric={rubric} />
             {rubric.items.map((item) => (
-              <Box key={item.key} label={item.key.toUpperCase()} title={`${item.name} (${item.max}점)`}>
+              <Box key={item.key} id={`rubric-${item.key}`} accent={compColor(item.key)} label={item.key.toUpperCase()} title={`${item.name} (${item.max}점)`}>
                 <table className="w-full table-fixed">
                   <colgroup>
                     <col className="w-24" />
@@ -286,6 +313,45 @@ function VersionsTab({ rubric, onChanged }: { rubric: GraderRubric; onChanged: (
         )}
       </div>
     </div>
+  )
+}
+
+/** 버전 화면 위 배점 지도 (2026-11-19 개편): 역량별 배점 비율 막대 + 눌러서 그 역량 표로 이동 */
+function RubricMap({ rubric }: { rubric: GraderRubric }) {
+  const total = rubric.items.reduce((a, it) => a + it.max, 0) || 1
+  const go = (key: string) => document.getElementById(`rubric-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  return (
+    <Glass className="sticky top-2 z-20 rounded-xl border border-line p-3 shadow-md">
+      <div className="flex h-3 overflow-hidden rounded-full" role="img" aria-label={`배점: ${rubric.items.map((it) => `${it.name} ${it.max}점`).join(', ')}`}>
+        {rubric.items.map((it, i) => (
+          <motion.span
+            key={it.key}
+            className="h-full origin-left border-r-2 border-panel last:border-0"
+            style={{ width: `${(it.max / total) * 100}%`, background: compColor(it.key) }}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: duration.slow, ease: easing.expo, delay: i * stagger.normal }}
+          />
+        ))}
+      </div>
+      <ul className="mt-2 grid grid-cols-2 gap-x-2 md:grid-cols-3">
+        {rubric.items.map((it) => (
+          <li key={it.key}>
+            <button
+              type="button"
+              onClick={() => go(it.key)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-panel-raised"
+            >
+              <i aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: compColor(it.key) }} />
+              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text">{it.name}</span>
+              <span className="tnum font-mono text-[12px] text-text-muted">
+                {it.max}점 │ 체크 {rubric.checks.filter((c) => c.item === it.key).length}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Glass>
   )
 }
 

@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, BarChart3, Bug, ClipboardCheck, Clock, FileText, FlaskConical, Lock, MessageSquareText, Search, Sparkles, Wrench, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Clock, Lock, Sparkles } from 'lucide-react'
 import { motion } from 'motion/react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
+import { LevelPips } from '../components/taskKind'
+import { KIND_ICON } from '../components/taskKindIcons'
 import { cx } from '../components/cx'
 import { GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
 import { CATALOG, KINDS, type CatalogTask, type Track } from '../data/catalog'
@@ -13,35 +15,10 @@ import { CREDIT_COST, useCredits } from '../data/credits'
 // 위: 직군 스위치(미끄러지는 알약) + 난이도·시간 필터 칩(기획_결정사항 §2). 그 아래 다크 무대에 지금 바로 풀 수 있는 추천 과제를 크게.
 // 아래: 과제 형태별 카드. OPEN 카드는 Spotlight + 떠오름, CLOSED(응시 마감)는 자물쇠와 흐림이고 시작이 막힌다.
 
-const KIND_ICON: Record<string, LucideIcon> = {
-  incident: Bug,
-  feature: Wrench,
-  refactor: FlaskConical,
-  testing: ClipboardCheck,
-  planning: FileText,
-  data: BarChart3,
-  research: Search,
-  cs: MessageSquareText,
-}
-const LEVEL_PIPS = { 초급: 1, 중급: 2, 고급: 3 } as const
 const TRACKS: { value: Track; label: string }[] = [
   { value: 'dev', label: '개발 직군' },
   { value: 'biz', label: '비개발 직군' },
 ]
-
-function LevelPips({ level, stage }: { level: CatalogTask['level']; stage?: boolean }) {
-  const n = LEVEL_PIPS[level]
-  return (
-    <span className="inline-flex items-center gap-1.5" aria-label={`난이도 ${level}`}>
-      <span className="flex gap-0.5" aria-hidden>
-        {[1, 2, 3].map((i) => (
-          <span key={i} className={cx('h-3 w-1.5 rounded-full', i <= n ? (stage ? 'bg-stage-brand' : 'bg-brand') : stage ? 'bg-stage-line' : 'bg-line-strong')} />
-        ))}
-      </span>
-      <span className={cx('text-[13px]', stage ? 'text-stage-muted' : 'text-text-muted')}>{level}</span>
-    </span>
-  )
-}
 
 /** 추천 과제: 이 화면의 다크 무대 */
 function Featured({ t }: { t: CatalogTask }) {

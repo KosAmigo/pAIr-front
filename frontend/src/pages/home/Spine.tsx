@@ -7,10 +7,12 @@ import { ScrollTrigger, prefersReducedMotion } from './motion'
 const LANE = 56 // 가지 레인 간격 (줄기에서 오른쪽으로)
 const DRAW_LINE = 0.62 // 화면 위에서 62% 지점까지 그려진다
 /**
- * 가지는 섹션 끝 노드에 닿을 때 다 그려진다 (2026-11-19: 0.6 은 너무 빨리 찼다).
- * 줄기와 같은 속도로 차오르므로 가지 게이지가 섹션을 읽는 동안 천천히 늘어난다.
+ * 가지는 섹션이 화면에 잡혔을 때(끝 노드가 화면 아래 끝에서 FOCUS_MARGIN 만큼 올라왔을 때) 다 그려진다.
+ * 2026-11-19: 섹션 60% 지점은 너무 빨랐고, 끝 노드에 닿을 때는 이미 지나간 뒤라 너무 느렸다.
+ * 아주 짧은 섹션도 길이의 30%만큼은 차오르는 구간을 둔다.
  */
-const BRANCH_RATIO = 1
+const BRANCH_MIN_RATIO = 0.3
+const FOCUS_MARGIN = 0.2 // 화면 높이의 20%
 
 type Pt = { x: number; y: number }
 type Geo = { w: number; h: number; x: number; pts: Record<string, Pt> }
@@ -43,7 +45,9 @@ const BRANCHES = [
 
 /** 가지가 다 그려지는 스크롤 위치 (문서 좌표) */
 function branchDone(a: Pt, b: Pt) {
-  return a.y + (b.y - a.y) * BRANCH_RATIO
+  // 그리기 선은 화면 위에서 DRAW_LINE 지점이다. 끝 노드가 화면 아래 끝에 닿을 때 그리기 선의 위치
+  const whenVisible = b.y - window.innerHeight * (1 - DRAW_LINE + FOCUS_MARGIN)
+  return Math.max(a.y + (b.y - a.y) * BRANCH_MIN_RATIO, whenVisible)
 }
 
 function branchPath(x: number, a: Pt, b: Pt) {
