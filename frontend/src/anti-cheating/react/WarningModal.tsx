@@ -33,7 +33,7 @@ export function WarningModal({ violation, count, onClose }: { violation: Violati
           <p className="mt-4 text-[13px] leading-5 text-text-faint">브라우저 상태 변화 기록이며, 이 기록만으로 부정행위를 확정하지 않습니다.</p>
         </div>
         <footer className="flex justify-end border-t border-line px-6 py-4">
-          <button type="button" onClick={onClose} className="rounded-sm bg-signal px-4 py-2 text-[14px] font-medium text-bg hover:brightness-110">확인</button>
+          <button type="button" onClick={onClose} className="rounded-md bg-brand-gradient px-4 py-2 text-[14px] font-semibold text-on-accent">확인</button>
         </footer>
       </section>
     </div>

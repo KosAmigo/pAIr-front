@@ -8,10 +8,10 @@ import { cx } from './cx'
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
 const variantCls: Record<Variant, string> = {
-  primary: 'bg-signal text-bg hover:brightness-110',
-  secondary: 'bg-panel-raised text-text border border-line-strong hover:border-text-muted',
+  primary: 'bg-brand-gradient text-on-accent hover:shadow-[0_8px_24px_-6px_rgb(108_71_255/0.45)] active:scale-[0.98] disabled:bg-none disabled:bg-panel-raised disabled:text-text-faint disabled:shadow-none',
+  secondary: 'bg-panel text-text border border-line-strong hover:border-text-muted hover:bg-panel-raised',
   ghost: 'text-text-muted hover:bg-panel-raised hover:text-text',
-  danger: 'text-alert border border-alert/40 hover:bg-alert/10',
+  danger: 'text-alert border border-alert/40 hover:bg-alert/8',
 }
 const sizeCls: Record<Size, string> = {
   sm: 'h-7 px-2.5 gap-1.5 text-[14px]',
@@ -21,7 +21,7 @@ const sizeCls: Record<Size, string> = {
 function buttonCls(variant: Variant = 'secondary', size: Size = 'md', extra?: string) {
   return cx(
     'inline-flex shrink-0 items-center justify-center rounded-md font-semibold whitespace-nowrap',
-    'transition-[background-color,border-color,color,filter] duration-[120ms] ease-out',
+    'transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out',
     'disabled:cursor-not-allowed disabled:opacity-40',
     variantCls[variant],
     sizeCls[size],
@@ -87,7 +87,7 @@ export function Panel({
   flush?: boolean
 }) {
   return (
-    <section className={cx('flex min-h-0 flex-col rounded-md border border-line bg-panel', className)}>
+    <section className={cx('flex min-h-0 flex-col rounded-md border border-line bg-panel shadow-sm', className)}>
       <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
         <span className="label">{label}</span>
         {title && <h2 className="truncate text-[16px] leading-[22px] font-semibold text-text">{title}</h2>}
@@ -129,7 +129,7 @@ export function Tabs<T extends string>({
             {t.label}
             <span
               className={cx(
-                'absolute inset-x-0 -bottom-px h-0.5 bg-signal transition-opacity duration-[180ms]',
+                'absolute inset-x-0 -bottom-px h-0.5 bg-brand transition-opacity duration-[180ms]',
                 active ? 'opacity-100' : 'opacity-0',
               )}
             />
@@ -184,7 +184,7 @@ export function MetricTile({
   sub?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-line bg-panel px-4 py-3">
+    <div className="flex flex-col gap-1.5 rounded-md border border-line bg-panel px-4 py-3 shadow-sm">
       <span className="label">{label}</span>
       <div className="flex items-baseline gap-1.5">
         <span className="tnum font-mono text-[32px] leading-9 font-semibold text-text">{value}</span>
@@ -243,12 +243,12 @@ export function Logo({ className }: { className?: string }) {
   return (
     <Link to="/" className={cx('inline-flex items-center gap-2 font-mono text-[16px] font-semibold text-text', className)} aria-label="pAIr 처음으로">
       <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden>
-        <path d="M10 7v18M10 13l9 6v6" stroke="var(--color-signal)" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="10" cy="7" r="3" fill="var(--color-signal)" />
+        <path d="M10 7v18M10 13l9 6v6" stroke="var(--color-brand)" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="10" cy="7" r="3" fill="var(--color-brand)" />
         <circle cx="19" cy="25" r="3" fill="var(--color-branch-2)" />
       </svg>
       <span>
-        p<span className="text-signal">AI</span>r
+        p<span className="text-brand-gradient">AI</span>r
       </span>
     </Link>
   )

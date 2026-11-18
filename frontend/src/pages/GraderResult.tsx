@@ -18,7 +18,7 @@ export default function GraderResult() {
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-panel px-8">
         <Logo />
-        <Link to="/grader" className="text-[16px] font-semibold hover:text-signal">
+        <Link to="/grader" className="text-[16px] font-semibold hover:text-brand">
           채점 툴
         </Link>
         <span className="text-[16px] text-text-muted">실험 채점 결과</span>

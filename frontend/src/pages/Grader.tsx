@@ -31,8 +31,8 @@ const fmtRunDate = (s: string) => {
 }
 const usd = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
 const refKey = (r: GraderRef) => `${r.source}:${r.id}`
-const inputCls = 'h-9 rounded-md border border-line-strong bg-panel-raised px-3 text-[15px] text-text outline-none focus:border-signal'
-const areaCls = 'w-full rounded-md border border-line-strong bg-panel-raised p-3 font-mono text-[13px] leading-5 text-text outline-none focus:border-signal'
+const inputCls = 'h-9 rounded-md border border-line-strong bg-panel-raised px-3 text-[15px] text-text outline-none focus:border-brand'
+const areaCls = 'w-full rounded-md border border-line-strong bg-panel-raised p-3 font-mono text-[13px] leading-5 text-text outline-none focus:border-brand'
 const th = 'label h-9 px-3 text-left font-medium'
 
 function Box({ label, title, actions, children, className }: { label: string; title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
@@ -425,7 +425,7 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
                     onClick={() => pickTask(t.id)}
                     className={cx(
                       'flex items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors duration-[120ms]',
-                      on ? 'border-signal bg-signal/6' : 'border-line hover:border-line-strong hover:bg-panel-raised/60',
+                      on ? 'border-brand bg-brand-dim' : 'border-line hover:border-line-strong hover:bg-panel-raised/60',
                     )}
                   >
                     <span className="rounded-sm bg-panel-raised px-1.5 font-mono text-[11px] text-text-muted">{t.type === 'dev' ? '개발' : '비개발'}</span>
@@ -461,9 +461,9 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
                   {g.rows.map((a) => {
                     const on = picked.has(refKey(a))
                     return (
-                      <tr key={refKey(a)} onClick={() => toggle(a)} className={cx('cursor-pointer border-b border-line last:border-0', on ? 'bg-signal/6' : 'hover:bg-panel-raised/60')}>
+                      <tr key={refKey(a)} onClick={() => toggle(a)} className={cx('cursor-pointer border-b border-line last:border-0', on ? 'bg-brand-dim' : 'hover:bg-panel-raised/60')}>
                         <td className="px-3 py-2">
-                          <input type="checkbox" checked={on} onChange={() => toggle(a)} onClick={(e) => e.stopPropagation()} aria-label={`${a.label ?? a.id} 선택`} className="size-4 accent-[var(--color-signal)]" />
+                          <input type="checkbox" checked={on} onChange={() => toggle(a)} onClick={(e) => e.stopPropagation()} aria-label={`${a.label ?? a.id} 선택`} className="size-4 accent-[var(--color-brand)]" />
                         </td>
                         <td className="px-3 py-2">
                           <div className="text-[14px]">{a.label ?? <span className="font-mono">{a.id}</span>}</div>
@@ -505,7 +505,7 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
                     onClick={() => setMode(o.v)}
                     className={cx(
                       'flex flex-col items-start rounded-sm px-2.5 py-1.5 text-left transition-colors duration-[120ms]',
-                      mode === o.v ? 'bg-panel-raised text-text shadow-[inset_0_0_0_1px_var(--color-signal)]' : 'text-text-muted hover:text-text',
+                      mode === o.v ? 'bg-brand-dim text-text shadow-[inset_0_0_0_1px_var(--color-brand)]' : 'text-text-muted hover:text-text',
                     )}
                   >
                     <span className="text-[14px] font-semibold">{o.t}</span>
@@ -805,7 +805,7 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
       {m.mode === 'batch' && m.phase && <BatchPhase phase={m.phase} running={m.status === 'RUNNING'} />}
       {m.status === 'RUNNING' && (
         <div className="mx-4 mb-3 h-1 overflow-hidden rounded-full bg-line">
-          <div className="h-full bg-signal transition-[width] duration-500" style={{ width: `${(finished / Math.max(1, m.total)) * 100}%` }} />
+          <div className="h-full bg-brand-gradient transition-[width] duration-500" style={{ width: `${(finished / Math.max(1, m.total)) * 100}%` }} />
         </div>
       )}
       {m.errors.length > 0 && (
@@ -910,7 +910,7 @@ function CheckVariance({ data }: { data: { meta: GraderRun; results: GraderResul
       actions={
         <>
           <label className="flex items-center gap-1.5 text-[13px] text-text-muted">
-            <input type="checkbox" checked={onlyMoving} onChange={(e) => setOnlyMoving(e.target.checked)} className="accent-[var(--color-signal)]" /> 감점이 있거나 바뀐 것만
+            <input type="checkbox" checked={onlyMoving} onChange={(e) => setOnlyMoving(e.target.checked)} className="accent-[var(--color-brand)]" /> 감점이 있거나 바뀐 것만
           </label>
           <select className={cx(inputCls, 'h-8 text-[14px]')} value={cur[0]} onChange={(e) => setKey(e.target.value)} aria-label="응시 고르기">
             {groups.map(([k, g]) => (
