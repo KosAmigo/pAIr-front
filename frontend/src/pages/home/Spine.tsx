@@ -6,8 +6,8 @@ import { ScrollTrigger, prefersReducedMotion } from './motion'
 
 const LANE = 56 // 가지 레인 간격 (줄기에서 오른쪽으로)
 const DRAW_LINE = 0.62 // 화면 위에서 62% 지점까지 그려진다
-/** 가지는 섹션 끝까지 기다리지 않고, 갈라진 뒤 이만큼만 스크롤하면 끝까지 다 그려진다 (섹션을 보는 동안 완성되게) */
-const BRANCH_RUN = 320
+/** 가지는 섹션 끝까지 기다리지 않는다. 섹션 길이의 이 비율만큼 스크롤하면 끝까지 다 그려진다 (화면 그림을 보는 중에 완성되게) */
+const BRANCH_RATIO = 0.6
 
 type Pt = { x: number; y: number }
 type Geo = { w: number; h: number; x: number; pts: Record<string, Pt> }
@@ -39,7 +39,7 @@ const BRANCHES = [
 
 /** 가지가 다 그려지는 스크롤 위치 (문서 좌표) */
 function branchDone(a: Pt, b: Pt) {
-  return Math.min(b.y, a.y + BRANCH_RUN)
+  return a.y + (b.y - a.y) * BRANCH_RATIO
 }
 
 function branchPath(x: number, a: Pt, b: Pt) {

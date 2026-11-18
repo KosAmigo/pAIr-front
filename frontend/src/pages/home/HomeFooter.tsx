@@ -35,17 +35,19 @@ export default function HomeFooter() {
   const lenis = useLenis()
   return (
     <footer className="relative z-10 overflow-hidden border-t border-line bg-panel/70 backdrop-blur">
-      <div className="mx-auto max-w-[1264px] px-8 pt-12">
+      <div className="mx-auto max-w-[1264px] px-8 py-12">
+        {/* 한 줄: 왼쪽 워드마크와 소개, 오른쪽 링크 묶음. 워드마크가 따로 줄을 차지하지 않는다 */}
         <div className="flex flex-wrap items-start gap-x-24 gap-y-10">
-          <div className="max-w-[320px]">
-            <p className="text-[20px] leading-7 font-bold tracking-[-0.02em] text-text">
-              AI와 일하는 방식까지
-              <br />
-              평가하는 pAIr
+          <div className="max-w-[360px]">
+            <p aria-hidden className="pointer-events-none font-mono text-[length:clamp(64px,8vw,112px)] leading-[0.85] font-semibold tracking-[-0.06em] select-none">
+              <span className="text-line-strong">p</span>
+              <span className="text-brand-gradient">AI</span>
+              <span className="text-line-strong">r</span>
             </p>
-            <p className="mt-3 text-[15px] leading-6 text-text-muted">결과물과 풀이 과정을 함께 보는 AI 활용 역량 진단</p>
+            <p className="mt-5 text-[17px] leading-7 font-bold text-text">AI와 일하는 방식까지 평가하는 pAIr</p>
+            <p className="mt-1 text-[15px] leading-6 text-text-muted">결과물과 풀이 과정을 함께 보는 AI 활용 역량 진단</p>
           </div>
-          <nav aria-label="바닥글" className="ml-auto -mt-1 flex flex-wrap gap-x-20 gap-y-8">
+          <nav aria-label="바닥글" className="ml-auto flex flex-wrap gap-x-20 gap-y-8 pt-2">
             {GROUPS.map((g) => (
               <div key={g.title}>
                 <p className="text-[14px] font-bold text-text">{g.title}</p>
@@ -77,12 +79,6 @@ export default function HomeFooter() {
         </div>
       </div>
 
-      {/* 큰 워드마크: 링크 아래에 잘리지 않게 다 보인다 */}
-      <div aria-hidden className="pointer-events-none mt-12 pb-10 text-center font-mono text-[length:clamp(72px,12vw,176px)] leading-none font-semibold tracking-[-0.06em] select-none">
-        <span className="text-line-strong">p</span>
-        <span className="text-brand-gradient">AI</span>
-        <span className="text-line-strong">r</span>
-      </div>
     </footer>
   )
 }
