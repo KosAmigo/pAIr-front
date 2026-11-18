@@ -1,4 +1,8 @@
-export async function openCamera(video: HTMLVideoElement, facingMode: 'user' | 'environment') {
+export async function openCamera(
+  video: HTMLVideoElement,
+  facingMode: 'user' | 'environment',
+  size: { width: number; height: number } = { width: 640, height: 480 },
+) {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('이 브라우저에서는 카메라를 쓸 수 없습니다. HTTPS 주소로 접속했는지 확인해 주세요.')
   }
@@ -6,7 +10,7 @@ export async function openCamera(video: HTMLVideoElement, facingMode: 'user' | '
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
+      video: { facingMode, width: { ideal: size.width }, height: { ideal: size.height }, frameRate: { ideal: 30 } },
     })
   } catch (e) {
     const name = e instanceof DOMException ? e.name : ''
@@ -38,19 +42,40 @@ export function captureSnapshot(video: HTMLVideoElement, width = 320, quality = 
   return canvas.toDataURL('image/jpeg', quality)
 }
 
-/** 같은 프레임 루프를 돌리면서 매번 새 시각을 넘겨준다 */
+/**
+ * 새 영상 프레임마다 onFrame을 부른다.
+ * requestAnimationFrame은 탭이 가려지면 멈추므로(= 다른 탭으로 가면 감독도 멈춤),
+ * 가려진 동안에는 타이머로 계속 돈다 (브라우저가 느리게 줄여도 분석은 이어진다).
+ */
 export function frameLoop(video: HTMLVideoElement, onFrame: (now: number) => void): () => void {
   let stopped = false
   let lastTime = -1
+  // rAF와 타이머 중 먼저 오는 쪽이 한 번만 실행 (rAF를 걸어 둔 채 탭이 가려져도 타이머가 이어 받는다)
+  let pending = false
+  const run = () => {
+    if (!pending) return
+    pending = false
+    tick()
+  }
+  const schedule = () => {
+    if (pending) return
+    pending = true
+    if (document.visibilityState === 'hidden') {
+      setTimeout(run, 100)
+    } else {
+      requestAnimationFrame(run)
+      setTimeout(run, 250)
+    }
+  }
   const tick = () => {
     if (stopped) return
     if (video.readyState >= 2 && video.currentTime !== lastTime) {
       lastTime = video.currentTime
       onFrame(performance.now())
     }
-    requestAnimationFrame(tick)
+    schedule()
   }
-  requestAnimationFrame(tick)
+  schedule()
   return () => {
     stopped = true
   }

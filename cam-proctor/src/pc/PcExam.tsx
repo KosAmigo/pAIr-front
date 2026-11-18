@@ -1,19 +1,21 @@
 // PC 시험 화면: 노트북 정면 캠으로 고개·시선·몸통을 감시하고, 폰 캠 경고도 함께 받는다.
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
-import type { FaceLandmarker, PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
+import type { FaceLandmarker, HandLandmarker, PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import { RuleEngine } from '../rules/RuleEngine'
 import { PC_RULES, PC_THRESHOLDS, buildPcBaseline, pcConditions, type PcBaseline, type PcFeatures } from '../rules/pcRules'
 import { angleDiff } from '../rules/stats'
-import { createFaceLandmarker, createPoseLandmarker } from '../vision/models'
+import { createFaceLandmarker, createHandLandmarker, createPoseLandmarker } from '../vision/models'
 import { pcFeatures } from '../vision/features'
 import { FpsMeter, frameLoop, openCamera, stopCamera } from '../lib/camera'
 import { ProctorSocket } from '../lib/socket'
 import { VIDEO_BYTES_PER_SEC, formatBytes, toViolation } from '../lib/violation'
 import type { PeerState, PhoneStatus, Violation } from '../shared/protocol'
 import { ViolationLog } from './ViolationLog'
+import { PcCheck, type ScanFrame } from '../check/PcCheck'
+import type { CheckReport } from '../check/envChecks'
 
-type Phase = 'idle' | 'loading' | 'calibrating' | 'monitoring' | 'error'
+type Phase = 'idle' | 'loading' | 'check' | 'calibrating' | 'monitoring' | 'error'
 const CALIBRATION_MS = 3000
 const SESSION_KEY = 'cam-proctor-session'
 
@@ -28,7 +30,7 @@ export function PcExam() {
   const streamRef = useRef<MediaStream | null>(null)
   const socketRef = useRef<ProctorSocket | null>(null)
   const stopLoopRef = useRef<(() => void) | null>(null)
-  const modelsRef = useRef<{ face: FaceLandmarker; pose: PoseLandmarker } | null>(null)
+  const modelsRef = useRef<{ face: FaceLandmarker; pose: PoseLandmarker; hand: HandLandmarker } | null>(null)
   const baselineRef = useRef<PcBaseline | null>(null)
   const startedAtRef = useRef<number>(0)
 
@@ -44,6 +46,9 @@ export function PcExam() {
   const [live, setLive] = useState<Live | null>(null)
   const [calibProgress, setCalibProgress] = useState(0)
   const [, forceTick] = useState(0)
+  const [phoneReport, setPhoneReport] = useState<CheckReport | null>(null)
+  const [scanFrames, setScanFrames] = useState<ScanFrame[]>([])
+  const [pcReport, setPcReport] = useState<CheckReport | null>(null)
 
   const seenIdsRef = useRef(new Set<string>())
   const addViolation = (v: Violation) => {
@@ -73,6 +78,11 @@ export function PcExam() {
           setPhoneStatus(msg.status)
         } else if (msg.type === 'violation') {
           addViolation(msg.violation)
+        } else if (msg.type === 'scan-frame') {
+          const { source, stage, url, objects } = msg
+          setScanFrames((prev) => [...prev, { source, stage, url, objects, at: Date.now() }])
+        } else if (msg.type === 'check-report' && msg.source === 'phone') {
+          setPhoneReport(msg.report)
         }
       },
       setConnected,
@@ -100,10 +110,11 @@ export function PcExam() {
       setPhase('loading')
       if (!streamRef.current) streamRef.current = await openCamera(video, 'user')
       if (!modelsRef.current) {
-        const [face, pose] = await Promise.all([createFaceLandmarker(), createPoseLandmarker()])
-        modelsRef.current = { face, pose }
+        const [face, pose, hand] = await Promise.all([createFaceLandmarker(), createPoseLandmarker(), createHandLandmarker()])
+        modelsRef.current = { face, pose, hand }
       }
-      runCalibration()
+      // 감독 전에 환경 점검부터
+      setPhase('check')
     } catch (e) {
       setPhase('error')
       setError(e instanceof Error ? e.message : String(e))
@@ -219,8 +230,31 @@ export function PcExam() {
             )}
           </div>
 
+          {phase === 'check' && videoRef.current && streamRef.current && modelsRef.current && (
+            <PcCheck
+              video={videoRef.current}
+              stream={streamRef.current}
+              models={modelsRef.current}
+              send={(m) => socketRef.current?.send(m)}
+              phoneConnected={phone === 'connected'}
+              phoneReport={phoneReport}
+              scanFrames={scanFrames}
+              onDone={(r) => {
+                setPcReport(r)
+                runCalibration()
+              }}
+            />
+          )}
+
           {phase === 'monitoring' && (
             <button className="ghost" onClick={runCalibration}>기준 자세 다시 잡기</button>
+          )}
+
+          {pcReport && phase !== 'check' && (
+            <p className="muted small">
+              환경 점검 통과 · 주의 {pcReport.items.filter((i) => i.status === 'warn').length}건
+              {phoneReport && ` · 휴대폰 점검 ${phoneReport.passed ? '통과' : '실패'}`}
+            </p>
           )}
 
           {live && b && (

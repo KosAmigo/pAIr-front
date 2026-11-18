@@ -81,3 +81,17 @@ export async function createObjectDetector() {
     }),
   )
 }
+
+/** 환경 점검 스캔용: 사람까지 찾고, 타일로 잘라 정지 이미지 단위로 돌린다 */
+export async function createScanDetector() {
+  const fs = await getFileset()
+  return withDelegate((delegate) =>
+    ObjectDetector.createFromOptions(fs, {
+      baseOptions: { modelAssetPath: URLS.object, delegate },
+      runningMode: 'IMAGE',
+      scoreThreshold: 0.4,
+      maxResults: 10,
+      categoryAllowlist: ['person', ...OBJECT_LABELS],
+    }),
+  )
+}

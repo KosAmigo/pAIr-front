@@ -109,3 +109,40 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
 .phone-layout { display: flex; flex-direction: column; min-height: 100vh; }
 .phone-video { aspect-ratio: auto; height: 60vh; border-radius: 0; }
 .phone-panel { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+
+/* 환경 점검 */
+.check-panel { display: flex; flex-direction: column; gap: 10px; }
+.check-panel h4 { margin: 4px 0; font-size: 14px; }
+.check-prompt {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  padding: 10px 12px; border-radius: 8px; font-weight: 600; margin: 0;
+}
+.checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.check { display: flex; gap: 10px; align-items: flex-start; }
+.check-icon {
+  width: 20px; height: 20px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; color: #fff; background: var(--line);
+}
+.st-running .check-icon { background: var(--accent); animation: pulse 1s infinite; }
+.st-pass .check-icon { background: var(--ok); }
+.st-warn .check-icon { background: var(--warn); }
+.st-fail .check-icon { background: var(--bad); }
+.st-fail > div > div:first-child { color: var(--bad); }
+@keyframes pulse { 50% { opacity: 0.5; } }
+.check-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+.scan-hud { display: flex; align-items: center; gap: 16px; }
+.coverage { position: relative; width: 64px; height: 64px; flex: none; }
+.coverage span {
+  position: absolute; left: 29px; top: 26px; width: 6px; height: 12px; border-radius: 3px;
+  background: var(--line); transform-origin: 3px 6px;
+}
+.coverage span.on { background: var(--ok); }
+
+.findings { border-top: 1px solid var(--line); padding-top: 8px; }
+.finding-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.finding-grid figure { margin: 0; }
+.finding-img { position: relative; }
+.finding-img img { width: 100%; display: block; border-radius: 6px; }
+.finding-box { position: absolute; border: 2px solid var(--warn); border-radius: 3px; }

@@ -1,5 +1,5 @@
 // 휴대폰 보조 캠: 옆·뒤에서 손·팔 움직임과 다른 기기·켜진 화면을 감시한다.
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   HandLandmarker,
   HandLandmarkerResult,
@@ -18,13 +18,16 @@ import {
   type PhoneBaseline,
   type PhoneFeatures,
 } from '../rules/phoneRules'
-import { createHandLandmarker, createObjectDetector, createPoseLandmarker } from '../vision/models'
+import { createHandLandmarker, createObjectDetector, createPoseLandmarker, createScanDetector } from '../vision/models'
 import { detectedObjects, phoneFeatures } from '../vision/features'
 import { FpsMeter, frameLoop, openCamera, stopCamera } from '../lib/camera'
 import { ProctorSocket } from '../lib/socket'
 import { toViolation } from '../lib/violation'
+import { PhoneScan } from '../check/PhoneScan'
+import { requestOrientationPermission } from '../check/probes'
+import type { ClientMsg } from '../shared/protocol'
 
-type Phase = 'connecting' | 'ready' | 'loading' | 'calibrating' | 'monitoring' | 'error'
+type Phase = 'connecting' | 'ready' | 'loading' | 'scan' | 'place' | 'calibrating' | 'monitoring' | 'error'
 const CALIBRATION_MS = 3000
 const OBJECT_INTERVAL_MS = 500
 
@@ -32,6 +35,8 @@ interface Models {
   hand: HandLandmarker
   pose: PoseLandmarker
   object: ObjectDetector
+  /** 환경 점검용 (정지 이미지·타일 감지) */
+  scan: ObjectDetector
 }
 
 export function PhoneCam() {
@@ -54,6 +59,9 @@ export function PhoneCam() {
   const [lastWarning, setLastWarning] = useState('')
   const [calibProgress, setCalibProgress] = useState(0)
   const [hud, setHud] = useState({ fps: 0, hands: 0, objects: '' })
+  const [gyro, setGyro] = useState(false)
+  const scanDoneRef = useRef(false)
+  const sendMsg = useCallback((m: ClientMsg) => socketRef.current?.send(m), [])
 
   useEffect(() => {
     if (!sessionId || !token) {
@@ -108,21 +116,26 @@ export function PhoneCam() {
     const video = videoRef.current!
     setError('')
     try {
+      // 아이폰 자이로 권한은 버튼 탭 안에서 가장 먼저 받아야 한다
+      setGyro(await requestOrientationPermission())
       setPhase('loading')
       // 화면 꺼짐 방지
       await (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<unknown> } }).wakeLock
         ?.request('screen')
         .catch(() => undefined)
-      if (!streamRef.current) streamRef.current = await openCamera(video, 'environment')
+      // 작은 물체를 찾기 위해 고해상도로 연다 (분석 모델은 내부에서 줄여 쓴다)
+      if (!streamRef.current) streamRef.current = await openCamera(video, 'environment', { width: 1280, height: 720 })
       if (!modelsRef.current) {
-        const [hand, pose, object] = await Promise.all([
+        const [hand, pose, object, scan] = await Promise.all([
           createHandLandmarker(),
           createPoseLandmarker(),
           createObjectDetector(),
+          createScanDetector(),
         ])
-        modelsRef.current = { hand, pose, object }
+        modelsRef.current = { hand, pose, object, scan }
       }
-      runCalibration()
+      // 스캔을 이미 마쳤다면(배치·보정 단계 오류) 배치부터 다시
+      setPhase(scanDoneRef.current ? 'place' : 'scan')
     } catch (e) {
       setPhase('error')
       setError(e instanceof Error ? e.message : String(e))
@@ -262,9 +275,30 @@ export function PhoneCam() {
         {(phase === 'ready' || (phase === 'error' && !sessionError)) && (
           <>
             <p className="small">
-              휴대폰을 옆이나 뒤에 세워 <b>두 손, 키보드, 시험 화면</b>이 함께 보이게 놓아 주세요. 영상은 전송되지 않습니다.
+              먼저 휴대폰을 들고 방과 책상을 스캔한 뒤, 옆이나 뒤에 세워 감독을 시작합니다. 영상은 전송되지 않습니다.
             </p>
             <button onClick={start}>{phase === 'error' ? '다시 시도' : '보조 캠 시작'}</button>
+          </>
+        )}
+        {phase === 'scan' && videoRef.current && streamRef.current && modelsRef.current && (
+          <PhoneScan
+            video={videoRef.current}
+            stream={streamRef.current}
+            detector={modelsRef.current.scan}
+            gyro={gyro}
+            send={sendMsg}
+            onDone={() => {
+              scanDoneRef.current = true
+              setPhase('place')
+            }}
+          />
+        )}
+        {phase === 'place' && (
+          <>
+            <p>
+              휴대폰을 옆이나 뒤에 세워 <b>두 손, 키보드, 시험 화면</b>이 함께 보이게 놓아 주세요.
+            </p>
+            <button onClick={runCalibration}>배치 완료</button>
           </>
         )}
         {phase === 'monitoring' && (

@@ -15,6 +15,7 @@ import { WS_PATH } from '../src/shared/protocol'
 const DATA_DIR = resolve(process.cwd(), 'data')
 const SNAP_DIR = join(DATA_DIR, 'snapshots')
 const EVENTS_FILE = join(DATA_DIR, 'events.jsonl')
+const CHECKS_FILE = join(DATA_DIR, 'checks.jsonl')
 /** 개발 서버가 재시작돼도 QR(세션ID·토큰)이 계속 유효하도록 저장 */
 const SESSIONS_FILE = join(DATA_DIR, 'sessions.json')
 /** 사진 보관 기간. 기본 7일 */
@@ -72,14 +73,19 @@ function lanIps(): string[] {
   return out
 }
 
-function saveSnapshot(sessionId: string, v: Violation): string | undefined {
-  const m = v.snapshot?.match(/^data:image\/jpeg;base64,(.+)$/)
+/** JPEG data URL을 세션 폴더에 저장하고 접근 경로를 돌려준다 (보관 기간이 지나면 purge가 지움) */
+function saveJpeg(sessionId: string, dataUrl: string | undefined, name: string): string | undefined {
+  const m = dataUrl?.match(/^data:image\/jpeg;base64,(.+)$/)
   if (!m) return undefined
   const dir = join(SNAP_DIR, sessionId)
   mkdirSync(dir, { recursive: true })
-  const file = `${v.ts}-${v.source}-${v.kind}.jpg`
+  const file = `${name.replace(/[^a-z0-9_-]/gi, '_')}.jpg`
   writeFileSync(join(dir, file), Buffer.from(m[1], 'base64'))
   return `/snapshots/${sessionId}/${file}`
+}
+
+function saveSnapshot(sessionId: string, v: Violation): string | undefined {
+  return saveJpeg(sessionId, v.snapshot, `${v.ts}-${v.source}-${v.kind}`)
 }
 
 function record(session: Session, v: Violation) {
@@ -188,6 +194,21 @@ function handleConnection(ws: WebSocket, origin: (ip: string) => string) {
       session.phoneMonitoring = msg.status.calibrated
       setPhoneState(session, 'connected')
       send(session.pc, { type: 'phone-status', status: msg.status })
+      return
+    }
+
+    if (msg.type === 'scan-frame') {
+      const url = saveJpeg(session.id, msg.image, `${Date.now()}-${role}-scan-${msg.stage}`)
+      if (role === 'phone') session.lastPhoneSeen = Date.now()
+      if (url) send(session.pc, { type: 'scan-frame', source: role, stage: msg.stage, url, objects: msg.objects })
+      return
+    }
+
+    if (msg.type === 'check-report') {
+      mkdirSync(DATA_DIR, { recursive: true })
+      appendFileSync(CHECKS_FILE, JSON.stringify({ sessionId: session.id, source: role, ...msg.report }) + '\n')
+      log('환경 점검', role, msg.report.passed ? '통과' : '실패')
+      send(session.pc, { type: 'check-report', source: role, report: msg.report })
     }
   })
 
