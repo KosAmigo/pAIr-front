@@ -74,19 +74,19 @@ export default function HomeHeader() {
           <Link
             to="/console"
             title="콘솔: 과제 만들기, 시험 회차와 감독"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-panel/60 px-3 text-[15px] font-medium text-text-muted transition-colors duration-150 hover:border-line-strong hover:bg-panel-raised hover:text-text"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel"
           >
             <LayoutDashboard size={16} aria-hidden /> 콘솔
           </Link>
           <Link
             to="/entry"
-            className="hidden h-9 items-center rounded-md border border-line-strong bg-panel px-3.5 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel-raised sm:inline-flex"
+            className="hidden h-9 items-center rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel sm:inline-flex"
           >
             테스트 응시
           </Link>
           <Link
             to="/tasks"
-            className="bg-brand-gradient inline-flex h-9 items-center rounded-md px-3.5 text-[15px] font-semibold text-on-accent hover:shadow-[0_8px_24px_-6px_rgb(108_71_255/0.45)]"
+            className="bg-brand-gradient inline-flex h-9 items-center rounded-full px-4 text-[15px] font-semibold text-on-accent hover:shadow-[0_8px_24px_-6px_rgb(108_71_255/0.45)]"
           >
             자가진단 시작
           </Link>

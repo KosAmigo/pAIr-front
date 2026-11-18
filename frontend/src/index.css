@@ -14,12 +14,6 @@
   --color-text-muted: #585e73;
   --color-text-faint: #8e93a6;
   --color-on-accent: #ffffff;
-  /* 초기화면 다크 아일랜드 전용 */
-  --color-ink: #0e1020;
-  --color-ink-text: #f2f3fa;
-  --color-ink-muted: #a3a8bd;
-  --color-ink-alert: #ff5c6c;
-  --color-ink-caution: #ffb547;
 
   /* 1.2 Brand */
   --color-brand: #6c47ff;

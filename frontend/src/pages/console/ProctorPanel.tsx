@@ -264,7 +264,7 @@ function EventCard({
 /** 목업 스냅샷: 실제 사진 대신 카메라 화면 자리 */
 function SnapshotPlaceholder({ big }: { big?: boolean }) {
   return (
-    <span className={cx('flex aspect-video w-full items-center justify-center bg-ink text-ink-muted', big ? 'rounded-md' : '')}>
+    <span className={cx('flex aspect-video w-full items-center justify-center bg-panel-raised text-text-faint', big ? 'rounded-md' : '')}>
       <Camera size={big ? 32 : 16} aria-hidden />
     </span>
   )

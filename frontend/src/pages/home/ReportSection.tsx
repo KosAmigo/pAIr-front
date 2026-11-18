@@ -144,15 +144,15 @@ export default function ReportSection() {
             >
               <div className="flex items-center gap-3">
                 <span
-                  className="inline-flex size-10 items-center justify-center rounded-md"
+                  className="inline-flex size-11 shrink-0 items-center justify-center rounded-md"
                   style={{ background: `color-mix(in srgb, ${it.color} 12%, transparent)`, color: it.color }}
                 >
                   <it.icon size={22} strokeWidth={1.75} aria-hidden />
                 </span>
-                <span className="text-[17px] font-bold text-text">{it.name}</span>
+                <span className="text-[19px] font-bold text-text">{it.name}</span>
                 <span className="tnum ml-auto font-mono text-[13px] text-text-muted">{it.max}점</span>
               </div>
-              <p className="mt-3 text-[15px] leading-6 text-text-muted">{it.desc}</p>
+              <p className="mt-3 text-[16px] leading-7 text-text-muted">{it.desc}</p>
             </li>
           ))}
         </ul>
