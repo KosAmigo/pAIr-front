@@ -175,9 +175,12 @@ export default function ProctorSection() {
               <ShieldAlert size={14} aria-hidden /> 부정 의심
             </span>
           </div>
-          <p className={cx('mt-2 text-[12px] text-text-muted transition-opacity duration-500', reviewed ? 'opacity-100' : 'opacity-0')}>
-            예시테크 담당자 │ 리포트 대화와 대조 필요
-          </p>
+          {/* 판단 메모: 판단이 찍힐 때만 펼쳐진다 (미리 빈칸을 두지 않는다) */}
+          <div className={cx('grid transition-[grid-template-rows,opacity] duration-500', reviewed ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
+            <p className="overflow-hidden text-[12px] text-text-muted">
+              <span className="block pt-2">예시테크 담당자 │ 리포트 대화와 대조 필요</span>
+            </p>
+          </div>
         </div>
       </div>
 
