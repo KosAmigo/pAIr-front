@@ -21,7 +21,8 @@ export function BranchLine({
   loading?: boolean
   className?: string
 }) {
-  const id = useId()
+  // useId 값의 특수문자(«», :)는 url(#…) 안에서 깨지므로 영문·숫자만 남긴다
+  const id = `bl${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   const ref = useRef<SVGSVGElement>(null)
   const inView = useInView(ref, { once: true })
   const run = useShouldAnimate()

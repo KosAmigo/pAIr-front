@@ -1,14 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
+import { CountUp, StageSection } from '../components/fx'
+import { duration, easing } from '../lib/motion'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Clock, FileBarChart2, GitBranch, Play } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
-import { ButtonLink, MetricTile, Panel, ScoreChip, Sep, Tabs } from '../components/ui'
+import { ButtonLink, MetricTile, Panel, ScoreBar, ScoreChip, Sep, Tabs } from '../components/ui'
 import { attempts, COMPETENCIES, recommended, trend, user, type CompetencyKey } from '../data/mock'
 
 // DESIGN.md §7-2 개인 대시보드
+// 연출: 최근 총점 타일이 이 화면의 다크 무대. 지표는 카운트업, 추이 차트 선은 왼쪽에서 오른쪽으로 그려진다.
+// 페이지 스크롤이 없다는 규칙은 그대로: 연출은 transform·opacity 만 써서 높이를 바꾸지 않는다.
+
+/** 최근 총점 타일: 안쪽 다크 무대 (MetricTile 과 같은 틀) */
+function StageScoreTile({ value, delta }: { value: number; delta: number }) {
+  return (
+    <StageSection className="h-full rounded-md! shadow-md!" aria-label="최근 총점">
+      <div className="flex flex-col gap-1.5 px-4 py-3">
+        <span className="label text-stage-muted">LATEST SCORE</span>
+        <div className="flex items-baseline gap-1.5">
+          <CountUp
+            value={value}
+            className="font-mono text-[32px] leading-9 font-semibold text-stage-text [text-shadow:0_0_24px_rgb(167_139_250/0.6)]"
+          />
+          <span className="text-[14px] text-stage-muted">/100</span>
+        </div>
+        <span className="text-[14px] text-stage-muted">
+          <b className="tnum font-mono font-semibold text-stage-signal">
+            {delta >= 0 ? '+' : ''}
+            {delta}
+          </b>{' '}
+          지난 응시 대비
+        </span>
+      </div>
+    </StageSection>
+  )
+}
 
 function TrendChart() {
+  const reduce = useReducedMotion()
   const [hover, setHover] = useState<number | null>(null)
   const [hidden, setHidden] = useState<Set<CompetencyKey>>(new Set())
   // 패널 실제 크기에 맞춰 그린다 (비율 고정 축소로 글자가 작아지는 것 방지)
@@ -72,14 +103,18 @@ function TrendChart() {
             </text>
           ))}
           {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={pad.t} y2={H - pad.b} stroke="var(--color-line-strong)" />}
-          {COMPETENCIES.filter((c) => !hidden.has(c.key)).map((c) => (
+          {COMPETENCIES.filter((c) => !hidden.has(c.key)).map((c, ci) => (
             <g key={c.key}>
-              <polyline
+              {/* 선은 왼쪽에서 오른쪽으로 그려진다 (항목마다 조금씩 늦게) */}
+              <motion.polyline
                 fill="none"
                 stroke={c.color}
                 strokeWidth={2}
                 strokeLinejoin="round"
                 points={trend.map((p, i) => `${x(i)},${yy(p.scores[c.key])}`).join(' ')}
+                initial={reduce ? false : { pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: duration.crawl, ease: easing.expo, delay: 0.2 + ci * 0.06 }}
               />
               {trend.map((p, i) => (
                 <circle
@@ -145,9 +180,7 @@ function LatestBars() {
               </span>
               <span className="tnum ml-3 w-7 text-right font-mono text-[16px] font-semibold">{last[c.key]}</span>
             </div>
-            <div className="mt-1 h-1.5 rounded-full bg-panel-raised">
-              <div className="h-full rounded-full" style={{ width: `${last[c.key]}%`, background: c.color }} />
-            </div>
+            <ScoreBar value={last[c.key] / 100} color={c.color} className="mt-1" />
           </li>
         )
       })}
@@ -180,7 +213,7 @@ export default function Dashboard() {
           <MetricTile label="TOTAL ATTEMPTS" value={attempts.length + 7} unit="회" sub="최근 30일 4회" />
         </div>
         <div className="col-span-3">
-          <MetricTile label="LATEST SCORE" value={avg} unit="/100" delta={5} deltaText="지난 응시 대비" />
+          <StageScoreTile value={avg} delta={5} />
         </div>
         <div className="col-span-3">
           <MetricTile label="STRONGEST" value={<span className="font-sans text-[24px]">{sorted[0].name}</span>} sub={<span className="font-mono">{latest[sorted[0].key]}점, 상위 12%</span>} />
@@ -193,14 +226,15 @@ export default function Dashboard() {
           />
         </div>
 
-        <Panel label="SCORE TREND" title="역량 항목별 점수 추이" className="col-span-8">
+        <Panel reveal label="SCORE TREND" title="역량 항목별 점수 추이" className="col-span-8">
           <TrendChart />
         </Panel>
-        <Panel label="LATEST" title="최근 응시 항목별 점수" className="col-span-4">
+        <Panel reveal label="LATEST" title="최근 응시 항목별 점수" className="col-span-4">
           <LatestBars />
         </Panel>
 
         <Panel
+          reveal
           label="HISTORY"
           title="최근 응시 기록"
           className="col-span-8"
@@ -246,7 +280,7 @@ export default function Dashboard() {
           </table>
         </Panel>
 
-        <Panel label="RECOMMENDED" title="유형별 추천 과제" className="col-span-4" flush>
+        <Panel reveal label="RECOMMENDED" title="유형별 추천 과제" className="col-span-4" flush>
           <div className="border-b border-line px-4">
             <Tabs
               value={track}

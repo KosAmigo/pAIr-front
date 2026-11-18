@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { motion, useReducedMotion, type Variants } from 'motion/react'
 import { distance, duration, easing, stagger as staggerTok } from '../../lib/motion'
 
-type Tag = 'div' | 'section' | 'ul' | 'li' | 'header' | 'span'
+type Tag = 'div' | 'section' | 'ul' | 'li' | 'header' | 'span' | 'tbody' | 'tr'
 const VIEWPORT = { once: true, margin: '0px 0px -40px 0px' } as const
 
 /**

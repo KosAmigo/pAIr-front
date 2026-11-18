@@ -3,10 +3,16 @@ import { Link } from 'react-router-dom'
 import { FileBarChart2, GitBranch, Loader2, Play } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ButtonLink, ScoreChip, StatusDot } from '../components/ui'
+import { BranchLine, Reveal, RevealGroup, RevealItem } from '../components/fx'
+import { stagger } from '../lib/motion'
 import { api, ApiError, type AttemptStatus, type AttemptSummary } from '../api'
 import { attempts as mockAttempts } from '../data/mock'
 
 // DESIGN.md §7-2b 내 기록: 실제 응시(백엔드) 위에, 목업 예시를 아래에 둔다. 기록마다 리포트와 복기로 들어간다.
+// 연출: 표 행은 순차 등장(첫 10행), 표 안쪽은 깨끗하게. 두 묶음 사이 구분선은 BranchLine.
+
+/** 첫 10행만 순서대로 등장하고 나머지는 바로 보인다 */
+const STAGGER_ROWS = 10
 
 const statusLabel: Record<AttemptStatus, { s: 'ok' | 'check' | 'down'; t: string }> = {
   SOLVING: { s: 'check', t: '응시 중' },
@@ -21,6 +27,17 @@ const th = 'label h-9 px-4 text-left font-medium'
 
 function Score({ v }: { v?: number | null }) {
   return v == null ? <span className="font-mono text-text-faint">-</span> : <ScoreChip score={Math.round(v)} />
+}
+
+function Row({ stagger: on, children }: { stagger: boolean; children: React.ReactNode }) {
+  const cls = 'border-b border-line last:border-b-0 hover:bg-panel-raised'
+  return on ? (
+    <RevealItem as="tr" className={cls}>
+      {children}
+    </RevealItem>
+  ) : (
+    <tr className={cls}>{children}</tr>
+  )
 }
 
 export default function History() {
@@ -41,7 +58,7 @@ export default function History() {
       }
     >
       <div className="mx-auto max-w-[1440px] space-y-6 px-8 py-6">
-        <section className="rounded-md border border-line bg-panel">
+        <Reveal as="section" className="rounded-md border border-line bg-panel shadow-sm">
           <header className="flex h-10 items-center gap-3 border-b border-line px-4">
             <span className="label">MY ATTEMPTS</span>
             <span className="text-[16px] font-semibold">응시 기록</span>
@@ -73,9 +90,9 @@ export default function History() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-b border-line last:border-b-0 hover:bg-panel-raised">
+              <RevealGroup as="tbody" gap={stagger.tight}>
+                {rows.map((r, i) => (
+                  <Row key={r.id} stagger={i < STAGGER_ROWS}>
                     <td className="tnum h-11 px-4 font-mono text-text-muted">{new Date(r.startedAt).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })}</td>
                     <td className="px-4 text-[15px] text-text">{r.taskTitle}</td>
                     <td className="px-4 text-text-muted">{r.taskType === 'dev' ? '개발' : '비개발'}</td>
@@ -105,14 +122,16 @@ export default function History() {
                         </span>
                       </div>
                     </td>
-                  </tr>
+                  </Row>
                 ))}
-              </tbody>
+              </RevealGroup>
             </table>
           )}
-        </section>
+        </Reveal>
 
-        <section className="rounded-md border border-line bg-panel">
+        <BranchLine branches={[0.18]} className="text-line" />
+
+        <Reveal as="section" delay={0.1} className="rounded-md border border-line bg-panel shadow-sm">
           <header className="flex h-10 items-center gap-3 border-b border-line px-4">
             <span className="label">EXAMPLES</span>
             <span className="text-[16px] font-semibold">예시 기록</span>
@@ -128,9 +147,9 @@ export default function History() {
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {mockAttempts.map((a) => (
-                <tr key={a.id} className="border-b border-line last:border-b-0 hover:bg-panel-raised">
+            <RevealGroup as="tbody" gap={stagger.tight}>
+              {mockAttempts.map((a, i) => (
+                <Row key={a.id} stagger={i < STAGGER_ROWS}>
                   <td className="tnum h-11 px-4 font-mono text-text-muted">{a.date}</td>
                   <td className="px-4 text-[15px] text-text">
                     {a.task}
@@ -154,11 +173,11 @@ export default function History() {
                       )}
                     </div>
                   </td>
-                </tr>
+                </Row>
               ))}
-            </tbody>
+            </RevealGroup>
           </table>
-        </section>
+        </Reveal>
       </div>
     </SelfShell>
   )

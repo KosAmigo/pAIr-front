@@ -4,9 +4,11 @@ import { ArrowRight, Clock } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
 import { Sep, Tabs } from '../components/ui'
+import { RevealGroup, RevealItem, Spotlight } from '../components/fx'
 import { CATALOG, KINDS, type CatalogTask, type Track } from '../data/catalog'
 
 // DESIGN.md §7-2a 과제 목록: 직군 탭(개발 직군 / 비개발 직군) 안에서 과제 형태별 섹션을 세로로 쌓는다
+// 연출: 응시할 수 있는 카드는 호버하면 떠오르고 Spotlight 가 비친다. 카드는 순차 등장(탭을 바꾸면 다시).
 
 function TaskCard({ t }: { t: CatalogTask }) {
   const ready = !!t.start
@@ -32,11 +34,18 @@ function TaskCard({ t }: { t: CatalogTask }) {
       </div>
     </>
   )
-  const cls = 'group flex min-h-[144px] flex-col rounded-md border bg-panel p-4'
+  const cls = 'group flex min-h-[144px] w-full flex-col rounded-md border bg-panel p-4'
   return ready ? (
-    <Link to={t.start!} className={cx(cls, 'border-line transition-[border-color,box-shadow] duration-150 hover:border-brand hover:shadow-md focus-visible:border-brand')}>
+    <Spotlight
+      as={Link}
+      to={t.start!}
+      className={cx(
+        cls,
+        'border-line transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-1 hover:border-brand/60 hover:shadow-md focus-visible:border-brand',
+      )}
+    >
       {body}
-    </Link>
+    </Spotlight>
   ) : (
     <div className={cx(cls, 'border-dashed border-line opacity-70')} aria-disabled="true">
       {body}
@@ -69,7 +78,7 @@ export default function Tasks() {
             ]}
           />
         </div>
-        <div key={track} className="fade-in mt-6 space-y-8">
+        <div key={track} className="mt-6 space-y-8">
           {kinds.map((k) => (
             <section key={k.key} aria-labelledby={`kind-${k.key}`}>
               <div className="mb-3 flex items-baseline gap-3">
@@ -78,11 +87,13 @@ export default function Tasks() {
                 </h2>
                 <p className="text-[14px] text-text-muted">{k.desc}</p>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <RevealGroup className="grid grid-cols-3 gap-2">
                 {CATALOG.filter((t) => t.kind === k.key).map((t) => (
-                  <TaskCard key={t.id} t={t} />
+                  <RevealItem key={t.id} className="flex">
+                    <TaskCard t={t} />
+                  </RevealItem>
                 ))}
-              </div>
+              </RevealGroup>
             </section>
           ))}
         </div>
