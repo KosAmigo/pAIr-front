@@ -12,7 +12,8 @@ const BRANCH_RATIO = 0.6
 type Pt = { x: number; y: number }
 type Geo = { w: number; h: number; x: number; pts: Record<string, Pt> }
 
-type NodeDef = { at: string; lane: 0 | 1; color: string; label: string; time?: string; score?: number }
+/** stage: 다크 무대 섹션 안에 놓이는 노드 (라벨 글자를 stage-muted 로) */
+type NodeDef = { at: string; lane: 0 | 1; color: string; label: string; time?: string; score?: number; stage?: boolean }
 
 const NODES: NodeDef[] = [
   { at: 'hero', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:00' },
@@ -20,13 +21,13 @@ const NODES: NodeDef[] = [
   { at: 'replay-end', lane: 1, color: 'var(--color-branch-2)', label: 'b2', score: 88 },
   { at: 'report', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:31' },
   { at: 'report-end', lane: 1, color: 'var(--color-branch-3)', label: 'b3', score: 91 },
-  { at: 'live', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:42' },
-  { at: 'live-end', lane: 1, color: 'var(--color-branch-4)', label: 'b4', score: 85 },
+  { at: 'live', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:42', stage: true },
+  { at: 'live-end', lane: 1, color: 'var(--color-branch-4)', label: 'b4', score: 85, stage: true },
   { at: 'create', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:47' },
   { at: 'create-end', lane: 1, color: 'var(--color-branch-5)', label: 'b5', score: 93 },
-  { at: 'proctor', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:50' },
-  { at: 'proctor-end', lane: 1, color: 'var(--color-branch-1)', label: 'b6', score: 90 },
-  { at: 'finale', lane: 0, color: 'var(--color-brand-blue)', label: 'main', time: '00:52' },
+  { at: 'proctor', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:50', stage: true },
+  { at: 'proctor-end', lane: 1, color: 'var(--color-branch-1)', label: 'b6', score: 90, stage: true },
+  { at: 'finale', lane: 0, color: 'var(--color-brand-blue)', label: 'main', time: '00:52', stage: true },
 ]
 
 const BRANCHES = [
@@ -194,12 +195,12 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
                 <text x={29} y={4} textAnchor="middle" className="fill-on-accent font-mono text-[11px] font-semibold">
                   {n.score}
                 </text>
-                <text x={52} y={4} className="fill-text-muted font-mono text-[12px]">
+                <text x={52} y={4} className={`${n.stage ? 'fill-stage-muted' : 'fill-text-muted'} font-mono text-[12px]`}>
                   {n.label}
                 </text>
               </g>
             ) : (
-              <text x={-16} y={4} textAnchor="end" className="fill-text-muted font-mono text-[12px]">
+              <text x={-16} y={4} textAnchor="end" className={`${n.stage ? 'fill-stage-muted' : 'fill-text-muted'} font-mono text-[12px]`}>
                 {n.label === 'main' ? n.time : n.label}
               </text>
             )}

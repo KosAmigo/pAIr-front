@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, BarChart3, Bug, ClipboardCheck, FileText, FlaskConical, MessageSquareText, Search, Wrench } from 'lucide-react'
 import DemoWindow from './DemoWindow'
+import { GlowBorder, Magnetic } from '../../components/fx'
 import { Glow } from './Points'
 import { MOTION_OK, SplitText, gsap, useGSAP } from './motion'
 
@@ -94,12 +95,16 @@ export default function Hero() {
             실전 시험 전에 같은 환경에서 먼저 연습해 보세요.
           </p>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
-            <Link to="/tasks" className={pillPrimary}>
-              자가진단 시작 <ArrowRight size={18} aria-hidden />
-            </Link>
-            <Link to="/entry" className={pillSecondary}>
-              테스트 응시
-            </Link>
+            <Magnetic>
+              <Link to="/tasks" className={`btn-shimmer ${pillPrimary}`}>
+                자가진단 시작 <ArrowRight size={18} aria-hidden />
+              </Link>
+            </Magnetic>
+            <Magnetic>
+              <Link to="/entry" className={pillSecondary}>
+                테스트 응시
+              </Link>
+            </Magnetic>
           </div>
         </div>
       </div>
@@ -108,7 +113,9 @@ export default function Hero() {
       <div data-hero-demo className="relative mx-auto mt-20 w-full md:w-[min(1080px,calc(100%-160px))] [perspective:1600px]">
         <Glow />
         <div data-hero-tilt className="relative origin-[50%_0%] will-change-transform">
-          <DemoWindow />
+          <GlowBorder className="rounded-[28px]">
+            <DemoWindow />
+          </GlowBorder>
         </div>
         {FLOAT_CHIPS.map((c) => (
           <div

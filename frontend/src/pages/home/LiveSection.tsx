@@ -1,10 +1,11 @@
 // DESIGN.md §7-1 ④ 실전 시험: 입장 링크 → 녹화 시작 → 타이머 임박 → 이탈 감지 경고가 차례로 나온다.
-// 다른 섹션과 같은 밝은 화면. 빨강은 "녹화 중", "시간 임박" 같은 상태에만 쓴다.
+// 전체 폭 다크 무대(§3.6). 흰 화면 그림이 어둠 속에 떠 있다. 빨강은 "녹화 중", "시간 임박" 같은 상태에만 쓴다.
 import { useRef } from 'react'
 import { Camera, Mail, MonitorUp, ShieldAlert, TriangleAlert } from 'lucide-react'
 import SectionHead, { Grad } from './SectionHead'
 import Points, { Glow } from './Points'
 import { floatCard, mockFrame } from './homeStyles'
+import { GlowBorder, StageSection } from '../../components/fx'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
 const TOKEN = 'inv_8f3a'
@@ -54,7 +55,8 @@ export default function LiveSection() {
   )
 
   return (
-    <section ref={root} id="live" className="relative pt-40 md:pl-[160px]">
+    <section ref={root} id="live" className="relative mt-40">
+      <StageSection shape="bleed" as="div" className="pt-32 pb-40 md:pl-[160px]">
       <div data-spine="live" aria-hidden className="h-0" />
       <SectionHead
         label="LIVE EXAM"
@@ -72,6 +74,7 @@ export default function LiveSection() {
         {/* 실전 시험 화면 축소판 */}
         <div data-console className="relative" role="img" aria-label="실전 시험 화면: 입장 링크, 녹화 표시, 남은 시간 3분, 브라우저 이탈 감지 경고">
           <Glow />
+          <GlowBorder className="rounded-[28px]">
           <div className={mockFrame}>
             <div className="flex flex-wrap items-center gap-4 border-b border-line px-6 py-4">
               <span className="rounded-sm bg-alert/10 px-1.5 font-mono text-[12px] font-semibold tracking-[0.08em] text-alert">LIVE EXAM</span>
@@ -115,6 +118,7 @@ export default function LiveSection() {
               </span>
             </div>
           </div>
+          </GlowBorder>
 
           {/* 이탈 감지 경고: 다른 섹션처럼 그림 오른쪽 아래에 떠오른다 */}
           <div data-toast className={floatCard}>
@@ -132,7 +136,8 @@ export default function LiveSection() {
 
         <Points items={FEATURES} className="lg:pt-6" />
       </div>
-      <div data-spine="live-end" aria-hidden className="absolute bottom-0 left-0" />
+      <div data-spine="live-end" aria-hidden className="absolute -bottom-24 left-0" />
+      </StageSection>
     </section>
   )
 }

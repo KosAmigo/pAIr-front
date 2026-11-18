@@ -6,6 +6,7 @@ import { cx } from '../../components/cx'
 import { Logo } from '../../components/ui'
 import { UserMenu } from '../../components/UserMenu'
 import { useAuth } from '../../auth/auth'
+import { Magnetic } from '../../components/fx'
 
 export default function HomeHeader() {
   const { signedIn } = useAuth()
@@ -22,7 +23,8 @@ export default function HomeHeader() {
     <header
       className={cx(
         'sticky top-0 z-40 transition-[background-color,box-shadow,backdrop-filter] duration-200',
-        scrolled ? 'glass rounded-none! border-x-0! border-t-0!' : 'border-b border-transparent',
+        // 다크 무대 위를 지날 때도 글자 대비가 깨지지 않게 유리 불투명도를 0.85로 올린다
+        scrolled ? 'glass bg-white/85! rounded-none! border-x-0! border-t-0!' : 'border-b border-transparent',
       )}
     >
       <div className="mx-auto flex h-16 max-w-[1264px] items-center gap-6 px-8">
@@ -42,12 +44,14 @@ export default function HomeHeader() {
           >
             테스트 응시
           </Link>
-          <Link
-            to="/tasks"
-            className="bg-brand-gradient inline-flex h-9 items-center rounded-full px-4 text-[15px] font-semibold text-on-accent hover:shadow-[0_8px_24px_-6px_rgb(108_71_255/0.45)]"
-          >
-            자가진단 시작
-          </Link>
+          <Magnetic>
+            <Link
+              to="/tasks"
+              className="btn-shimmer bg-brand-gradient inline-flex h-9 items-center rounded-full px-4 text-[15px] font-semibold text-on-accent hover:shadow-[0_8px_24px_-6px_rgb(108_71_255/0.45)]"
+            >
+              자가진단 시작
+            </Link>
+          </Magnetic>
           {/* 계정: 직접 로그인하지 않았으면 로그인·회원가입, 했으면 아바타 메뉴 */}
           {signedIn ? (
             <span className="ml-1">
