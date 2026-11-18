@@ -11,6 +11,7 @@ import LiveSection from './home/LiveSection'
 import ProctorSection from './home/ProctorSection'
 import ReplaySection from './home/ReplaySection'
 import ReportSection from './home/ReportSection'
+import ShaderBackground from './home/ShaderBackground'
 import Spine from './home/Spine'
 import { LenisContext, MOTION_OK, ScrollTrigger, gsap, prefersReducedMotion, useGSAP } from './home/motion'
 
@@ -66,6 +67,7 @@ export default function Home() {
           <i />
         </div>
         <div className="home-dots" aria-hidden />
+        <ShaderBackground className="absolute inset-x-0 top-0 z-0 h-screen min-h-[720px]" />
 
         <HomeHeader />
 

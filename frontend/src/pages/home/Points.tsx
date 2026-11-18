@@ -2,20 +2,27 @@
 // 아이콘 칸 44px(brand-dim) + 제목 19px + 설명 16px, 아이콘은 왼쪽, 글은 오른쪽.
 import type { LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
+import { useOnStage } from '../../components/fx'
 
 export type Point = { icon: LucideIcon; title: string; body: string }
 
 export default function Points({ items, className }: { items: Point[]; className?: string }) {
+  const stage = useOnStage()
   return (
     <ul data-points className={cx('grid gap-8', className)}>
       {items.map((p) => (
         <li key={p.title} data-point className="flex gap-4">
-          <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-md bg-brand-dim text-brand">
+          <span
+            className={cx(
+              'inline-flex size-11 shrink-0 items-center justify-center rounded-md',
+              stage ? 'border border-stage-line bg-stage-raised text-stage-brand' : 'bg-brand-dim text-brand',
+            )}
+          >
             <p.icon size={22} strokeWidth={1.75} aria-hidden />
           </span>
           <div>
-            <p className="text-[19px] font-bold text-text">{p.title}</p>
-            <p className="mt-1 text-[16px] leading-7 text-text-muted">{p.body}</p>
+            <p className={cx('text-[19px] font-bold', stage ? 'text-stage-text' : 'text-text')}>{p.title}</p>
+            <p className={cx('mt-1 text-[16px] leading-7', stage ? 'text-stage-muted' : 'text-text-muted')}>{p.body}</p>
           </div>
         </li>
       ))}

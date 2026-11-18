@@ -5,6 +5,7 @@ import { CircleCheck, FileText, ListChecks, Loader2, ShieldCheck, Sparkles } fro
 import SectionHead, { Grad } from './SectionHead'
 import Points, { Glow } from './Points'
 import { floatCard, mockFrame } from './homeStyles'
+import { GlowBorder } from '../../components/fx'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
 const STEPS = [
@@ -73,6 +74,7 @@ export default function CreateSection() {
         {/* 콘솔 "AI로 과제 만들기" 화면 축소판 */}
         <div data-gen className="relative" role="img" aria-label="AI가 과제 설명, 작업 파일, 문항, 후속 질문, 근거 문서를 차례로 만들고 검수 대기 초안이 만들어지는 화면">
           <Glow />
+          <GlowBorder className="rounded-[28px]">
           <div className={mockFrame}>
             <div className="h-1 bg-line">
               <div data-progress className="bg-brand-gradient h-full" />
@@ -106,6 +108,7 @@ export default function CreateSection() {
               ))}
             </ol>
           </div>
+          </GlowBorder>
 
           {/* 완성된 초안 카드: 그림 오른쪽 아래에 떠오른다 */}
           <div data-draft className={floatCard}>

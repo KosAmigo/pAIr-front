@@ -248,6 +248,10 @@
     border: 1px solid rgb(255 255 255 / 0.08);
   }
 
+  /* 3.6 다크 무대 안 포커스 링 */
+  .stage-scope :focus-visible {
+    outline-color: var(--color-stage-brand);
+  }
   /* 3.6 다크 무대: 32px 도트 그리드 */
   .stage-dots {
     background-image: radial-gradient(color-mix(in srgb, var(--color-stage-line) 60%, transparent) 1px, transparent 1px);
