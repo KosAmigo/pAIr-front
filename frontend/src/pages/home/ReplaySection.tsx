@@ -1,11 +1,8 @@
-// DESIGN.md §7-1 ② 복기: 150vh 동안 고정되고 장면 3개(기록 → 되감기 → 분기)를 넘긴다 (§4.3).
-// 스크롤은 장면 번호만 정하고 그림은 시간으로 재생한다. 왼쪽 단계 3줄은 늘 보이고, 현재 장면까지 번호 칸이 켜진다.
-// 768px 미만은 고정 없이 화면에 들어오면 끝까지 한 번 재생, 움직임 줄이기는 마지막 장면으로 멈춘다. 척추 선은 여기서 b2로 갈라진다.
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+// DESIGN.md §7-1 ② 복기: 보통 섹션(2026-11-19: 화면 고정을 없앴다). 그림이 화면에 들어오면 한 번 재생된다(기록 → 되감기 → 분기).
+// 왼쪽 단계 3줄은 늘 보이고, 그림이 그 단계에 이르면 번호 칸이 켜진다. 움직임 줄이기는 마지막 장면으로 멈춘다. 척추 선은 여기서 b2로 갈라진다.
+import { useRef, useState, type CSSProperties } from 'react'
 import { cx } from '../../components/cx'
 import { GlowBorder } from '../../components/fx'
-import SceneDots from './SceneDots'
-import { STACK_OK, useScenePin } from './scenePin'
 import SectionHead, { Grad } from './SectionHead'
 import { Glow } from './Points'
 import { mockFrame } from './homeStyles'
@@ -110,21 +107,11 @@ function Visual() {
 
 export default function ReplaySection() {
   const root = useRef<HTMLElement>(null)
-  const pin = useRef<HTMLDivElement>(null)
   const tlRef = useRef<gsap.core.Timeline | null>(null)
-  const ends = useRef<number[]>([])
-  const { scene, pinned, st } = useScenePin(pin, SCENES.length, 150)
   // 연출이 꺼진 환경(움직임 줄이기)에서는 모든 단계가 켜진 마지막 장면을 보여 준다
   const [animated, setAnimated] = useState(false)
-  const [stackScene, setStackScene] = useState(-1)
-  const shown = pinned ? scene : animated ? stackScene : SCENES.length - 1
-
-  // 장면이 바뀌면 그 장면 끝까지 시간으로 재생한다 (앞으로든 뒤로든)
-  useEffect(() => {
-    const tl = tlRef.current
-    if (!tl || !pinned) return
-    tl.tweenTo(scene < 0 ? 0 : ends.current[scene], { ease: 'none' })
-  }, [scene, pinned])
+  const [step, setStep] = useState(-1)
+  const shown = animated ? step : SCENES.length - 1
 
   useGSAP(
     () => {
@@ -162,21 +149,20 @@ export default function ReplaySection() {
           .to(q('[data-chip]'), { opacity: 1, duration: 0.2, stagger: 0.08 }, 4.1)
           .to(count, { v: 1, duration: 0.6, ease: 'power2.out', onUpdate: () => scores.forEach((s) => (s.textContent = String(Math.round(Number(s.dataset.score) * count.v)))) }, 4.1)
         tlRef.current = tl
-        ends.current = [1.85, 3.25, tl.duration()]
         return () => {
           tlRef.current = null
           setAnimated(false)
         }
       })
-      // 고정 없는 좁은 화면: 들어오면 끝까지 한 번 재생하고 단계도 차례로 켠다
-      mm.add(STACK_OK, () => {
+      // 그림이 화면에 들어오면 끝까지 한 번 재생하고 단계도 차례로 켠다
+      mm.add(MOTION_OK, () => {
         ScrollTrigger.create({
           trigger: q('[data-visual]')[0],
           start: 'top 70%',
           once: true,
           onEnter: () => {
             tlRef.current?.play()
-            ;[0, 1.9, 3.3].forEach((at, i) => gsap.delayedCall(at, () => setStackScene(i)))
+            ;[0, 1.9, 3.3].forEach((at, i) => gsap.delayedCall(at, () => setStep(i)))
           },
         })
       })
@@ -187,7 +173,7 @@ export default function ReplaySection() {
   return (
     <section ref={root} id="replay" className="relative pt-40 md:pl-[160px]">
       <div data-spine="replay" aria-hidden className="h-0" />
-      <div ref={pin} className="relative">
+      <div className="relative">
       <SectionHead
         label="REPLAY"
         title={
@@ -207,7 +193,6 @@ export default function ReplaySection() {
               key={s.no}
               data-step={i}
               data-on={i <= shown}
-              aria-current={pinned && i === scene ? 'step' : undefined}
               className="group flex gap-4 opacity-45 transition-opacity duration-300 data-[on=true]:opacity-100"
             >
               <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-md bg-brand-dim font-mono text-[15px] font-semibold text-brand transition-colors duration-300 group-data-[on=true]:bg-brand group-data-[on=true]:text-on-accent">
@@ -230,7 +215,6 @@ export default function ReplaySection() {
           </GlowBorder>
         </div>
       </div>
-      {pinned && <SceneDots count={SCENES.length} scene={scene} st={st} labels={SCENES.map((s) => s.title)} className="absolute right-0 -bottom-12" />}
       </div>
       <div data-spine="replay-end" aria-hidden className="absolute bottom-0 left-0" />
     </section>

@@ -6,8 +6,11 @@ import { ScrollTrigger, prefersReducedMotion } from './motion'
 
 const LANE = 56 // 가지 레인 간격 (줄기에서 오른쪽으로)
 const DRAW_LINE = 0.62 // 화면 위에서 62% 지점까지 그려진다
-/** 가지는 섹션 끝까지 기다리지 않는다. 섹션 길이의 이 비율만큼 스크롤하면 끝까지 다 그려진다 (화면 그림을 보는 중에 완성되게) */
-const BRANCH_RATIO = 0.6
+/**
+ * 가지는 섹션 끝 노드에 닿을 때 다 그려진다 (2026-11-19: 0.6 은 너무 빨리 찼다).
+ * 줄기와 같은 속도로 차오르므로 가지 게이지가 섹션을 읽는 동안 천천히 늘어난다.
+ */
+const BRANCH_RATIO = 1
 
 type Pt = { x: number; y: number }
 type Geo = { w: number; h: number; x: number; pts: Record<string, Pt> }
