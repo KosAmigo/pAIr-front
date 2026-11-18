@@ -25,7 +25,7 @@ const poly = (f: (i: number) => number) => ITEMS.map((_, i) => pt(i, f(i)).join(
 
 function Radar({ hover }: { hover: string | null }) {
   return (
-    <svg viewBox="0 0 440 420" className="w-full max-w-[480px]" role="img" aria-label={`6가지 역량 점수 레이더 차트, 총점 ${TOTAL}점`}>
+    <svg viewBox="0 0 440 420" className="w-full max-w-[360px]" role="img" aria-label={`6가지 역량 점수 레이더 차트, 총점 ${TOTAL}점`}>
       {[1, 2 / 3, 1 / 3].map((k) => (
         <polygon key={k} points={poly(() => R * k)} fill={k === 1 ? 'var(--color-panel)' : 'none'} stroke="var(--color-line)" strokeWidth={1} />
       ))}
@@ -130,7 +130,7 @@ export default function ReportSection() {
       <div className="mt-16 grid items-center gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div data-radar className="relative flex justify-center">
           <Glow />
-          <div className="relative w-full max-w-[480px]">
+          <div className="relative flex w-full max-w-[360px] justify-center">
             <Radar hover={hover} />
           </div>
         </div>
@@ -142,21 +142,21 @@ export default function ReportSection() {
               onMouseEnter={() => setHover(it.key)}
               onMouseLeave={() => setHover(null)}
               className={cx(
-                'glass rounded-2xl p-5 transition-[transform,box-shadow] duration-200',
+                'glass rounded-2xl px-4 py-3.5 transition-[transform,box-shadow] duration-200',
                 hover === it.key && '-translate-y-1 shadow-md',
               )}
             >
               <div className="flex items-center gap-3">
                 <span
-                  className="inline-flex size-11 shrink-0 items-center justify-center rounded-md"
+                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-md"
                   style={{ background: `color-mix(in srgb, ${it.color} 12%, transparent)`, color: it.color }}
                 >
-                  <it.icon size={22} strokeWidth={1.75} aria-hidden />
+                  <it.icon size={18} strokeWidth={1.75} aria-hidden />
                 </span>
-                <span className="text-[19px] font-bold text-text">{it.name}</span>
+                <span className="text-[17px] font-bold text-text">{it.name}</span>
                 <span className="tnum ml-auto font-mono text-[13px] text-text-muted">{it.max}점</span>
               </div>
-              <p className="mt-3 text-[16px] leading-7 text-text-muted">{it.desc}</p>
+              <p className="mt-2 text-[15px] leading-6 text-text-muted">{it.desc}</p>
             </li>
           ))}
         </ul>

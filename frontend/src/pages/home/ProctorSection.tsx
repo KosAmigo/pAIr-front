@@ -16,7 +16,6 @@ const ST: Record<St, { label: string; dot: string; text: string }> = {
   lost: { label: '연결 끊김', dot: 'bg-alert', text: 'text-alert' },
 }
 const PEOPLE: { name: string; st: St; turns: number; ev: number }[] = [
-  { name: '오세린', st: 'solving', turns: 7, ev: 0 },
   { name: '윤태호', st: 'solving', turns: 4, ev: 1 },
   { name: '강다은', st: 'followup', turns: 9, ev: 0 },
   { name: '서준혁', st: 'lost', turns: 2, ev: 1 },
@@ -26,8 +25,8 @@ const FEED = [
   { who: '윤태호', what: '탭 전환', cam: false, at: '14:09:12' },
   { who: '서준혁', what: '얼굴 없음', cam: true, at: '14:17:40' },
   { who: '임채원', what: '외부 붙여넣기', cam: false, at: '14:21:03' },
-  { who: '오세린', what: '고개 돌림', cam: true, at: '14:23:55' },
-  { who: '강다은', what: '창 이탈', cam: false, at: '14:26:18' },
+  { who: '임채원', what: '고개 돌림', cam: true, at: '14:23:55' },
+  { who: '윤태호', what: '창 이탈', cam: false, at: '14:26:18' },
 ]
 
 const POINTS = [
@@ -74,15 +73,15 @@ export default function ProctorSection() {
   // 장면에 따라 바뀌는 값
   const feed = FEED.slice(0, Math.min(FEED.length, step + 1)).reverse()
   const people = PEOPLE.map((p, i) => {
-    if (i === 2 && step >= 3) return { ...p, st: 'submitted' as St }
-    if (i === 3 && step >= 2) return { ...p, st: 'solving' as St }
+    if (i === 1 && step >= 3) return { ...p, st: 'submitted' as St }
+    if (i === 2 && step >= 2) return { ...p, st: 'solving' as St }
     return { ...p, turns: p.turns + Math.floor((step + i) / 3), ev: p.ev + (FEED.slice(0, step + 1).filter((f) => f.who === p.name).length > p.ev ? 1 : 0) }
   })
   const reviewed = step >= FEED.length
   const left = 35 * 60 - step * 37
 
   return (
-    <section ref={root} id="proctor" className="relative pt-40 pb-32 md:pl-[160px]">
+    <section ref={root} id="proctor" className="relative pt-40 pb-12 md:pl-[160px]">
       <div data-spine="proctor" aria-hidden className="h-0" />
       <SectionHead
         label="PROCTOR"
@@ -96,28 +95,29 @@ export default function ProctorSection() {
         lead="기업 담당자는 콘솔에서 회차를 열고, 시험 중에는 실시간 현황을, 끝나면 응시자별 리포트와 감독 기록을 봅니다."
       />
 
+      <div className="mt-16 grid items-start gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       {/* 콘솔 실시간 현황 축소판 */}
-      <div ref={board} data-board className="relative mt-16" role="img" aria-label="감독관 콘솔: 응시자 상태 표, 남은 시간, 감독 이벤트 피드, 이벤트에 부정 의심 판단을 남기는 카드">
+      <div ref={board} data-board className="relative" role="img" aria-label="감독관 콘솔: 응시자 상태 표, 남은 시간, 최신 감독 이벤트, 이벤트에 부정 의심 판단을 남기는 카드">
         <Glow />
         <div className={mockFrame}>
-          <div className="flex flex-wrap items-center gap-4 border-b border-line px-6 py-4">
+          <div className="flex items-center gap-3 border-b border-line px-6 py-4">
             <span className="inline-flex h-[22px] items-center gap-1.5 rounded-sm bg-alert/10 px-2 text-[12px] font-semibold text-alert">
               <i className="rec-pulse size-1.5 rounded-full bg-alert" aria-hidden /> 진행 중
             </span>
-            <span className="text-[16px] font-bold text-text">2026 하반기 백엔드 경력 실전 2차</span>
-            <span className="tnum ml-auto font-mono text-[28px] leading-none font-semibold text-text">
+            <span className="min-w-0 truncate text-[15px] font-semibold text-text">2026 하반기 백엔드 경력 실전 2차</span>
+            <span className="tnum ml-auto font-mono text-[22px] leading-none font-semibold text-text">
               00:{String(Math.floor(left / 60)).padStart(2, '0')}:{String(left % 60).padStart(2, '0')}
             </span>
           </div>
 
-          <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div>
             <table className="w-full text-[14px]">
               <thead>
                 <tr className="h-10 border-b border-line text-left text-[13px] font-semibold text-text-muted">
                   <th className="px-6 font-semibold">이름</th>
                   <th className="px-4 font-semibold">상태</th>
                   <th className="px-4 text-right font-semibold">AI 질문</th>
-                  <th className="px-6 text-right font-semibold">감독 이벤트</th>
+                  <th className="px-6 text-right font-semibold">이벤트</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,21 +139,14 @@ export default function ProctorSection() {
               </tbody>
             </table>
 
-            <div className="border-line max-lg:border-t lg:border-l">
-              <div className="flex h-10 items-center border-b border-line px-4 text-[13px] font-semibold text-text-muted">이벤트 피드</div>
-              <ol className="h-[200px] overflow-hidden">
-                {feed.map((f, i) => (
-                  <li key={f.at} className={cx('flex items-start gap-3 border-b border-line px-4 py-3 transition-colors duration-700', i === 0 && step < FEED.length && 'bg-brand-dim')}>
-                    <i className={cx('mt-1.5 size-2 shrink-0', f.cam ? 'rounded-full bg-alert' : 'rotate-45 bg-caution')} aria-hidden />
-                    <span>
-                      <span className="block text-[14px] text-text">
-                        <b className="font-semibold">{f.who}</b> {f.what}
-                      </span>
-                      <span className="tnum font-mono text-[12px] text-text-muted">{f.at}</span>
-                    </span>
-                  </li>
-                ))}
-              </ol>
+            {/* 최신 감독 이벤트 한 줄: 새 이벤트가 들어오면 바뀌며 잠깐 강조된다 */}
+            <div key={feed[0].at} className={cx('flex items-center gap-3 border-t border-line px-6 py-3 transition-colors duration-700', step < FEED.length ? 'bg-brand-dim' : 'bg-panel-sunken')}>
+              <span className="text-[13px] font-semibold text-text-muted">최신 이벤트</span>
+              <i className={cx('size-2 shrink-0', feed[0].cam ? 'rounded-full bg-alert' : 'rotate-45 bg-caution')} aria-hidden />
+              <span className="min-w-0 truncate text-[14px] text-text">
+                <b className="font-semibold">{feed[0].who}</b> {feed[0].what}
+              </span>
+              <span className="tnum ml-auto font-mono text-[12px] text-text-muted">{feed[0].at}</span>
             </div>
           </div>
         </div>
@@ -188,9 +181,10 @@ export default function ProctorSection() {
         </div>
       </div>
 
-      <Points items={POINTS} className="mt-24 md:grid-cols-3" />
-      <div data-spine="proctor-end" aria-hidden className="absolute bottom-24 left-0" />
-      <div data-spine="finale" aria-hidden className="mt-24 h-0" />
+      <Points items={POINTS} className="lg:pt-6" />
+      </div>
+      <div data-spine="proctor-end" aria-hidden className="absolute bottom-12 left-0" />
+      <div data-spine="finale" aria-hidden className="mt-16 h-0" />
     </section>
   )
 }
