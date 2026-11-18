@@ -6,6 +6,8 @@ import { ScrollTrigger, prefersReducedMotion } from './motion'
 
 const LANE = 56 // 가지 레인 간격 (줄기에서 오른쪽으로)
 const DRAW_LINE = 0.62 // 화면 위에서 62% 지점까지 그려진다
+/** 가지는 섹션 끝까지 기다리지 않고, 갈라진 뒤 이만큼만 스크롤하면 끝까지 다 그려진다 (섹션을 보는 동안 완성되게) */
+const BRANCH_RUN = 320
 
 type Pt = { x: number; y: number }
 type Geo = { w: number; h: number; x: number; pts: Record<string, Pt> }
@@ -34,6 +36,11 @@ const BRANCHES = [
   { from: 'create', to: 'create-end', color: 'var(--color-branch-5)' },
   { from: 'proctor', to: 'proctor-end', color: 'var(--color-branch-1)' },
 ]
+
+/** 가지가 다 그려지는 스크롤 위치 (문서 좌표) */
+function branchDone(a: Pt, b: Pt) {
+  return Math.min(b.y, a.y + BRANCH_RUN)
+}
 
 function branchPath(x: number, a: Pt, b: Pt) {
   return `M ${x} ${a.y} L ${x + LANE} ${a.y + LANE} L ${x + LANE} ${b.y}`
@@ -155,7 +162,7 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
                 key={b.to}
                 data-draw
                 data-y0={pts[b.from].y}
-                data-y1={pts[b.to].y}
+                data-y1={branchDone(pts[b.from], pts[b.to])}
                 d={branchPath(x, pts[b.from], pts[b.to])}
                 stroke={b.color}
                 strokeWidth={2.5}
@@ -174,7 +181,7 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
           <g
             key={n.at}
             data-node
-            data-y={p.y}
+            data-y={n.lane === 1 ? branchDone(pts[BRANCHES.find((b) => b.to === n.at)!.from], p) : p.y}
             data-on="false"
             className="spine-node"
             transform={`translate(${nx} ${p.y})`}

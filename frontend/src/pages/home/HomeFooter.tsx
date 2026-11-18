@@ -59,12 +59,12 @@ export default function HomeFooter() {
                             e.preventDefault()
                             scrollToId(lenis, l.anchor)
                           }}
-                          className="text-[15px] text-text-muted transition-colors hover:text-brand"
+                          className="text-[15px] text-text-muted transition-colors duration-150 hover:text-text"
                         >
                           {l.label}
                         </a>
                       ) : (
-                        <Link to={l.to} className="text-[15px] text-text-muted transition-colors hover:text-brand">
+                        <Link to={l.to} className="text-[15px] text-text-muted transition-colors duration-150 hover:text-text">
                           {l.label}
                         </Link>
                       )}

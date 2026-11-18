@@ -109,24 +109,18 @@ export default function CreateSection() {
 
           {/* 완성된 초안 카드: 그림 오른쪽 아래에 떠오른다 */}
           <div data-draft className={floatCard}>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-[22px] items-center gap-1.5 rounded-sm bg-caution/10 px-2 text-[12px] font-semibold text-caution">
-                <i className="size-1.5 rounded-full bg-caution" aria-hidden /> 검수 대기
+            <div className="flex gap-3">
+              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-caution/10 text-caution">
+                <FileText size={18} aria-hidden />
               </span>
-              <span className="font-mono text-[12px] text-text-muted">incident-ai512</span>
+              <div className="min-w-0">
+                <p className="text-[15px] font-bold text-text">주문 처리 장애 원인 분석</p>
+                <p className="tnum font-mono text-[12px] text-text-muted">검수 대기 │ 파일 6 │ 문항 3</p>
+              </div>
             </div>
-            <p className="mt-2 text-[17px] font-bold text-text">주문 처리 장애 원인 분석</p>
-            <div className="mt-3 flex gap-4 text-[13px] text-text-muted">
-              <span className="inline-flex items-center gap-1">
-                <FileText size={14} aria-hidden /> 파일 6
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <ListChecks size={14} aria-hidden /> 문항 3
-              </span>
-              <span className="inline-flex items-center gap-1 text-signal">
-                <CircleCheck size={14} aria-hidden /> 공개 전 점검 통과
-              </span>
-            </div>
+            <p className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-signal">
+              <CircleCheck size={14} aria-hidden /> 공개 전 점검 통과
+            </p>
           </div>
         </div>
       </div>
