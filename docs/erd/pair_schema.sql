@@ -48,7 +48,7 @@ CREATE TABLE tasks (
     category        VARCHAR(30)  NOT NULL,
     difficulty      VARCHAR(10)  NOT NULL,
     time_limit_min  INT          NOT NULL,
-    status          VARCHAR(20)  NOT NULL DEFAULT 'CLOSED' CHECK (status IN ('OPEN', 'COMING_SOON', 'CLOSED')),
+    status          VARCHAR(20)  NOT NULL DEFAULT 'CLOSED' CHECK (status IN ('OPEN', 'CLOSED')),
     parent_task_id  BIGINT       REFERENCES tasks (task_id),
     created_by      BIGINT       NOT NULL REFERENCES users (user_id),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -67,7 +67,7 @@ COMMENT ON COLUMN tasks.track IS '직군(DEV/BIZ)';
 COMMENT ON COLUMN tasks.category IS '과제 형태';
 COMMENT ON COLUMN tasks.difficulty IS '난이도';
 COMMENT ON COLUMN tasks.time_limit_min IS '제한 시간(분)';
-COMMENT ON COLUMN tasks.status IS '상태(OPEN 공개/COMING_SOON 준비 중/CLOSED 숨김)';
+COMMENT ON COLUMN tasks.status IS '상태(OPEN 공개/CLOSED 숨김)';
 COMMENT ON COLUMN tasks.parent_task_id IS '복제 원본 과제 ID';
 COMMENT ON COLUMN tasks.created_by IS '만든 관리자 회원 ID';
 COMMENT ON COLUMN tasks.created_at IS '생성 시각';
