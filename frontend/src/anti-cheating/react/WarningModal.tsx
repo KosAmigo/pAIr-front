@@ -29,7 +29,7 @@ export function WarningModal({ violation, count, onClose }: { violation: Violati
         <div className="p-6">
           <h2 id="anti-cheating-title" className="text-h2 font-semibold">시험 화면 이탈이 감지됐습니다</h2>
           <p className="mt-2 text-[15px] leading-6 text-text-muted">감지 유형: {types.map((type) => LABELS[type]).join(', ')}</p>
-          <p className="mt-3 font-mono text-[13px] text-text-faint">누적 {count}회 · 발생 {formatTime(violation.occurredAt)}</p>
+          <p className="mt-3 font-mono text-[13px] text-text-faint">누적 {count}회 │ 발생 {formatTime(violation.occurredAt)}</p>
           <p className="mt-4 text-[13px] leading-5 text-text-faint">브라우저 상태 변화 기록이며, 이 기록만으로 부정행위를 확정하지 않습니다.</p>
         </div>
         <footer className="flex justify-end border-t border-line px-6 py-4">

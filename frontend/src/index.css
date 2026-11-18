@@ -308,6 +308,11 @@
   .env-scan {
     animation: env-scan 2.4s ease-in-out infinite alternate;
   }
+  /* 집중 무대(응시 화면): 버튼의 빛 쓸림 같은 꾸밈 연출을 끄고 호버 색 변화만 남긴다 */
+  .focus-stage .btn-shimmer::after {
+    display: none;
+  }
+
   /* 3.6 다크 무대 안 포커스 링 */
   .stage-scope :focus-visible {
     outline-color: var(--color-stage-brand);

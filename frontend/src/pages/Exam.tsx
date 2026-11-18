@@ -406,7 +406,8 @@ export default function Exam() {
   const source = useMemo(() => fileContents[active] ?? `# ${active}\n`, [active])
 
   return (
-    <div className="flex h-full flex-col bg-bg">
+    // 집중 무대(DESIGN.md §0-1, §7-3): 들어올 때 짧은 페이드만, 꾸밈 연출은 focus-stage 로 끈다
+    <div className="focus-stage fade-in flex h-full flex-col bg-bg">
       <StatusBar
         mode={mode}
         title={task.title}
