@@ -49,12 +49,15 @@ export function ScoreHero({
   return (
     <StageSection className="col-span-12" aria-label="총점 요약">
       <Particles fire={fire} origin={{ x: 0.78, y: 0.32 }} />
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-10 px-10 py-9">
+      {/* 좁은 자리(콘솔 응시자 상세 등)에서는 제목을 위로, 레이더와 총점을 아래 한 줄로 (컨테이너 폭 기준) */}
+      <div className="@container">
+      <div className="grid items-center gap-6 px-7 py-7 @4xl:grid-cols-[minmax(0,1fr)_auto] @4xl:gap-10 @4xl:px-10 @4xl:py-9">
         <Reveal>
           <span className="label text-stage-brand">{kind}</span>
           <h2 className="mt-2 text-[30px] leading-10 font-bold tracking-[-0.02em] text-stage-text">{title}</h2>
           <div className="tnum mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[14px] text-stage-muted">{meta}</div>
         </Reveal>
+        <div className="flex flex-wrap items-center justify-between gap-6 @4xl:flex-nowrap @4xl:gap-10">
         <ScoreRadar items={items} size={240} />
         <div className="flex flex-col items-end">
           <span className="label text-stage-muted">TOTAL SCORE</span>
@@ -67,6 +70,8 @@ export function ScoreHero({
           </div>
           {aside && <div className="mt-1 text-[14px] text-stage-muted">{aside}</div>}
         </div>
+        </div>
+      </div>
       </div>
     </StageSection>
   )

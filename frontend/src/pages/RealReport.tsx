@@ -115,7 +115,8 @@ function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number
   )
 }
 
-export function ReportView({ r }: { r: Report }) {
+/** bare: 콘솔 응시자 상세처럼 다른 화면 안에 넣을 때 바깥 여백을 뺀다. 좁은 자리에서는 대화 기록과 옆 패널을 위아래로 쌓는다(컨테이너 폭 기준) */
+export function ReportView({ r, bare }: { r: Report; bare?: boolean }) {
   const [selected, setSelected] = useState<number | null>(null)
   const showTurn = (t: number) => {
     setSelected(t)
@@ -123,7 +124,8 @@ export function ReportView({ r }: { r: Report }) {
   }
   const tokens = Object.entries(r.tokens ?? {})
   return (
-    <div className="mx-auto grid max-w-[1440px] grid-cols-12 gap-2 p-8">
+    <div className="@container">
+    <div className={cx('mx-auto grid max-w-[1440px] grid-cols-12 gap-2', !bare && 'p-8')}>
       <ScoreHero
         kind={r.taskType === 'dev' ? 'DEV TASK' : 'BIZ TASK'}
         title={r.taskTitle}
@@ -182,7 +184,7 @@ export function ReportView({ r }: { r: Report }) {
         })}
       />
 
-      <Panel reveal label="TRANSCRIPT" title="AI 대화 기록" className="col-span-7" bodyClassName="max-h-[720px] overflow-auto space-y-2">
+      <Panel reveal label="TRANSCRIPT" title="AI 대화 기록" className="col-span-12 @5xl:col-span-7" bodyClassName="max-h-[720px] overflow-auto space-y-2">
         {r.transcript.length === 0 ? (
           <p className="text-[15px] text-text-muted">AI와 나눈 대화가 없습니다.</p>
         ) : (
@@ -190,7 +192,7 @@ export function ReportView({ r }: { r: Report }) {
         )}
       </Panel>
 
-      <div className="col-span-5 flex flex-col gap-2">
+      <div className="col-span-12 flex flex-col gap-2 @5xl:col-span-5">
         {r.r2KeyTurns && r.r2KeyTurns.length > 0 && (
           <Panel reveal label="R1 REPLAY" title="재현성: 다시 실행 판정">
             <ul className="space-y-3">
@@ -262,6 +264,7 @@ export function ReportView({ r }: { r: Report }) {
           )}
         </Panel>
       </div>
+    </div>
     </div>
   )
 }

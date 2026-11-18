@@ -3,6 +3,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, Check, Eye, EyeOff, GitBranch, ShieldCheck, Sparkles, TriangleAlert, User } from 'lucide-react'
+import { CheckMark } from '../components/CheckMark'
 import { cx } from '../components/cx'
 import { Button, Logo } from '../components/ui'
 import { Aurora, Glass, GlowBorder, GradientText, Reveal, StageSection } from '../components/fx'
@@ -277,8 +278,9 @@ export function Signup() {
             </li>
           ))}
         </ul>
-        <label className="flex items-start gap-2 text-[14px] text-text">
-          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 size-4 accent-[var(--color-brand)]" />
+        <label className={cx('flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-[14px] text-text transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand/40', agree ? 'border-brand/50 bg-brand-dim' : 'border-line bg-panel hover:border-line-strong')}>
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="sr-only" />
+          <CheckMark on={agree} />
           서비스 이용약관과 개인정보 처리방침에 동의합니다
         </label>
         <Button type="submit" variant="primary" size="lg" className="mt-2 w-full" disabled={!valid}>

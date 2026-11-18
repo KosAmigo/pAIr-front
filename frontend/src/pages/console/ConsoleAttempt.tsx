@@ -42,7 +42,7 @@ export default function ConsoleAttempt() {
   const loaded = report && report.file === p.reportFile ? report.r : undefined
 
   return (
-    <div className="grid items-start gap-6 p-8 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
+    <div className="grid items-start gap-6 p-8 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0">
         {/* 2026-11-19 개편: 유리 머리 카드. 아래 리포트 본문이 이 화면의 다크 무대(ScoreHero)를 가진다 */}
         <Glass className="mb-4 flex items-center gap-4 rounded-xl px-5 py-4">
@@ -65,7 +65,7 @@ export default function ConsoleAttempt() {
             <Loader2 size={18} className="animate-spin text-brand" aria-hidden /> 리포트를 불러오는 중
           </p>
         ) : loaded ? (
-          <ReportView r={loaded} />
+          <ReportView r={loaded} bare />
         ) : (
           <p className="py-16 text-center text-[14px] text-alert">리포트를 찾을 수 없습니다.</p>
         )}

@@ -130,6 +130,10 @@
 }
 
 @layer base {
+  /* 밝은 테마만 쓴다(DESIGN.md §1). OS가 다크 모드여도 체크 상자·선택 상자·스크롤바 같은 기본 컨트롤을 밝게 그린다 */
+  html {
+    color-scheme: light;
+  }
   html,
   body,
   #root {

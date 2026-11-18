@@ -1,3 +1,4 @@
+import { ErrorState } from '../components/ErrorState'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
@@ -30,7 +31,7 @@ export default function GraderResult() {
         </span>
       </header>
       <main className="relative z-10 min-h-0 flex-1 overflow-auto">
-        {err && <p className="m-8 text-[15px] text-alert">{err}</p>}
+        {err && <ErrorState message={err} className="mt-16" />}
         {!r && !err && (
           <p className="m-8 flex items-center gap-2 text-text-muted">
             <Loader2 size={16} className="animate-spin" aria-hidden /> 불러오는 중

@@ -57,13 +57,13 @@ export function CompetencyCards({ items, label = 'BREAKDOWN', title = '항목별
   const [open, setOpen] = useState<string | null>(null)
   const sel = items.find((i) => i.key === open)
   return (
-    <section className="col-span-12" aria-label={title}>
+    <section className="@container col-span-12" aria-label={title}>
       <div className="mb-3 flex items-baseline gap-3">
         <span className="label">{label}</span>
         <h2 className="text-h2 font-semibold text-text">{title}</h2>
         <span className="text-[13px] text-text-muted">카드를 누르면 감점 근거가 펼쳐집니다</span>
       </div>
-      <RevealGroup className="grid grid-cols-3 gap-3">
+      <RevealGroup className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @5xl:grid-cols-3">
         {items.map((it) => {
           const on = open === it.key
           return (
