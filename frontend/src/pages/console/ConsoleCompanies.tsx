@@ -6,7 +6,7 @@ import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
-import { Reveal } from '../../components/fx'
+import { CountUp, Reveal, StageSection } from '../../components/fx'
 import { ConsoleHero, HeroSep } from './ConsoleHero'
 import { approveInquiry, rejectInquiry, useInquiries } from '../../data/inquiries'
 import {
@@ -20,6 +20,7 @@ import {
   useSessions,
   type Company,
   type Manager,
+  type SessionPhase,
 } from '../../data/consoleSessions'
 import { ConfirmModal, Modal, RowMenu } from './common'
 import { fmtHm, fmtShort, fmtTime, useToast } from './format'
@@ -46,6 +47,55 @@ function ErrorLine({ text }: { text: string | null }) {
   ) : null
 }
 
+/** 이름의 마지막 낱말 첫 글자 (예: "예시테크 담당자" → 담) */
+const initial = (name: string) => name.trim().split(/\s+/).pop()!.slice(0, 1)
+
+/** 담당자 이니셜 겹침 (최대 3명 + 나머지 수) */
+function AvatarStack({ names }: { names: string[] }) {
+  if (names.length === 0) return <span className="text-[13px] text-text-faint">없음</span>
+  return (
+    <span className="inline-flex items-center" aria-label={`담당자 ${names.length}명`}>
+      {names.slice(0, 3).map((n, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="-ml-2 inline-flex size-8 items-center justify-center rounded-full border-2 border-panel bg-brand-dim text-[13px] font-bold text-brand first:ml-0"
+        >
+          {initial(n)}
+        </span>
+      ))}
+      {names.length > 3 && <span className="tnum ml-1.5 font-mono text-[12px] text-text-muted">+{names.length - 3}</span>}
+    </span>
+  )
+}
+
+/** 회사 회차를 단계별 칸으로: 진행 중(alert, 맥동) │ 예정(info) │ 종료(line-strong). 글자도 같이 적는다 */
+function PhaseBar({ phases }: { phases: SessionPhase[] }) {
+  const n = { live: 0, upcoming: 0, ended: 0 }
+  phases.forEach((p) => n[p]++)
+  if (phases.length === 0) return <span className="text-[13px] text-text-faint">아직 없음</span>
+  const order: SessionPhase[] = ['live', 'upcoming', 'ended']
+  return (
+    <span className="flex items-center gap-3">
+      <span className="flex h-2.5 w-28 overflow-hidden rounded-full bg-panel-raised" aria-hidden>
+        {order.flatMap((p) =>
+          Array.from({ length: n[p] }, (_, i) => (
+            <span
+              key={p + i}
+              className={cx('h-full flex-1 border-r-2 border-panel last:border-0', p === 'live' ? 'rec-pulse bg-alert' : p === 'upcoming' ? 'bg-info' : 'bg-line-strong')}
+            />
+          )),
+        )}
+      </span>
+      <span className="flex gap-2 text-[12px]">
+        {n.live > 0 && <span className="font-semibold text-alert">진행 중 {n.live}</span>}
+        {n.upcoming > 0 && <span className="font-semibold text-info">예정 {n.upcoming}</span>}
+        <span className="text-text-muted">종료 {n.ended}</span>
+      </span>
+    </span>
+  )
+}
+
 // ── 목록 ──
 export default function ConsoleCompanies() {
   const companies = useCompanies()
@@ -63,7 +113,7 @@ export default function ConsoleCompanies() {
       <div className="px-8 pt-6">
         <InquiryInbox />
       </div>
-      <div className="p-8">
+      <div className="p-8 pt-6">
         <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
           {companies.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
@@ -75,7 +125,7 @@ export default function ConsoleCompanies() {
               <thead>
                 <tr className="h-10 border-b border-line text-left">
                   {['회사', '사업자등록번호', '담당자', '회차', '등록 시각', ''].map((h, i) => (
-                    <th key={i} className={cx('px-4 text-[13px] font-semibold text-text-muted', (i === 2 || i === 3) && 'text-right')}>
+                    <th key={i} className="px-4 text-[13px] font-semibold text-text-muted">
                       {h}
                     </th>
                   ))}
@@ -84,20 +134,22 @@ export default function ConsoleCompanies() {
               <tbody className="fx-rows">
                 {companies.map((c) => {
                   const mine = sessions.filter((s) => s.companyId === c.id)
-                  const live = mine.filter((s) => phaseOf(s) === 'live').length
                   return (
-                    <tr key={c.id} onClick={() => nav(`/console/companies/${c.id}`)} className="h-14 cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised">
+                    <tr key={c.id} onClick={() => nav(`/console/companies/${c.id}`)} className="h-[72px] cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised">
                       <td className="px-4">
                         <span className="flex items-center gap-3">
-                          <span className="inline-flex size-9 items-center justify-center rounded-md bg-brand-dim text-[15px] font-bold text-brand">{c.name.slice(0, 1)}</span>
+                          <span aria-hidden className="bg-brand-gradient inline-flex size-10 items-center justify-center rounded-lg text-[17px] font-bold text-white shadow-md">
+                            {c.name.slice(0, 1)}
+                          </span>
                           <span className="text-[15px] font-semibold text-text">{c.name}</span>
                         </span>
                       </td>
                       <td className="tnum px-4 font-mono text-[13px] text-text-muted">{c.businessNo ?? '—'}</td>
-                      <td className="tnum px-4 text-right font-mono text-[13px] text-text">{c.managers.length}</td>
-                      <td className="tnum px-4 text-right font-mono text-[13px] text-text">
-                        {mine.length}
-                        {live > 0 && <span className="ml-2 rounded-sm bg-alert/10 px-1.5 py-0.5 font-sans text-[12px] font-semibold text-alert">진행 중 {live}</span>}
+                      <td className="px-4">
+                        <AvatarStack names={c.managers.map((m) => m.name)} />
+                      </td>
+                      <td className="px-4">
+                        <PhaseBar phases={mine.map((s) => phaseOf(s))} />
                       </td>
                       <td className="tnum px-4 font-mono text-[13px] text-text-muted">{fmtTime(c.createdAt)}</td>
                       <td className="w-10 px-2">
@@ -266,7 +318,14 @@ function CompanyDetail({ c }: { c: Company }) {
                 <tbody className="fx-rows">
                   {c.managers.map((m) => (
                     <tr key={m.id} className="h-12 border-b border-line last:border-0">
-                      <td className="px-4 font-medium text-text">{m.name}</td>
+                      <td className="px-4">
+                        <span className="flex items-center gap-3">
+                          <span aria-hidden className="inline-flex size-8 items-center justify-center rounded-full bg-brand-dim text-[13px] font-bold text-brand">
+                            {initial(m.name)}
+                          </span>
+                          <span className="font-medium text-text">{m.name}</span>
+                        </span>
+                      </td>
                       <td className="px-4 font-mono text-[13px] text-text-muted">{m.email}</td>
                       <td className="tnum px-4 font-mono text-[13px] text-text-muted">{fmtTime(m.createdAt)}</td>
                       <td className="w-12 px-2">
@@ -294,16 +353,26 @@ function CompanyDetail({ c }: { c: Company }) {
             {sessions.length === 0 ? (
               <p className="py-12 text-center text-[14px] text-text-muted">아직 연 회차가 없습니다.</p>
             ) : (
-              <ul>
+              <ol className="fx-cards relative py-2">
+                {/* 회차 타임라인: 최신이 위. 세로 줄 위의 점이 단계를 보여 준다(글자도 오른쪽에 같이) */}
+                <span aria-hidden className="absolute top-7 bottom-7 left-[27px] w-0.5 rounded-full bg-line" />
                 {sessions.map((s) => {
                   const ph = phaseOf(s)
                   return (
-                    <li key={s.id}>
+                    <li key={s.id} className="relative">
                       <button
                         type="button"
                         onClick={() => nav(`/console/sessions/${s.id}`)}
-                        className="flex h-14 w-full items-center gap-4 border-b border-line px-4 text-left last:border-0 hover:bg-panel-raised"
+                        className="flex min-h-16 w-full items-center gap-4 px-4 py-2 text-left hover:bg-panel-raised"
                       >
+                        <span aria-hidden className="relative z-10 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-panel">
+                          <span
+                            className={cx(
+                              'size-3 rounded-full',
+                              ph === 'live' ? 'rec-pulse bg-alert' : ph === 'upcoming' ? 'border-2 border-info bg-panel' : 'bg-line-strong',
+                            )}
+                          />
+                        </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[15px] font-semibold text-text">{s.title}</span>
                           <span className="text-[13px] text-text-muted">{taskTitles(s)}</span>
@@ -319,7 +388,7 @@ function CompanyDetail({ c }: { c: Company }) {
                     </li>
                   )
                 })}
-              </ul>
+              </ol>
             )}
           </section>
         </div>
@@ -394,57 +463,83 @@ function AddManagerModal({ companyId, onClose, onDone }: { companyId: number; on
  * 도입 문의 받은편지함 (기획_결정사항 §4, company_inquiries). 승인하면 회사를 등록하고 담당자를 첫 MANAGER 로 초대한다.
  * 처리한 문의는 기록으로 아래에 흐리게 남는다.
  */
+/** 도입 문의함: 회사 목록 화면의 스포트라이트 (2026-11-19 개편) */
 function InquiryInbox() {
   const list = useInquiries()
   const toast = useToast()
   const pending = list.filter((q) => q.status === 'PENDING')
   const handled = list.filter((q) => q.status !== 'PENDING').slice(0, 3)
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm" aria-label="도입 문의">
-      <header className="flex h-12 items-center gap-2 border-b border-line bg-[linear-gradient(120deg,var(--color-brand-dim),transparent_70%)] px-4">
-        <Inbox size={16} className="text-brand" aria-hidden />
-        <span className="label">INQUIRIES</span>
-        <span className="text-[15px] font-semibold text-text">도입 문의</span>
-        <span className={cx('tnum ml-1 rounded-full px-2 font-mono text-[12px] font-semibold', pending.length ? 'bg-caution/12 text-caution' : 'bg-panel-raised text-text-muted')}>{pending.length}</span>
-        <span className="ml-auto text-[13px] text-text-muted">승인하면 회사를 등록하고 담당자에게 초대 메일을 보냅니다</span>
-      </header>
-      {pending.length === 0 && handled.length === 0 && <p className="px-4 py-6 text-center text-[14px] text-text-muted">새 문의가 없습니다.</p>}
-      <ul className="fx-cards divide-y divide-line">
-        {[...pending, ...handled].map((q) => (
-          <li key={q.id} className={cx('flex items-start gap-4 px-4 py-3', q.status !== 'PENDING' && 'opacity-60')}>
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 text-[15px] font-semibold text-text">
-                {q.companyName}
-                <span className="tnum font-mono text-[12px] font-normal text-text-muted">{q.businessNo}</span>
-              </p>
-              <p className="text-[13px] text-text-muted">
-                {q.contactName} │ <span className="font-mono">{q.contactEmail}</span> │ {fmtTime(q.createdAt)}
-              </p>
-              {q.message && <p className="mt-1 text-[14px] leading-6 text-text">{q.message}</p>}
-            </div>
-            {q.status === 'PENDING' ? (
-              <div className="flex shrink-0 gap-2">
-                <Button size="sm" variant="ghost" onClick={() => rejectInquiry(q.id)}>
-                  <X size={14} aria-hidden /> 거절
-                </Button>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => {
-                    const err = approveInquiry(q.id)
-                    toast.show(err ?? `회사 등록 완료: ${q.companyName}. 담당자 초대 메일을 ${q.contactEmail} 주소로 보냈습니다`)
-                  }}
+    <StageSection aria-label="도입 문의" className="p-6">
+      <div className="relative z-10 grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
+        <div className="flex flex-col gap-2">
+          <p className="label flex items-center gap-1.5 text-stage-brand">
+            <Inbox size={14} aria-hidden /> INQUIRIES
+          </p>
+          <h2 className="text-[20px] font-bold text-stage-text">도입 문의</h2>
+          <p className={cx('tnum font-mono text-[56px] leading-none font-bold', pending.length ? 'text-stage-caution' : 'text-stage-faint')}>
+            <CountUp value={pending.length} />
+            <span className="ml-1 font-sans text-[15px] font-semibold text-stage-muted">건 대기</span>
+          </p>
+          <p className="text-[13px] leading-5 text-stage-muted">승인하면 회사를 등록하고 담당자에게 초대 메일을 보냅니다.</p>
+        </div>
+        <div className="min-w-0">
+          {pending.length === 0 && handled.length === 0 && (
+            <p className="glass-stage rounded-lg border border-stage-line px-4 py-10 text-center text-[14px] text-stage-muted">새 문의가 없습니다.</p>
+          )}
+          <ul className="fx-cards flex flex-col gap-3">
+            {[...pending, ...handled].map((q) => (
+              <li
+                key={q.id}
+                className={cx('glass-stage flex items-start gap-4 rounded-lg border p-4', q.status === 'PENDING' ? 'border-stage-line-strong' : 'border-stage-line opacity-60')}
+              >
+                <span
+                  aria-hidden
+                  className={cx(
+                    'inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-[17px] font-bold',
+                    q.status === 'PENDING' ? 'bg-brand-gradient text-white' : 'bg-stage-raised text-stage-muted',
+                  )}
                 >
-                  <Check size={14} aria-hidden /> 승인
-                </Button>
-              </div>
-            ) : (
-              <span className={cx('shrink-0 text-[13px] font-semibold', q.status === 'APPROVED' ? 'text-signal' : 'text-text-muted')}>{q.status === 'APPROVED' ? '승인됨' : '거절됨'}</span>
-            )}
-          </li>
-        ))}
-      </ul>
+                  {q.companyName.slice(0, 1)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-2 text-[16px] font-semibold text-stage-text">
+                    {q.companyName}
+                    <span className="tnum font-mono text-[12px] font-normal text-stage-muted">{q.businessNo}</span>
+                    {q.status === 'PENDING' && <span className="rounded-full bg-stage-caution/12 px-2 py-0.5 text-[12px] font-semibold text-stage-caution">새 문의</span>}
+                  </p>
+                  <p className="text-[13px] text-stage-muted">
+                    {q.contactName} │ <span className="font-mono">{q.contactEmail}</span> │ <span className="tnum font-mono">{fmtTime(q.createdAt)}</span>
+                  </p>
+                  {q.message && <p className="mt-2 rounded-md bg-stage-raised px-3 py-2 text-[14px] leading-6 text-stage-text">{q.message}</p>}
+                </div>
+                {q.status === 'PENDING' ? (
+                  <div className="flex shrink-0 gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => rejectInquiry(q.id)}>
+                      <X size={14} aria-hidden /> 거절
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => {
+                        const err = approveInquiry(q.id)
+                        toast.show(err ?? `회사 등록 완료: ${q.companyName}. 담당자 초대 메일을 ${q.contactEmail} 주소로 보냈습니다`)
+                      }}
+                    >
+                      <Check size={14} aria-hidden /> 승인
+                    </Button>
+                  </div>
+                ) : (
+                  <span className={cx('shrink-0 text-[13px] font-semibold', q.status === 'APPROVED' ? 'text-stage-signal' : 'text-stage-muted')}>
+                    {q.status === 'APPROVED' ? '승인됨' : '거절됨'}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
       {toast.node}
-    </section>
+    </StageSection>
   )
 }

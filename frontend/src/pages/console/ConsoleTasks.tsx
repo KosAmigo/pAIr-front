@@ -19,7 +19,9 @@ import {
   type TaskTab,
 } from '../../data/consoleTasks'
 import { ConfirmModal, RowMenu } from './common'
-import { LEVEL_CLS, fmtTime, useToast } from './format'
+import { fmtTime, useToast } from './format'
+import { ReviewQueue } from './ReviewQueue'
+import { KindTile, LevelPips } from '../../components/taskKind'
 
 export default function ConsoleTasks() {
   const all = useConsoleTasks()
@@ -41,6 +43,28 @@ export default function ConsoleTasks() {
       (track === 'ALL' || t.track === track) &&
       (!q.trim() || `${t.title} ${t.code}`.toLowerCase().includes(q.trim().toLowerCase())),
   )
+  const menuFor = (t: CTask) =>
+    [
+      { text: '편집', onClick: () => nav(`/console/tasks/${t.id}`) },
+      {
+        text: '복제',
+        onClick: () => {
+          const id = duplicateTask(t.id)
+          nav(`/console/tasks/${id}`)
+        },
+      },
+      ...(t.status === 'OPEN'
+        ? [
+            { text: '응시 마감', onClick: () => (setTaskStatus(t.id, 'CLOSED'), toast.show('응시를 마감했습니다. 목록에는 남고 새 응시만 막힙니다')) },
+            { text: '공개 취소', danger: true, onClick: () => setClosing(t) },
+          ]
+        : t.status === 'CLOSED'
+          ? [
+              { text: '다시 공개', onClick: () => (setTaskStatus(t.id, 'OPEN'), toast.show('다시 공개했습니다')) },
+              { text: '공개 취소', danger: true, onClick: () => setClosing(t) },
+            ]
+          : [{ text: '공개하기', onClick: () => nav(`/console/tasks/${t.id}?publish=1`) }]),
+    ]
   const visibleQuestions = (t: CTask) => t.questions.filter((x) => x.stage === 'TASK').length
 
   return (
@@ -98,7 +122,10 @@ export default function ConsoleTasks() {
           </div>
         </div>
 
-        <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
+        {tab === 'draft' && rows.length > 0 ? (
+          <ReviewQueue tasks={rows} menuFor={menuFor} />
+        ) : (
+          <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
               <FileStack size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
@@ -127,9 +154,12 @@ export default function ConsoleTasks() {
                   <tr
                     key={t.id}
                     onClick={() => nav(`/console/tasks/${t.id}`)}
-                    className="h-14 cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised"
+                    className="h-16 cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised"
                   >
                     <td className="px-4 py-2">
+                      <div className="flex items-center gap-3">
+                      <KindTile kind={t.category} vivid={t.status === 'OPEN'} />
+                      <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         {tabOf(t) === 'draft' && (
                           <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-caution">
@@ -140,11 +170,13 @@ export default function ConsoleTasks() {
                         <span className="text-[15px] font-semibold text-text">{t.title}</span>
                       </div>
                       <span className="font-mono text-[12px] text-text-muted">{t.code}</span>
+                      </div>
+                      </div>
                     </td>
                     <td className="px-4 text-text-muted">{t.track === 'DEV' ? '개발' : '비개발'}</td>
                     <td className="px-4 text-text-muted">{kindName(t.category)}</td>
                     <td className="px-4">
-                      <span className={cx('rounded-sm px-1.5 py-0.5 text-[12px] font-semibold', LEVEL_CLS[t.difficulty])}>{t.difficulty}</span>
+                      <LevelPips level={t.difficulty} />
                     </td>
                     <td className="tnum px-4 text-right font-mono text-text-muted">{t.minutes}분</td>
                     <td className="tnum px-4 text-right font-mono text-text-muted">{t.files.length}</td>
@@ -154,27 +186,7 @@ export default function ConsoleTasks() {
                       <div className="flex items-center justify-end gap-1">
                         <RowMenu
                           label={`${t.title} 메뉴`}
-                          items={[
-                            { text: '편집', onClick: () => nav(`/console/tasks/${t.id}`) },
-                            {
-                              text: '복제',
-                              onClick: () => {
-                                const id = duplicateTask(t.id)
-                                nav(`/console/tasks/${id}`)
-                              },
-                            },
-                            ...(t.status === 'OPEN'
-                              ? [
-                                  { text: '응시 마감', onClick: () => (setTaskStatus(t.id, 'CLOSED'), toast.show('응시를 마감했습니다. 목록에는 남고 새 응시만 막힙니다')) },
-                                  { text: '공개 취소', danger: true, onClick: () => setClosing(t) },
-                                ]
-                              : t.status === 'CLOSED'
-                                ? [
-                                    { text: '다시 공개', onClick: () => (setTaskStatus(t.id, 'OPEN'), toast.show('다시 공개했습니다')) },
-                                    { text: '공개 취소', danger: true, onClick: () => setClosing(t) },
-                                  ]
-                                : [{ text: '공개하기', onClick: () => nav(`/console/tasks/${t.id}?publish=1`) }]),
-                          ]}
+                          items={menuFor(t)}
                         />
                         <ChevronRight size={16} className="text-text-faint" aria-hidden />
                       </div>
@@ -184,7 +196,8 @@ export default function ConsoleTasks() {
               </tbody>
             </table>
           )}
-        </Reveal>
+          </Reveal>
+        )}
       </div>
 
       {closing && (
