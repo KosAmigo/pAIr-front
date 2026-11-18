@@ -10,6 +10,8 @@ const LINKS = [
   { id: 'replay', label: '복기' },
   { id: 'report', label: '리포트' },
   { id: 'live', label: '실전 시험' },
+  { id: 'create', label: '과제 생성' },
+  { id: 'proctor', label: '감독' },
 ]
 
 export default function HomeHeader() {

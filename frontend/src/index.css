@@ -52,7 +52,8 @@
 
   /* 2.1 Fonts */
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  /* 한글은 JetBrains Mono에 없으므로 Pretendard로 그린다 (시스템의 얇은 대체 글꼴 금지) */
+  --font-mono: 'JetBrains Mono', 'Pretendard Variable', Pretendard, ui-monospace, Consolas, monospace;
 
   /* 2.3 Type scale (mega·hero·lead 는 초기화면 전용) */
   --text-mega: clamp(64px, 7.5vw, 112px);

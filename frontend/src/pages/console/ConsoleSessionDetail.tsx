@@ -188,7 +188,7 @@ function Overview({ s, phase }: { s: Session; phase: SessionPhase }) {
         <dl className="grid grid-cols-[160px_1fr] text-[15px]">
           {rows.map(([k, v]) => (
             <div key={k} className="contents">
-              <dt className="label border-b border-line px-4 py-3 last:border-0">{k}</dt>
+              <dt className="text-[14px] font-semibold text-text-muted border-b border-line px-4 py-3 last:border-0">{k}</dt>
               <dd className="border-b border-line px-4 py-3 text-text">{v}</dd>
             </div>
           ))}
@@ -356,7 +356,7 @@ function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; to
             <thead>
               <tr className="h-9 border-b border-line text-left">
                 {['이름', '이메일', '초대', '입장', ''].map((h) => (
-                  <th key={h} className="label px-4 font-medium">
+                  <th key={h} className="px-4 text-[13px] font-semibold text-text-muted">
                     {h}
                   </th>
                 ))}
@@ -503,7 +503,7 @@ function Live({ s, now }: { s: Session; now: number }) {
             <thead>
               <tr className="h-9 border-b border-line text-left">
                 {['이름', '상태', '입장', 'AI 질문', '감독 이벤트', '마지막 활동'].map((h, i) => (
-                  <th key={h} className={cx('label px-4 font-medium', (i === 3 || i === 4) && 'text-right')}>
+                  <th key={h} className={cx('px-4 text-[13px] font-semibold text-text-muted', (i === 3 || i === 4) && 'text-right')}>
                     {h}
                   </th>
                 ))}
@@ -631,7 +631,7 @@ function Results({ s }: { s: Session }) {
         <thead>
           <tr className="h-9 border-b border-line text-left">
             {['이름', '상태', '총점', '역량', '감독 이벤트', '부정 의심', ''].map((h, i) => (
-              <th key={i} className="label px-4 font-medium">
+              <th key={i} className="px-4 text-[13px] font-semibold text-text-muted">
                 {h}
               </th>
             ))}
