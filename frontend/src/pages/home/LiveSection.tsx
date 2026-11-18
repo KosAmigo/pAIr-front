@@ -54,7 +54,7 @@ export default function LiveSection() {
   )
 
   return (
-    <section ref={root} id="live" className="relative pt-40 md:pl-[120px]">
+    <section ref={root} id="live" className="relative pt-40 md:pl-[160px]">
       <div data-spine="live" aria-hidden className="h-0" />
       <SectionHead
         label="LIVE EXAM"

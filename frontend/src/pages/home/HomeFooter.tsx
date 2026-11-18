@@ -36,7 +36,7 @@ export default function HomeFooter() {
   return (
     <footer className="relative z-10 overflow-hidden border-t border-line bg-panel/70 backdrop-blur">
       <div className="mx-auto max-w-[1264px] px-8 pt-12">
-        <div className="flex flex-wrap gap-x-24 gap-y-10">
+        <div className="flex flex-wrap items-start gap-x-24 gap-y-10">
           <div className="max-w-[320px]">
             <p className="text-[20px] leading-7 font-bold tracking-[-0.02em] text-text">
               AI와 일하는 방식까지
@@ -45,7 +45,7 @@ export default function HomeFooter() {
             </p>
             <p className="mt-3 text-[15px] leading-6 text-text-muted">결과물과 풀이 과정을 함께 보는 AI 활용 역량 진단</p>
           </div>
-          <nav aria-label="바닥글" className="ml-auto flex flex-wrap gap-x-20 gap-y-8">
+          <nav aria-label="바닥글" className="ml-auto -mt-1 flex flex-wrap gap-x-20 gap-y-8">
             {GROUPS.map((g) => (
               <div key={g.title}>
                 <p className="text-[14px] font-bold text-text">{g.title}</p>
@@ -77,11 +77,11 @@ export default function HomeFooter() {
         </div>
       </div>
 
-      {/* 큰 워드마크: 아래가 살짝 잘리게. 넓은 화면에서는 소개 글과 링크 사이 빈칸까지 끌어올린다 */}
-      <div aria-hidden className="relative mt-6 -mb-[0.2em] text-center lg:-mt-36 pointer-events-none font-mono text-[length:clamp(72px,12vw,176px)] leading-[0.9] font-semibold tracking-[-0.06em] select-none">
-        <span className="bg-[linear-gradient(180deg,var(--color-line-strong),transparent_85%)] bg-clip-text text-transparent">p</span>
+      {/* 큰 워드마크: 링크 아래에 잘리지 않게 다 보인다 */}
+      <div aria-hidden className="pointer-events-none mt-12 pb-10 text-center font-mono text-[length:clamp(72px,12vw,176px)] leading-none font-semibold tracking-[-0.06em] select-none">
+        <span className="text-line-strong">p</span>
         <span className="text-brand-gradient">AI</span>
-        <span className="bg-[linear-gradient(180deg,var(--color-line-strong),transparent_85%)] bg-clip-text text-transparent">r</span>
+        <span className="text-line-strong">r</span>
       </div>
     </footer>
   )

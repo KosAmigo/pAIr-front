@@ -53,7 +53,7 @@ export default function CreateSection() {
   )
 
   return (
-    <section ref={root} id="create" className="relative pt-40 md:pl-[120px]">
+    <section ref={root} id="create" className="relative pt-40 md:pl-[160px]">
       <div data-spine="create" aria-hidden className="h-0" />
       <SectionHead
         label="CREATE"

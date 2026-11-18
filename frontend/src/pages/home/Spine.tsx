@@ -17,20 +17,22 @@ const NODES: NodeDef[] = [
   { at: 'replay', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:23' },
   { at: 'replay-end', lane: 1, color: 'var(--color-branch-2)', label: 'b2', score: 88 },
   { at: 'report', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:31' },
+  { at: 'report-end', lane: 1, color: 'var(--color-branch-3)', label: 'b3', score: 91 },
   { at: 'live', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:42' },
-  { at: 'live-end', lane: 1, color: 'var(--color-branch-3)', label: 'b3', score: 91 },
+  { at: 'live-end', lane: 1, color: 'var(--color-branch-4)', label: 'b4', score: 85 },
   { at: 'create', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:47' },
-  { at: 'create-end', lane: 1, color: 'var(--color-branch-4)', label: 'b4', score: 85 },
+  { at: 'create-end', lane: 1, color: 'var(--color-branch-5)', label: 'b5', score: 93 },
   { at: 'proctor', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:50' },
-  { at: 'proctor-end', lane: 1, color: 'var(--color-branch-5)', label: 'b5', score: 93 },
+  { at: 'proctor-end', lane: 1, color: 'var(--color-branch-1)', label: 'b6', score: 90 },
   { at: 'finale', lane: 0, color: 'var(--color-brand-blue)', label: 'main', time: '00:52' },
 ]
 
 const BRANCHES = [
   { from: 'replay', to: 'replay-end', color: 'var(--color-branch-2)' },
-  { from: 'live', to: 'live-end', color: 'var(--color-branch-3)' },
-  { from: 'create', to: 'create-end', color: 'var(--color-branch-4)' },
-  { from: 'proctor', to: 'proctor-end', color: 'var(--color-branch-5)' },
+  { from: 'report', to: 'report-end', color: 'var(--color-branch-3)' },
+  { from: 'live', to: 'live-end', color: 'var(--color-branch-4)' },
+  { from: 'create', to: 'create-end', color: 'var(--color-branch-5)' },
+  { from: 'proctor', to: 'proctor-end', color: 'var(--color-branch-1)' },
 ]
 
 function branchPath(x: number, a: Pt, b: Pt) {
@@ -50,7 +52,7 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
       const b = el.getBoundingClientRect()
       pts[el.dataset.spine!] = { x: b.left - r.left, y: b.top - r.top }
     })
-    const x = r.width >= 1024 ? 48 : 24
+    const x = 64
     setGeo((g) => {
       const next = { w: r.width, h: r.height, x, pts }
       return g && JSON.stringify(g) === JSON.stringify(next) ? g : next

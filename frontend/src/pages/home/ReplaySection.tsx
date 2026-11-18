@@ -1,9 +1,10 @@
-// DESIGN.md §7-1 ② 복기: 화면에 붙은 채(sticky) 스크롤로 장면 세 개를 넘긴다.
-// 기록 → 되감기 → 분기. 같은 순간 페이지의 척추 선도 b2로 갈라진다.
+// DESIGN.md §7-1 ② 복기: 보통 섹션. 화면에 들어오면 그림이 한 번 재생된다(기록 → 되감기 → 분기).
+// 왼쪽 단계 3줄은 늘 다 보이고, 그림이 그 단계에 이르면 번호 칸이 켜진다. 척추 선은 여기서 b2로 갈라진다.
 import { useRef, type CSSProperties } from 'react'
-import { useReducedMotion } from 'motion/react'
 import { cx } from '../../components/cx'
 import SectionHead, { Grad } from './SectionHead'
+import { Glow } from './Points'
+import { mockFrame } from './homeStyles'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
 const SCENES = [
@@ -104,7 +105,6 @@ function Visual() {
 }
 
 export default function ReplaySection() {
-  const reduced = useReducedMotion()
   const root = useRef<HTMLElement>(null)
 
   useGSAP(
@@ -125,92 +125,71 @@ export default function ReplaySection() {
         const b2 = root.current!.querySelector<SVGPathElement>('[data-b2]')!
         const len = b2.getTotalLength()
         gsap.set(b2, { strokeDasharray: len, strokeDashoffset: len })
-        gsap.set(q('[data-scene]').slice(1), { opacity: 0, y: 28 })
         gsap.set(q('[data-evt]'), { opacity: 0, scale: 0, transformOrigin: 'center' })
         gsap.set(q('[data-marker]'), { opacity: 0, scale: 0.4, transformOrigin: '50% 50%' })
         gsap.set(q('[data-b2-node], [data-chip]'), { opacity: 0 })
-        gsap.set(q('[data-bar]'), { scaleX: 0, transformOrigin: 'left' })
+        gsap.set(q('[data-step]'), { opacity: 0.45 })
 
         const scores = [...root.current!.querySelectorAll<SVGTextElement>('[data-score]')]
         const count = { v: 0 }
-        const tl = gsap.timeline({
-          defaults: { ease: 'none' },
-          scrollTrigger: { trigger: root.current, start: 'top top', end: 'bottom bottom', scrub: 0.8 },
-        })
-        // 장면 1: 기록
-        tl.to(proxy, { x: X1, duration: 1, onUpdate: draw }, 0)
-          .to(q('[data-evt]'), { opacity: 1, scale: 1, stagger: 0.07, duration: 0.15 }, 0.05)
-          .to(q('[data-bar="0"]'), { scaleX: 1, duration: 1 }, 0)
-          // 장면 2: 되감기
-          .to(q('[data-scene="0"]'), { opacity: 0, y: -28, duration: 0.2 }, 1)
-          .to(q('[data-scene="1"]'), { opacity: 1, y: 0, duration: 0.25 }, 1.1)
-          .to(proxy, { x: FORK, duration: 0.7, ease: 'power1.inOut', onUpdate: draw }, 1.1)
-          .to(q('[data-marker]'), { opacity: 1, scale: 1.25, duration: 0.3, ease: 'back.out(2)' }, 1.6)
-          .to(q('[data-bar="1"]'), { scaleX: 1, duration: 1 }, 1)
-          // 장면 3: 분기
-          .to(q('[data-scene="1"]'), { opacity: 0, y: -28, duration: 0.2 }, 2)
-          .to(q('[data-scene="2"]'), { opacity: 1, y: 0, duration: 0.25 }, 2.1)
-          .to(q('[data-b2-node]'), { opacity: 1, duration: 0.15 }, 2.1)
-          .to(b2, { strokeDashoffset: 0, duration: 0.5 }, 2.15)
-          .to(q('[data-chip]'), { opacity: 1, duration: 0.15, stagger: 0.05 }, 2.6)
-          .to(
-            count,
-            {
-              v: 1,
-              duration: 0.35,
-              onUpdate: () => scores.forEach((s) => (s.textContent = String(Math.round(Number(s.dataset.score) * count.v)))),
-            },
-            2.6,
-          )
-          .to(q('[data-bar="2"]'), { scaleX: 1, duration: 1 }, 2)
-          .to({}, { duration: 0.25 }) // 마지막 장면을 잠깐 붙잡아 둔다
+        const step = (i: number, at: number) =>
+          tl.to(q(`[data-step="${i}"]`), { opacity: 1, duration: 0.3, ease: 'power1.out' }, at).add(() => q(`[data-step="${i}"]`)[0]?.setAttribute('data-on', 'true'), at)
+        const tl = gsap.timeline({ defaults: { ease: 'none' }, scrollTrigger: { trigger: q('[data-visual]')[0], start: 'top 70%' } })
+        // 1: 기록
+        step(0, 0)
+        tl.to(proxy, { x: X1, duration: 1.6, ease: 'power1.inOut', onUpdate: draw }, 0).to(q('[data-evt]'), { opacity: 1, scale: 1, stagger: 0.1, duration: 0.2 }, 0.1)
+        // 2: 되감기
+        step(1, 1.9)
+        tl.to(proxy, { x: FORK, duration: 0.9, ease: 'power2.inOut', onUpdate: draw }, 1.9).to(q('[data-marker]'), { opacity: 1, scale: 1.25, duration: 0.4, ease: 'back.out(2)' }, 2.7)
+        // 3: 분기
+        step(2, 3.3)
+        tl.to(q('[data-b2-node]'), { opacity: 1, duration: 0.2 }, 3.3)
+          .to(b2, { strokeDashoffset: 0, duration: 0.8, ease: 'power1.inOut' }, 3.35)
+          .to(q('[data-chip]'), { opacity: 1, duration: 0.2, stagger: 0.08 }, 4.1)
+          .to(count, { v: 1, duration: 0.6, ease: 'power2.out', onUpdate: () => scores.forEach((s) => (s.textContent = String(Math.round(Number(s.dataset.score) * count.v)))) }, 4.1)
       })
     },
     { scope: root },
   )
 
   return (
-    <section ref={root} id="replay" className={cx('relative', !reduced && 'h-[320vh]')}>
+    <section ref={root} id="replay" className="relative pt-40 md:pl-[160px]">
       <div data-spine="replay" aria-hidden className="h-0" />
-      <div aria-hidden data-spine="replay-end" className={cx('absolute left-0', reduced ? 'bottom-0' : 'bottom-[30vh]')} />
-      <div className={cx('flex items-center md:pl-[120px]', !reduced && 'sticky top-0 h-screen')}>
-        <div className="grid w-full items-center gap-12 py-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-          <div>
-            <SectionHead
-              compact
-              label="REPLAY"
-              title={
-                <>
-                  모든 순간이 기록되고,
-                  <br />
-                  <Grad>어디로든</Grad> 돌아갈 수 있어요
-                </>
-              }
-            />
-            <div className={cx('relative mt-12', reduced ? 'space-y-8' : 'h-[150px]')}>
-              {SCENES.map((s, i) => (
-                <div key={s.no} data-scene={i} className={cx(!reduced && 'absolute inset-0')}>
-                  <p className="font-mono text-[14px] font-semibold text-brand">{s.no}</p>
-                  <h3 className="mt-2 text-[28px] leading-9 font-bold tracking-[-0.02em] text-text">{s.title}</h3>
-                  <p className="mt-3 max-w-[440px] text-[17px] leading-7 text-text-muted">{s.body}</p>
-                </div>
-              ))}
-            </div>
-            {!reduced && (
-              <div className="mt-6 flex max-w-[280px] gap-2" aria-hidden>
-                {SCENES.map((s, i) => (
-                  <span key={s.no} className="h-1 flex-1 overflow-hidden rounded-full bg-line">
-                    <span data-bar={i} className="block h-full w-full rounded-full bg-brand-gradient" />
-                  </span>
-                ))}
+      <SectionHead
+        label="REPLAY"
+        title={
+          <>
+            모든 순간이 기록되고,
+            <br />
+            <Grad>어디로든</Grad> 돌아갈 수 있어요
+          </>
+        }
+        lead="풀이가 끝나도 끝이 아닙니다. 아쉬웠던 순간으로 돌아가 다른 선택으로 다시 풀어 볼 수 있습니다."
+      />
+
+      <div className="mt-16 grid items-start gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <ol className="grid gap-8 lg:pt-6">
+          {SCENES.map((s, i) => (
+            <li key={s.no} data-step={i} className="group flex gap-4">
+              <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-md bg-brand-dim font-mono text-[15px] font-semibold text-brand transition-colors duration-300 group-data-[on=true]:bg-brand group-data-[on=true]:text-on-accent">
+                {s.no}
+              </span>
+              <div>
+                <p className="text-[19px] font-bold text-text">{s.title}</p>
+                <p className="mt-1 text-[16px] leading-7 text-text-muted">{s.body}</p>
               </div>
-            )}
-          </div>
-          <div className="rounded-[28px] border border-line bg-panel p-6 shadow-lg md:p-8">
+            </li>
+          ))}
+        </ol>
+
+        <div data-visual className="relative">
+          <Glow />
+          <div className={cx(mockFrame, 'p-6 md:p-8')}>
             <Visual />
           </div>
         </div>
       </div>
+      <div data-spine="replay-end" aria-hidden className="absolute bottom-0 left-0" />
     </section>
   )
 }

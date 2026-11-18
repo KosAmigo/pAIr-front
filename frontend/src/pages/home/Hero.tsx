@@ -115,7 +115,7 @@ export default function Hero() {
             key={c.text}
             data-float={c.speed}
             aria-hidden
-            className={`glass absolute z-10 hidden items-center gap-2 rounded-full px-4 py-2 text-[14px] font-medium text-text md:flex ${c.cls}`}
+            className={`glass absolute z-10 hidden items-center gap-2 rounded-full px-4 py-2 text-[14px] font-semibold text-text md:flex ${c.cls}`}
           >
             <span className={`size-2 rounded-full ${c.dot}`} />
             {c.text}
@@ -132,7 +132,7 @@ export default function Hero() {
               <li
                 key={i}
                 aria-hidden={i >= KINDS.length}
-                className="glass inline-flex shrink-0 items-center gap-2 rounded-full px-5 py-2.5 text-[15px] font-medium text-text"
+                className="glass inline-flex shrink-0 items-center gap-2 rounded-full px-5 py-2.5 text-[15px] font-semibold text-text"
               >
                 <k.icon size={16} className="text-brand" aria-hidden />
                 {k.label}
