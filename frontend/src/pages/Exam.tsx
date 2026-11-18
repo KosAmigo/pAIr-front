@@ -161,7 +161,7 @@ function FileTree({ nodes, depth = 0, active, onOpen }: { nodes: FileNode[]; dep
               )}
               style={{ paddingLeft: 22 + depth * 14 }}
             >
-              {active === n.name && <span className="absolute inset-y-0 left-0 w-0.5 bg-signal" aria-hidden />}
+              {active === n.name && <span className="absolute inset-y-0 left-0 w-0.5 bg-brand" aria-hidden />}
               <FileText size={16} strokeWidth={1.75} aria-hidden />
               <span className="truncate font-mono">{n.name}</span>
             </button>
@@ -231,7 +231,7 @@ function ChatPanel({ disabled, initial }: { disabled: boolean; initial: ChatMsg[
         <label htmlFor="chat-input" className="sr-only">
           AI에게 질문
         </label>
-        <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-signal')}>
+        <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-brand')}>
           <div className="flex items-center gap-2 px-3 pt-1.5">
             {notice && (
               <span role="status" className="truncate text-[12px] text-caution">
@@ -301,7 +301,7 @@ function FollowUp({ onDone }: { onDone: () => void }) {
       </header>
       <div className="flex gap-1 px-4 pt-3" aria-hidden>
         {followUps.map((_, j) => (
-          <span key={j} className={cx('h-0.5 flex-1 rounded-full', j <= i ? 'bg-signal' : 'bg-line')} />
+          <span key={j} className={cx('h-0.5 flex-1 rounded-full', j <= i ? 'bg-brand' : 'bg-line')} />
         ))}
       </div>
       <div className="flex min-h-0 flex-1 flex-col p-8">
@@ -315,7 +315,7 @@ function FollowUp({ onDone }: { onDone: () => void }) {
           id="answer"
           value={answers[i]}
           onChange={(e) => setAnswers(answers.map((a, j) => (j === i ? e.target.value : a)))}
-          className="mt-6 min-h-0 flex-1 resize-none rounded-md border border-line-strong bg-panel-raised p-4 text-body text-text outline-none focus:border-signal"
+          className="mt-6 min-h-0 flex-1 resize-none rounded-md border border-line-strong bg-panel-raised p-4 text-body text-text outline-none focus:border-brand"
           placeholder="답변을 입력하세요"
         />
         <div className="mt-4 flex items-center">
@@ -487,7 +487,7 @@ export default function Exam() {
                         active === f ? 'bg-panel-sunken text-text' : 'text-text-muted hover:text-text',
                       )}
                     >
-                      {active === f && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
+                      {active === f && <span className="absolute inset-x-0 top-0 h-0.5 bg-brand" aria-hidden />}
                       <button role="tab" aria-selected={active === f} type="button" onClick={() => setActive(f)} className="font-mono text-[14px]">
                         {f}
                       </button>

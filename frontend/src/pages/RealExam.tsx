@@ -112,7 +112,7 @@ function PathTree({ nodes, depth = 0, active, onOpen }: { nodes: TreeNode[]; dep
               )}
               style={{ paddingLeft: 22 + depth * 14 }}
             >
-              {active === n.path && <span className="absolute inset-y-0 left-0 w-0.5 bg-signal" aria-hidden />}
+              {active === n.path && <span className="absolute inset-y-0 left-0 w-0.5 bg-brand" aria-hidden />}
               <FileText size={16} strokeWidth={1.75} aria-hidden />
               <span className="truncate font-mono">{n.name}</span>
             </button>
@@ -276,7 +276,7 @@ function ChatPanel({
         <label htmlFor="chat-input" className="sr-only">
           AI에게 질문
         </label>
-        <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-signal')}>
+        <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-brand')}>
           {notice && (
             <p role="status" className="truncate px-3 pt-1.5 text-[12px] text-caution">
               {notice}
@@ -376,7 +376,7 @@ function FollowUp({
       </header>
       <div className="flex gap-1 px-4 pt-3" aria-hidden>
         {questions.map((_, j) => (
-          <span key={j} className={cx('h-0.5 flex-1 rounded-full', j <= i ? 'bg-signal' : 'bg-line')} />
+          <span key={j} className={cx('h-0.5 flex-1 rounded-full', j <= i ? 'bg-brand' : 'bg-line')} />
         ))}
       </div>
       <div key={i} className="fade-in flex min-h-0 flex-1 flex-col px-6 pt-4 pb-4">
@@ -390,7 +390,7 @@ function FollowUp({
           id="answer"
           value={answers[i]}
           onChange={(e) => onAnswers(answers.map((a, j) => (j === i ? e.target.value : a)))}
-          className="mt-3 min-h-0 flex-1 resize-none rounded-md border border-line-strong bg-panel-raised p-4 text-body text-text outline-none focus:border-signal"
+          className="mt-3 min-h-0 flex-1 resize-none rounded-md border border-line-strong bg-panel-raised p-4 text-body text-text outline-none focus:border-brand"
           placeholder="답변을 입력하세요"
         />
         {error && <p className="mt-3 text-[14px] text-alert">{error}</p>}
@@ -872,7 +872,7 @@ export default function RealExam() {
                         showPrompts ? 'bg-panel-sunken text-text' : 'text-text-muted hover:text-text',
                       )}
                     >
-                      {showPrompts && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
+                      {showPrompts && <span className="absolute inset-x-0 top-0 h-0.5 bg-brand" aria-hidden />}
                       내 질문 <span className="tnum ml-1.5 font-mono text-[12px] text-text-faint">{turns.filter((t) => t.role === 'user').length}</span>
                     </button>
                   )}
@@ -885,7 +885,7 @@ export default function RealExam() {
                         locked && 'pr-3',
                       )}
                     >
-                      {active === f && !showPrompts && <span className="absolute inset-x-0 top-0 h-0.5 bg-signal" aria-hidden />}
+                      {active === f && !showPrompts && <span className="absolute inset-x-0 top-0 h-0.5 bg-brand" aria-hidden />}
                       <button
                         role="tab"
                         aria-selected={active === f && !showPrompts}

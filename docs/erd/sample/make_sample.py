@@ -53,13 +53,15 @@ CATALOG = {
     "order-deadlock": ("주문이 3초 넘게 멈췄다가 실패합니다. 잠금 순서와 재고 정합성 문제를 찾아 고치세요.", "DEV", "장애 분석", "중급"),
     "pricing-plan": ("이탈 설문과 매출 자료로 저가 요금제 출시 여부를 판단하는 1페이지 기획안을 씁니다.", "BIZ", "기획서", "중급"),
 }
+TK = ["task_id", "code", "title", "summary", "description", "requirements", "track", "category", "difficulty", "time_limit_min", "status",
+      "parent_task_id", "created_by", "created_at", "updated_at", "published_at"]
 task_id = {}
 for i, code in enumerate(["order-deadlock", "pricing-plan"], 1):
     t = rj(os.path.join(TASKS, code, "task.json"))
     s, track, cat, lvl = CATALOG[code]
     task_id[code] = i
-    put("tasks", ["task_id", "code", "title", "summary", "description", "requirements", "track", "category", "difficulty", "time_limit_min", "status"],
-        [i, code, t["title"], s, "\n".join(t["description"]), "\n".join("- " + r for r in t["requirements"]), track, cat, lvl, t["minutes"], "OPEN"])
+    put("tasks", TK, [i, code, t["title"], s, "\n".join(t["description"]), "\n".join("- " + r for r in t["requirements"]), track, cat, lvl,
+                      t["minutes"], "OPEN", None, 1, "2026-11-08T00:00:00Z", "2026-11-10T00:00:00Z", "2026-11-10T00:00:00Z"])
 
 # ── 과제 파일 (자료 2개는 PDF로 가정) ──
 MIME = {".java": "text/x-java", ".md": "text/markdown", ".log": "text/plain", ".csv": "text/csv"}
@@ -86,6 +88,13 @@ for code in ["order-deadlock", "pricing-plan"]:
                 ro = rel.startswith("logs/") or vis == "HIDDEN"
                 put("task_files", ["task_file_id", "task_id", "path", "content", "storage_key", "mime_type", "size_bytes", "visibility", "read_only"],
                     [fid, task_id[code], rel, text, None, MIME.get(os.path.splitext(rel)[1], "text/plain"), len(text.encode()), vis, b(ro)])
+
+# ── AI로 만든 숨김 초안 과제 (예시): 검수 전이라 CLOSED, 공개 시각 없음 ──
+put("tasks", TK, [3, "inventory-sync", "재고 동기화 지연 원인 분석", "주문 직후 재고가 늦게 줄어드는 문제를 찾아 고치세요.", "(AI 생성 초안) 주문 서비스와 재고 서비스 사이 이벤트 처리가 늦어 …",
+                  "- 지연 원인을 찾아 NOTES.md에 정리\n- 지연을 없애는 수정\n- 회귀 테스트 추가", "DEV", "장애 분석", "중급", 60, "CLOSED", None, 1,
+                  "2026-11-16T03:00:00Z", "2026-11-16T03:00:00Z", None])
+put("task_files", ["task_file_id", "task_id", "path", "content", "storage_key", "mime_type", "size_bytes", "visibility", "read_only"],
+    [fid + 1, 3, "NOTES.md", "# 원인 분석\n", None, "text/markdown", 14, "VISIBLE", "false"])
 
 # ── 문서 페이지: 설문은 '## ' 절마다 한 페이지, CSV 는 한 페이지 ──
 SURVEY = file_id[("pricing-plan", "자료/이탈_설문_요약.md")]
@@ -230,7 +239,7 @@ put("chat_attachments", ["attachment_id", "turn_id", "source_type", "task_file_i
 # 체크포인트: 개발 모범 응시 4번째 턴 시점 + 그 시점 NOTES.md 사본, 그리고 거기서 롤백한 응시 1건
 n_avn = attempt_id["att-261111-1841-avn"]
 put("checkpoints", ["checkpoint_id", "attempt_id", "turn_no", "label", "created_at"], [1, n_avn, 4, "원인 파악 직후", "2026-11-11T09:41:17Z"])
-put("checkpoint_files", ["checkpoint_id", "path", "content"], [1, "NOTES.md", open(os.path.join(TASKS, "order-deadlock", "files", "NOTES.md"), encoding="utf-8").read()])
+put("checkpoint_files", ["checkpoint_file_id", "checkpoint_id", "path", "content"], [1, 1, "NOTES.md", open(os.path.join(TASKS, "order-deadlock", "files", "NOTES.md"), encoding="utf-8").read()])
 put("attempts", ["attempt_id", "user_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
                  "started_at", "submitted_at", "followups_done_at"],
     [len(idx) + 1, 2, task_id["order-deadlock"], "SELF", "SOLVING", "gpt-6-luna", 1, "2026-11-12T10:00:00Z", None, None])

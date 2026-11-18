@@ -36,6 +36,8 @@ UNION ALL SELECT '한 문항에 객관식·글 답변이 둘 다', COUNT(*) FROM
 UNION ALL SELECT '첨부한 과제 자료가 응시 과제와 다름', COUNT(*) FROM chat_attachments ca
   JOIN chat_turns t ON t.turn_id = ca.turn_id JOIN attempts a ON a.attempt_id = t.attempt_id
   JOIN task_files f ON f.task_file_id = ca.task_file_id WHERE f.task_id <> a.task_id
+UNION ALL SELECT '관리자가 아닌 회원이 만든 과제', COUNT(*) FROM tasks t
+  JOIN users u ON u.user_id = t.created_by WHERE u.role <> 'ADMIN'
 UNION ALL SELECT '회차를 연 담당자가 다른 회사 소속', COUNT(*) FROM exam_sessions s
   JOIN users u ON u.user_id = s.created_by WHERE u.role = 'COMPANY' AND u.company_id <> s.company_id
 UNION ALL SELECT '회차 응시가 회차 과제와 다름', COUNT(*) FROM exam_participants p
@@ -75,6 +77,9 @@ DECLARE a bigint := (SELECT max(attempt_id) FROM attempts);
   ['객관식 문항을 단답형이라 속여 글 답변', format($q$INSERT INTO text_answers(attempt_id,question_id,question_type,content) VALUES (1,%s,'SHORT','x')$q$, mcq)],
   ['단답형 문항을 객관식이라 속여 보기 선택', format($q$INSERT INTO choice_answers(attempt_id,question_id,question_type,choice_id) SELECT 1,%s,'SINGLE',choice_id FROM question_choices LIMIT 1$q$, shortq)],
   ['한 개만 고르는 문항에 보기 두 개', format($q$INSERT INTO choice_answers(attempt_id,question_id,question_type,choice_id) VALUES (%s,%s,'SINGLE',%s)$q$, (ca).attempt_id, (ca).question_id, other_choice)],
+  ['없는 상태값(DRAFT) 과제', $q$UPDATE tasks SET status = 'DRAFT' WHERE task_id = (SELECT min(task_id) FROM tasks)$q$],
+  ['공개 시각 없이 공개', $q$UPDATE tasks SET status = 'OPEN', published_at = NULL WHERE task_id = (SELECT min(task_id) FROM tasks)$q$],
+  ['같은 체크포인트에 같은 경로 파일 두 번', $q$INSERT INTO checkpoint_files(checkpoint_id,path,content) SELECT checkpoint_id,path,'x' FROM checkpoint_files LIMIT 1$q$],
   ['같은 문항에 같은 인정 답안 두 번', $q$INSERT INTO short_answer_keys(question_id,accepted) SELECT question_id,accepted FROM short_answer_keys LIMIT 1$q$],
   ['같은 코드·직군 체크', format($q$INSERT INTO rubric_checks(item_key,code,track,method,points,label) VALUES (%L,%L,%L,%L,1,'x')$q$, (rc).item_key, (rc).code, (rc).track, (rc).method)],
   ['없는 페이지의 조각', $q$INSERT INTO document_chunks(task_file_id,page_no,chunk_no,content,token_count,embedding) SELECT task_file_id,999,1,'x',1,embedding FROM document_chunks LIMIT 1$q$],

@@ -35,8 +35,8 @@ function Stepper({ current, viaLink }: { current: number; viaLink: boolean }) {
               <span
                 className={cx(
                   'flex size-6 items-center justify-center rounded-full font-mono text-[13px] font-semibold transition-colors duration-[240ms]',
-                  done && 'bg-signal text-bg',
-                  active && 'border border-signal text-signal',
+                  done && 'bg-brand text-on-accent',
+                  active && 'border border-brand text-brand ring-[3px] ring-brand/15',
                   !done && !active && 'border border-line-strong text-text-muted',
                 )}
               >
@@ -45,7 +45,7 @@ function Stepper({ current, viaLink }: { current: number; viaLink: boolean }) {
               <span className={cx('text-[14px] font-medium', active || done ? 'text-text' : 'text-text-muted')}>{s}</span>
             </div>
             {i < STEPS.length - 1 && (
-              <span className={cx('mx-3 h-px w-12', i < current ? 'bg-signal' : 'bg-line')} aria-hidden />
+              <span className={cx('mx-3 h-px w-12', i < current ? 'bg-brand' : 'bg-line')} aria-hidden />
             )}
           </li>
         )
@@ -160,7 +160,7 @@ function CodeStep({ onNext, onLink }: { onNext: () => void; onLink: () => void }
             maxLength={2}
             className={cx(
               'h-14 w-12 rounded-sm border bg-panel-raised text-center font-mono text-[24px] font-semibold uppercase text-text outline-none transition-colors duration-[120ms]',
-              error ? 'border-alert' : 'border-line-strong focus:border-signal',
+              error ? 'border-alert' : 'border-line-strong focus:border-brand',
             )}
           />
         ))}
@@ -259,7 +259,7 @@ function Field({ id, label, ...rest }: { id: string; label: string } & InputHTML
       </label>
       <input
         id={id}
-        className="h-10 rounded-sm border border-line-strong bg-panel-raised px-3 text-[16px] text-text outline-none transition-colors duration-[120ms] placeholder:text-text-faint read-only:border-line read-only:text-text-muted focus:border-signal"
+        className="h-10 rounded-sm border border-line-strong bg-panel-raised px-3 text-[16px] text-text outline-none transition-colors duration-[120ms] placeholder:text-text-faint read-only:border-line read-only:text-text-muted focus:border-brand"
         {...rest}
       />
     </div>
@@ -290,7 +290,7 @@ function ConsentStep({ onNext, onBack, viaLink }: { onNext: () => void; onBack: 
         <Field id="name" label="이름" defaultValue="김지원" readOnly={viaLink} />
         <Field id="email" label="이메일" type="email" defaultValue="jiwon.kim@example.com" readOnly={viaLink} />
         <div className="col-span-2">
-          <Field id="seat" label="수험번호" defaultValue={examInfo.seat} readOnly={viaLink} className="h-10 w-full rounded-sm border border-line-strong bg-panel-raised px-3 font-mono text-[16px] text-text outline-none read-only:border-line read-only:text-text-muted focus:border-signal" />
+          <Field id="seat" label="수험번호" defaultValue={examInfo.seat} readOnly={viaLink} className="h-10 w-full rounded-sm border border-line-strong bg-panel-raised px-3 font-mono text-[16px] text-text outline-none read-only:border-line read-only:text-text-muted focus:border-brand" />
         </div>
       </div>
 
@@ -300,7 +300,7 @@ function ConsentStep({ onNext, onBack, viaLink }: { onNext: () => void; onBack: 
             type="checkbox"
             checked={all}
             onChange={(e) => setChecked(checked.map(() => e.target.checked))}
-            className="size-4 accent-[var(--color-signal)]"
+            className="size-4 accent-[var(--color-brand)]"
           />
           <span className="text-[15px] font-semibold">전체 동의</span>
         </label>
@@ -312,7 +312,7 @@ function ConsentStep({ onNext, onBack, viaLink }: { onNext: () => void; onBack: 
                 type="checkbox"
                 checked={checked[i]}
                 onChange={(e) => setChecked(checked.map((v, j) => (j === i ? e.target.checked : v)))}
-                className="size-4 accent-[var(--color-signal)]"
+                className="size-4 accent-[var(--color-brand)]"
               />
               <label htmlFor={`consent-${i}`} className="flex-1 cursor-pointer text-[15px]">
                 {c.title}

@@ -36,11 +36,11 @@ const javaPlus = new LanguageSupport(
 const v = (name: string) => `var(--color-${name})`
 
 const highlight = HighlightStyle.define([
-  { tag: [t.keyword, t.controlKeyword, t.definitionKeyword, t.modifier, t.moduleKeyword, t.operatorKeyword, t.self, t.null], color: v('branch-3') },
-  { tag: [t.string, t.character], color: v('branch-1') },
-  { tag: [t.integer, t.float, t.number, t.bool, t.annotation], color: v('branch-4') },
+  { tag: [t.keyword, t.controlKeyword, t.definitionKeyword, t.modifier, t.moduleKeyword, t.operatorKeyword, t.self, t.null], color: v('code-keyword') },
+  { tag: [t.string, t.character], color: v('code-string') },
+  { tag: [t.integer, t.float, t.number, t.bool, t.annotation], color: v('code-number') },
   { tag: [t.className, t.typeName, t.standard(t.typeName)], color: v('code-type') },
-  { tag: [t.function(t.variableName), t.function(t.definition(t.variableName))], color: v('branch-2') },
+  { tag: [t.function(t.variableName), t.function(t.definition(t.variableName))], color: v('code-method') },
   { tag: t.propertyName, color: v('code-field') },
   { tag: [t.variableName, t.definition(t.variableName), t.labelName], color: v('text') },
   { tag: [t.lineComment, t.blockComment, t.comment], color: v('text-faint'), fontStyle: 'italic' },
@@ -48,25 +48,25 @@ const highlight = HighlightStyle.define([
   { tag: t.heading, color: v('text'), fontWeight: '700' },
   { tag: t.emphasis, fontStyle: 'italic' },
   { tag: t.strong, fontWeight: '700' },
-  { tag: [t.link, t.url], color: v('branch-2') },
-  { tag: [t.processingInstruction, t.monospace], color: v('branch-4') },
+  { tag: [t.link, t.url], color: v('code-method') },
+  { tag: [t.processingInstruction, t.monospace], color: v('code-number') },
 ])
 
 const theme = EditorView.theme(
   {
     '&': { height: '100%', backgroundColor: v('panel-sunken'), color: v('text'), fontSize: '14px' },
     '.cm-scroller': { fontFamily: '"JetBrains Mono", ui-monospace, Consolas, monospace', lineHeight: '22px' },
-    '.cm-content': { padding: '12px 0', caretColor: v('signal') },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: v('signal'), borderLeftWidth: '2px' },
+    '.cm-content': { padding: '12px 0', caretColor: v('brand') },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: v('brand'), borderLeftWidth: '2px' },
     '&.cm-focused': { outline: 'none' },
     '.cm-gutters': { backgroundColor: v('panel-sunken'), color: v('text-faint'), border: 'none' },
     '.cm-lineNumbers .cm-gutterElement': { padding: '0 16px 0 12px', minWidth: '48px', fontVariantNumeric: 'tabular-nums' },
     '.cm-activeLine': { backgroundColor: v('panel-raised') },
     '.cm-activeLineGutter': { backgroundColor: v('panel-raised'), color: v('text-muted') },
     '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, ::selection': {
-      backgroundColor: 'color-mix(in srgb, var(--color-info) 30%, transparent)',
+      backgroundColor: 'color-mix(in srgb, var(--color-brand) 16%, transparent)',
     },
-    '.cm-matchingBracket': { backgroundColor: 'color-mix(in srgb, var(--color-signal) 20%, transparent)', outline: 'none' },
+    '.cm-matchingBracket': { backgroundColor: 'color-mix(in srgb, var(--color-brand) 16%, transparent)', outline: 'none' },
     '.cm-selectionMatch': { backgroundColor: 'color-mix(in srgb, var(--color-text-muted) 20%, transparent)' },
     '.cm-tooltip': { backgroundColor: v('panel-raised'), border: `1px solid ${v('line')}`, color: v('text') },
     '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: v('line-strong'), color: v('text') },
