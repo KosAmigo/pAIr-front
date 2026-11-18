@@ -26,13 +26,5 @@ export const STAT_HISTORY: { date: string; task: string; scores: StatScores }[] 
 
 export const total = (s: StatScores) => STATS.reduce((n, st) => n + s[st.key], 0)
 
-/** 점수 구간별 등급 (배지에 쓰는 이름) */
-export function tierOf(score: number) {
-  if (score >= 90) return { name: 'MASTER', label: '마스터' }
-  if (score >= 80) return { name: 'EXPERT', label: '엑스퍼트' }
-  if (score >= 65) return { name: 'PRO', label: '프로' }
-  if (score >= 50) return { name: 'RISING', label: '라이징' }
-  return { name: 'ROOKIE', label: '루키' }
-}
-
-export const PROFILE = { name: '김지원', track: '개발', percentile: 18, streakWeeks: 6 }
+/** 크레딧 잔액은 기획_결정사항 §3(크레딧 원장 합계). 목업 값이다 */
+export const PROFILE = { name: '김지원', credits: 1240 }

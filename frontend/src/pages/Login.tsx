@@ -1,27 +1,68 @@
-// DESIGN.md §7-8 로그인, 회원가입
+// DESIGN.md §7-8 로그인, 회원가입 (2026-11-19 개편: 반반 쇼케이스)
+// 왼쪽 절반은 다크 무대: 큰 문장 + 역량 육각형 미리보기 + 떠 있는 유리 칩. 오른쪽 절반은 오로라 위 유리 폼 카드(GlowBorder).
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { Building2, Check, Eye, EyeOff, TriangleAlert, User } from 'lucide-react'
+import { Building2, Check, Eye, EyeOff, GitBranch, ShieldCheck, Sparkles, TriangleAlert, User } from 'lucide-react'
 import { cx } from '../components/cx'
 import { Button, Logo } from '../components/ui'
+import { Aurora, Glass, GlowBorder, GradientText, Reveal, StageSection } from '../components/fx'
+import { StatHex } from '../components/dashboard/StatHex'
+import { STAT_HISTORY, STATS, total } from '../data/dashboard'
 import { homeFor, useAuth } from '../auth/auth'
 
 const inputCls =
   'h-11 w-full rounded-sm border border-line-strong bg-panel px-3 text-[16px] text-text outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-text-faint focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
 
+const DEMO = STAT_HISTORY[STAT_HISTORY.length - 1].scores
+const DEMO_STATS = STATS.map((st) => ({ key: st.key, name: st.name, score: DEMO[st.key], max: st.max, color: st.color }))
+const CHIPS = [
+  { icon: Sparkles, text: 'AI 질문 18턴 분석', cls: 'top-[16%] right-[8%]', delay: '0s' },
+  { icon: GitBranch, text: '복기 분기 b2 +16', cls: 'bottom-[22%] left-[6%]', delay: '-2s' },
+  { icon: ShieldCheck, text: '감점 근거 대화 #T07', cls: 'bottom-[9%] right-[12%]', delay: '-4s' },
+]
+
 function AuthLayout({ title, children, footer }: { title: string; children: ReactNode; footer: ReactNode }) {
+  const [active, setActive] = useState<string | null>(null)
   return (
-    <div className="relative flex min-h-full items-center justify-center overflow-hidden bg-bg px-4 py-16">
-      <div aria-hidden className="absolute -top-40 left-1/2 size-[720px] -translate-x-1/2 rounded-full bg-brand/12 blur-[120px]" />
-      <div className="relative w-full max-w-[420px]">
-        <div className="mb-8 flex justify-center">
-          <Logo className="text-[20px]" />
+    <div className="grid min-h-full grid-cols-2">
+      {/* 왼쪽: 다크 무대 쇼케이스 */}
+      <StageSection shape="inset" className="rounded-none! border-0! shadow-none!" aria-label="pAIr 소개">
+        <div className="relative flex h-full min-h-[720px] flex-col px-14 py-12">
+          <Logo className="text-[20px] text-stage-text!" />
+          <Reveal className="mt-16">
+            <p className="text-[44px] leading-[54px] font-extrabold tracking-[-0.03em] text-stage-text">
+              AI와 일하는 실력,
+              <br />
+              <GradientText>숫자로 증명</GradientText>하세요
+            </p>
+            <p className="mt-4 max-w-[440px] text-[17px] leading-7 text-stage-muted">풀이 과정 전체를 6가지 역량으로 채점하고, 아쉬웠던 순간으로 돌아가 다시 풀어 볼 수 있습니다.</p>
+          </Reveal>
+          <div className="relative mt-auto flex justify-center" aria-hidden>
+            <StatHex stats={DEMO_STATS} total={total(DEMO)} active={active} onActive={setActive} size={400} />
+            {CHIPS.map((c) => (
+              <span key={c.text} className={`auth-float glass-stage absolute inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold text-stage-text ${c.cls}`} style={{ animationDelay: c.delay }}>
+                <c.icon size={14} className="text-stage-brand" />
+                {c.text}
+              </span>
+            ))}
+          </div>
         </div>
-        <div className="rounded-lg border border-line bg-panel p-10 shadow-md">
-          <h1 className="text-h1 font-bold text-text">{title}</h1>
-          {children}
+      </StageSection>
+
+      {/* 오른쪽: 폼 */}
+      <div className="relative isolate flex items-center justify-center overflow-hidden px-10 py-16">
+        <Aurora variant="full" />
+        <div className="relative z-10 w-full max-w-[440px]">
+          <Reveal>
+            <GlowBorder className="rounded-2xl">
+              <Glass className="rounded-2xl bg-white/85! p-10 shadow-lg!">
+                <h1 className="text-[28px] leading-9 font-bold tracking-[-0.02em] text-text">{title}</h1>
+                {children}
+              </Glass>
+            </GlowBorder>
+          </Reveal>
+          <div className="mt-6 text-center text-[14px] text-text-muted">{footer}</div>
         </div>
-        <div className="mt-6 text-center text-[14px] text-text-muted">{footer}</div>
       </div>
     </div>
   )
