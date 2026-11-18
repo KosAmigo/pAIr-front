@@ -44,6 +44,21 @@
   --color-code-method: #1d4ed8;
   --color-code-field: #1e5f99;
 
+  /* 1.1a 다크 무대(Stage): StageSection 안에서만 */
+  --color-stage-bg: #0b0a1f;
+  --color-stage-panel: #15132e;
+  --color-stage-raised: #1f1c40;
+  --color-stage-line: #2e2a57;
+  --color-stage-line-strong: #625d99;
+  --color-stage-text: #f4f3ff;
+  --color-stage-muted: #a9a6c9;
+  --color-stage-faint: #6f6b94;
+  --color-stage-brand: #a78bfa;
+  --color-stage-blue: #7fa3ff;
+  --color-stage-signal: #34d399;
+  --color-stage-caution: #fbbf24;
+  --color-stage-alert: #fb7185;
+
   /* 2.1 Fonts */
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', sans-serif;
   /* 한글은 JetBrains Mono에 없으므로 Pretendard로 그린다 (시스템의 얇은 대체 글꼴 금지) */
@@ -89,12 +104,26 @@
   /* 모달·팝오버·토스트 (= shadow-lg) */
   --shadow-modal: 0 32px 80px -16px rgb(60 40 160 / 0.28);
 
-  /* 4. Motion */
+  /* 4.1 Motion (값은 src/lib/motion.ts 와 같게 유지) */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-instant: 80ms;
+  --duration-fast: 150ms;
+  --duration-normal: 260ms;
+  --duration-slow: 600ms;
+  --duration-crawl: 900ms;
 
   /* 1.2 브랜드 그라데이션 (클래스: bg-brand-gradient, text-brand-gradient) */
   --gradient-brand: linear-gradient(120deg, #8b5cf6 0%, #6c47ff 45%, #2f5bea 100%);
+  /* 1.1a 다크 무대 위 그라데이션 글씨 */
+  --gradient-brand-stage: linear-gradient(120deg, #c4b5fd 0%, #a78bfa 45%, #7fa3ff 100%);
+}
+
+/* GlowBorder 회전 각도 (conic-gradient 애니메이션용) */
+@property --fx-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
 }
 
 @layer base {
@@ -169,6 +198,193 @@
       0 0 0 1px color-mix(in srgb, var(--glow) 40%, transparent),
       0 8px 32px color-mix(in srgb, var(--glow) 35%, transparent);
   }
+  /* 6.1 primary 버튼: 호버하면 빛이 한 번 쓸고 지나간다 */
+  .btn-shimmer {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .btn-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.35) 50%, transparent 70%);
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+  .btn-shimmer:not(:disabled):hover::after {
+    transform: translateX(100%);
+    transition: transform var(--duration-slow) var(--ease-expo);
+  }
+
+  /* 3.4 다크 무대 안 glow: 반경 1.5배 */
+  .glow-stage {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--glow) 50%, transparent),
+      0 0 48px color-mix(in srgb, var(--glow) 45%, transparent);
+  }
+  .text-brand-gradient-stage {
+    background-image: var(--gradient-brand-stage);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* 3.5 유리 표면 */
+  .glass {
+    background: rgb(255 255 255 / 0.62);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgb(255 255 255 / 0.7);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--color-line) 60%, transparent),
+      var(--shadow-sm);
+  }
+  .glass-stage {
+    background: rgb(21 19 46 / 0.6);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgb(255 255 255 / 0.08);
+  }
+
+  /* 3.6 다크 무대: 32px 도트 그리드 */
+  .stage-dots {
+    background-image: radial-gradient(color-mix(in srgb, var(--color-stage-line) 60%, transparent) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* 1.2 brand-aurora (Aurora 부품). 흐림 원 3개, data-variant 로 강도를 고른다 */
+  .fx-aurora {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .fx-aurora > i {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(120px);
+    will-change: transform;
+  }
+  .fx-aurora > i:nth-child(1) {
+    width: 46%;
+    aspect-ratio: 1;
+    left: -8%;
+    top: -40%;
+    background: rgb(196 181 253 / var(--a1));
+    animation: fx-aurora-a 22s ease-in-out infinite alternate;
+  }
+  .fx-aurora > i:nth-child(2) {
+    width: 40%;
+    aspect-ratio: 1;
+    right: -10%;
+    top: -30%;
+    background: rgb(147 197 253 / var(--a2));
+    animation: fx-aurora-b 26s ease-in-out infinite alternate;
+  }
+  .fx-aurora > i:nth-child(3) {
+    width: 30%;
+    aspect-ratio: 1;
+    left: 34%;
+    top: -10%;
+    background: rgb(240 171 252 / var(--a3));
+    animation: fx-aurora-c 18s ease-in-out infinite alternate;
+  }
+  .fx-aurora[data-variant='full'] {
+    --a1: 0.55;
+    --a2: 0.5;
+    --a3: 0.35;
+  }
+  .fx-aurora[data-variant='full'] > i:nth-child(1) {
+    top: -12%;
+  }
+  .fx-aurora[data-variant='full'] > i:nth-child(2) {
+    top: 4%;
+  }
+  .fx-aurora[data-variant='full'] > i:nth-child(3) {
+    top: 40%;
+  }
+  .fx-aurora[data-variant='band'] {
+    --a1: 0.4;
+    --a2: 0.35;
+    --a3: 0.25;
+    mask-image: linear-gradient(to bottom, black 40%, transparent);
+  }
+  .fx-aurora[data-variant='stage'] > i:nth-child(1) {
+    background: rgb(124 58 237 / 0.45);
+  }
+  .fx-aurora[data-variant='stage'] > i:nth-child(2) {
+    background: rgb(47 91 234 / 0.4);
+  }
+  .fx-aurora[data-variant='stage'] > i:nth-child(3) {
+    background: rgb(192 38 211 / 0.25);
+  }
+  .fx-aurora[data-paused='true'] > i {
+    animation-play-state: paused;
+  }
+
+  /* GlowBorder: 테두리를 따라 도는 브랜드 그라데이션 빛 (6초 1바퀴) */
+  .fx-glow-border {
+    position: relative;
+    isolation: isolate;
+  }
+  .fx-glow-border::before {
+    content: '';
+    position: absolute;
+    inset: -1.5px;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(from var(--fx-angle), transparent 0deg, #8b5cf6 60deg, #2f5bea 120deg, transparent 180deg, transparent 360deg)
+      border-box;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: fx-spin 6s linear infinite;
+    pointer-events: none;
+  }
+  .fx-glow-border::after {
+    content: '';
+    position: absolute;
+    inset: -1.5px;
+    z-index: -2;
+    border-radius: inherit;
+    background: conic-gradient(from var(--fx-angle), transparent 0deg, rgb(108 71 255 / 0.35) 90deg, transparent 180deg);
+    filter: blur(16px);
+    animation: fx-spin 6s linear infinite;
+    pointer-events: none;
+  }
+  .fx-glow-border[data-paused='true']::before,
+  .fx-glow-border[data-paused='true']::after {
+    animation-play-state: paused;
+  }
+
+  /* Spotlight: 커서를 따라 카드 면에 비치는 빛 */
+  .fx-spotlight {
+    position: relative;
+    isolation: isolate;
+  }
+  .fx-spotlight::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: var(--spot-o, 0);
+    transition: opacity var(--duration-fast) ease-out;
+    background: radial-gradient(320px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgb(108 71 255 / 0.08), transparent 70%);
+  }
+  .fx-spotlight[data-tone='stage']::before {
+    background: radial-gradient(320px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgb(167 139 250 / 0.14), transparent 70%);
+  }
+
   .glow-svg {
     filter: drop-shadow(0 0 6px color-mix(in srgb, var(--glow) 55%, transparent));
   }
@@ -205,6 +421,26 @@
   50% {
     opacity: 0.35;
     transform: scale(0.85);
+  }
+}
+@keyframes fx-spin {
+  to {
+    --fx-angle: 360deg;
+  }
+}
+@keyframes fx-aurora-a {
+  to {
+    transform: translate(40%, 20%) scale(1.15);
+  }
+}
+@keyframes fx-aurora-b {
+  to {
+    transform: translate(-40%, 30%) scale(0.9);
+  }
+}
+@keyframes fx-aurora-c {
+  to {
+    transform: translate(30%, -20%) scale(1.2);
   }
 }
 @keyframes fade-in {

@@ -1,14 +1,19 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router-dom'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
+import { motion } from 'motion/react'
 
 import { cx } from './cx'
+import { springs } from '../lib/motion'
+import { CountUp } from './fx/CountUp'
 
 // ── 6.1 Button ──────────────────────────────
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
 const variantCls: Record<Variant, string> = {
-  primary: 'bg-brand-gradient text-on-accent hover:shadow-[0_8px_24px_-6px_rgb(108_71_255/0.45)] active:scale-[0.98] disabled:bg-none disabled:bg-panel-raised disabled:text-text-faint disabled:shadow-none',
+  // 호버: 그라데이션이 밝아지고 빛이 한 번 쓸고 지나가며 brand glow (DESIGN.md §6.1, §3.4)
+  primary:
+    'btn-shimmer bg-brand-gradient text-on-accent hover:shadow-[0_0_0_1px_rgb(108_71_255/0.4),0_8px_32px_rgb(108_71_255/0.35)] disabled:bg-none disabled:bg-panel-raised disabled:text-text-faint disabled:shadow-none',
   secondary: 'bg-panel text-text border border-line-strong hover:border-text-muted hover:bg-panel-raised',
   ghost: 'text-text-muted hover:bg-panel-raised hover:text-text',
   danger: 'text-alert border border-alert/40 hover:bg-alert/8',
@@ -21,7 +26,7 @@ const sizeCls: Record<Size, string> = {
 function buttonCls(variant: Variant = 'secondary', size: Size = 'md', extra?: string) {
   return cx(
     'inline-flex shrink-0 items-center justify-center rounded-md font-semibold whitespace-nowrap',
-    'transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out',
+    'transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.97]',
     'disabled:cursor-not-allowed disabled:opacity-40',
     variantCls[variant],
     sizeCls[size],
@@ -110,6 +115,8 @@ export function Tabs<T extends string>({
   onChange: (v: T) => void
   className?: string
 }) {
+  // 인디케이터는 탭 사이를 미끄러져 이동한다 (DESIGN.md §6.3, Motion layoutId)
+  const indicatorId = useId()
   return (
     <div role="tablist" className={cx('flex h-9 items-stretch gap-4', className)}>
       {tabs.map((t) => {
@@ -127,12 +134,9 @@ export function Tabs<T extends string>({
             )}
           >
             {t.label}
-            <span
-              className={cx(
-                'absolute inset-x-0 -bottom-px h-0.5 bg-brand transition-opacity duration-[180ms]',
-                active ? 'opacity-100' : 'opacity-0',
-              )}
-            />
+            {active && (
+              <motion.span layoutId={indicatorId} transition={springs.snappy} className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-brand-gradient" />
+            )}
           </button>
         )
       })}
@@ -187,7 +191,9 @@ export function MetricTile({
     <div className="flex flex-col gap-1.5 rounded-md border border-line bg-panel px-4 py-3 shadow-sm">
       <span className="label">{label}</span>
       <div className="flex items-baseline gap-1.5">
-        <span className="tnum font-mono text-[32px] leading-9 font-semibold text-text">{value}</span>
+        <span className="tnum font-mono text-[32px] leading-9 font-semibold text-text">
+          {typeof value === 'number' ? <CountUp value={value} decimals={Number.isInteger(value) ? 0 : 1} /> : value}
+        </span>
         {unit && <span className="text-[14px] text-text-muted">{unit}</span>}
       </div>
       {delta !== undefined ? <Delta value={delta} text={deltaText} /> : sub && <div className="text-[14px] text-text-muted">{sub}</div>}

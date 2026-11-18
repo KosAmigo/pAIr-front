@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { MotionConfig } from 'motion/react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Exam from './pages/Exam'
@@ -56,6 +57,8 @@ function ConsoleHome() {
 
 export default function App() {
   return (
+    // 움직임 줄이기 설정이면 Motion 의 transform 연출을 모두 끈다 (DESIGN.md §4.4)
+    <MotionConfig reducedMotion="user">
     <AuthProvider>
       <BrowserRouter>
         <AntiCheatingSync />
@@ -111,5 +114,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </MotionConfig>
   )
 }
