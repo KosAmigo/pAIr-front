@@ -1,11 +1,14 @@
 import { useState, type CSSProperties } from 'react'
+import { motion } from 'motion/react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { isRealAttempt } from '../api'
 import RealReport from './RealReport'
 import { Bot, ChevronDown, CircleAlert, CircleCheck, GitBranch, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
-import { Button, ButtonLink, Delta, Panel, Sep } from '../components/ui'
+import { Button, ButtonLink, Panel, ScoreBar } from '../components/ui'
+import { ScoreHero, StageSep } from '../components/report/ScoreHero'
+import { duration, easing } from '../lib/motion'
 import { COMPETENCIES, density, moments, report, timelineEvents, type ChatMsg } from '../data/mock'
 
 // DESIGN.md §7-4 결과 리포트, §6.11 Timeline, §6.12 Quote Block
@@ -51,8 +54,17 @@ function Timeline({ selected, onSelect }: { selected: string; onSelect: (id: str
 
       {/* AI 상호작용 밀도 */}
       <div className="relative flex h-[120px] items-end gap-px border-y border-line" aria-label="분당 AI 상호작용 밀도" role="img">
+        {/* 화면에 들어오면 막대가 왼쪽부터 차례로 솟는다 */}
         {density.map((d, i) => (
-          <span key={i} className="flex-1 rounded-t-[1px] bg-text-faint/50" style={{ height: `${d * 100}%` }} />
+          <motion.span
+            key={i}
+            className="flex-1 origin-bottom rounded-t-[1px] bg-text-faint/50"
+            style={{ height: `${d * 100}%` }}
+            initial={{ scaleY: 0 }}
+            whileInView={{ scaleY: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: duration.slow, ease: easing.expo, delay: i * 0.012 }}
+          />
         ))}
         {moments.map((m) => (
           <span
@@ -151,30 +163,38 @@ function MockReport() {
     >
       <div className="mx-auto grid max-w-[1440px] grid-cols-12 gap-2 p-8">
         {/* 헤더 요약 */}
-        <section className="col-span-12 flex items-end gap-10 rounded-md border border-line bg-panel px-6 py-5">
-          <div className="min-w-0 flex-1">
-            <span className="label">DEV TASK</span>
-            <h2 className="mt-1 text-h1 font-bold">{report.task}</h2>
-            <div className="tnum mt-2 flex gap-4 font-mono text-[14px] text-text-muted">
+        <ScoreHero
+          kind="DEV TASK"
+          title={report.task}
+          meta={
+            <>
               <span>{report.date}</span>
-              <Sep />
+              <StageSep />
               <span>소요 {report.duration}</span>
-              <Sep />
+              <StageSep />
               <span>AI 대화 18턴</span>
-            </div>
-          </div>
-          <div className="flex flex-col items-end">
-            <span className="label">TOTAL SCORE</span>
-            <div className="flex items-baseline gap-2">
-              <span className="tnum font-mono text-display font-semibold">{report.total}</span>
-              <span className="font-mono text-[16px] text-text-muted">/100</span>
-            </div>
-            <Delta value={report.delta} text="지난 응시 대비" />
-          </div>
-        </section>
+            </>
+          }
+          total={report.total}
+          max={100}
+          items={report.scores.map((s) => {
+            const c = COMPETENCIES.find((x) => x.key === s.key)!
+            return { key: s.key, name: c.name, score: s.score, max: 100, color: c.color }
+          })}
+          aside={
+            <span>
+              <b className="tnum font-mono font-semibold text-stage-signal">
+                {report.delta >= 0 ? '+' : ''}
+                {report.delta}
+              </b>{' '}
+              지난 응시 대비
+            </span>
+          }
+          seenKey={`mock-${report.task}-${report.date}`}
+        />
 
         {/* 1행: 항목별 점수 */}
-        <Panel label="BREAKDOWN" title="항목별 점수" className="col-span-12" flush>
+        <Panel reveal label="BREAKDOWN" title="항목별 점수" className="col-span-12" flush>
           <ul className="divide-y divide-line">
             {report.scores.map((s) => {
               const c = COMPETENCIES.find((x) => x.key === s.key)!
@@ -183,9 +203,7 @@ function MockReport() {
                 <li key={s.key}>
                   <div className="grid grid-cols-[168px_280px_48px_1fr_128px] items-center gap-6 px-4 py-3">
                     <span className="text-[15px] font-medium">{c.name}</span>
-                    <div className="h-1.5 rounded-full bg-panel-raised">
-                      <div className="h-full rounded-full" style={{ width: `${s.score}%`, background: c.color }} />
-                    </div>
+                    <ScoreBar value={s.score / 100} color={c.color} />
                     <span className="tnum text-right font-mono text-[16px] font-semibold">{s.score}</span>
                     <span className="text-[14px] text-text-muted">{s.note}</span>
                     {s.sub ? (
@@ -236,6 +254,7 @@ function MockReport() {
 
         {/* 2행: 타임라인 */}
         <Panel
+          reveal
           label="TIMELINE"
           title="풀이 타임라인"
           className="col-span-12"

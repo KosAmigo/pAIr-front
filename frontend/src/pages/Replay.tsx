@@ -1,5 +1,8 @@
 import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion, useReducedMotion } from 'motion/react'
+import { StageSection } from '../components/fx'
+import { duration, easing, springs } from '../lib/motion'
 import { FileBarChart2, GitBranch, GitCompareArrows, RotateCcw, X } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
@@ -7,6 +10,7 @@ import { Button, ButtonLink, IconButton, ScoreChip } from '../components/ui'
 import { branches, COMPETENCIES, treeNodes, type TreeNode } from '../data/mock'
 
 // DESIGN.md §7-5 복기 트리 + §6.13 노드 & 선
+// 트리 캔버스는 이 화면의 다크 무대(§3.6). 들어오면 main 부터 분기 순서대로 선이 그려지고 노드가 튀어나온다.
 
 const ROW = 56 // 행 높이
 const LANE = 28 // 레인 폭 (dx ≤ ROW → 45° 대각선 유지)
@@ -28,15 +32,27 @@ function branchPath(b: number) {
   return `M ${px} ${y0} L ${x} ${y0 + dx} L ${x} ${end}`
 }
 
+/** 분기 b 의 선이 그려지기 시작하는 시각 (main 부터 차례로, stagger 200ms) */
+const branchDelay = (b: number) => b * 0.2
+/** 노드는 자기 분기 선이 그 행에 닿을 즈음 튀어나온다 */
+const nodeDelay = (n: TreeNode) => branchDelay(n.branch) + 0.15 + n.row * 0.03
+
 function Node({ n, dim, active }: { n: TreeNode; dim: boolean; active: boolean }) {
+  const reduce = useReducedMotion()
   const x = laneX(n.branch)
   const y = rowY(n.row)
   const c = color(n.branch)
-  const style = { '--glow': c } as CSSProperties
+  const style = { '--glow': c, transformOrigin: `${x}px ${y}px` } as CSSProperties
   return (
-    <g className={cx('transition-opacity duration-300', dim && 'opacity-35')} style={style}>
-      {active && <circle cx={x} cy={y} r={14} fill="none" stroke="var(--color-text)" strokeOpacity={0.5} strokeDasharray="3 3" />}
-      {n.kind === 'checkpoint' && <circle cx={x} cy={y} r={5} fill="var(--color-panel)" stroke={c} strokeWidth={3} />}
+    <motion.g
+      className={cx('transition-opacity duration-300', dim && 'opacity-35')}
+      style={style}
+      initial={reduce ? false : { scale: 0 }}
+      animate={{ scale: 1 }}
+      transition={{ ...springs.gentle, delay: nodeDelay(n) }}
+    >
+      {active && <circle cx={x} cy={y} r={14} fill="none" stroke="var(--color-stage-text)" strokeOpacity={0.6} strokeDasharray="3 3" />}
+      {n.kind === 'checkpoint' && <circle cx={x} cy={y} r={5} fill="var(--color-stage-bg)" stroke={c} strokeWidth={3} />}
       {n.kind === 'fork' && <circle cx={x} cy={y} r={7} fill={c} className="glow-svg" />}
       {n.kind === 'submit' && (
         <g className="glow-svg">
@@ -46,7 +62,7 @@ function Node({ n, dim, active }: { n: TreeNode; dim: boolean; active: boolean }
           </text>
         </g>
       )}
-    </g>
+    </motion.g>
   )
 }
 
@@ -60,6 +76,7 @@ function BranchGraph({
   onNode: (id: string) => void
 }) {
   const navigate = useNavigate()
+  const reduce = useReducedMotion()
   const any = selected.length > 0
   const isSel = (b: number) => selected.includes(branches[b].id)
   const maxRow = Math.max(...treeNodes.map((n) => n.row))
@@ -74,7 +91,7 @@ function BranchGraph({
         {[...branches.keys()]
           .sort((a, b) => Number(isSel(a)) - Number(isSel(b)))
           .map((b) => (
-            <path
+            <motion.path
               key={b}
               d={branchPath(b)}
               fill="none"
@@ -84,6 +101,9 @@ function BranchGraph({
               strokeLinecap="round"
               style={{ '--glow': color(b) } as CSSProperties}
               className={cx('transition-opacity duration-300', any && !isSel(b) && 'opacity-35', isSel(b) && 'glow-svg')}
+              initial={reduce ? false : { pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: duration.slow, ease: easing.expo, delay: branchDelay(b) }}
             />
           ))}
         {treeNodes.map((n) => (
@@ -103,15 +123,17 @@ function BranchGraph({
                 aria-expanded={activeNode === n.id}
                 className={cx(
                   'flex h-10 w-full items-center gap-3 rounded-md px-3 text-left transition-[opacity,background-color] duration-300',
-                  activeNode === n.id ? 'bg-panel-raised' : 'hover:bg-panel-raised/60',
+                  activeNode === n.id ? 'bg-stage-raised' : 'hover:bg-stage-raised/60',
                   dim && 'opacity-35',
                 )}
               >
-                <span className="tnum w-16 shrink-0 font-mono text-[13px] text-text-muted">{n.time}</span>
-                <span className="w-10 shrink-0 font-mono text-[13px] font-semibold" style={{ color: color(n.branch) }}>
+                <span className="tnum w-16 shrink-0 font-mono text-[13px] text-stage-muted">{n.time}</span>
+                {/* 분기 색은 글자가 아니라 점으로 (§1.1a: 무대 위 분기 색 글자 금지) */}
+                <span className="flex w-12 shrink-0 items-center gap-1.5 font-mono text-[13px] font-semibold text-stage-text">
+                  <span className="size-2 rounded-full" style={{ background: color(n.branch) }} aria-hidden />
                   {branches[n.branch].name}
                 </span>
-                <span className={cx('truncate text-[14px]', n.kind === 'submit' ? 'font-semibold text-text' : 'text-text')}>{n.label}</span>
+                <span className={cx('truncate text-[14px] text-stage-text', n.kind === 'submit' && 'font-semibold')}>{n.label}</span>
                 {n.kind === 'submit' && <ScoreChip score={n.score!} className="ml-auto" />}
               </button>
             </li>
@@ -189,7 +211,13 @@ function Compare({ ids, onClear }: { ids: string[]; onClear: () => void }) {
   const diff = b.total - a.total
 
   return (
-    <div className="fade-in flex h-full flex-col">
+    <motion.div
+      key={ids.join('-')}
+      className="flex h-full flex-col"
+      initial={{ opacity: 0, x: 24 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: duration.slow, ease: easing.expo }}
+    >
       {/* A vs B 헤더 */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-line px-4 py-4">
         {[
@@ -233,8 +261,12 @@ function Compare({ ids, onClear }: { ids: string[]; onClear: () => void }) {
                 <span className="tnum w-8 text-right font-mono font-semibold">{vb}</span>
               </div>
               <div className="grid grid-cols-[1fr_44px_1fr] items-center gap-2">
-                <div className="flex h-2 justify-end rounded-full bg-panel-raised">
-                  <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${va}%`, background: color(ai) }} />
+                {/* 막대는 width 대신 scaleX 로 (§4.1) */}
+                <div className="h-2 overflow-hidden rounded-full bg-panel-raised">
+                  <div
+                    className="h-full w-full origin-right rounded-full transition-transform duration-300"
+                    style={{ transform: `scaleX(${va / 100})`, background: color(ai) }}
+                  />
                 </div>
                 <span
                   className={cx(
@@ -245,8 +277,11 @@ function Compare({ ids, onClear }: { ids: string[]; onClear: () => void }) {
                   {d > 0 ? '+' : ''}
                   {d}
                 </span>
-                <div className="h-2 rounded-full bg-panel-raised">
-                  <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${vb}%`, background: color(bi) }} />
+                <div className="h-2 overflow-hidden rounded-full bg-panel-raised">
+                  <div
+                    className="h-full w-full origin-left rounded-full transition-transform duration-300"
+                    style={{ transform: `scaleX(${vb / 100})`, background: color(bi) }}
+                  />
                 </div>
               </div>
             </li>
@@ -284,7 +319,7 @@ function Compare({ ids, onClear }: { ids: string[]; onClear: () => void }) {
           선택 해제
         </Button>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -338,24 +373,28 @@ export default function Replay() {
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-12">
-          <section className="dot-grid col-span-7 min-h-0 overflow-auto border-r border-line py-6 pr-6" aria-label="분기 그래프">
-            <div className="mb-2 flex items-center gap-4 pl-6">
-              <span className="label">BRANCH GRAPH</span>
-              <span className="flex items-center gap-3 text-[13px] text-text-muted">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full border-2 border-text-muted" aria-hidden /> 체크포인트
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-text-muted" aria-hidden /> 분기 시작
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-3.5 rounded-[3px] bg-text-muted" aria-hidden /> 제출 점수
-                </span>
-              </span>
-            </div>
-            <BranchGraph selected={selected} activeNode={activeNode} onNode={(id) => setActiveNode(activeNode === id ? null : id)} />
-          </section>
-          <section className="col-span-5 min-h-0 bg-panel" aria-label="분기 비교">
+          <div className="col-span-7 min-h-0 p-4 pr-2">
+            <StageSection className="h-full" aria-label="분기 그래프">
+              <div className="h-full overflow-auto py-6 pr-6">
+                <div className="mb-2 flex items-center gap-4 pl-6">
+                  <span className="label text-stage-muted">BRANCH GRAPH</span>
+                  <span className="flex items-center gap-3 text-[13px] text-stage-muted">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2.5 rounded-full border-2 border-stage-muted" aria-hidden /> 체크포인트
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2.5 rounded-full bg-stage-muted" aria-hidden /> 분기 시작
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-3.5 rounded-[3px] bg-stage-muted" aria-hidden /> 제출 점수
+                    </span>
+                  </span>
+                </div>
+                <BranchGraph selected={selected} activeNode={activeNode} onNode={(id) => setActiveNode(activeNode === id ? null : id)} />
+              </div>
+            </StageSection>
+          </div>
+          <section className="col-span-5 my-4 mr-4 ml-2 min-h-0 overflow-hidden rounded-xl border border-line bg-panel shadow-sm" aria-label="분기 비교">
             <header className="flex h-10 items-center border-b border-line px-4">
               <span className="label">COMPARE</span>
               <span className="ml-3 text-[16px] font-semibold">항목별 비교</span>

@@ -414,11 +414,11 @@ Fallback:
 | 라이브러리 | 쓰는 곳 | 비고 |
 |---|---|---|
 | **Motion** (`motion/react`) | 표현 무대의 모든 움직임: 등장, 순차 등장, 레이아웃 전환, 페이지 전환, `Spotlight`, `Magnetic`, `CountUp` | `framer-motion`에서 가져오지 않는다. 기본 도구다 |
-| **GSAP** + `@gsap/react` (`useGSAP`) | 초기화면 스크롤 연출 전부(ScrollTrigger scrub·pin, SplitText, 척추 선). 표현 무대에서는 **SVG를 그리는 한 번짜리 타임라인**만: 리포트 레이더·타임라인, 복기 트리 선 그리기 | `useGSAP(..., { scope })`로 묶어 언마운트 시 자동 정리. 한 요소를 Motion과 GSAP가 같이 움직이지 않는다 |
+| **GSAP** + `@gsap/react` (`useGSAP`) | 초기화면 스크롤 연출 전부(ScrollTrigger scrub·pin, SplitText, 척추 선). 앱 화면의 SVG 그리기(리포트 레이더·타임라인, 복기 트리 선)는 Motion `pathLength`로 한다(2026-11-19: 앱 화면은 lazy 분리가 안 돼 있어 GSAP를 넣으면 응시 화면 번들에도 섞인다) | `useGSAP(..., { scope })`로 묶어 언마운트 시 자동 정리. 한 요소를 Motion과 GSAP가 같이 움직이지 않는다 |
 | **Lenis** | 초기화면 부드러운 스크롤 | **초기화면에서만** 켠다. `lenis.on('scroll', ScrollTrigger.update)`로 GSAP와 연결 |
 | **three.js** (2026-11-19 추가) | 초기화면 히어로 `ShaderBackground` 하나 | `@react-three/fiber` 없이 직접 쓴다(셰이더 면 하나라 가볍게). §4.3 |
 
-- 초기화면은 `React.lazy`로 분리해 three.js·Lenis·ScrollTrigger가 초기화면 청크에만 들어가게 한다. GSAP 코어는 리포트·복기 청크에도 들어간다. 집중 무대(응시 화면) 청크에는 GSAP·three.js가 들어가지 않는다.
+- 초기화면은 `React.lazy`로 분리해 GSAP·three.js·Lenis가 초기화면 청크에만 들어가게 한다. three.js는 그 안에서도 동적 import로 따로 불러온다. 앱 화면 번들에는 Motion만 들어간다.
 - 화면 밖으로 나간 반복 애니메이션(오로라, 데모 타이핑, 셰이더, `GlowBorder`)은 멈춘다 (`IntersectionObserver`, `document.hidden`).
 
 ### 4.3 초기화면 전용: WebGL과 스크롤 고정 (2026-11-19)
@@ -652,7 +652,7 @@ AI가 파일을 고치거나 새로 만들자고 제안하면, 답변 속 수정
 | 2. 대시보드 | 표현 | 최근 총점 타일 (안쪽 무대) | band | 지표 `CountUp`, 차트 선 그려짐 |
 | 2b. 내 기록 | 표현 | 없음 | band | 목록 순차 등장 |
 | 3. 응시 화면, 후속 질문 | **집중** | 없음 | 없음 | 없음 |
-| 4. 결과 리포트 | 표현 | 상단 총점 히어로 (전체 폭) | stage | 총점 카운트업 + 레이더 그려짐, 첫 열람 `Particles` |
+| 4. 결과 리포트 | 표현 | 상단 총점 히어로 (본문 폭 안쪽 무대) | stage | 총점 카운트업 + 레이더 그려짐, 첫 열람 `Particles` |
 | 5. 복기 트리 | 표현 | 트리 캔버스 (안쪽 무대) | stage | 분기 선 그려짐, 선택 분기 glow |
 | 6. 시험 입장 | 표현 | 4단계 대기실 (전체 폭) | band (1–3단계) | 단계 전환, 대기실 카운트다운 |
 | 제출 완료 | 표현 | 없음 | full | 체크 그려짐 + `Particles` |
@@ -879,7 +879,7 @@ pAIr를 자랑하는 스크롤형 소개 페이지다. 기본은 자유 스크�
 
 ### 4. 결과 리포트 `/report/:id`
 
-- **연출 (2026-11-19):** 상단 헤더를 전체 폭 다크 무대(`aurora-stage`)로 만든다. 총점은 `display`보다 큰 120px mono로 `CountUp`(`count`)되고 `shadow-glow-stage`(brand)가 켜진다. 그 옆 레이더(GSAP)가 축부터 뻗고 면이 채워진다(`crawl`). 그 리포트를 처음 열 때만 `Particles`가 한 번 터진다(본 적 있는 리포트는 다시 터지지 않음). 아래 본문 섹션은 `Reveal`, 타임라인 선은 화면에 들어올 때 그려지고 결정적 순간 마커가 glow와 함께 켜진다. 스크롤 고정(pin)은 쓰지 않는다.
+- **연출 (2026-11-19):** 상단 헤더를 본문 폭(12열 전체)의 안쪽 다크 무대(`ScoreHero`, `aurora-stage`)로 만든다. 앱 화면은 스크롤 영역 안이라 화면 끝까지 펴면 가로 스크롤이 생기므로 안쪽 무대로 정했다. 총점은 `display`보다 큰 120px mono로 `CountUp`(`count`)되고 `stage-brand` 빛 번짐이 켜진다. 그 옆 레이더(`ScoreRadar`, Motion)가 축부터 뻗고 면이 채워진다(`crawl`). 항목별 점수 막대는 화면에 들어오면 차오른다(`ScoreBar`, scaleX). 패널은 `Panel reveal`로 등장한다. 그 리포트를 처음 열 때만 `Particles`가 한 번 터진다(본 적 있는 리포트는 다시 터지지 않음). 아래 본문 섹션은 `Reveal`, 타임라인 선은 화면에 들어올 때 그려지고 결정적 순간 마커가 glow와 함께 켜진다. 스크롤 고정(pin)은 쓰지 않는다.
 
 **실제 응시 리포트**(`att-` ID, `pages/RealReport.tsx`)
 - 상단 헤더: 과제명, 메타(응시 일시 │ 소요 │ AI 대화 턴 │ 어시스턴트 모델 │ 채점 모델), 오른쪽에 `TOTAL SCORE` **총점 `display` / 100**.
@@ -900,7 +900,7 @@ pAIr를 자랑하는 스크롤형 소개 페이지다. 기본은 자유 스크�
 
 ### 5. 복기 트리 `/replay/:taskId` — 가장 돋보여야 하는 화면
 
-- **연출 (2026-11-19):** 트리 캔버스를 안쪽 다크 무대(`radius-xl`, 도트 그리드, `aurora-stage`)로 만든다. 들어오면 main 줄기부터 분기 순서대로 선이 그려지고(GSAP `stroke-dashoffset`, 분기당 `slow`, stagger 200ms) 노드가 `gentle` 스프링으로 튀어나온다. 선택한 분기는 `shadow-glow-stage`, 나머지는 35%. A·B 비교 패널은 `glass-stage`로 오른쪽에서 밀려 들어온다. 트리 안에서는 여전히 브랜드 그라데이션을 쓰지 않는다(§1.4), 글자는 `stage-*` 토큰.
+- **연출 (2026-11-19):** 트리 캔버스를 안쪽 다크 무대(`radius-xl`, 도트 그리드, `aurora-stage`)로 만든다. 들어오면 main 줄기부터 분기 순서대로 선이 그려지고(GSAP `stroke-dashoffset`, 분기당 `slow`, stagger 200ms) 노드가 `gentle` 스프링으로 튀어나온다. 선택한 분기는 `shadow-glow-stage`, 나머지는 35%. A·B 비교 패널은 밝은 패널 그대로 두고(막대와 숫자를 읽는 곳), 분기 두 개가 골라질 때마다 오른쪽에서 밀려 들어온다. 트리 행의 분기 이름은 분기 색 글자 대신 색 점 + `stage-text` 글자로 쓴다. 트리 안에서는 여전히 브랜드 그라데이션을 쓰지 않는다(§1.4), 글자는 `stage-*` 토큰.
 
 ```
 ┌ 상단: 과제명 · 분기 범례 (색·이름·총점) · 선택 슬롯 [A] [B] ─────────────┐
