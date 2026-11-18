@@ -42,8 +42,9 @@ UNION ALL SELECT '회차를 연 담당자가 다른 회사 소속', COUNT(*) FRO
   JOIN users u ON u.user_id = s.created_by WHERE u.role = 'COMPANY' AND u.company_id <> s.company_id
 UNION ALL SELECT '회차 응시가 회차 과제와 다름', COUNT(*) FROM exam_participants p
   JOIN attempts a ON a.attempt_id = p.attempt_id JOIN exam_sessions s ON s.session_id = p.session_id WHERE a.task_id <> s.task_id
-UNION ALL SELECT '회차 응시 회원이 대상자와 다름', COUNT(*) FROM exam_participants p
-  JOIN attempts a ON a.attempt_id = p.attempt_id WHERE a.user_id IS DISTINCT FROM p.user_id
+UNION ALL SELECT '감독 판단자가 다른 회사 담당자', COUNT(*) FROM proctor_events e
+  JOIN exam_participants p ON p.attempt_id = e.attempt_id JOIN exam_sessions s ON s.session_id = p.session_id
+  JOIN users u ON u.user_id = e.reviewed_by WHERE u.role = 'COMPANY' AND u.company_id <> s.company_id
 UNION ALL SELECT '회차 응시인데 실전 모드가 아님', COUNT(*) FROM exam_participants p
   JOIN attempts a ON a.attempt_id = p.attempt_id WHERE a.mode <> 'LIVE'
 UNION ALL SELECT '감독 회차인데 동의 없이 응시', COUNT(*) FROM exam_participants p
@@ -93,7 +94,11 @@ DECLARE a bigint := (SELECT max(attempt_id) FROM attempts);
   ['같은 회차에 같은 이메일 초대', $q$INSERT INTO exam_participants(session_id,email,name,invite_token) SELECT session_id,email,'x','new_token' FROM exam_participants LIMIT 1$q$],
   ['같은 응시에 감독 동의 두 번', $q$INSERT INTO proctor_consents(attempt_id,consent_version,env_check) SELECT attempt_id,'v2','{}' FROM proctor_consents LIMIT 1$q$],
   ['없는 감독 이벤트 종류', $q$INSERT INTO proctor_events(attempt_id,type,started_at) SELECT attempt_id,'SCREENSHOT',started_at FROM proctor_events LIMIT 1$q$],
-  ['확신도 1 초과', $q$INSERT INTO proctor_events(attempt_id,type,started_at,confidence) SELECT attempt_id,'NO_FACE',started_at,1.5 FROM proctor_events LIMIT 1$q$]];
+  ['확신도 1 초과', $q$INSERT INTO proctor_events(attempt_id,type,started_at,confidence) SELECT attempt_id,'NO_FACE',started_at,1.5 FROM proctor_events LIMIT 1$q$],
+  ['회원이 연결된 실전 응시', $q$INSERT INTO attempts(user_id,task_id,mode,status,assistant_model) SELECT 2,task_id,'LIVE','SOLVING','x' FROM attempts LIMIT 1$q$],
+  ['회원 없는 자가진단 응시', $q$INSERT INTO attempts(task_id,mode,status,assistant_model) SELECT task_id,'SELF','SOLVING','x' FROM attempts LIMIT 1$q$],
+  ['없는 감독 판단', $q$UPDATE proctor_events SET review='MAYBE', reviewed_by=4, reviewed_at=now() WHERE proctor_event_id=(SELECT min(proctor_event_id) FROM proctor_events)$q$],
+  ['판단자 없는 감독 판단', $q$UPDATE proctor_events SET review='OK', reviewed_by=NULL, reviewed_at=NULL WHERE proctor_event_id=(SELECT max(proctor_event_id) FROM proctor_events)$q$]];
 BEGIN
   FOR i IN 1..array_length(tests, 1) LOOP
     BEGIN

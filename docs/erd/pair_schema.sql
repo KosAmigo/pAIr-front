@@ -198,7 +198,7 @@ COMMENT ON COLUMN question_sources.note IS '출제 메모';
 
 CREATE TABLE attempts (
     attempt_id                 BIGSERIAL    PRIMARY KEY,
-    user_id                    BIGINT       NOT NULL REFERENCES users (user_id),
+    user_id                    BIGINT       REFERENCES users (user_id),
     task_id                    BIGINT       NOT NULL REFERENCES tasks (task_id),
     mode                       VARCHAR(10)  NOT NULL,
     status                     VARCHAR(20)  NOT NULL,
@@ -206,11 +206,12 @@ CREATE TABLE attempts (
     forked_from_checkpoint_id  BIGINT,
     started_at                 TIMESTAMPTZ  NOT NULL DEFAULT now(),
     submitted_at               TIMESTAMPTZ,
-    followups_done_at          TIMESTAMPTZ
+    followups_done_at          TIMESTAMPTZ,
+    CHECK ((mode = 'SELF') = (user_id IS NOT NULL))
 );
 COMMENT ON TABLE  attempts IS '응시';
 COMMENT ON COLUMN attempts.attempt_id IS '응시 ID';
-COMMENT ON COLUMN attempts.user_id IS '회원 ID';
+COMMENT ON COLUMN attempts.user_id IS '회원 ID(자가진단만. 실전 응시는 로그인 없이 보므로 비어 있음)';
 COMMENT ON COLUMN attempts.task_id IS '과제 ID';
 COMMENT ON COLUMN attempts.mode IS '모드(SELF 자가진단/LIVE 실전)';
 COMMENT ON COLUMN attempts.status IS '상태';
@@ -554,7 +555,6 @@ CREATE TABLE exam_participants (
     email           VARCHAR(255) NOT NULL,
     name            VARCHAR(50)  NOT NULL,
     invite_token    VARCHAR(64)  NOT NULL UNIQUE,
-    user_id         BIGINT       REFERENCES users (user_id),
     attempt_id      BIGINT       UNIQUE REFERENCES attempts (attempt_id),
     invited_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     entered_at      TIMESTAMPTZ,
@@ -566,7 +566,6 @@ COMMENT ON COLUMN exam_participants.session_id IS '회차 ID';
 COMMENT ON COLUMN exam_participants.email IS '초대 이메일';
 COMMENT ON COLUMN exam_participants.name IS '이름';
 COMMENT ON COLUMN exam_participants.invite_token IS '메일 입장 링크 토큰';
-COMMENT ON COLUMN exam_participants.user_id IS '회원 ID(입장 시 연결)';
 COMMENT ON COLUMN exam_participants.attempt_id IS '응시 ID(입장 시 생성)';
 COMMENT ON COLUMN exam_participants.invited_at IS '초대 시각';
 COMMENT ON COLUMN exam_participants.entered_at IS '입장 시각';
@@ -593,7 +592,12 @@ CREATE TABLE proctor_events (
     confidence           NUMERIC(4, 3) CHECK (confidence BETWEEN 0 AND 1),
     detail               JSONB,
     snapshot_key         VARCHAR(255),
-    snapshot_deleted_at  TIMESTAMPTZ
+    snapshot_deleted_at  TIMESTAMPTZ,
+    review               VARCHAR(10)   CHECK (review IN ('OK', 'SUSPECT')),
+    review_note          TEXT,
+    reviewed_by          BIGINT        REFERENCES users (user_id),
+    reviewed_at          TIMESTAMPTZ,
+    CHECK ((review IS NULL) = (reviewed_by IS NULL) AND (review IS NULL) = (reviewed_at IS NULL))
 );
 COMMENT ON TABLE  proctor_events IS '감독 이벤트';
 COMMENT ON COLUMN proctor_events.proctor_event_id IS '감독 이벤트 ID';
@@ -605,6 +609,10 @@ COMMENT ON COLUMN proctor_events.confidence IS '확신도(0~1, 카메라 감지�
 COMMENT ON COLUMN proctor_events.detail IS '상세 내용(붙여넣은 글자 수, 얼굴 수, 고개 각도 등)';
 COMMENT ON COLUMN proctor_events.snapshot_key IS '스냅샷 저장 위치';
 COMMENT ON COLUMN proctor_events.snapshot_deleted_at IS '스냅샷 삭제 시각(보관 기간 만료)';
+COMMENT ON COLUMN proctor_events.review IS '담당자 판단(OK 문제 없음/SUSPECT 부정 의심, 없으면 미확인)';
+COMMENT ON COLUMN proctor_events.review_note IS '판단 메모';
+COMMENT ON COLUMN proctor_events.reviewed_by IS '판단한 회원 ID(기업 담당자 또는 관리자)';
+COMMENT ON COLUMN proctor_events.reviewed_at IS '판단 시각';
 
 -- ───────── 7. 조회용 인덱스 ─────────
 -- PostgreSQL 은 외래 키에 인덱스를 자동으로 만들지 않는다. 자주 따라가는 외래 키에만 건다.
@@ -617,5 +625,4 @@ CREATE INDEX idx_scorings_attempt_id       ON scorings (attempt_id);        -- �
 CREATE INDEX idx_judge_calls_scoring_id    ON judge_calls (scoring_id);     -- 채점의 모델 호출(토큰)
 CREATE INDEX idx_judge_verdicts_result_id  ON judge_verdicts (result_id);   -- 체크 결과의 모델별 판정 → 리포트
 CREATE INDEX idx_exam_sessions_company_id  ON exam_sessions (company_id);   -- 회사의 회차 목록(관리자 화면)
-CREATE INDEX idx_exam_participants_user_id ON exam_participants (user_id);  -- 내 실전 시험 목록
 CREATE INDEX idx_proctor_events_attempt_id ON proctor_events (attempt_id);  -- 응시의 감독 이벤트 → 리포트·관리자 화면

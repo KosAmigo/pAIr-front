@@ -1,4 +1,4 @@
-participant_id,session_id,email,name,invite_token,user_id,attempt_id,invited_at,entered_at
-1,1,b@pair.test,응시자B,inv_8f3a1c9e2b7d4f60,3,4,2026-11-10T12:05:00Z,2026-11-11T09:42:08Z
-2,1,a@pair.test,응시자A,inv_2d9c47a1e5b83f02,2,5,2026-11-10T12:05:00Z,2026-11-11T09:41:57Z
-3,1,c@pair.test,응시자C,inv_71e0b4d6c3a95f18,,,2026-11-10T12:05:00Z,
+participant_id,session_id,email,name,invite_token,attempt_id,invited_at,entered_at
+1,1,b@pair.test,응시자B,inv_8f3a1c9e2b7d4f60,4,2026-11-10T12:05:00Z,2026-11-11T09:42:08Z
+2,1,a@pair.test,응시자A,inv_2d9c47a1e5b83f02,5,2026-11-10T12:05:00Z,2026-11-11T09:41:57Z
+3,1,c@pair.test,응시자C,inv_71e0b4d6c3a95f18,,2026-11-10T12:05:00Z,
