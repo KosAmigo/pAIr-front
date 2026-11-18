@@ -3,9 +3,9 @@
 import { useEffect, useRef } from 'react'
 import Lenis from 'lenis'
 import './home/home.css'
-import { Logo } from '../components/ui'
 import Finale from './home/Finale'
 import Hero from './home/Hero'
+import HomeFooter from './home/HomeFooter'
 import HomeHeader from './home/HomeHeader'
 import LiveSection from './home/LiveSection'
 import ReplaySection from './home/ReplaySection'
@@ -79,13 +79,7 @@ export default function Home() {
           </div>
         </main>
 
-        <footer className="relative z-10 border-t border-line bg-panel/60 backdrop-blur">
-          <div className="mx-auto flex h-20 max-w-[1264px] items-center gap-4 px-8">
-            <Logo />
-            <span className="font-mono text-[13px] text-text-faint">v0.1 PROTOTYPE</span>
-            <span className="ml-auto font-mono text-[13px] text-text-faint">© 2026 pAIr</span>
-          </div>
-        </footer>
+        <HomeFooter />
       </div>
     </LenisContext.Provider>
   )

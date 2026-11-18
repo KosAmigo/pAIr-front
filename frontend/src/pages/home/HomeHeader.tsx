@@ -1,7 +1,7 @@
 // DESIGN.md §7-1 상단 바: 처음엔 투명, 80px 이상 내리면 유리 표면으로 바뀐다.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FlaskConical } from 'lucide-react'
+import { LayoutDashboard } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { Logo } from '../../components/ui'
 import { scrollToId, useLenis } from './motion'
@@ -68,13 +68,13 @@ export default function HomeHeader() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2 md:ml-0">
+          {/* 콘솔: 관리자는 과제(문제) 만들기, 기업 담당자는 회차와 감독 */}
           <Link
-            to="/grader"
-            aria-label="채점 툴"
-            title="채점 툴"
-            className="inline-flex size-9 items-center justify-center rounded-md border border-line bg-panel/60 text-text-muted transition-colors duration-150 hover:border-line-strong hover:bg-panel-raised hover:text-text"
+            to="/console"
+            title="콘솔: 과제 만들기, 시험 회차와 감독"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-panel/60 px-3 text-[15px] font-medium text-text-muted transition-colors duration-150 hover:border-line-strong hover:bg-panel-raised hover:text-text"
           >
-            <FlaskConical size={18} aria-hidden />
+            <LayoutDashboard size={16} aria-hidden /> 콘솔
           </Link>
           <Link
             to="/entry"

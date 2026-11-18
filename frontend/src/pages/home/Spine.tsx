@@ -27,27 +27,19 @@ const BRANCHES = [
   { from: 'live', to: 'live-end', color: 'var(--color-branch-3)' },
 ]
 
-// 마무리 두 갈래: 가까운 카드는 낮은 길, 먼 카드는 높은 길로 가서 선이 겹치지 않는다.
+// 마무리 두 갈래: 줄기를 따라 내려오다 각 줄 버튼의 가운데 높이에서 오른쪽으로 꺾여 줄 왼쪽 끝에 닿는다.
 const SPLITS = [
-  { to: 'card-self', rise: 28, color: 'url(#spine-grad-h)' },
-  { to: 'card-live', rise: 56, color: 'var(--color-alert)' },
+  { to: 'card-self', color: 'url(#spine-grad-h)' },
+  { to: 'card-live', color: 'var(--color-alert)' },
 ]
 
 function branchPath(x: number, a: Pt, b: Pt) {
   return `M ${x} ${a.y} L ${x + LANE} ${a.y + LANE} L ${x + LANE} ${b.y}`
 }
 
-function splitPath(x: number, from: Pt, to: Pt, rise: number) {
-  const r = 20
-  const h = to.y - rise
-  return [
-    `M ${x} ${from.y}`,
-    `L ${x} ${h - r}`,
-    `Q ${x} ${h} ${x + r} ${h}`,
-    `L ${to.x - r} ${h}`,
-    `Q ${to.x} ${h} ${to.x} ${h + r}`,
-    `L ${to.x} ${to.y}`,
-  ].join(' ')
+function splitPath(x: number, from: Pt, to: Pt) {
+  const r = 24
+  return `M ${x} ${from.y} L ${x} ${to.y - r} Q ${x} ${to.y} ${x + r} ${to.y} L ${to.x} ${to.y}`
 }
 
 export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | null> }) {
@@ -65,7 +57,7 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
     })
     const x = r.width >= 1024 ? 48 : 24
     setGeo((g) => {
-      const next = { w: r.width, h: root.scrollHeight, x, pts }
+      const next = { w: r.width, h: r.height, x, pts }
       return g && JSON.stringify(g) === JSON.stringify(next) ? g : next
     })
   }, [rootRef])
@@ -129,10 +121,8 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
     <svg
       ref={svgRef}
       aria-hidden
-      className="pointer-events-none absolute inset-0 z-20 hidden md:block"
-      width={geo.w}
-      height={geo.h}
-      viewBox={`0 0 ${geo.w} ${geo.h}`}
+      // 크기를 부모에 맞춘다. scrollHeight 로 높이를 정하면 SVG 자신이 높이에 들어가 페이지가 줄어들지 않는다
+      className="pointer-events-none absolute inset-0 z-20 hidden h-full w-full md:block"
       overflow="visible"
     >
       <defs>
@@ -151,7 +141,7 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
       <g stroke="var(--color-line-strong)" strokeWidth={1} strokeDasharray="3 6" fill="none">
         <line x1={x} y1={y0} x2={x} y2={y1} />
         {BRANCHES.map((b) => pts[b.from] && pts[b.to] && <path key={b.to} d={branchPath(x, pts[b.from], pts[b.to])} />)}
-        {SPLITS.map((s) => pts[s.to] && <path key={s.to} d={splitPath(x, pts.finale, pts[s.to], s.rise)} />)}
+        {SPLITS.map((s) => pts[s.to] && <path key={s.to} d={splitPath(x, pts.finale, pts[s.to])} />)}
       </g>
 
       {/* 그려지는 선 */}
@@ -189,7 +179,7 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
                 data-draw
                 data-y0={y1}
                 data-y1={pts[s.to].y}
-                d={splitPath(x, pts.finale, pts[s.to], s.rise)}
+                d={splitPath(x, pts.finale, pts[s.to])}
                 stroke={s.color}
                 strokeWidth={3}
               />
