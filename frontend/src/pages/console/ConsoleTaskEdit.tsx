@@ -152,10 +152,22 @@ function Editor({ stored }: { stored: CTask }) {
           <Button onClick={save} disabled={!dirty}>
             저장
           </Button>
-          {draft.status === 'OPEN' ? (
-            <Button variant="danger" onClick={() => setClosing(true)}>
-              공개 취소
-            </Button>
+          {draft.status === 'OPEN' || draft.status === 'CLOSED' ? (
+            <>
+              <Button
+                onClick={() => {
+                  const next = draft.status === 'OPEN' ? 'CLOSED' : 'OPEN'
+                  setTaskStatus(draft.id, next)
+                  setDraft((d) => ({ ...d, status: next }))
+                  toast.show(next === 'CLOSED' ? '응시를 마감했습니다. 목록에는 남고 새 응시만 막힙니다' : '다시 공개했습니다')
+                }}
+              >
+                {draft.status === 'OPEN' ? '응시 마감' : '다시 공개'}
+              </Button>
+              <Button variant="danger" onClick={() => setClosing(true)}>
+                공개 취소
+              </Button>
+            </>
           ) : (
             <Button variant="primary" onClick={publish}>
               공개하기
@@ -223,8 +235,8 @@ function Editor({ stored }: { stored: CTask }) {
           disabled={activeSessionCount(draft.id) > 0}
           onClose={() => setClosing(false)}
           onConfirm={() => {
-            setTaskStatus(draft.id, 'CLOSED')
-            setDraft((d) => ({ ...d, status: 'CLOSED' }))
+            setTaskStatus(draft.id, 'HIDDEN')
+            setDraft((d) => ({ ...d, status: 'HIDDEN' }))
             setClosing(false)
             toast.show('공개를 취소했습니다. 검수 대기로 옮겼습니다')
           }}
