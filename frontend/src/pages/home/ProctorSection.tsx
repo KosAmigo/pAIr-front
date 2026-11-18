@@ -82,7 +82,7 @@ export default function ProctorSection() {
   const left = 35 * 60 - step * 37
 
   return (
-    <section ref={root} id="proctor" className="relative pt-40 md:pl-[120px]">
+    <section ref={root} id="proctor" className="relative pt-40 pb-32 md:pl-[160px]">
       <div data-spine="proctor" aria-hidden className="h-0" />
       <SectionHead
         label="PROCTOR"

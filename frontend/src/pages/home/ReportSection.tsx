@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { ListTree, Rocket, ShieldCheck, Sparkles, Split, TrendingUp } from 'lucide-react'
 import { cx } from '../../components/cx'
 import SectionHead, { Grad } from './SectionHead'
+import { Glow } from './Points'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
 const ITEMS = [
@@ -113,7 +114,7 @@ export default function ReportSection() {
   )
 
   return (
-    <section ref={root} id="report" className="relative pt-40 md:pl-[120px]">
+    <section ref={root} id="report" className="relative pt-40 md:pl-[160px]">
       <div data-spine="report" aria-hidden className="h-0" />
       <SectionHead
         label="REPORT"
@@ -126,9 +127,12 @@ export default function ReportSection() {
         }
         lead="AI와 나눈 대화, 코드 변화, 실행 기록을 근거로 6가지 역량을 100점 만점으로 평가합니다. 감점마다 근거가 된 대화 턴을 함께 보여줍니다."
       />
-      <div className="mt-16 grid items-center gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-        <div data-radar className="flex justify-center">
-          <Radar hover={hover} />
+      <div className="mt-16 grid items-center gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div data-radar className="relative flex justify-center">
+          <Glow />
+          <div className="relative w-full max-w-[480px]">
+            <Radar hover={hover} />
+          </div>
         </div>
         <ul data-cards className="grid gap-3 sm:grid-cols-2">
           {ITEMS.map((it) => (
@@ -157,6 +161,7 @@ export default function ReportSection() {
           ))}
         </ul>
       </div>
+      <div data-spine="report-end" aria-hidden className="absolute bottom-0 left-0" />
     </section>
   )
 }
