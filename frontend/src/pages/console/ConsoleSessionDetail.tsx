@@ -1,7 +1,7 @@
 // DESIGN.md §7-9-4 회차 상세: 개요 / 대상자 / 실시간 현황 / 결과
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowDownUp, Camera, CircleAlert, Copy, Download, FileUp, Pause, Play, UserPlus, X } from 'lucide-react'
+import { ArrowDownUp, Camera, CircleAlert, Download, FileUp, Pause, Play, UserPlus, X } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { Button, MetricTile, ScoreChip, Sep, Tabs } from '../../components/ui'
@@ -82,18 +82,6 @@ function Detail({ s }: { s: Session }) {
             </span>
             <Sep />
             <span className="font-sans">{s.taskTitle}</span>
-            <Sep />
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard?.writeText(s.entryCode).catch(() => {})
-                toast.show(`입장 코드 ${s.entryCode}를 복사했습니다`)
-              }}
-              className="inline-flex items-center gap-1 font-semibold text-text hover:text-brand"
-              aria-label={`입장 코드 ${s.entryCode} 복사`}
-            >
-              {s.entryCode} <Copy size={13} aria-hidden />
-            </button>
             {s.proctoring && (
               <>
                 <Sep />
@@ -159,7 +147,6 @@ function Overview({ s, phase }: { s: Session; phase: SessionPhase }) {
     ['회사', <Link key="co" to={`/console/companies/${s.companyId}`} className="text-brand hover:underline">{companyName(s.companyId)}</Link>],
     ['과제', <Link key="t" to={`/console/tasks/${s.taskId}`} className="text-brand hover:underline">{s.taskTitle}</Link>],
     ['일시', <span key="d" className="tnum font-mono">{fmtTime(s.startsAt)} – {fmtHm(s.endsAt)}</span>],
-    ['입장 코드', <span key="c" className="font-mono font-semibold">{s.entryCode}</span>],
     ['감독', s.proctoring ? '사용 (카메라, 브라우저 이탈 감지)' : '사용 안 함'],
     ['만든 시각', <span key="m" className="tnum font-mono">{fmtTime(s.createdAt)}</span>],
   ]

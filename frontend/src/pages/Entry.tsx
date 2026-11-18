@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -19,11 +19,10 @@ import { Button, Logo, Sep, StatusDot, type Status } from '../components/ui'
 import { examInfo } from '../data/mock'
 
 // DESIGN.md §7-6 시험 입장 + §6.10 Stepper
-// 입장 방법은 두 가지: 입장 코드 입력, 또는 메일로 받은 개인별 입장 링크
-const stepsFor = (viaLink: boolean) => [viaLink ? '메일 링크' : '입장 코드', '시험 정보', '응시자 정보와 동의', '환경 점검', '대기실']
+// 입장 방법은 메일로 받은 응시자별 입장 링크(/entry?invite=<토큰>) 하나뿐이다.
+const STEPS = ['시험 정보', '응시자 정보와 동의', '환경 점검', '대기실']
 
-function Stepper({ current, viaLink }: { current: number; viaLink: boolean }) {
-  const STEPS = stepsFor(viaLink)
+function Stepper({ current }: { current: number }) {
   return (
     <ol className="flex items-center" aria-label="입장 단계">
       {STEPS.map((s, i) => {
@@ -90,110 +89,33 @@ function LinkNotice({ text }: { text: string }) {
   )
 }
 
-// ── 1. 입장 코드 ────────────────────────────
-function CodeStep({ onNext, onLink }: { onNext: () => void; onLink: () => void }) {
-  const [chars, setChars] = useState<string[]>(Array(6).fill(''))
-  const [error, setError] = useState(false)
-  const refs = useRef<(HTMLInputElement | null)[]>([])
-  const full = chars.every(Boolean)
-
-  const set = (i: number, v: string) => {
-    const c = v.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(-1)
-    const next = [...chars]
-    next[i] = c
-    setChars(next)
-    setError(false)
-    if (c && i < 5) refs.current[i + 1]?.focus()
-  }
-  const submit = () => {
-    if (chars.join('') === examInfo.code) onNext()
-    else setError(true)
-  }
-
+// ── 링크 없이 들어온 경우 ───────────────────
+// 실전 시험은 메일로 받은 응시자별 입장 링크로만 들어온다(회차 공용 입장 코드 없음).
+function NoLink({ onDemo }: { onDemo: () => void }) {
   return (
-    <StepPanel
-      label="STEP 01 / 05"
-      title="입장 코드를 입력하세요"
-      center
-      footer={
-        <>
-          <button
-            type="button"
-            className="font-mono text-[13px] text-text-muted underline-offset-4 hover:text-text hover:underline"
-            onClick={() => {
-              setChars(examInfo.code.split(''))
-              setError(false)
-            }}
-          >
-            데모 입장 코드 채우기 ({examInfo.code})
-          </button>
-          <Button variant="primary" size="lg" className="ml-auto" disabled={!full} onClick={submit}>
-            확인 <ArrowRight size={18} aria-hidden />
-          </Button>
-        </>
-      }
-    >
-      <label htmlFor="code-0" className="mb-3 block text-center text-[14px] font-medium text-text-muted">
-        기업에서 받은 6자리 입장 코드
-      </label>
-      <div className="flex justify-center gap-2" onPaste={(e) => {
-        const p = e.clipboardData.getData('text').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6)
-        if (p) {
-          e.preventDefault()
-          setChars(p.padEnd(6, ' ').split('').map((c) => c.trim()))
-        }
-      }}>
-        {chars.map((c, i) => (
-          <input
-            key={i}
-            id={`code-${i}`}
-            ref={(el) => {
-              refs.current[i] = el
-            }}
-            value={c}
-            onChange={(e) => set(i, e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Backspace' && !c && i > 0) refs.current[i - 1]?.focus()
-              if (e.key === 'Enter' && full) submit()
-            }}
-            aria-label={`입장 코드 ${i + 1}번째 자리`}
-            maxLength={2}
-            className={cx(
-              'h-14 w-12 rounded-sm border bg-panel-raised text-center font-mono text-[24px] font-semibold uppercase text-text outline-none transition-colors duration-[120ms]',
-              error ? 'border-alert' : 'border-line-strong focus:border-brand',
-            )}
-          />
-        ))}
-      </div>
-      {error ? (
-        <p className="mt-3 text-center text-[14px] text-alert" role="alert">
-          유효하지 않은 입장 코드입니다. 영문과 숫자를 다시 확인하세요.
+    <section className="step-in w-[640px] rounded-md border border-line bg-panel">
+      <div className="flex flex-col items-center px-8 pt-10 pb-8 text-center">
+        <Mail size={32} strokeWidth={1.75} className="text-info" aria-hidden />
+        <h1 className="mt-4 text-h1 font-bold">메일의 입장 링크로 들어와 주세요</h1>
+        <p className="mt-3 text-[15px] leading-6 text-text-muted">
+          실전 시험은 응시자마다 따로 보내 드린 입장 링크로만 입장할 수 있습니다.
+          <br />
+          시험 안내 메일의 <span className="text-text">시험 입장하기</span> 버튼을 눌러 주세요. 시작 30분 전부터 입장할 수 있습니다.
         </p>
-      ) : (
-        <p className="mt-3 text-center text-[14px] text-text-muted">입장 코드는 시험 안내 메일에 있습니다. 시작 30분 전부터 입장할 수 있습니다.</p>
-      )}
-
-      <div className="mt-8 flex items-center gap-3" aria-hidden>
-        <span className="h-px flex-1 bg-line" />
-        <span className="label">OR</span>
-        <span className="h-px flex-1 bg-line" />
+        <p className="mt-4 text-[14px] text-text-muted">메일을 받지 못했다면 시험을 안내한 기업 담당자에게 문의하세요.</p>
       </div>
-      <div className="mt-6 flex items-center gap-4 rounded-md border border-line bg-panel-raised p-4">
-        <Mail size={22} strokeWidth={1.75} className="shrink-0 text-info" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold">메일로 입장 링크를 받으셨나요?</p>
-          <p className="mt-0.5 text-[14px] text-text-muted">메일의 입장 링크를 누르면 코드 입력 없이 바로 입장하고, 응시자 정보도 자동으로 채워집니다.</p>
-        </div>
-        <Button variant="secondary" size="sm" onClick={onLink}>
-          링크로 입장 (데모)
+      <footer className="flex items-center border-t border-line px-8 py-4">
+        <span className="text-[14px] text-text-muted">프로토타입에서는 데모 링크로 입장할 수 있습니다.</span>
+        <Button variant="secondary" className="ml-auto" onClick={onDemo}>
+          데모 링크로 입장 <ArrowRight size={18} aria-hidden />
         </Button>
-      </div>
-    </StepPanel>
+      </footer>
+    </section>
   )
 }
 
 // ── 2. 시험 정보 ────────────────────────────
-function InfoStep({ onNext, onBack, viaLink }: { onNext: () => void; onBack: () => void; viaLink: boolean }) {
+function InfoStep({ onNext }: { onNext: () => void }) {
   const rows: [string, string, boolean?][] = [
     ['COMPANY', examInfo.company],
     ['EXAM', examInfo.title],
@@ -204,22 +126,15 @@ function InfoStep({ onNext, onBack, viaLink }: { onNext: () => void; onBack: () 
   ]
   return (
     <StepPanel
-      label="STEP 02 / 05"
+      label="STEP 01 / 04"
       title="시험 정보를 확인하세요"
       footer={
-        <>
-          {!viaLink && (
-            <Button variant="ghost" onClick={onBack}>
-              <ArrowLeft size={18} aria-hidden /> 이전
-            </Button>
-          )}
-          <Button variant="primary" size="lg" className="ml-auto" onClick={onNext}>
-            맞습니다 <ArrowRight size={18} aria-hidden />
-          </Button>
-        </>
+        <Button variant="primary" size="lg" className="ml-auto" onClick={onNext}>
+          맞습니다 <ArrowRight size={18} aria-hidden />
+        </Button>
       }
     >
-      {viaLink && <LinkNotice text="메일 입장 링크가 확인되었습니다. 아래 시험이 맞는지 확인하세요." />}
+      <LinkNotice text="입장 링크가 확인되었습니다. 아래 시험이 맞는지 확인하세요." />
       <dl className="divide-y divide-line rounded-md border border-line">
         {rows.map(([k, v, mono]) => (
           <div key={k} className="grid grid-cols-[140px_1fr] items-center px-4 py-3">
@@ -266,13 +181,13 @@ function Field({ id, label, ...rest }: { id: string; label: string } & InputHTML
   )
 }
 
-function ConsentStep({ onNext, onBack, viaLink }: { onNext: () => void; onBack: () => void; viaLink: boolean }) {
+function ConsentStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const [checked, setChecked] = useState([false, false, false])
   const [open, setOpen] = useState<number | null>(null)
   const all = checked.every(Boolean)
   return (
     <StepPanel
-      label="STEP 03 / 05"
+      label="STEP 02 / 04"
       title="응시자 정보와 동의"
       footer={
         <>
@@ -285,12 +200,12 @@ function ConsentStep({ onNext, onBack, viaLink }: { onNext: () => void; onBack: 
         </>
       }
     >
-      {viaLink && <LinkNotice text="메일 링크로 확인된 응시자 정보입니다. 수정이 필요하면 기업 담당자에게 문의하세요." />}
+      <LinkNotice text="입장 링크로 확인된 응시자 정보입니다. 수정이 필요하면 기업 담당자에게 문의하세요." />
       <div className="grid grid-cols-2 gap-4">
-        <Field id="name" label="이름" defaultValue="김지원" readOnly={viaLink} />
-        <Field id="email" label="이메일" type="email" defaultValue="jiwon.kim@example.com" readOnly={viaLink} />
+        <Field id="name" label="이름" defaultValue="김지원" readOnly />
+        <Field id="email" label="이메일" type="email" defaultValue="jiwon.kim@example.com" readOnly />
         <div className="col-span-2">
-          <Field id="seat" label="수험번호" defaultValue={examInfo.seat} readOnly={viaLink} className="h-10 w-full rounded-sm border border-line-strong bg-panel-raised px-3 font-mono text-[16px] text-text outline-none read-only:border-line read-only:text-text-muted focus:border-brand" />
+          <Field id="seat" label="수험번호" defaultValue={examInfo.seat} readOnly className="h-10 w-full rounded-sm border border-line-strong bg-panel-raised px-3 font-mono text-[16px] text-text outline-none read-only:border-line read-only:text-text-muted focus:border-brand" />
         </div>
       </div>
 
@@ -355,7 +270,7 @@ function EnvStep({ onNext, onBack }: { onNext: () => void; onBack: () => void })
   const allOk = Object.values(status).every((s) => s === 'ok')
   return (
     <StepPanel
-      label="STEP 04 / 05"
+      label="STEP 03 / 04"
       title="응시 환경을 점검합니다"
       footer={
         <>
@@ -410,7 +325,7 @@ function WaitingRoom({ onStart }: { onStart: () => void }) {
   return (
     <section className="step-in w-[640px] rounded-md border border-line bg-panel">
       <header className="flex h-10 items-center gap-3 border-b border-line px-4">
-        <span className="label">STEP 05 / 05</span>
+        <span className="label">STEP 04 / 04</span>
         <span className="ml-auto flex items-center gap-4">
           <StatusDot status="ok" label="카메라" />
           <StatusDot status="ok" label="화면 공유" />
@@ -454,16 +369,16 @@ function WaitingRoom({ onStart }: { onStart: () => void }) {
 }
 
 export default function Entry() {
-  // 메일 링크 입장: /entry?invite=<응시자별 토큰>. 코드 입력 단계를 건너뛴다.
+  // 입장 링크: /entry?invite=<응시자별 토큰>. 토큰이 없으면 링크 안내만 보여 준다.
   const [params, setParams] = useSearchParams()
   const viaLink = params.has('invite')
-  const [step, setStep] = useState(viaLink ? 1 : 0)
+  const [step, setStep] = useState(0)
   const navigate = useNavigate()
   const next = () => setStep((s) => s + 1)
   const back = () => setStep((s) => s - 1)
-  const enterByLink = () => {
+  const enterByDemoLink = () => {
     setParams({ invite: examInfo.seat })
-    setStep(1)
+    setStep(0)
   }
   return (
     <div className="flex min-h-full flex-col border-t-2 border-alert">
@@ -474,16 +389,16 @@ export default function Entry() {
             LIVE EXAM
           </span>
         </div>
-        <Stepper current={step} viaLink={viaLink} />
+        {viaLink ? <Stepper current={step} /> : <span aria-hidden />}
         <span aria-hidden />
       </header>
       <main className="flex flex-1 justify-center px-8 py-12">
-        <div key={step}>
-          {step === 0 && <CodeStep onNext={next} onLink={enterByLink} />}
-          {step === 1 && <InfoStep onNext={next} onBack={back} viaLink={viaLink} />}
-          {step === 2 && <ConsentStep onNext={next} onBack={back} viaLink={viaLink} />}
-          {step === 3 && <EnvStep onNext={next} onBack={back} />}
-          {step === 4 && <WaitingRoom onStart={() => navigate('/exam/live-k7q2mx?mode=live')} />}
+        <div key={viaLink ? step : 'no-link'}>
+          {!viaLink && <NoLink onDemo={enterByDemoLink} />}
+          {viaLink && step === 0 && <InfoStep onNext={next} />}
+          {viaLink && step === 1 && <ConsentStep onNext={next} onBack={back} />}
+          {viaLink && step === 2 && <EnvStep onNext={next} onBack={back} />}
+          {viaLink && step === 3 && <WaitingRoom onStart={() => navigate('/exam/live-k7q2mx?mode=live')} />}
         </div>
       </main>
     </div>
