@@ -1,5 +1,5 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom'
-import Home from './pages/Home'
 import Dashboard from './pages/Dashboard'
 import Exam from './pages/Exam'
 import RealExam, { NewExam } from './pages/RealExam'
@@ -14,6 +14,14 @@ import GraderResult from './pages/GraderResult'
 import { isRealAttempt } from './api'
 import { AntiCheatingSync } from './anti-cheating'
 
+// 초기화면은 GSAP·Lenis를 쓰므로 따로 불러온다 (DESIGN.md §4.2)
+const Home = lazy(() => import('./pages/Home'))
+const home = (
+  <Suspense fallback={<div className="min-h-full bg-bg" />}>
+    <Home />
+  </Suspense>
+)
+
 // 실제 응시 ID(att-...)는 백엔드에 연결된 응시 화면, 그 밖의 ID는 기존 목업 화면
 function ExamRoute() {
   const { sessionId } = useParams()
@@ -25,7 +33,7 @@ export default function App() {
     <BrowserRouter>
       <AntiCheatingSync />
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={home} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/history" element={<History />} />
@@ -37,7 +45,7 @@ export default function App() {
         <Route path="/entry" element={<Entry />} />
         <Route path="/grader" element={<Grader />} />
         <Route path="/grader/result/:runId/:file" element={<GraderResult />} />
-        <Route path="*" element={<Home />} />
+        <Route path="*" element={home} />
       </Routes>
     </BrowserRouter>
   )
