@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, ArrowUpRight, Clock, Flame, Play, Target, Trophy } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, Clock, Coins, History as HistoryIcon, Play, Target } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
 import { ButtonLink, Panel, Sep } from '../components/ui'
 import { CountUp, GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
 import { MiniHex, StatHex, type HexStat } from '../components/dashboard/StatHex'
-import { PROFILE, STAT_HISTORY, STATS, tierOf, total, type StatScores } from '../data/dashboard'
+import { PROFILE, STAT_HISTORY, STATS, total, type StatScores } from '../data/dashboard'
 import { recommended } from '../data/mock'
 import { duration, easing } from '../lib/motion'
 
@@ -133,7 +133,6 @@ export default function Dashboard() {
   const score = total(latest.scores)
   const prevScore = total(previous.scores)
   const delta = score - prevScore
-  const tier = tierOf(score)
   // 가장 약한 항목 = 배점 대비 비율이 가장 낮은 항목
   const weakest = [...STATS].sort((a, b) => latest.scores[a.key] / a.max - latest.scores[b.key] / b.max)[0]
   const weakPct = Math.round((latest.scores[weakest.key] / weakest.max) * 100)
@@ -154,11 +153,12 @@ export default function Dashboard() {
         {/* ── 역량 시트: 이 화면의 다크 무대 ── */}
         <StageSection aria-label="역량 시트">
           <div className="grid grid-cols-[300px_minmax(0,1fr)_340px] items-center gap-6 px-10 py-8">
-            {/* 왼쪽: 등급, 총점, 순위 */}
+            {/* 왼쪽: 최근 응시, 총점, 크레딧과 응시 수 (기획_결정사항 §3: 크레딧 잔액 표시) */}
             <div className="flex flex-col gap-5">
-              <GlowBorder className="w-fit rounded-full">
-                <span className="glass-stage inline-flex h-9 items-center gap-2 rounded-full px-4 font-mono text-[13px] font-semibold tracking-[0.12em] text-stage-text">
-                  <Trophy size={16} className="text-stage-caution" aria-hidden /> {tier.name}
+              <GlowBorder className="w-fit max-w-full rounded-full">
+                <span className="glass-stage inline-flex h-9 max-w-full items-center gap-2 rounded-full px-4 text-[13px] font-semibold text-stage-text">
+                  <span className="tnum font-mono text-stage-brand">2026.{latest.date}</span>
+                  <span className="truncate">{latest.task}</span>
                 </span>
               </GlowBorder>
               <div>
@@ -175,21 +175,22 @@ export default function Dashboard() {
                     {delta >= 0 ? '+' : ''}
                     {delta}
                   </b>{' '}
-                  지난 응시 대비 <span className="text-stage-faint">({latest.task})</span>
+                  지난 응시 대비
                 </p>
               </div>
               <dl className="grid grid-cols-2 gap-2">
                 <div className="glass-stage rounded-lg px-3 py-2.5">
-                  <dt className="label text-stage-muted">RANK</dt>
-                  <dd className="mt-0.5 text-[15px] text-stage-text">
-                    상위 <CountUp value={PROFILE.percentile} className="font-mono text-[22px] font-semibold" />%
+                  <dt className="label text-stage-muted">CREDITS</dt>
+                  <dd className="mt-0.5 flex items-center gap-1.5 text-[15px] text-stage-text">
+                    <Coins size={16} className="text-stage-caution" aria-hidden />
+                    <CountUp value={PROFILE.credits} className="font-mono text-[22px] font-semibold" />
                   </dd>
                 </div>
                 <div className="glass-stage rounded-lg px-3 py-2.5">
-                  <dt className="label text-stage-muted">STREAK</dt>
-                  <dd className="mt-0.5 flex items-center gap-1 text-[15px] text-stage-text">
-                    <Flame size={16} className="text-stage-caution" aria-hidden />
-                    <CountUp value={PROFILE.streakWeeks} className="font-mono text-[22px] font-semibold" />주 연속
+                  <dt className="label text-stage-muted">ATTEMPTS</dt>
+                  <dd className="mt-0.5 flex items-center gap-1.5 text-[15px] text-stage-text">
+                    <HistoryIcon size={16} className="text-stage-brand" aria-hidden />
+                    <CountUp value={STAT_HISTORY.length} className="font-mono text-[22px] font-semibold" />회
                   </dd>
                 </div>
               </dl>

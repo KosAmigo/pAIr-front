@@ -300,6 +300,14 @@
     margin: -6px 0 0 -6px;
     animation: quest-orbit 18s linear infinite;
   }
+  /* 로그인 쇼케이스: 유리 칩이 천천히 위아래로 떠다닌다 */
+  .auth-float {
+    animation: auth-float 6s ease-in-out infinite;
+  }
+  /* 입장 환경 점검: 카메라 미리보기 자리를 훑는 빛 */
+  .env-scan {
+    animation: env-scan 2.4s ease-in-out infinite alternate;
+  }
   /* 3.6 다크 무대 안 포커스 링 */
   .stage-scope :focus-visible {
     outline-color: var(--color-stage-brand);
@@ -515,6 +523,19 @@
   }
   to {
     transform: rotate(360deg) translateX(140px);
+  }
+}
+@keyframes auth-float {
+  50% {
+    transform: translateY(-10px);
+  }
+}
+@keyframes env-scan {
+  from {
+    transform: translateY(-64px);
+  }
+  to {
+    transform: translateY(calc(var(--scan-h, 360px)));
   }
 }
 @keyframes fx-row-in {
