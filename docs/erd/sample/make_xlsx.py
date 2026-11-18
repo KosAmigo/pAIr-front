@@ -1,4 +1,4 @@
-"""csv/ 의 테이블별 CSV 28개를 엑셀 파일 하나(테이블마다 탭)로 합친다. 기존 CSV 는 그대로 둔다.
+"""csv/ 의 테이블별 CSV 를 엑셀 파일 하나(테이블마다 탭)로 합친다. 기존 CSV 는 그대로 둔다.
 
 실행: python docs/erd/sample/make_xlsx.py   → pair_sample.xlsx
 """
@@ -18,10 +18,10 @@ SCHEMA = os.path.join(BASE, "..", "pair_schema.sql")
 
 # load.sh 와 같은 외래 키 순서 (부모 테이블이 먼저)
 ORDER = """companies users tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys
-question_sources rubric_items rubric_checks prompt_versions prompt_check_hints attempts attempt_files chat_turns
-chat_attachments attempt_events text_answers choice_answers checkpoints checkpoint_files scorings judge_calls
-check_results judge_verdicts verdict_evidences question_results exam_sessions exam_participants proctor_consents
-proctor_events""".split()
+question_sources rubric_items rubric_checks prompt_versions prompt_check_hints exam_sessions exam_session_tasks
+exam_participants attempts attempt_files chat_turns chat_attachments attempt_events text_answers choice_answers
+checkpoints checkpoint_files scorings judge_calls check_results judge_verdicts verdict_evidences question_results
+proctor_consents proctor_events""".split()
 
 CELL_MAX = 32767  # 엑셀 셀 하나에 들어가는 최대 글자 수
 FONT = "Arial"

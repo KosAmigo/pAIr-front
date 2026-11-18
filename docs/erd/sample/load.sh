@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 샘플 CSV 를 eXERD 용 Docker DB(pair-erd-pg)에 외래 키 순서대로 넣는다. 한 테이블이라도 실패하면 전체를 되돌린다.
-# 실행: bash docs/erd/sample/load.sh [csv 폴더, 기본 csv]   예) bash docs/erd/sample/load.sh csv5
+# 실행: bash docs/erd/sample/load.sh [csv 폴더, 기본 csv]
 set -euo pipefail
 cd "$(dirname "$0")"
 CSV_DIR="${1:-csv}"
@@ -9,9 +9,9 @@ docker exec pair-erd-pg rm -rf /sample
 docker cp "$CSV_DIR" pair-erd-pg:/sample
 
 ORDER="companies users tasks task_files document_pages document_chunks task_questions question_choices short_answer_keys question_sources
-rubric_items rubric_checks prompt_versions prompt_check_hints
+rubric_items rubric_checks prompt_versions prompt_check_hints exam_sessions exam_session_tasks exam_participants
 attempts attempt_files chat_turns chat_attachments attempt_events text_answers choice_answers checkpoints checkpoint_files
-exam_sessions exam_participants proctor_consents proctor_events
+proctor_consents proctor_events
 scorings judge_calls check_results judge_verdicts verdict_evidences question_results"
 
 SQL="BEGIN;
@@ -24,7 +24,7 @@ for t in $ORDER; do
     SQL+="
 CREATE TEMP TABLE attempts_in (LIKE attempts);
 COPY attempts_in ($cols) FROM '/sample/attempts.csv' CSV HEADER;
-INSERT INTO attempts SELECT attempt_id, user_id, task_id, mode, status, assistant_model, NULL, started_at, submitted_at, followups_done_at FROM attempts_in;"
+INSERT INTO attempts SELECT attempt_id, user_id, participant_id, task_id, mode, status, assistant_model, NULL, started_at, submitted_at, followups_done_at FROM attempts_in;"
   else
     SQL+="
 COPY $t ($cols) FROM '/sample/$t.csv' CSV HEADER;"

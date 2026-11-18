@@ -186,14 +186,14 @@ EV = {"start": "START", "save": "SAVE", "run": "RUN", "build": "BUILD", "chat": 
 tid = eid = afid = ta_id = 0
 turn_ids = {}
 TA = ["text_answer_id", "attempt_id", "question_id", "question_type", "content", "answered_at"]
-LIVE = (4, 5)  # 개발 응시 2건은 실전 시험 회차에서 본 것으로 가정 (아래 실전 시험 · 감독)
+LIVE = {4: 1, 5: 2}  # 개발 응시 2건은 실전 시험 회차에서 본 것으로 가정: 응시 번호 → 대상자 번호 (아래 실전 시험 · 감독)
 for n, s in enumerate(idx, 1):
     a = rj(os.path.join(SAMPLES, s["id"], "attempt.json"))
     attempt_id[s["id"]] = n
     att_code[s["id"]] = a["taskId"]
-    put("attempts", ["attempt_id", "user_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
+    put("attempts", ["attempt_id", "user_id", "participant_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
                      "started_at", "submitted_at", "followups_done_at"],
-        [n, None if n in LIVE else (2 if n % 2 else 3), task_id[a["taskId"]], "LIVE" if n in LIVE else "SELF", "DONE", a["model"], None,
+        [n, None if n in LIVE else (2 if n % 2 else 3), LIVE.get(n), task_id[a["taskId"]], "LIVE" if n in LIVE else "SELF", "DONE", a["model"], None,
          a["startedAt"], a["submittedAt"], a["followupsDoneAt"]])
     ws = os.path.join(SAMPLES, s["id"], "workspace")
     for p in sorted(glob.glob(os.path.join(ws, "**", "*"), recursive=True)):
@@ -240,23 +240,29 @@ put("chat_attachments", ["attachment_id", "turn_id", "source_type", "task_file_i
 n_avn = attempt_id["att-261111-1841-avn"]
 put("checkpoints", ["checkpoint_id", "attempt_id", "turn_no", "label", "created_at"], [1, n_avn, 4, "원인 파악 직후", "2026-11-11T09:41:17Z"])
 put("checkpoint_files", ["checkpoint_file_id", "checkpoint_id", "path", "content"], [1, 1, "NOTES.md", open(os.path.join(TASKS, "order-deadlock", "files", "NOTES.md"), encoding="utf-8").read()])
-put("attempts", ["attempt_id", "user_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
+put("attempts", ["attempt_id", "user_id", "participant_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
                  "started_at", "submitted_at", "followups_done_at"],
-    [len(idx) + 1, 2, task_id["order-deadlock"], "SELF", "SOLVING", "gpt-6-luna", 1, "2026-11-12T10:00:00Z", None, None])
+    [len(idx) + 1, 2, None, task_id["order-deadlock"], "SELF", "SOLVING", "gpt-6-luna", 1, "2026-11-12T10:00:00Z", None, None])
 
 # ── 실전 시험 · 감독 (예시) ──
-# 예시테크 담당자가 개발 과제로 회차 1개를 열고 3명을 초대. 2명은 입장해 응시(4, 5번), 1명은 입장하지 않음.
-put("exam_sessions", ["session_id", "company_id", "task_id", "title", "entry_code", "starts_at", "ends_at", "proctoring", "created_by", "created_at"],
-    [1, 1, task_id["order-deadlock"], "2026 하반기 백엔드 신입 실전", "PAIR-7K2Q", "2026-11-11T09:40:00Z", "2026-11-11T10:40:00Z",
+# 예시테크 담당자가 과제 2개(개발, 비개발)로 회차 1개를 열고 3명을 초대. 2명은 입장해 개발 과제를 풀었고(4, 5번),
+# 응시자A는 비개발 과제도 시작했다(풀던 중). 1명은 입장하지 않음. 시간은 회차 전체로 본다.
+put("exam_sessions", ["session_id", "company_id", "title", "entry_code", "starts_at", "ends_at", "proctoring", "created_by", "created_at"],
+    [1, 1, "2026 하반기 백엔드 신입 실전", "PAIR-7K2Q", "2026-11-11T09:40:00Z", "2026-11-11T10:40:00Z",
      "true", 4, "2026-11-10T12:00:00Z"])
-# 실전 시험은 로그인 없이 보므로 대상자와 응시에 회원을 연결하지 않는다
-P = ["participant_id", "session_id", "email", "name", "invite_token", "attempt_id", "invited_at", "entered_at"]
-put("exam_participants", P, [1, 1, "b@pair.test", "응시자B", "inv_8f3a1c9e2b7d4f60", 4, "2026-11-10T12:05:00Z", "2026-11-11T09:42:08Z"])
-put("exam_participants", P, [2, 1, "a@pair.test", "응시자A", "inv_2d9c47a1e5b83f02", 5, "2026-11-10T12:05:00Z", "2026-11-11T09:41:57Z"])
-put("exam_participants", P, [3, 1, "c@pair.test", "응시자C", "inv_71e0b4d6c3a95f18", None, "2026-11-10T12:05:00Z", None])
+put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [1, task_id["order-deadlock"], 1])
+put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [1, task_id["pricing-plan"], 2])
+# 실전 시험은 로그인 없이 보므로 대상자와 응시에 회원을 연결하지 않는다. 응시가 대상자를 가리킨다(attempts.participant_id).
+P = ["participant_id", "session_id", "email", "name", "invite_token", "invited_at", "entered_at"]
+put("exam_participants", P, [1, 1, "b@pair.test", "응시자B", "inv_8f3a1c9e2b7d4f60", "2026-11-10T12:05:00Z", "2026-11-11T09:42:08Z"])
+put("exam_participants", P, [2, 1, "a@pair.test", "응시자A", "inv_2d9c47a1e5b83f02", "2026-11-10T12:05:00Z", "2026-11-11T09:41:57Z"])
+put("exam_participants", P, [3, 1, "c@pair.test", "응시자C", "inv_71e0b4d6c3a95f18", "2026-11-10T12:05:00Z", None])
+put("attempts", ["attempt_id", "user_id", "participant_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
+                 "started_at", "submitted_at", "followups_done_at"],
+    [len(idx) + 2, None, 2, task_id["pricing-plan"], "LIVE", "SOLVING", "gpt-6-luna", None, "2026-11-11T09:55:00Z", None, None])
 ENV = json.dumps({"camera": True, "fullscreen": True, "browser": "Chrome 142"})
-for n in LIVE:
-    put("proctor_consents", ["attempt_id", "consent_version", "env_check", "consented_at"], [n, "v1", ENV, "2026-11-11T09:41:50Z"])
+for p in sorted(LIVE.values()):  # 감독 동의는 대상자마다 회차당 1번
+    put("proctor_consents", ["participant_id", "consent_version", "env_check", "consented_at"], [p, "v1", ENV, "2026-11-11T09:41:50Z"])
 PE = ["proctor_event_id", "attempt_id", "type", "started_at", "duration_ms", "confidence", "detail", "snapshot_key", "snapshot_deleted_at",
       "review", "review_note", "reviewed_by", "reviewed_at"]
 NR = [None, None, None, None]  # 아직 확인하지 않은 이벤트

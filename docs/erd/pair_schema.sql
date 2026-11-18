@@ -199,6 +199,7 @@ COMMENT ON COLUMN question_sources.note IS '출제 메모';
 CREATE TABLE attempts (
     attempt_id                 BIGSERIAL    PRIMARY KEY,
     user_id                    BIGINT       REFERENCES users (user_id),
+    participant_id             BIGINT,
     task_id                    BIGINT       NOT NULL REFERENCES tasks (task_id),
     mode                       VARCHAR(10)  NOT NULL,
     status                     VARCHAR(20)  NOT NULL,
@@ -207,11 +208,14 @@ CREATE TABLE attempts (
     started_at                 TIMESTAMPTZ  NOT NULL DEFAULT now(),
     submitted_at               TIMESTAMPTZ,
     followups_done_at          TIMESTAMPTZ,
-    CHECK ((mode = 'SELF') = (user_id IS NOT NULL))
+    CHECK ((mode = 'SELF') = (user_id IS NOT NULL)),
+    CHECK ((mode = 'LIVE') = (participant_id IS NOT NULL)),
+    UNIQUE (participant_id, task_id)
 );
 COMMENT ON TABLE  attempts IS '응시';
 COMMENT ON COLUMN attempts.attempt_id IS '응시 ID';
 COMMENT ON COLUMN attempts.user_id IS '회원 ID(자가진단만. 실전 응시는 로그인 없이 보므로 비어 있음)';
+COMMENT ON COLUMN attempts.participant_id IS '대상자 ID(실전만. 회차 과제마다 응시 1건)';
 COMMENT ON COLUMN attempts.task_id IS '과제 ID';
 COMMENT ON COLUMN attempts.mode IS '모드(SELF 자가진단/LIVE 실전)';
 COMMENT ON COLUMN attempts.status IS '상태';
@@ -522,12 +526,12 @@ COMMENT ON COLUMN question_results.reason IS '판정 이유';
 
 -- ───────── 6. 실전 시험 · 감독 ─────────
 -- 실전 응시(attempts.mode = 'LIVE')에만 쓴다. 자가진단(SELF)은 회차·감독 없이 응시한다.
+-- 회차에는 과제를 여러 개 건다. 대상자는 과제마다 응시 1건을 만들고, 시간은 회차 전체(starts_at~ends_at)로 본다.
 -- 감독 영상은 서버로 보내지 않는다. 브라우저에서 분석하고, 이상이 생긴 순간의 이벤트와 스냅샷 1장만 저장한다.
 
 CREATE TABLE exam_sessions (
     session_id    BIGSERIAL    PRIMARY KEY,
     company_id    BIGINT       NOT NULL REFERENCES companies (company_id),
-    task_id       BIGINT       NOT NULL REFERENCES tasks (task_id),
     title         VARCHAR(100) NOT NULL,
     entry_code    VARCHAR(20)  NOT NULL UNIQUE,
     starts_at     TIMESTAMPTZ  NOT NULL,
@@ -540,7 +544,6 @@ CREATE TABLE exam_sessions (
 COMMENT ON TABLE  exam_sessions IS '시험 회차';
 COMMENT ON COLUMN exam_sessions.session_id IS '회차 ID';
 COMMENT ON COLUMN exam_sessions.company_id IS '회사 ID(회차를 연 회사)';
-COMMENT ON COLUMN exam_sessions.task_id IS '과제 ID';
 COMMENT ON COLUMN exam_sessions.title IS '회차 이름';
 COMMENT ON COLUMN exam_sessions.entry_code IS '입장 코드';
 COMMENT ON COLUMN exam_sessions.starts_at IS '시작 시각(전원 동시)';
@@ -549,13 +552,24 @@ COMMENT ON COLUMN exam_sessions.proctoring IS '감독 사용 여부';
 COMMENT ON COLUMN exam_sessions.created_by IS '만든 관리자 회원 ID';
 COMMENT ON COLUMN exam_sessions.created_at IS '생성 시각';
 
+CREATE TABLE exam_session_tasks (
+    session_id  BIGINT    NOT NULL REFERENCES exam_sessions (session_id),
+    task_id     BIGINT    NOT NULL REFERENCES tasks (task_id),
+    sort_order  SMALLINT  NOT NULL CHECK (sort_order > 0),
+    PRIMARY KEY (session_id, task_id),
+    UNIQUE (session_id, sort_order)
+);
+COMMENT ON TABLE  exam_session_tasks IS '회차 과제';
+COMMENT ON COLUMN exam_session_tasks.session_id IS '회차 ID';
+COMMENT ON COLUMN exam_session_tasks.task_id IS '과제 ID';
+COMMENT ON COLUMN exam_session_tasks.sort_order IS '순서';
+
 CREATE TABLE exam_participants (
     participant_id  BIGSERIAL    PRIMARY KEY,
     session_id      BIGINT       NOT NULL REFERENCES exam_sessions (session_id),
     email           VARCHAR(255) NOT NULL,
     name            VARCHAR(50)  NOT NULL,
     invite_token    VARCHAR(64)  NOT NULL UNIQUE,
-    attempt_id      BIGINT       UNIQUE REFERENCES attempts (attempt_id),
     invited_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     entered_at      TIMESTAMPTZ,
     UNIQUE (session_id, email)
@@ -566,18 +580,21 @@ COMMENT ON COLUMN exam_participants.session_id IS '회차 ID';
 COMMENT ON COLUMN exam_participants.email IS '초대 이메일';
 COMMENT ON COLUMN exam_participants.name IS '이름';
 COMMENT ON COLUMN exam_participants.invite_token IS '메일 입장 링크 토큰';
-COMMENT ON COLUMN exam_participants.attempt_id IS '응시 ID(입장 시 생성)';
 COMMENT ON COLUMN exam_participants.invited_at IS '초대 시각';
 COMMENT ON COLUMN exam_participants.entered_at IS '입장 시각';
 
+ALTER TABLE attempts
+    ADD CONSTRAINT fk_attempts_participant
+    FOREIGN KEY (participant_id) REFERENCES exam_participants (participant_id);
+
 CREATE TABLE proctor_consents (
-    attempt_id       BIGINT       PRIMARY KEY REFERENCES attempts (attempt_id),
+    participant_id   BIGINT       PRIMARY KEY REFERENCES exam_participants (participant_id),
     consent_version  VARCHAR(20)  NOT NULL,
     env_check        JSONB        NOT NULL,
     consented_at     TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE  proctor_consents IS '감독 동의·환경 점검';
-COMMENT ON COLUMN proctor_consents.attempt_id IS '응시 ID';
+COMMENT ON COLUMN proctor_consents.participant_id IS '대상자 ID(회차당 1번)';
 COMMENT ON COLUMN proctor_consents.consent_version IS '동의서 버전';
 COMMENT ON COLUMN proctor_consents.env_check IS '환경 점검 결과(카메라, 브라우저, 전체화면)';
 COMMENT ON COLUMN proctor_consents.consented_at IS '동의 시각';
