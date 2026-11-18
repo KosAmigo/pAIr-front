@@ -9,6 +9,8 @@ const GROUPS = [
       { label: '자가진단', to: '/tasks' },
       { label: '테스트 응시', to: '/entry' },
       { label: '내 기록', to: '/history' },
+      { label: '회원가입', to: '/signup' },
+      { label: '기업 회원가입', to: '/signup?type=company' },
     ],
   },
   {

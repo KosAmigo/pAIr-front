@@ -1,7 +1,7 @@
 // 상단 바 오른쪽 아바타 메뉴 (DESIGN.md §7-8): 이름, 이메일, 로그아웃
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { LogOut, UserPlus } from 'lucide-react'
 import { useAuth } from '../auth/auth'
 
 export function UserMenu() {
@@ -57,6 +57,16 @@ export function UserMenu() {
           >
             <LogOut size={16} aria-hidden /> {signedIn ? '로그아웃' : '다른 목업 계정으로 로그인'}
           </button>
+          {!signedIn && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => nav('/signup')}
+              className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-[14px] text-text hover:bg-panel-raised"
+            >
+              <UserPlus size={16} aria-hidden /> 회원가입
+            </button>
+          )}
         </div>
       )}
     </div>

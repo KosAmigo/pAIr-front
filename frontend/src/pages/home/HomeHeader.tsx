@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 import { LayoutDashboard } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { Logo } from '../../components/ui'
+import { UserMenu } from '../../components/UserMenu'
+import { useAuth } from '../../auth/auth'
 import { scrollToId, useLenis } from './motion'
 
 const LINKS = [
@@ -16,6 +18,7 @@ const LINKS = [
 
 export default function HomeHeader() {
   const lenis = useLenis()
+  const { signedIn } = useAuth()
   const [scrolled, setScrolled] = useState(false)
   const [current, setCurrent] = useState<string | null>(null)
 
@@ -80,7 +83,7 @@ export default function HomeHeader() {
           </Link>
           <Link
             to="/entry"
-            className="hidden h-9 items-center rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel sm:inline-flex"
+            className="hidden h-9 items-center rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel xl:inline-flex"
           >
             테스트 응시
           </Link>
@@ -90,6 +93,25 @@ export default function HomeHeader() {
           >
             자가진단 시작
           </Link>
+          {/* 계정: 직접 로그인하지 않았으면 로그인·회원가입, 했으면 아바타 메뉴 */}
+          {signedIn ? (
+            <span className="ml-1">
+              <UserMenu />
+            </span>
+          ) : (
+            <>
+              <span aria-hidden className="mx-1 hidden h-5 w-px bg-line-strong sm:block" />
+              <Link to="/login" className="hidden h-9 items-center px-2 text-[15px] font-semibold text-text-muted transition-colors duration-150 hover:text-text sm:inline-flex">
+                로그인
+              </Link>
+              <Link
+                to="/signup"
+                className="inline-flex h-9 items-center rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel"
+              >
+                회원가입
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>
