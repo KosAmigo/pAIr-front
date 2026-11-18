@@ -75,18 +75,11 @@ export default function HomeFooter() {
         </div>
       </div>
 
-      {/* 큰 워드마크: 아래가 살짝 잘리게 */}
-      <div aria-hidden className="mt-10 -mb-[0.2em] text-center font-mono text-[length:clamp(72px,12vw,176px)] leading-[0.9] font-semibold tracking-[-0.06em] select-none">
+      {/* 큰 워드마크: 아래가 살짝 잘리게. 넓은 화면에서는 소개 글과 링크 사이 빈칸까지 끌어올린다 */}
+      <div aria-hidden className="relative mt-6 -mb-[0.2em] text-center lg:-mt-36 pointer-events-none font-mono text-[length:clamp(72px,12vw,176px)] leading-[0.9] font-semibold tracking-[-0.06em] select-none">
         <span className="bg-[linear-gradient(180deg,var(--color-line-strong),transparent_85%)] bg-clip-text text-transparent">p</span>
         <span className="text-brand-gradient">AI</span>
         <span className="bg-[linear-gradient(180deg,var(--color-line-strong),transparent_85%)] bg-clip-text text-transparent">r</span>
-      </div>
-
-      <div className="relative border-t border-line bg-panel">
-        <div className="mx-auto flex h-12 max-w-[1264px] items-center gap-4 px-8 font-mono text-[13px] text-text-faint">
-          <span>v0.1 PROTOTYPE</span>
-          <span className="ml-auto">© 2026 pAIr</span>
-        </div>
       </div>
     </footer>
   )

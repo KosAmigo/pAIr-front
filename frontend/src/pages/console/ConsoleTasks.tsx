@@ -1,4 +1,4 @@
-// DESIGN.md §7-9-1 과제 목록 (ADMIN): 검수 대기 / 공개 / 내림
+// DESIGN.md §7-9-1 과제 목록 (ADMIN): 검수 대기(CLOSED) / 공개(OPEN)
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, FileStack, Search, Sparkles } from 'lucide-react'
@@ -28,7 +28,7 @@ export default function ConsoleTasks() {
   const [closing, setClosing] = useState<CTask | null>(null)
 
   const counts = useMemo(() => {
-    const c = { draft: 0, open: 0, closed: 0 }
+    const c = { draft: 0, open: 0 }
     all.forEach((t) => c[tabOf(t)]++)
     return c
   }, [all])
@@ -56,7 +56,6 @@ export default function ConsoleTasks() {
             tabs={[
               { value: 'draft', label: <>검수 대기 <Count n={counts.draft} warn /></> },
               { value: 'open', label: <>공개 <Count n={counts.open} /></> },
-              { value: 'closed', label: <>내림 <Count n={counts.closed} /></> },
             ]}
           />
           <div className="ml-auto flex items-center gap-2 pb-2">
@@ -159,7 +158,7 @@ export default function ConsoleTasks() {
                               },
                             },
                             t.status === 'OPEN'
-                              ? { text: '내리기', danger: true, onClick: () => setClosing(t) }
+                              ? { text: '공개 취소', danger: true, onClick: () => setClosing(t) }
                               : { text: '공개하기', onClick: () => nav(`/console/tasks/${t.id}?publish=1`) },
                           ]}
                         />
@@ -176,23 +175,23 @@ export default function ConsoleTasks() {
 
       {closing && (
         <ConfirmModal
-          title="과제를 내릴까요?"
+          title="공개를 취소할까요?"
           danger
-          confirm="내리기"
+          confirm="공개 취소"
           disabled={activeSessionCount(closing.id) > 0}
           onClose={() => setClosing(null)}
           onConfirm={() => {
             setTaskStatus(closing.id, 'CLOSED')
             setClosing(null)
-            toast.show('과제를 내렸습니다')
+            toast.show('공개를 취소했습니다. 검수 대기로 옮겼습니다')
           }}
           body={
             activeSessionCount(closing.id) > 0 ? (
               <span className="text-alert">
-                진행 중이거나 예정된 회차 {activeSessionCount(closing.id)}개가 이 과제를 씁니다. 회차가 끝난 뒤에 내릴 수 있습니다.
+                진행 중이거나 예정된 회차 {activeSessionCount(closing.id)}개가 이 과제를 씁니다. 회차가 끝난 뒤에 공개를 취소할 수 있습니다.
               </span>
             ) : (
-              <>「{closing.title}」을 내리면 자가진단 과제 목록과 회차 만들기에서 사라집니다. 지난 응시 기록은 그대로 남습니다.</>
+              <>「{closing.title}」이 검수 대기로 돌아가 자가진단 과제 목록과 회차 만들기에서 사라집니다. 지난 응시 기록은 그대로 남습니다.</>
             )
           }
         />

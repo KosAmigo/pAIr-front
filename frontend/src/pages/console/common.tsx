@@ -124,7 +124,6 @@ export function ConfirmModal({
 const STATUS = {
   draft: { text: '검수 대기', cls: 'bg-caution/10 text-caution', dot: 'bg-caution' },
   open: { text: '공개', cls: 'bg-signal/10 text-signal', dot: 'bg-signal' },
-  closed: { text: '내림', cls: 'bg-panel-raised text-text-muted', dot: 'bg-text-faint' },
 }
 export function TaskStatusBadge({ task }: { task: CTask }) {
   const s = STATUS[tabOf(task)]

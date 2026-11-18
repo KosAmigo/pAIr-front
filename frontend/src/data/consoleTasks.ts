@@ -56,9 +56,9 @@ export type CTask = {
   questions: CQuestion[]
 }
 
-/** 목록 탭: 검수 대기(CLOSED, 공개한 적 없음) / 공개 / 내림(CLOSED, 공개한 적 있음) */
-export type TaskTab = 'draft' | 'open' | 'closed'
-export const tabOf = (t: CTask): TaskTab => (t.status === 'OPEN' ? 'open' : t.publishedAt ? 'closed' : 'draft')
+/** 목록 탭: 테이블 status 와 같이 둘뿐이다. 검수 대기 = CLOSED, 공개 = OPEN (공개를 취소한 과제도 검수 대기) */
+export type TaskTab = 'draft' | 'open'
+export const tabOf = (t: CTask): TaskTab => (t.status === 'OPEN' ? 'open' : 'draft')
 
 export const kindName = (key: string) => KINDS.find((k) => k.key === key)?.name ?? key
 export const QTYPE_LABEL: Record<QType, string> = { SINGLE: '객관식 1개', MULTI: '객관식 여러 개', SHORT: '단답형', ESSAY: '서술형' }
@@ -254,7 +254,7 @@ function seed(): CTask[] {
       code: 'legacy-report',
       title: '월간 리포트 자동화 (구버전)',
       summary: '엑셀 수작업 리포트를 스크립트로 바꿉니다.',
-      description: '구버전 과제. 새 데이터 해석 과제로 대체되어 내렸습니다.',
+      description: '구버전 과제. 새 데이터 해석 과제로 대체되어 공개를 취소했습니다.',
       requirements: ['리포트 생성 스크립트를 만든다.'],
       track: 'BIZ',
       category: 'data',
