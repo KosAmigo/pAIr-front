@@ -1,6 +1,5 @@
-// DESIGN.md §7-1 푸터 (2026-11-18 개편): 링크 묶음 + 화면 폭을 꽉 채우는 큰 pAIr 글자
+// DESIGN.md §7-1 푸터: 낮은 한 줄. 왼쪽 pAIr 글자와 소개, 오른쪽 링크. 링크는 다른 화면으로 가는 것만 둔다
 import { Link } from 'react-router-dom'
-import { scrollToId, useLenis } from './motion'
 
 const GROUPS = [
   {
@@ -14,15 +13,6 @@ const GROUPS = [
     ],
   },
   {
-    title: '둘러보기',
-    links: [
-      { label: '복기', anchor: 'replay' },
-      { label: '리포트', anchor: 'report' },
-      { label: '과제 생성', anchor: 'create' },
-      { label: '감독', anchor: 'proctor' },
-    ],
-  },
-  {
     title: '운영',
     links: [
       { label: '콘솔', to: '/console' },
@@ -32,53 +22,37 @@ const GROUPS = [
 ] as const
 
 export default function HomeFooter() {
-  const lenis = useLenis()
   return (
-    <footer className="relative z-10 overflow-hidden border-t border-line bg-panel/70 backdrop-blur">
-      <div className="mx-auto max-w-[1264px] px-8 py-12">
-        {/* 한 줄: 왼쪽 워드마크와 소개, 오른쪽 링크 묶음. 워드마크가 따로 줄을 차지하지 않는다 */}
-        <div className="flex flex-wrap items-start gap-x-24 gap-y-10">
-          <div className="max-w-[360px]">
-            <p aria-hidden className="pointer-events-none font-mono text-[length:clamp(64px,8vw,112px)] leading-[0.85] font-semibold tracking-[-0.06em] select-none">
-              <span className="text-line-strong">p</span>
-              <span className="text-brand-gradient">AI</span>
-              <span className="text-line-strong">r</span>
-            </p>
-            <p className="mt-5 text-[17px] leading-7 font-bold text-text">AI와 일하는 방식까지 평가하는 pAIr</p>
-            <p className="mt-1 text-[15px] leading-6 text-text-muted">결과물과 풀이 과정을 함께 보는 AI 활용 역량 진단</p>
-          </div>
-          <nav aria-label="바닥글" className="ml-auto flex flex-wrap gap-x-20 gap-y-8 pt-2">
-            {GROUPS.map((g) => (
-              <div key={g.title}>
-                <p className="text-[14px] font-bold text-text">{g.title}</p>
-                <ul className="mt-3 flex flex-col gap-2">
-                  {g.links.map((l) => (
-                    <li key={l.label}>
-                      {'anchor' in l ? (
-                        <a
-                          href={`#${l.anchor}`}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            scrollToId(lenis, l.anchor)
-                          }}
-                          className="text-[15px] text-text-muted transition-colors duration-150 hover:text-text"
-                        >
-                          {l.label}
-                        </a>
-                      ) : (
-                        <Link to={l.to} className="text-[15px] text-text-muted transition-colors duration-150 hover:text-text">
-                          {l.label}
-                        </Link>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </nav>
+    <footer className="relative z-10 border-t border-line bg-panel/70 backdrop-blur">
+      {/* 낮은 한 줄: 왼쪽 pAIr 글자와 한 줄 소개, 오른쪽 링크를 가로로. 묶음 사이는 세로 구분선 */}
+      <div className="mx-auto flex max-w-[1264px] flex-wrap items-center gap-x-10 gap-y-5 px-8 py-8">
+        <div className="flex items-center gap-4">
+          <p aria-hidden className="pointer-events-none font-mono text-[40px] leading-none font-semibold tracking-[-0.06em] select-none">
+            <span className="text-line-strong">p</span>
+            <span className="text-brand-gradient">AI</span>
+            <span className="text-line-strong">r</span>
+          </p>
+          <p className="text-[14px] leading-5 text-text-muted">
+            <b className="font-semibold text-text">AI와 일하는 방식까지 평가합니다</b>
+            <br />
+            결과물과 풀이 과정을 함께 보는 AI 활용 역량 진단
+          </p>
         </div>
+        <nav aria-label="바닥글" className="ml-auto flex flex-wrap items-center gap-x-6 gap-y-3">
+          {GROUPS.map((g, gi) => (
+            <ul key={g.title} aria-label={g.title} className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              {gi > 0 && <li aria-hidden className="mr-1 h-4 w-px bg-line-strong" />}
+              {g.links.map((l) => (
+                <li key={l.label}>
+                  <Link to={l.to} className="text-[14px] font-medium text-text-muted transition-colors duration-150 hover:text-text">
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ))}
+        </nav>
       </div>
-
     </footer>
   )
 }

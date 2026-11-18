@@ -6,32 +6,13 @@ import { cx } from '../../components/cx'
 import { Logo } from '../../components/ui'
 import { UserMenu } from '../../components/UserMenu'
 import { useAuth } from '../../auth/auth'
-import { scrollToId, useLenis } from './motion'
-
-const LINKS = [
-  { id: 'replay', label: '복기' },
-  { id: 'report', label: '리포트' },
-  { id: 'live', label: '실전 시험' },
-  { id: 'create', label: '과제 생성' },
-  { id: 'proctor', label: '감독' },
-]
 
 export default function HomeHeader() {
-  const lenis = useLenis()
   const { signedIn } = useAuth()
   const [scrolled, setScrolled] = useState(false)
-  const [current, setCurrent] = useState<string | null>(null)
 
   useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > 80)
-      let cur: string | null = null
-      for (const l of LINKS) {
-        const el = document.getElementById(l.id)
-        if (el && el.getBoundingClientRect().top < window.innerHeight * 0.4) cur = l.id
-      }
-      setCurrent(cur)
-    }
+    const onScroll = () => setScrolled(window.scrollY > 80)
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -46,33 +27,7 @@ export default function HomeHeader() {
     >
       <div className="mx-auto flex h-16 max-w-[1264px] items-center gap-6 px-8">
         <Logo className="text-[18px]" />
-        <nav aria-label="소개 섹션" className="mx-auto hidden items-center gap-8 md:flex">
-          {LINKS.map((l) => (
-            <a
-              key={l.id}
-              href={`#${l.id}`}
-              onClick={(e) => {
-                e.preventDefault()
-                scrollToId(lenis, l.id)
-              }}
-              aria-current={current === l.id ? 'location' : undefined}
-              className={cx(
-                'relative text-[15px] font-medium transition-colors duration-150',
-                current === l.id ? 'text-text' : 'text-text-muted hover:text-text',
-              )}
-            >
-              {l.label}
-              <span
-                aria-hidden
-                className={cx(
-                  'absolute -bottom-2 left-1/2 size-1 -translate-x-1/2 rounded-full bg-brand transition-opacity duration-200',
-                  current === l.id ? 'opacity-100' : 'opacity-0',
-                )}
-              />
-            </a>
-          ))}
-        </nav>
-        <div className="ml-auto flex items-center gap-2 md:ml-0">
+        <div className="ml-auto flex items-center gap-2">
           {/* 콘솔: 관리자는 과제(문제) 만들기, 기업 담당자는 회차와 감독 */}
           <Link
             to="/console"
@@ -83,7 +38,7 @@ export default function HomeHeader() {
           </Link>
           <Link
             to="/entry"
-            className="hidden h-9 items-center rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel xl:inline-flex"
+            className="hidden h-9 items-center rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel sm:inline-flex"
           >
             테스트 응시
           </Link>
