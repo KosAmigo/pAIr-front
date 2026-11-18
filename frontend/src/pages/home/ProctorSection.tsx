@@ -172,7 +172,7 @@ export default function ProctorSection() {
             </span>
             <span
               className={cx(
-                'inline-flex h-8 items-center justify-center gap-1.5 rounded-md border text-[13px] font-semibold transition-all duration-500',
+                'inline-flex h-8 items-center justify-center gap-1.5 rounded-md border text-[13px] font-semibold transition-[background-color,border-color,color] duration-500',
                 reviewed ? 'scale-100 border-alert bg-alert/10 text-alert' : 'border-line-strong bg-panel text-text-muted',
               )}
             >
@@ -180,11 +180,9 @@ export default function ProctorSection() {
             </span>
           </div>
           {/* 판단 메모: 판단이 찍힐 때만 펼쳐진다 (미리 빈칸을 두지 않는다) */}
-          <div className={cx('grid transition-[grid-template-rows,opacity] duration-500', reviewed ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
-            <p className="overflow-hidden text-[12px] text-text-muted">
-              <span className="block pt-2">예시테크 담당자 │ 리포트 대화와 대조 필요</span>
-            </p>
-          </div>
+          {reviewed && (
+            <p className="fade-in pt-2 text-[12px] text-text-muted">예시테크 담당자 │ 리포트 대화와 대조 필요</p>
+          )}
         </div>
       </div>
 

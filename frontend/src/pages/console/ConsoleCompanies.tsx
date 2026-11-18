@@ -7,6 +7,7 @@ import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
 import { Reveal } from '../../components/fx'
+import { ConsoleHero, HeroSep } from './ConsoleHero'
 import {
   addManager,
   createCompany,
@@ -58,7 +59,7 @@ export default function ConsoleCompanies() {
         </Button>
       </PageHeader>
       <div className="p-8">
-        <Reveal className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+        <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
           {companies.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
               <Building2 size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
@@ -188,9 +189,31 @@ function CompanyDetail({ c }: { c: Company }) {
 
   return (
     <>
-      <PageHeader label="COMPANY" title={c.name} />
+      {/* 2026-11-19 개편: 머리는 다크 무대 카드(ConsoleHero) */}
+      <div className="px-8 pt-6">
+        <ConsoleHero
+          label="회사 요약"
+          badge={
+            <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-stage-raised px-2.5 text-[13px] font-semibold text-stage-muted">
+              <Building2 size={14} aria-hidden /> COMPANY
+            </span>
+          }
+          title={c.name}
+          meta={
+            <>
+              <span>{c.businessNo || '사업자번호 없음'}</span>
+              <HeroSep />
+              <span>등록 {fmtTime(c.createdAt)}</span>
+            </>
+          }
+          stats={[
+            { label: 'MANAGERS', value: c.managers.length, unit: '명' },
+            { label: 'SESSIONS', value: sessions.length, unit: '회' },
+          ]}
+        />
+      </div>
       <div className="grid gap-6 p-8 xl:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
-        <section className="flex h-fit flex-col gap-4 rounded-md border border-line bg-panel p-5 shadow-sm">
+        <section className="flex h-fit flex-col gap-4 rounded-xl border border-line bg-panel p-5 shadow-sm">
           <p className="label">INFO</p>
           <Field id="d-name" label="회사 이름">
             <input id="d-name" value={name} onChange={(e) => setName(e.target.value)} className={input} />
@@ -214,7 +237,7 @@ function CompanyDetail({ c }: { c: Company }) {
         </section>
 
         <div className="flex min-w-0 flex-col gap-6">
-          <section className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+          <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
             <header className="flex h-12 items-center gap-2 border-b border-line px-4">
               <span className="label">MANAGERS</span>
               <h2 className="text-[16px] font-semibold text-text">담당자 계정</h2>
@@ -257,7 +280,7 @@ function CompanyDetail({ c }: { c: Company }) {
             )}
           </section>
 
-          <section className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+          <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
             <header className="flex h-12 items-center gap-2 border-b border-line px-4">
               <span className="label">SESSIONS</span>
               <h2 className="text-[16px] font-semibold text-text">회차</h2>

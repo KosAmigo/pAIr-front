@@ -9,8 +9,8 @@ import { GlowBorder } from '../../components/fx'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
 const STEPS = [
-  { name: '과제 설명', result: '설명과 요구사항 3개', stream: '## 상황 · 어제 21시부터 주문 API 응답이 8배 느려졌습니다' },
-  { name: '작업 파일', result: '파일 6개', stream: 'OrderService.java · InventoryService.java · api.log' },
+  { name: '과제 설명', result: '설명과 요구사항 3개', stream: '## 상황, 어제 21시부터 주문 API 응답이 8배 느려졌습니다' },
+  { name: '작업 파일', result: '파일 6개', stream: 'OrderService.java, InventoryService.java, api.log' },
   { name: '문항', result: '객관식 1, 단답형 1, 서술형 1', stream: 'Q1 로그에서 처음 실패한 요청의 원인은?' },
   { name: '후속 질문', result: '3개', stream: 'F1 AI 답변 중 직접 확인한 것과 확인 방법' },
   { name: '근거 문서 연결', result: '문항마다 2개', stream: 'Q1 ← api.log 12행, 설계서 3쪽' },

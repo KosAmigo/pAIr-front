@@ -58,8 +58,8 @@ export default function ProctorPanel({ session, p, className }: { session: Sessi
   const pos = (iso: string) => Math.min(100, Math.max(0, ((Date.parse(iso) - Date.parse(session.startsAt)) / span) * 100))
 
   return (
-    <section className={cx('flex flex-col rounded-md border border-line bg-panel shadow-sm', className)} aria-label="감독 기록">
-      <header className="border-b border-line px-4 py-3">
+    <section className={cx('flex flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-md', className)} aria-label="감독 기록">
+      <header className="border-b border-line bg-[linear-gradient(120deg,var(--color-brand-dim),transparent_70%)] px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="label">PROCTORING</span>
           <span className="tnum ml-auto font-mono text-[12px] text-text-muted">
@@ -129,7 +129,7 @@ export default function ProctorPanel({ session, p, className }: { session: Sessi
             ))}
           </div>
 
-          <ol className="flex flex-col gap-3 p-4">
+          <ol className="fx-cards flex flex-col gap-3 p-4">
             {shown.length === 0 && <li className="py-8 text-center text-[14px] text-text-muted">{events.length ? '조건에 맞는 이벤트가 없습니다.' : '감독 이벤트가 없습니다.'}</li>}
             {shown.map((e) => (
               <EventCard

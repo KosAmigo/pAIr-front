@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, Download, ExternalLink, Info, Loader2, Play, Save, Square, Star } from 'lucide-react'
+import { CheckCircle2, Download, ExternalLink, FlaskConical, Info, Loader2, Play, Save, Square, Star } from 'lucide-react'
 import { cx } from '../components/cx'
-import { Button, Logo, Tabs } from '../components/ui'
+import { Button, Logo } from '../components/ui'
+import { Aurora, BranchLine, CountUp, Reveal, StageSection } from '../components/fx'
+import { PillTabs } from './console/ConsoleHero'
 import {
   ApiError,
   grader,
@@ -37,7 +39,7 @@ const th = 'label h-9 px-3 text-left font-medium'
 
 function Box({ label, title, actions, children, className }: { label: string; title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cx('rounded-md border border-line bg-panel', className)}>
+    <section className={cx('overflow-hidden rounded-xl border border-line bg-panel shadow-sm', className)}>
       <header className="flex h-10 items-center gap-3 border-b border-line px-4">
         <span className="label">{label}</span>
         {title && <h2 className="truncate text-[16px] font-semibold">{title}</h2>}
@@ -216,8 +218,8 @@ function VersionsTab({ rubric, onChanged }: { rubric: GraderRubric; onChanged: (
                   </div>
                 ) : (
                   <p className="font-mono text-[13px] text-text-muted">
-                    {shown.id} · {fmtDate(shown.createdAt)}
-                    {shown.parent && <> · {shown.parent} 바탕</>}
+                    {shown.id} │ {fmtDate(shown.createdAt)}
+                    {shown.parent && <> │ {shown.parent} 바탕</>}
                     {shown.note && <span className="mt-1 block font-sans text-[14px] text-text">{shown.note}</span>}
                   </p>
                 )}
@@ -440,7 +442,7 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
         {groups.map((g) => (
           <Box
             key={g.label}
-            label={`STEP 2 · ${g.label}`}
+            label={`STEP 2 │ ${g.label}`}
             title={g.title}
             actions={<span className="font-mono text-[13px] text-text-muted">{g.rows.length}건</span>}
           >
@@ -524,7 +526,7 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
               <select className={inputCls} value={versionId} onChange={(e) => setVersionId(e.target.value)}>
                 {versions.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.name}{v.active ? ' · 실제 채점' : ''}
+                    {v.name}{v.active ? ' │ 실제 채점' : ''}
                   </option>
                 ))}
               </select>
@@ -692,7 +694,7 @@ function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect:
                 <button
                   type="button"
                   onClick={() => onSelect(r.id)}
-                  title={`${r.versionName} · ${usd(r.actualUsd)}`}
+                  title={`${r.versionName} │ ${usd(r.actualUsd)}`}
                   className={cx(
                     'flex w-full items-center gap-2 px-4 py-2.5 text-left font-mono text-[13px] whitespace-nowrap',
                     selected === r.id ? 'bg-panel-raised text-text' : 'text-text-muted hover:bg-panel-raised/60',
@@ -734,7 +736,7 @@ function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect:
                     .filter((r) => r.id !== selected)
                     .map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.versionName} · {fmtDate(r.createdAt)} · 응시 {r.attempts.length}×{r.count}
+                        {r.versionName} │ {fmtDate(r.createdAt)} │ 응시 {r.attempts.length}×{r.count}
                       </option>
                     ))}
                 </select>
@@ -771,7 +773,7 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
   return (
     <Box
       label="RUN"
-      title={`${m.versionName} · ${fmtDate(m.createdAt)}`}
+      title={`${m.versionName} │ ${fmtDate(m.createdAt)}`}
       actions={
         <>
           {m.status === 'RUNNING' && (
@@ -804,8 +806,8 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
       </div>
       {m.mode === 'batch' && m.phase && <BatchPhase phase={m.phase} running={m.status === 'RUNNING'} />}
       {m.status === 'RUNNING' && (
-        <div className="mx-4 mb-3 h-1 overflow-hidden rounded-full bg-line">
-          <div className="h-full bg-brand-gradient transition-[width] duration-500" style={{ width: `${(finished / Math.max(1, m.total)) * 100}%` }} />
+        <div className="mx-4 mb-2">
+          <BranchLine progress={finished / Math.max(1, m.total)} />
         </div>
       )}
       {m.errors.length > 0 && (
@@ -1061,23 +1063,57 @@ export default function Grader() {
   }, [])
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-panel px-8">
+    // 2026-11-19 개편 (DESIGN.md §7-7): 오로라 띠 + 유리 상단 바, 다크 무대 "채점 실험실" 소개, 알약 탭.
+    <div className="relative isolate flex h-full flex-col">
+      <Aurora variant="band" className="h-[360px]" />
+      <header className="glass relative z-20 flex h-14 shrink-0 items-center gap-3 rounded-none! border-0! border-b! border-line/70! px-8 shadow-none!">
         <Logo />
         <span className="text-[16px] font-semibold">채점 툴</span>
+        <span className="rounded-sm bg-brand-dim px-1.5 font-mono text-[11px] font-semibold tracking-[0.12em] text-brand">LAB</span>
       </header>
-      <div className="flex shrink-0 items-end border-b border-line px-8">
-        <Tabs
-          value={tab}
-          onChange={setTab}
-          tabs={[
-            { value: 'versions', label: '프롬프트 버전' },
-            { value: 'run', label: '실험 채점' },
-            { value: 'results', label: '결과' },
-          ]}
-        />
-      </div>
-      <main className="min-h-0 flex-1 overflow-auto">
+      <main className="relative z-10 min-h-0 flex-1 overflow-auto">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-5 px-8 pt-6">
+          <StageSection aria-label="채점 실험실">
+            <div className="flex flex-wrap items-center gap-x-10 gap-y-5 px-8 py-7">
+              <Reveal className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 font-mono text-[12px] font-semibold tracking-[0.12em] text-stage-brand">
+                  <FlaskConical size={14} aria-hidden /> GRADING LAB
+                </p>
+                <h1 className="mt-2 text-[30px] leading-10 font-bold tracking-[-0.02em] text-stage-text">채점 프롬프트를 고치고, 같은 응시를 여러 번 채점해 흔들림을 봅니다</h1>
+              </Reveal>
+              {rubric && (
+                <dl className="flex gap-8">
+                  {(
+                    [
+                      ['ITEMS', rubric.items.length, '개'],
+                      ['CHECKS', rubric.checks.length, '개'],
+                      ['REPEAT', rubric.defaults.judgeRepeat, '회'],
+                    ] as const
+                  ).map(([l, v, u]) => (
+                    <div key={l}>
+                      <dt className="label text-stage-muted">{l}</dt>
+                      <dd className="flex items-baseline gap-1">
+                        <CountUp value={v} className="font-mono text-[34px] leading-10 font-semibold text-stage-text" />
+                        <span className="text-[13px] text-stage-muted">{u}</span>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </div>
+          </StageSection>
+          <PillTabs
+            id="grader-tab"
+            label="채점 툴 화면"
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { value: 'versions', label: '프롬프트 버전' },
+              { value: 'run', label: '실험 채점' },
+              { value: 'results', label: '결과' },
+            ]}
+          />
+        </div>
         <div className="mx-auto max-w-[1440px] px-8 py-6">
           {err && <p className="text-[15px] text-alert">{err}</p>}
           {!rubric && !err && <Loading />}

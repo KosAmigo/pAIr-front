@@ -60,9 +60,10 @@ export default function ConsoleTaskNew() {
   return (
     <>
       <PageHeader label="NEW TASK" title="AI로 과제 만들기" />
-      <div className="p-8">
+      {/* 2026-11-19 개편: 왼쪽 유리 폼, 오른쪽 다크 무대에 만들어질 초안 미리보기(고른 값이 바로 반영) */}
+      <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6 p-8">
         <form
-          className="mx-auto flex max-w-[720px] flex-col gap-7 rounded-md border border-line bg-panel p-8 shadow-sm"
+          className="glass flex flex-col gap-7 rounded-2xl bg-white/90! p-8 shadow-md!"
           onSubmit={(e) => {
             e.preventDefault()
             setRun({ input: { track, category, difficulty, minutes, pdfs, instruction, counts } })
@@ -232,8 +233,68 @@ export default function ConsoleTaskNew() {
             </Button>
           </div>
         </form>
+        <DraftPreview track={track} category={category} difficulty={difficulty} minutes={minutes} counts={counts} />
       </div>
     </>
+  )
+}
+
+/** 만들어질 초안 미리보기 (다크 무대, 화면에 붙어 따라온다) */
+function DraftPreview({ track, category, difficulty, minutes, counts }: { track: Track; category: string; difficulty: Difficulty; minutes: number; counts: Record<'SINGLE' | 'SHORT' | 'ESSAY' | 'FOLLOWUP', number> }) {
+  const kind = KINDS.find((k) => k.key === category)
+  const level = { 초급: 1, 중급: 2, 고급: 3 }[difficulty]
+  const q = counts.SINGLE + counts.SHORT + counts.ESSAY
+  return (
+    <StageSection className="sticky top-6" aria-label="초안 미리보기">
+      <div className="flex flex-col gap-5 px-6 py-6">
+        <p className="flex items-center gap-2 font-mono text-[12px] font-semibold tracking-[0.12em] text-stage-brand">
+          <Sparkles size={14} aria-hidden /> DRAFT PREVIEW
+        </p>
+        <div>
+          <p className="text-[13px] text-stage-muted">{track === 'DEV' ? '개발 직군' : '비개발 직군'}</p>
+          <p className="text-[24px] leading-8 font-bold text-stage-text">{kind?.name ?? '과제 형태'}</p>
+          <p className="mt-1 text-[14px] leading-5 text-stage-muted">{kind?.desc}</p>
+        </div>
+        <div className="flex items-center gap-5">
+          <span className="inline-flex items-center gap-1.5" aria-label={`난이도 ${difficulty}`}>
+            <span className="flex gap-0.5" aria-hidden>
+              {[1, 2, 3].map((i) => (
+                <span key={i} className={cx('h-3 w-1.5 rounded-full', i <= level ? 'bg-stage-brand' : 'bg-stage-line')} />
+              ))}
+            </span>
+            <span className="text-[14px] text-stage-text">{difficulty}</span>
+          </span>
+          <span className="tnum font-mono text-[14px] text-stage-text">{minutes}분</span>
+        </div>
+        <dl className="grid grid-cols-4 gap-2">
+          {(
+            [
+              ['객관식', counts.SINGLE],
+              ['단답형', counts.SHORT],
+              ['서술형', counts.ESSAY],
+              ['후속', counts.FOLLOWUP],
+            ] as const
+          ).map(([l, n]) => (
+            <div key={l} className="glass-stage rounded-lg px-2 py-2.5 text-center">
+              <dd className="tnum font-mono text-[24px] leading-7 font-semibold text-stage-text">{n}</dd>
+              <dt className="text-[12px] text-stage-muted">{l}</dt>
+            </div>
+          ))}
+        </dl>
+        <div>
+          <p className="label text-stage-muted">AI가 만들 것</p>
+          <ol className="mt-2 flex flex-col gap-1.5">
+            {['과제 설명과 요구사항', track === 'DEV' ? '작업 파일 (코드, 테스트)' : '작업 파일 (자료)', `문항 ${q}개`, `후속 질문 ${counts.FOLLOWUP}개`, '문항 근거 연결'].map((t, i) => (
+              <li key={t} className="flex items-center gap-2.5 text-[14px] text-stage-text">
+                <span className="tnum flex size-5 items-center justify-center rounded-full border border-stage-line font-mono text-[11px] text-stage-brand">{i + 1}</span>
+                {t}
+              </li>
+            ))}
+          </ol>
+        </div>
+        <p className="border-t border-stage-line pt-4 text-[13px] leading-5 text-stage-muted">만든 초안은 검수 대기(HIDDEN)로 저장되고, 검수한 뒤 공개합니다.</p>
+      </div>
+    </StageSection>
   )
 }
 

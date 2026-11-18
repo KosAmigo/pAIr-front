@@ -1,4 +1,5 @@
 // DESIGN.md §7-9-0 콘솔 공통 셸: 왼쪽 사이드바(권한별 메뉴) + 상단 바(브레드크럼, 권한 배지, 아바타).
+// 2026-11-19 개편: 사이드바는 다크 무대 레일. 활성 메뉴 뒤로 빛나는 판이 미끄러지고, 아래에 소속과 권한 카드.
 import { useEffect, useState } from 'react'
 import { CrumbContext } from './consoleCrumbs'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -6,7 +7,7 @@ import { Building2, CalendarClock, FileStack, FlaskConical, ShieldCheck } from '
 import { motion } from 'motion/react'
 import { springs } from '../lib/motion'
 import { cx } from './cx'
-import { Aurora, Glass, PageTransition } from './fx'
+import { Aurora, Glass, PageTransition, StageSection } from './fx'
 import { Logo } from './ui'
 import { UserMenu } from './UserMenu'
 import { homeFor, useAuth, type Role } from '../auth/auth'
@@ -46,34 +47,35 @@ export function ConsoleShell() {
 
   return (
     <div className="flex h-full">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
-        <div className="flex h-14 items-center gap-2 px-5">
-          <Logo />
-          <span className="label">CONSOLE</span>
+      <StageSection as="aside" aria-label="콘솔 메뉴" className="flex w-64 shrink-0 flex-col rounded-none! border-0! shadow-none!">
+        <div className="flex h-full flex-col">
+          <div className="flex h-16 items-center gap-2 px-5">
+            <Logo className="text-stage-text!" />
+            <span className="rounded-sm border border-stage-line px-1.5 font-mono text-[11px] font-semibold tracking-[0.12em] text-stage-brand">CONSOLE</span>
+          </div>
+          <nav className="flex flex-col gap-1 px-3 pt-4">
+            <p className="px-3 pb-1 font-mono text-[11px] tracking-[0.12em] text-stage-faint">MENU</p>
+            {items.map((m) => (
+              <MenuLink key={m.to} item={m} />
+            ))}
+            {user.role === 'ADMIN' && (
+              <>
+                <p className="px-3 pt-5 pb-1 font-mono text-[11px] tracking-[0.12em] text-stage-faint">TOOLS</p>
+                <MenuLink item={{ to: '/grader', label: '채점 툴', icon: FlaskConical, roles: ['ADMIN'] }} />
+              </>
+            )}
+          </nav>
+          <div className="mt-auto p-3">
+            <div className="glass-stage rounded-xl px-4 py-3">
+              <p className="flex items-center gap-2 text-[13px] font-semibold text-stage-text">
+                {user.companyName ? <Building2 size={16} className="text-stage-brand" aria-hidden /> : <ShieldCheck size={16} className="text-stage-brand" aria-hidden />}
+                {user.companyName ?? 'pAIr 운영'}
+              </p>
+              <p className="mt-0.5 font-mono text-[12px] text-stage-muted">{user.role}</p>
+            </div>
+          </div>
         </div>
-        <nav aria-label="콘솔 메뉴" className="flex flex-col gap-0.5 px-3 pt-3">
-          {items.map((m) => (
-            <MenuLink key={m.to} item={m} />
-          ))}
-          {user.role === 'ADMIN' && (
-            <>
-              <div className="mx-2 my-3 h-px bg-line" />
-              <MenuLink item={{ to: '/grader', label: '채점 툴', icon: FlaskConical, roles: ['ADMIN'] }} />
-            </>
-          )}
-        </nav>
-        <div className="mt-auto border-t border-line px-5 py-4">
-          {user.companyName ? (
-            <p className="flex items-center gap-2 text-[13px] text-text-muted">
-              <Building2 size={16} aria-hidden /> {user.companyName}
-            </p>
-          ) : (
-            <p className="flex items-center gap-2 text-[13px] text-text-muted">
-              <ShieldCheck size={16} aria-hidden /> pAIr 운영
-            </p>
-          )}
-        </div>
-      </aside>
+      </StageSection>
 
       <div className="relative isolate flex min-w-0 flex-1 flex-col">
         <Aurora variant="band" className="h-[360px]" />
@@ -133,21 +135,26 @@ function MenuLink({ item }: { item: MenuItem }) {
     <NavLink
       to={item.to}
       className={({ isActive }) =>
-        cx(
-          'relative flex h-10 items-center gap-3 rounded-md px-3 text-[15px] font-medium transition-colors duration-150',
-          isActive ? 'bg-brand-dim text-brand' : 'text-text-muted hover:bg-panel-raised hover:text-text',
-        )
+        cx('relative flex h-11 items-center gap-3 rounded-lg px-3 text-[15px] font-medium transition-colors duration-150', isActive ? 'text-stage-text' : 'text-stage-muted hover:bg-stage-raised/60 hover:text-stage-text')
       }
     >
       {({ isActive }) => (
         <>
+          {/* 활성 메뉴 뒤 빛나는 판: 메뉴 사이를 미끄러진다 */}
           {isActive && (
-            <motion.span layoutId="console-menu-active" transition={springs.snappy} className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand-gradient" aria-hidden />
+            <motion.span
+              layoutId="console-menu-active"
+              transition={springs.snappy}
+              className="absolute inset-0 -z-0 rounded-lg border border-stage-line bg-stage-raised shadow-[0_0_24px_-6px_color-mix(in_srgb,var(--color-stage-brand)_60%,transparent)]"
+              aria-hidden
+            >
+              <span className="bg-brand-gradient absolute inset-y-2.5 left-0 w-[3px] rounded-full" />
+            </motion.span>
           )}
-          <item.icon size={18} strokeWidth={1.75} aria-hidden />
-          {item.label}
-          {item.count != null && (
-            <span className="tnum ml-auto rounded-sm bg-panel-raised px-1.5 font-mono text-[12px] text-text-muted">{item.count}</span>
+          <item.icon size={18} strokeWidth={1.75} className={cx('relative', isActive && 'text-stage-brand')} aria-hidden />
+          <span className="relative">{item.label}</span>
+          {item.count != null && item.count > 0 && (
+            <span className="tnum relative ml-auto rounded-full bg-stage-caution/15 px-2 font-mono text-[12px] font-semibold text-stage-caution">{item.count}</span>
           )}
         </>
       )}

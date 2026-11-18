@@ -242,7 +242,7 @@ function MockReport() {
           key={m.id}
           label={`MOMENT AT ${m.time}`}
           title={m.title}
-          className="fade-in col-span-7"
+          className={cx('fade-in col-span-7 border-t-[3px]', m.tone === 'good' ? 'border-t-signal' : 'border-t-caution')}
           actions={
             <span className={cx('flex items-center gap-1.5 text-[14px] font-medium', m.tone === 'good' ? 'text-signal' : 'text-caution')}>
               {m.tone === 'good' ? <CircleCheck size={16} aria-hidden /> : <CircleAlert size={16} aria-hidden />}
@@ -266,7 +266,7 @@ function MockReport() {
           </div>
         </Panel>
 
-        <Panel key={`${m.id}-snap`} label="SNAPSHOT" title="이 시점의 상태" className="fade-in col-span-5">
+        <Panel key={`${m.id}-snap`} label="SNAPSHOT" title="이 시점의 상태" className="fade-in col-span-5 border-t-[3px] border-t-brand">
           <ul className="space-y-2">
             {m.snapshot.map((s) => (
               <li key={s} className="flex items-center gap-3 rounded-sm bg-panel-sunken px-3 py-2 font-mono text-[14px] text-text-muted">

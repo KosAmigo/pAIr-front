@@ -1,7 +1,8 @@
 // DESIGN.md §7-9-4 회차 만들기: 공개 과제 고르기 → 이름 → 일시 → 감독 (입장은 대상자별 링크로만)
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Check, CircleAlert, Search } from 'lucide-react'
+import { CalendarClock, Camera, Check, CircleAlert, Search, Users } from 'lucide-react'
+import { StageSection } from '../../components/fx'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
@@ -52,7 +53,8 @@ export default function ConsoleSessionNew() {
   return (
     <>
       <PageHeader label="NEW SESSION" title="회차 만들기" />
-      <div className="p-8">
+      {/* 2026-11-19 개편: 왼쪽 유리 폼, 오른쪽 다크 무대에 만들어질 회차 요약(고른 값이 바로 반영) */}
+      <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6 p-8">
         <form
           noValidate
           onSubmit={(e) => {
@@ -71,7 +73,7 @@ export default function ConsoleSessionNew() {
             })
             nav(`/console/sessions/${s.id}?tab=participants`)
           }}
-          className="mx-auto flex max-w-[720px] flex-col gap-8 rounded-md border border-line bg-panel p-8 shadow-sm"
+          className="glass flex flex-col gap-8 rounded-2xl bg-white/90! p-8 shadow-md!"
         >
           {user?.role === 'ADMIN' && (
             <Section n={0} title="회사">
@@ -177,6 +179,39 @@ export default function ConsoleSessionNew() {
             </Button>
           </div>
         </form>
+        <StageSection className="sticky top-6" aria-label="회차 요약">
+          <div className="flex flex-col gap-5 px-6 py-6">
+            <p className="flex items-center gap-2 font-mono text-[12px] font-semibold tracking-[0.12em] text-stage-brand">
+              <CalendarClock size={14} aria-hidden /> SESSION PREVIEW
+            </p>
+            <div>
+              <p className="text-[13px] text-stage-muted">{companies.find((c) => c.id === company)?.name ?? '회사'}</p>
+              <p className={cx('text-[22px] leading-8 font-bold', title.trim() ? 'text-stage-text' : 'text-stage-faint')}>{title.trim() || '회차 이름'}</p>
+            </div>
+            <div className="glass-stage rounded-xl px-4 py-3">
+              <p className="label text-stage-muted">TASK</p>
+              <p className={cx('mt-0.5 text-[15px] font-semibold', task ? 'text-stage-text' : 'text-stage-faint')}>{task?.title ?? '과제를 고르세요'}</p>
+              {task && <p className="tnum font-mono text-[12px] text-stage-muted">풀이 {task.minutes}분</p>}
+            </div>
+            <div>
+              <p className="label text-stage-muted">WHEN</p>
+              <p className="tnum font-mono text-[30px] leading-9 font-semibold text-stage-text">
+                {start} – {endStr}
+              </p>
+              <p className="tnum font-mono text-[13px] text-stage-muted">
+                {date} │ {spanMin > 0 ? `${spanMin}분` : '시간을 확인하세요'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={cx('inline-flex h-8 items-center gap-2 rounded-full px-3 text-[13px] font-semibold', proctoring ? 'bg-stage-signal/15 text-stage-signal' : 'bg-stage-raised text-stage-muted')}>
+                <Camera size={14} aria-hidden /> 감독 {proctoring ? '사용' : '안 함'}
+              </span>
+            </div>
+            <p className="flex items-start gap-2 border-t border-stage-line pt-4 text-[13px] leading-5 text-stage-muted">
+              <Users size={16} className="mt-0.5 shrink-0" aria-hidden /> 만든 뒤 대상자 탭에서 응시자를 등록하면 개인별 입장 링크가 메일로 나갑니다.
+            </p>
+          </div>
+        </StageSection>
       </div>
     </>
   )
