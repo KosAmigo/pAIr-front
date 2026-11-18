@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { CheckMark } from '../components/CheckMark'
 import { cx } from '../components/cx'
 import { Button, Logo, StatusDot, type Status } from '../components/ui'
 import { Aurora, Glass, GlowBorder, GradientText, Magnetic, Particles, RevealGroup, RevealItem, StageSection } from '../components/fx'
@@ -321,21 +322,6 @@ function ApplicantCard({ agreed }: { agreed: number }) {
         <p className="text-[13px] leading-5 break-keep text-stage-muted">필수 동의 {CONSENTS.length}개에 모두 동의해야 다음 단계로 갈 수 있습니다.</p>
       </div>
     </>
-  )
-}
-
-/** 체크 상자: 켜지면 브랜드 그라데이션으로 채워지고 체크가 튀어나온다 */
-function CheckMark({ on }: { on: boolean }) {
-  return (
-    <span className={cx('flex size-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors duration-150', on ? 'bg-brand-gradient border-transparent' : 'border-line-strong bg-panel')} aria-hidden>
-      <AnimatePresence>
-        {on && (
-          <motion.span key="c" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={springs.snappy} className="text-on-accent">
-            <Check size={16} strokeWidth={3} />
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </span>
   )
 }
 

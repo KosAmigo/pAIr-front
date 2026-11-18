@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Download, ExternalLink, FlaskConical, Info, Loader2, Play, Save, Square, Star } from 'lucide-react'
 import { cx } from '../components/cx'
+import { ErrorState } from '../components/ErrorState'
 import { Button, Logo } from '../components/ui'
 import { Aurora, BranchLine, CountUp, Glass, Reveal, StageSection } from '../components/fx'
 import { motion } from 'motion/react'
@@ -196,7 +197,7 @@ function VersionsTab({ rubric, onChanged }: { rubric: GraderRubric; onChanged: (
       </Box>
 
       <div className="min-w-0 space-y-4">
-        {err && <p className="rounded-md border border-alert/40 bg-alert/10 px-4 py-2 text-[14px] text-alert">{err}</p>}
+        {err && <ErrorState compact message={err} onRetry={() => (setErr(null), load())} />}
         {!shown ? (
           <Box label="VERSION">
             <Loading />
@@ -632,7 +633,7 @@ function RunTab({ rubric, versionsKey, onStarted }: { rubric: GraderRubric; vers
                 </p>
               </>
             )}
-            {err && <p className="mt-3 text-[14px] text-alert">{err}</p>}
+            {err && <ErrorState compact message={err} className="mt-3" />}
             <Button variant="primary" className="mt-4 w-full" disabled={!refs.length || !versionId || busy} onClick={() => void start()}>
               {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Play size={16} aria-hidden />} 채점 시작
             </Button>
@@ -782,7 +783,7 @@ function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect:
       </Box>
 
       <div className="min-w-0 space-y-4">
-        {err && <p className="rounded-md border border-alert/40 bg-alert/10 px-4 py-2 text-[14px] text-alert">{err}</p>}
+        {err && <ErrorState compact message={err} />}
         {!selected ? null : !data ? (
           <Box label="RUN">
             <Loading />
@@ -1124,9 +1125,14 @@ export default function Grader() {
   const [versionsKey, setVersionsKey] = useState(0)
   const [runId, setRunId] = useState<string | null>(null)
 
+  const [tries, setTries] = useState(0)
   useEffect(() => {
     grader.rubric().then(setRubric).catch((e: ApiError) => setErr(e.message))
-  }, [])
+  }, [tries])
+  const retry = () => {
+    setErr(null)
+    setTries((t) => t + 1)
+  }
 
   return (
     // 2026-11-19 개편 (DESIGN.md §7-7): 오로라 띠 + 유리 상단 바, 다크 무대 "채점 실험실" 소개, 알약 탭.
@@ -1181,7 +1187,7 @@ export default function Grader() {
           />
         </div>
         <div className="mx-auto max-w-[1440px] px-8 py-6">
-          {err && <p className="text-[15px] text-alert">{err}</p>}
+          {err && <ErrorState message={err} onRetry={retry} className="mt-6" />}
           {!rubric && !err && <Loading />}
           {rubric && tab === 'versions' && <VersionsTab rubric={rubric} onChanged={() => setVersionsKey((k) => k + 1)} />}
           {rubric && tab === 'run' && (
