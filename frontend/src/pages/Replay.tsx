@@ -344,7 +344,8 @@ export default function Replay() {
     >
       <div className="flex h-full flex-col">
         {/* 분기 범례 + 선택 슬롯 */}
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-8">
+        {/* 2026-11-19 개편: 분기 범례 = 분기 카드 줄. 고른 분기는 분기 색 테두리 + 빛, A/B 슬롯 배지 */}
+        <div className="flex shrink-0 items-center gap-2 px-8 pt-4">
           <span className="label mr-2">BRANCHES</span>
           {branches.map((b, i) => {
             const slot = selected.indexOf(b.id)
@@ -356,9 +357,10 @@ export default function Replay() {
                 aria-pressed={on}
                 onClick={() => toggle(b.id)}
                 className={cx(
-                  'flex h-9 items-center gap-2 rounded-md border px-2.5 transition-colors duration-[120ms]',
-                  on ? 'border-line-strong bg-panel-raised' : 'border-line hover:border-line-strong',
+                  'glass flex h-11 items-center gap-2 rounded-xl px-3 transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5',
+                  on ? 'bg-white/95!' : 'opacity-80 hover:opacity-100',
                 )}
+                style={on ? { boxShadow: `0 0 0 2px ${color(i)}, 0 8px 24px -8px ${color(i)}` } : undefined}
               >
                 {on ? <SlotBadge slot={slot === 0 ? 'A' : 'B'} /> : <span className="size-[18px]" aria-hidden />}
                 <span className="h-[3px] w-4 rounded-full" style={{ background: color(i) }} aria-hidden />

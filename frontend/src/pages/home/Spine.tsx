@@ -132,9 +132,9 @@ export default function Spine({ rootRef }: { rootRef: RefObject<HTMLElement | nu
     >
       <defs>
         <linearGradient id="spine-grad" gradientUnits="userSpaceOnUse" x1="0" y1={y0} x2="0" y2={y1}>
-          <stop offset="0%" stopColor="#8b5cf6" />
-          <stop offset="45%" stopColor="#6c47ff" />
-          <stop offset="100%" stopColor="#2f5bea" />
+          <stop offset="0%" style={{ stopColor: 'var(--color-branch-3)' }} />
+          <stop offset="45%" style={{ stopColor: 'var(--color-brand)' }} />
+          <stop offset="100%" style={{ stopColor: 'var(--color-brand-blue)' }} />
         </linearGradient>
       </defs>
 

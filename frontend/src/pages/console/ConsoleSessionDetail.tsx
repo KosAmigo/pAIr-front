@@ -6,7 +6,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowDownUp, Camera, CircleAlert, Download, FileUp, Pause, Play, UserPlus, X } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
-import { Button, MetricTile, ScoreChip, Sep, Tabs } from '../../components/ui'
+import { Button, ScoreChip } from '../../components/ui'
+import { ConsoleHero, HeroSep, PillTabs } from './ConsoleHero'
 import {
   companyName,
   EVENT_LABEL,
@@ -71,44 +72,52 @@ function Detail({ s }: { s: Session }) {
   const setTab = (t: Tab) => setParams({ tab: t }, { replace: true })
   const toast = useToast()
 
+  const entered = s.participants.filter((p) => p.enteredAt).length
+  const submitted = s.participants.filter((p) => p.state === 'SUBMITTED').length
+  const open = s.participants.reduce((n, p) => n + unreviewed(p), 0)
+
   return (
     <>
-      <header className="flex flex-wrap items-center gap-4 border-b border-line px-8 py-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <PhaseBadge phase={phase} />
-            <h1 className="truncate text-[21px] leading-7 font-bold text-text">{s.title}</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 font-mono text-[13px] text-text-muted">
-            <span className="tnum">
-              {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
-            </span>
-            <Sep />
-            <span className="font-sans">{s.taskTitle}</span>
-            {s.proctoring && (
-              <>
-                <Sep />
-                <span className="inline-flex items-center gap-1 font-sans">
-                  <Camera size={14} aria-hidden /> 감독
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
-      <div className="border-b border-line bg-panel px-8">
-        <Tabs
+      {/* 2026-11-19 개편: 머리는 다크 무대 카드(ConsoleHero), 탭은 알약 탭 */}
+      <div className="flex flex-col gap-5 px-8 pt-6">
+        <ConsoleHero
+          label="회차 요약"
+          badge={<PhaseBadge phase={phase} />}
+          title={s.title}
+          meta={
+            <>
+              <span>
+                {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
+              </span>
+              <HeroSep />
+              <span className="font-sans">{s.taskTitle}</span>
+              {s.proctoring && (
+                <>
+                  <HeroSep />
+                  <span className="inline-flex items-center gap-1 font-sans">
+                    <Camera size={14} aria-hidden /> 감독
+                  </span>
+                </>
+              )}
+            </>
+          }
+          stats={[
+            { label: 'INVITED', value: s.participants.length, unit: '명' },
+            { label: 'ENTERED', value: entered, unit: '명' },
+            { label: 'SUBMITTED', value: submitted, unit: '명', tone: 'signal' },
+            { label: 'UNREVIEWED', value: open, unit: '건', tone: 'caution' },
+          ]}
+        />
+        <PillTabs
+          id="session-tab"
+          label="회차 화면"
           value={tab}
-          onChange={(t) => {
-            if ((t === 'live' && phase !== 'live') || (t === 'results' && phase !== 'ended')) return
-            setTab(t)
-          }}
-          className="h-11"
+          onChange={setTab}
           tabs={[
             { value: 'overview', label: '개요' },
-            { value: 'participants', label: <>대상자 <Num n={s.participants.length} /></> },
-            { value: 'live', label: <span className={cx(phase !== 'live' && 'opacity-40')} title={phase !== 'live' ? '진행 중일 때만 볼 수 있습니다' : undefined}>실시간 현황</span> },
-            { value: 'results', label: <span className={cx(phase !== 'ended' && 'opacity-40')} title={phase !== 'ended' ? '회차가 끝나면 볼 수 있습니다' : undefined}>결과</span> },
+            { value: 'participants', label: <>대상자 <span className="tnum font-mono text-[13px] opacity-80">{s.participants.length}</span></> },
+            { value: 'live', label: '실시간 현황', disabled: phase !== 'live', hint: phase !== 'live' ? '진행 중일 때만 볼 수 있습니다' : undefined },
+            { value: 'results', label: '결과', disabled: phase !== 'ended', hint: phase !== 'ended' ? '회차가 끝나면 볼 수 있습니다' : undefined },
           ]}
         />
       </div>
@@ -126,29 +135,22 @@ function Detail({ s }: { s: Session }) {
 function PhaseBadge({ phase }: { phase: SessionPhase }) {
   return phase === 'live' ? (
     <span
-      className="glow inline-flex h-[22px] items-center gap-1.5 rounded-sm bg-alert/10 px-2 text-[13px] font-semibold text-alert"
-      style={{ '--glow': 'var(--color-alert)' } as CSSProperties}
+      className="glow-stage inline-flex h-6 items-center gap-1.5 rounded-full bg-stage-alert/15 px-2.5 text-[13px] font-semibold text-stage-alert"
+      style={{ '--glow': 'var(--color-stage-alert)' } as CSSProperties}
     >
-      <i className="rec-pulse size-1.5 rounded-full bg-alert" aria-hidden /> 진행 중
+      <i className="rec-pulse size-1.5 rounded-full bg-stage-alert" aria-hidden /> 진행 중
     </span>
   ) : phase === 'upcoming' ? (
-    <span className="inline-flex h-[22px] items-center rounded-sm bg-info/10 px-2 text-[13px] font-semibold text-info">예정</span>
+    <span className="inline-flex h-6 items-center rounded-full bg-stage-blue/15 px-2.5 text-[13px] font-semibold text-stage-blue">예정</span>
   ) : (
-    <span className="inline-flex h-[22px] items-center rounded-sm bg-panel-raised px-2 text-[13px] font-semibold text-text-muted">종료</span>
+    <span className="inline-flex h-6 items-center rounded-full bg-stage-raised px-2.5 text-[13px] font-semibold text-stage-muted">종료</span>
   )
 }
-function Num({ n }: { n: number }) {
-  return <span className="tnum ml-1 rounded-sm bg-panel-raised px-1.5 font-mono text-[12px] text-text-muted">{n}</span>
-}
-
 // ── 개요 ──
 function Overview({ s, phase }: { s: Session; phase: SessionPhase }) {
   const nav = useNavigate()
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const entered = s.participants.filter((p) => p.enteredAt).length
-  const submitted = s.participants.filter((p) => p.state === 'SUBMITTED').length
-  const open = s.participants.reduce((n, p) => n + unreviewed(p), 0)
   const rows: [string, ReactNode][] = [
     ['회사', <Link key="co" to={`/console/companies/${s.companyId}`} className="text-brand hover:underline">{companyName(s.companyId)}</Link>],
     ['과제', <Link key="t" to={`/console/tasks/${s.taskId}`} className="text-brand hover:underline">{s.taskTitle}</Link>],
@@ -158,13 +160,7 @@ function Overview({ s, phase }: { s: Session; phase: SessionPhase }) {
   ]
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <MetricTile label="INVITED" value={s.participants.length} unit="명" sub="초대" />
-        <MetricTile label="ENTERED" value={entered} unit="명" sub="입장" />
-        <MetricTile label="SUBMITTED" value={submitted} unit="명" sub="제출" />
-        <MetricTile label="UNREVIEWED" value={open} unit="건" sub={<span className={open ? 'text-caution' : ''}>미확인 감독 이벤트</span>} />
-      </div>
-      <section className="rounded-md border border-line bg-panel shadow-sm">
+      <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
         <header className="flex h-10 items-center border-b border-line px-4">
           <span className="label">SETTINGS</span>
           {phase === 'upcoming' && (

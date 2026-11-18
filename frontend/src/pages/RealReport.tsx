@@ -105,7 +105,7 @@ function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number
               <li key={j.judge} className="text-[13px] leading-5 text-text-faint">
                 <span className="font-mono">{j.model}</span>{' '}
                 <span className={j.violated ? 'text-alert' : 'text-signal'}>{j.violated ? '걸림' : '안 걸림'}</span>
-                {j.reason && <> · {j.reason}</>}
+                {j.reason && <> │ {j.reason}</>}
               </li>
             ))}
           </ul>

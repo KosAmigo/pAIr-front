@@ -20,7 +20,8 @@ import {
 import { cx } from '../../components/cx'
 import { CodeEditor } from '../../components/CodeEditor'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
-import { Button, Sep, Tabs } from '../../components/ui'
+import { Button } from '../../components/ui'
+import { ConsoleHero, HeroSep, PillTabs } from './ConsoleHero'
 import { KINDS } from '../../data/catalog'
 import {
   QTYPE_LABEL,
@@ -115,79 +116,90 @@ function Editor({ stored }: { stored: CTask }) {
 
   return (
     <>
-      <header className="flex shrink-0 flex-wrap items-center gap-4 border-b border-line px-8 py-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <TaskStatusBadge task={{ ...stored, status: draft.status }} />
-            <h1 className="truncate text-[21px] leading-7 font-bold text-text">{draft.title || '제목 없음'}</h1>
-          </div>
-          <div className="flex items-center gap-3 font-mono text-[13px] text-text-muted">
-            <span>{draft.code}</span>
-            <Sep />
-            <span>수정 {fmtTime(stored.updatedAt)}</span>
-            {parent && (
+      {/* 2026-11-19 개편: 머리는 다크 무대 카드(ConsoleHero), 탭은 알약 탭 */}
+      <div className="flex flex-col gap-5 px-8 pt-6">
+        <ConsoleHero
+          label="과제 요약"
+          badge={
+            <>
+              <TaskStatusBadge task={{ ...stored, status: draft.status }} stage />
+              {dirty && (
+                <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-stage-caution/15 px-2.5 text-[13px] font-semibold text-stage-caution">
+                  <i className="size-1.5 rounded-full bg-stage-caution" aria-hidden /> 저장 안 됨
+                </span>
+              )}
+            </>
+          }
+          title={draft.title || '제목 없음'}
+          meta={
+            <>
+              <span>{draft.code}</span>
+              <HeroSep />
+              <span>수정 {fmtTime(stored.updatedAt)}</span>
+              {parent && (
+                <>
+                  <HeroSep />
+                  <Link to={`/console/tasks/${parent}`} className="hover:text-stage-brand hover:underline">
+                    복제 원본
+                  </Link>
+                </>
+              )}
+            </>
+          }
+          stats={[
+            { label: 'FILES', value: draft.files.length, unit: '개' },
+            { label: 'QUESTIONS', value: taskQs.length, unit: '개' },
+            { label: 'FOLLOW-UPS', value: followQs.length, unit: '개' },
+          ]}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <PillTabs
+            id="task-tab"
+            label="과제 편집 화면"
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { value: 'info', label: '기본 정보' },
+              { value: 'files', label: '파일' },
+              { value: 'questions', label: '문항' },
+              { value: 'followups', label: '후속 질문' },
+            ]}
+          />
+          <div className="ml-auto flex items-center gap-2">
+            <a
+              href={`/console/tasks/${draft.id}/preview?track=${draft.track === 'BIZ' ? 'biz' : 'dev'}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-line-strong bg-panel px-3.5 text-[15px] font-semibold text-text hover:border-text-muted hover:bg-panel-raised"
+            >
+              <Eye size={16} aria-hidden /> 응시자로 보기
+            </a>
+            <Button onClick={save} disabled={!dirty}>
+              저장
+            </Button>
+            {draft.status === 'OPEN' || draft.status === 'CLOSED' ? (
               <>
-                <Sep />
-                <Link to={`/console/tasks/${parent}`} className="hover:text-brand hover:underline">
-                  복제 원본
-                </Link>
+                <Button
+                  onClick={() => {
+                    const next = draft.status === 'OPEN' ? 'CLOSED' : 'OPEN'
+                    setTaskStatus(draft.id, next)
+                    setDraft((d) => ({ ...d, status: next }))
+                    toast.show(next === 'CLOSED' ? '응시를 마감했습니다. 목록에는 남고 새 응시만 막힙니다' : '다시 공개했습니다')
+                  }}
+                >
+                  {draft.status === 'OPEN' ? '응시 마감' : '다시 공개'}
+                </Button>
+                <Button variant="danger" onClick={() => setClosing(true)}>
+                  공개 취소
+                </Button>
               </>
+            ) : (
+              <Button variant="primary" onClick={publish}>
+                공개하기
+              </Button>
             )}
           </div>
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          {dirty && (
-            <span className="mr-1 inline-flex items-center gap-1.5 text-[13px] text-caution">
-              <i className="size-1.5 rounded-full bg-caution" aria-hidden /> 저장 안 됨
-            </span>
-          )}
-          <a
-            href={`/console/tasks/${draft.id}/preview?track=${draft.track === 'BIZ' ? 'biz' : 'dev'}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-line-strong bg-panel px-3.5 text-[15px] font-semibold text-text hover:border-text-muted hover:bg-panel-raised"
-          >
-            <Eye size={16} aria-hidden /> 응시자로 보기
-          </a>
-          <Button onClick={save} disabled={!dirty}>
-            저장
-          </Button>
-          {draft.status === 'OPEN' || draft.status === 'CLOSED' ? (
-            <>
-              <Button
-                onClick={() => {
-                  const next = draft.status === 'OPEN' ? 'CLOSED' : 'OPEN'
-                  setTaskStatus(draft.id, next)
-                  setDraft((d) => ({ ...d, status: next }))
-                  toast.show(next === 'CLOSED' ? '응시를 마감했습니다. 목록에는 남고 새 응시만 막힙니다' : '다시 공개했습니다')
-                }}
-              >
-                {draft.status === 'OPEN' ? '응시 마감' : '다시 공개'}
-              </Button>
-              <Button variant="danger" onClick={() => setClosing(true)}>
-                공개 취소
-              </Button>
-            </>
-          ) : (
-            <Button variant="primary" onClick={publish}>
-              공개하기
-            </Button>
-          )}
-        </div>
-      </header>
-
-      <div className="border-b border-line bg-panel px-8">
-        <Tabs
-          value={tab}
-          onChange={setTab}
-          className="h-11"
-          tabs={[
-            { value: 'info', label: '기본 정보' },
-            { value: 'files', label: <>파일 <Num n={draft.files.length} /></> },
-            { value: 'questions', label: <>문항 <Num n={taskQs.length} /></> },
-            { value: 'followups', label: <>후속 질문 <Num n={followQs.length} /></> },
-          ]}
-        />
       </div>
 
       <div className="p-8">
@@ -254,10 +266,6 @@ function Editor({ stored }: { stored: CTask }) {
   )
 }
 
-function Num({ n }: { n: number }) {
-  return <span className="tnum ml-1 rounded-sm bg-panel-raised px-1.5 font-mono text-[12px] text-text-muted">{n}</span>
-}
-
 function Field({ id, label, hint, children }: { id?: string; label: string; hint?: ReactNode; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -279,7 +287,7 @@ function InfoTab({ t, update }: { t: CTask; update: (p: Partial<CTask>) => void 
   const reqs = t.requirements
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
-      <div className="flex flex-col gap-6 rounded-md border border-line bg-panel p-6 shadow-sm">
+      <div className="flex flex-col gap-6 rounded-xl border border-line bg-panel p-6 shadow-sm">
         <Field id="title" label="제목">
           <input id="title" value={t.title} onChange={(e) => update({ title: e.target.value })} maxLength={200} className={cx(input, 'h-10')} />
         </Field>
@@ -352,7 +360,7 @@ function InfoTab({ t, update }: { t: CTask; update: (p: Partial<CTask>) => void 
         </Field>
       </div>
 
-      <aside className="flex h-fit flex-col gap-5 rounded-md border border-line bg-panel p-6 shadow-sm">
+      <aside className="flex h-fit flex-col gap-5 rounded-xl border border-line bg-panel p-6 shadow-sm">
         <p className="label">PROPERTIES</p>
         <Field id="code" label="과제 코드">
           <input id="code" value={t.code} onChange={(e) => update({ code: e.target.value.replace(/[^a-z0-9-]/g, '') })} className={cx(input, 'h-9 font-mono text-[14px]')} />
@@ -414,7 +422,7 @@ function FilesTab({ files, onChange }: { files: CFile[]; onChange: (f: CFile[]) 
   }
 
   return (
-    <div className="grid h-[calc(100vh-260px)] min-h-[480px] grid-cols-[280px_minmax(0,1fr)] overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+    <div className="grid h-[calc(100vh-420px)] min-h-[480px] grid-cols-[280px_minmax(0,1fr)] overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
       <div className="flex min-h-0 flex-col border-r border-line">
         <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-3">
           <span className="label">FILES</span>
@@ -613,7 +621,7 @@ function QuestionsTab({
         <p className="text-[14px] text-text-muted">제출 뒤에 묻는 질문입니다. 배점은 없고, 답변은 역량 채점의 근거로 씁니다.</p>
       )}
       {qs.map((q, i) => (
-        <article key={q.id} className={cx('rounded-md border border-line bg-panel shadow-sm', !q.active && 'opacity-60')}>
+        <article key={q.id} className={cx('rounded-xl border border-line bg-panel shadow-sm', !q.active && 'opacity-60')}>
           <header className="flex h-12 items-center gap-3 border-b border-line px-4">
             <span className="tnum font-mono text-[14px] font-semibold text-text">
               {prefix}
@@ -755,7 +763,7 @@ function QuestionsTab({
           <Plus size={16} aria-hidden /> {stage === 'TASK' ? '문항 추가' : '후속 질문 추가'}
         </button>
         {menu && (
-          <div role="menu" className="fade-in absolute top-16 left-1/2 z-20 w-48 -translate-x-1/2 rounded-md border border-line bg-panel p-1 shadow-modal">
+          <div role="menu" className="fade-in absolute top-16 left-1/2 z-20 w-48 -translate-x-1/2 rounded-xl border border-line bg-panel p-1 shadow-modal">
             {(Object.keys(QTYPE_LABEL) as QType[]).map((t) => (
               <button key={t} type="button" role="menuitem" onClick={() => add(t)} className="flex w-full rounded-sm px-3 py-2 text-left text-[14px] text-text hover:bg-panel-raised">
                 {QTYPE_LABEL[t]}
