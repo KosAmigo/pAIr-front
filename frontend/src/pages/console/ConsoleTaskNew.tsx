@@ -1,0 +1,384 @@
+// DESIGN.md §7-9-2 AI로 과제 만들기 (ADMIN): 입력 → 만드는 중 → 검수 화면으로
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { CircleAlert, CircleCheck, FileText, FileUp, Info, Loader2, Minus, Plus, Sparkles, X } from 'lucide-react'
+import { cx } from '../../components/cx'
+import { useConsoleCrumbs } from '../../components/consoleCrumbs'
+import { PageHeader } from '../../components/SelfShell'
+import { Button } from '../../components/ui'
+import { KINDS } from '../../data/catalog'
+import { createDraft, type Difficulty, type DraftInput, type Track } from '../../data/consoleTasks'
+
+const STEPS = [
+  { key: 'desc', name: '과제 설명', result: '설명과 요구사항' },
+  { key: 'files', name: '작업 파일', result: '파일' },
+  { key: 'questions', name: '문항', result: '문항' },
+  { key: 'followups', name: '후속 질문', result: '후속 질문' },
+  { key: 'sources', name: '근거 문서 연결', result: '근거' },
+] as const
+
+const STREAM: Record<(typeof STEPS)[number]['key'], string[]> = {
+  desc: ['# 상황', '어제 21시부터 주문 생성 API의 응답이 느려졌습니다.', '## 요구사항', '- 원인을 찾아 코드로 고친다', '- 검증 테스트를 추가한다'],
+  files: ['src/main/Service.java 만드는 중', 'test/ServiceTest.java 만드는 중', 'NOTES.md 만드는 중', '참고 자료 페이지 나누는 중'],
+  questions: ['Q1 객관식: 자료에 따르면 맞는 설명은?', '  ② 두 번째 보기 (정답)', 'Q2 단답형: 자료에서 찾을 수 있는 수치', 'Q3 서술형: 채점 기준 작성 중'],
+  followups: ['F1 (고정) AI 답변 중 직접 확인한 것과 확인 방법', 'F2 풀이 중 가장 어려웠던 판단은?'],
+  sources: ['Q1 ← 자료 1쪽, 2쪽', 'Q2 ← 자료 2쪽', 'Q3 ← 자료 1-2쪽'],
+}
+
+const field = 'flex flex-col gap-2'
+const fieldLabel = 'text-[14px] font-semibold text-text'
+
+export default function ConsoleTaskNew() {
+  useConsoleCrumbs(['AI로 만들기'])
+  const nav = useNavigate()
+  const [track, setTrack] = useState<Track>('DEV')
+  const [category, setCategory] = useState('incident')
+  const [difficulty, setDifficulty] = useState<Difficulty>('중급')
+  const [minutes, setMinutes] = useState(60)
+  const [pdfs, setPdfs] = useState<{ name: string; pages: number }[]>([])
+  const [instruction, setInstruction] = useState('')
+  const [counts, setCounts] = useState({ SINGLE: 0, SHORT: 0, ESSAY: 1, FOLLOWUP: 3 })
+  const [drag, setDrag] = useState(false)
+  const [run, setRun] = useState<{ input: DraftInput; failAt?: number } | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const kinds = KINDS.filter((k) => k.track === (track === 'DEV' ? 'dev' : 'biz'))
+  const addFiles = (list: FileList | null) => {
+    if (!list) return
+    // 목업: 실제 PDF를 읽지 않고 이름과 크기로 페이지 수를 정한다
+    const next = [...list].filter((f) => f.name.toLowerCase().endsWith('.pdf')).map((f) => ({ name: f.name, pages: Math.max(1, Math.round(f.size / 60_000)) }))
+    setPdfs((p) => [...p, ...next])
+  }
+
+  if (run) return <Generating input={run.input} onCancel={() => setRun(null)} onDone={(id) => nav(`/console/tasks/${id}`)} />
+
+  return (
+    <>
+      <PageHeader label="NEW TASK" title="AI로 과제 만들기" />
+      <div className="p-8">
+        <form
+          className="mx-auto flex max-w-[720px] flex-col gap-7 rounded-md border border-line bg-panel p-8 shadow-sm"
+          onSubmit={(e) => {
+            e.preventDefault()
+            setRun({ input: { track, category, difficulty, minutes, pdfs, instruction, counts } })
+          }}
+        >
+          <div className={field}>
+            <span className={fieldLabel}>직군</span>
+            <div role="radiogroup" aria-label="직군" className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  ['DEV', '개발', 'Spring Boot와 React 코드로 푸는 과제'],
+                  ['BIZ', '비개발', '문서와 데이터 자료로 푸는 과제'],
+                ] as const
+              ).map(([v, l, d]) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="radio"
+                  aria-checked={track === v}
+                  onClick={() => {
+                    setTrack(v)
+                    setCategory(KINDS.find((k) => k.track === (v === 'DEV' ? 'dev' : 'biz'))!.key)
+                    setCounts(v === 'DEV' ? { SINGLE: 0, SHORT: 0, ESSAY: 1, FOLLOWUP: 3 } : { SINGLE: 1, SHORT: 1, ESSAY: 1, FOLLOWUP: 3 })
+                  }}
+                  className={cx(
+                    'rounded-md border p-4 text-left transition-colors',
+                    track === v ? 'border-brand bg-brand-dim' : 'border-line-strong hover:border-text-muted',
+                  )}
+                >
+                  <span className={cx('block text-[16px] font-semibold', track === v ? 'text-brand' : 'text-text')}>{l}</span>
+                  <span className="mt-1 block text-[13px] text-text-muted">{d}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={field}>
+            <span className={fieldLabel}>과제 형태</span>
+            <ChipGroup label="과제 형태" value={category} onChange={setCategory} options={kinds.map((k) => [k.key, k.name])} />
+            <p className="text-[13px] text-text-muted">{kinds.find((k) => k.key === category)?.desc}</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className={field}>
+              <span className={fieldLabel}>난이도</span>
+              <ChipGroup label="난이도" value={difficulty} onChange={(v) => setDifficulty(v as Difficulty)} options={['초급', '중급', '고급'].map((x) => [x, x])} />
+            </div>
+            <div className={field}>
+              <label htmlFor="minutes" className={fieldLabel}>
+                제한 시간
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="minutes"
+                  type="number"
+                  min={10}
+                  max={180}
+                  value={minutes}
+                  onChange={(e) => setMinutes(Number(e.target.value))}
+                  className="tnum h-9 w-20 rounded-sm border border-line-strong bg-panel px-2 text-right font-mono text-[15px] outline-none focus:border-brand"
+                />
+                <span className="text-[14px] text-text-muted">분</span>
+                {[30, 45, 60, 90].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMinutes(m)}
+                    className={cx('tnum h-7 rounded-full px-2.5 font-mono text-[12px]', minutes === m ? 'bg-brand-dim text-brand' : 'bg-panel-raised text-text-muted hover:text-text')}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className={field}>
+            <span className={fieldLabel}>
+              {track === 'BIZ' ? '참고 자료 (권장)' : '참고 코드나 문서 (선택)'}
+            </span>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInput.current?.click()}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInput.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDrag(true)
+              }}
+              onDragLeave={() => setDrag(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDrag(false)
+                addFiles(e.dataTransfer.files)
+              }}
+              className={cx(
+                'flex h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed text-[14px] transition-colors',
+                drag ? 'border-brand bg-brand-dim text-brand' : 'border-line-strong text-text-muted hover:border-text-muted',
+              )}
+            >
+              <FileUp size={22} strokeWidth={1.75} aria-hidden />
+              PDF를 끌어다 놓거나 눌러서 고르세요
+            </div>
+            <input ref={fileInput} type="file" accept="application/pdf" multiple hidden onChange={(e) => addFiles(e.target.files)} />
+            {pdfs.length > 0 && (
+              <ul className="divide-y divide-line rounded-md border border-line">
+                {pdfs.map((p, i) => (
+                  <li key={i} className="flex items-center gap-3 px-3 py-2 text-[14px]">
+                    <FileText size={16} className="text-info" aria-hidden />
+                    <span className="truncate font-mono text-[13px] text-text">{p.name}</span>
+                    <span className="tnum font-mono text-[12px] text-text-muted">{p.pages}쪽</span>
+                    <button
+                      type="button"
+                      aria-label={`${p.name} 빼기`}
+                      title="빼기"
+                      onClick={() => setPdfs((l) => l.filter((_, j) => j !== i))}
+                      className="ml-auto inline-flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-raised hover:text-text"
+                    >
+                      <X size={14} aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className={field}>
+            <label htmlFor="inst" className={fieldLabel}>
+              추가 지시 (선택)
+            </label>
+            <textarea
+              id="inst"
+              rows={3}
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              placeholder="예: 결제 도메인, 동시성 문제가 드러나게"
+              className="resize-y rounded-sm border border-line-strong bg-panel p-3 text-[15px] leading-6 outline-none placeholder:text-text-faint focus:border-brand"
+            />
+          </div>
+
+          <div className={field}>
+            <span className={fieldLabel}>문항 구성</span>
+            <div className="grid grid-cols-4 gap-3">
+              {(
+                [
+                  ['SINGLE', '객관식'],
+                  ['SHORT', '단답형'],
+                  ['ESSAY', '서술형'],
+                  ['FOLLOWUP', '후속 질문'],
+                ] as const
+              ).map(([k, l]) => (
+                <Stepper key={k} label={l} value={counts[k]} min={k === 'FOLLOWUP' ? 1 : 0} onChange={(v) => setCounts((c) => ({ ...c, [k]: v }))} />
+              ))}
+            </div>
+            {track === 'BIZ' && (
+              <p className="flex items-start gap-2 rounded-md bg-info/8 px-3 py-2 text-[13px] leading-5 text-info">
+                <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
+                비개발 문항은 하나마다 근거 PDF를 2개 이상 참조하도록 만듭니다. 응시자는 과제 자료와 작업 파일만 AI에게 첨부할 수 있습니다.
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-line pt-6">
+            <span className="text-[13px] text-text-muted">약 1~2분 걸립니다</span>
+            <Button type="submit" variant="primary" size="lg">
+              <Sparkles size={16} aria-hidden /> 초안 만들기
+            </Button>
+          </div>
+        </form>
+      </div>
+    </>
+  )
+}
+
+function ChipGroup({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: (readonly [string, string])[] }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map(([v, l]) => (
+        <button
+          key={v}
+          type="button"
+          role="radio"
+          aria-checked={value === v}
+          onClick={() => onChange(v)}
+          className={cx(
+            'h-9 rounded-full border px-4 text-[14px] font-medium transition-colors',
+            value === v ? 'border-brand bg-brand-dim text-brand' : 'border-line-strong text-text-muted hover:text-text',
+          )}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Stepper({ label, value, min, onChange }: { label: string; value: number; min: number; onChange: (v: number) => void }) {
+  return (
+    <div className="rounded-md border border-line px-3 py-2">
+      <p className="text-[13px] text-text-muted">{label}</p>
+      <div className="mt-1 flex items-center justify-between">
+        <button type="button" aria-label={`${label} 줄이기`} disabled={value <= min} onClick={() => onChange(value - 1)} className="inline-flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-raised disabled:opacity-30">
+          <Minus size={14} aria-hidden />
+        </button>
+        <span className="tnum font-mono text-[18px] font-semibold text-text">{value}</span>
+        <button type="button" aria-label={`${label} 늘리기`} disabled={value >= 10} onClick={() => onChange(value + 1)} className="inline-flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-raised disabled:opacity-30">
+          <Plus size={14} aria-hidden />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── 만드는 중 (목업: 단계마다 정해진 시간이 지나면 완료) ──
+function Generating({ input, onCancel, onDone }: { input: DraftInput; onCancel: () => void; onDone: (id: string) => void }) {
+  const [step, setStep] = useState(0)
+  const [lines, setLines] = useState<string[]>([])
+  const [doneId, setDoneId] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+
+  useEffect(() => {
+    if (doneId || failed) return
+    if (step >= STEPS.length) {
+      const t = createDraft(input)
+      const id = window.setTimeout(() => setDoneId(t.id), 0)
+      return () => window.clearTimeout(id)
+    }
+    const src = STREAM[STEPS[step].key]
+    let i = 0
+    const timer = window.setInterval(() => {
+      i++
+      setLines(src.slice(0, i))
+      if (i >= src.length) {
+        window.clearInterval(timer)
+        window.setTimeout(() => setStep((s) => s + 1), 350)
+      }
+    }, 320)
+    return () => window.clearInterval(timer)
+  }, [step, doneId, failed, input, attempt])
+
+  useEffect(() => {
+    if (!doneId) return
+    const t = window.setTimeout(() => onDone(doneId), 1500)
+    return () => window.clearTimeout(t)
+  }, [doneId, onDone])
+
+  const qCount = input.counts.SINGLE + input.counts.SHORT + input.counts.ESSAY
+  const resultOf = (k: string) =>
+    k === 'files' ? `파일 ${input.track === 'DEV' ? 3 + input.pdfs.length : 1 + input.pdfs.length}개` : k === 'questions' ? `문항 ${qCount}개` : k === 'followups' ? `${input.counts.FOLLOWUP}개` : k === 'sources' ? `${input.pdfs.length ? qCount : 0}건` : '완료'
+  const progress = doneId ? 1 : Math.min(step, STEPS.length) / STEPS.length
+
+  return (
+    <>
+      <PageHeader label="NEW TASK" title="AI로 과제 만들기" />
+      <div className="p-8">
+        <div className="relative mx-auto max-w-[720px] overflow-hidden rounded-md border border-line bg-panel shadow-sm">
+          <div className="h-0.5 bg-line">
+            <div className="bg-brand-gradient h-full transition-[width] duration-500" style={{ width: `${progress * 100}%` }} />
+          </div>
+          <div className="p-8">
+            <h2 className="text-h2 font-semibold text-text">{doneId ? '초안이 만들어졌습니다' : '초안을 만들고 있습니다'}</h2>
+            <p className="mt-1 text-[14px] text-text-muted">
+              {doneId ? '잠시 뒤 검수 화면으로 이동합니다.' : '화면을 떠나도 되지만, 끝날 때까지 이 화면에 있으면 바로 검수로 넘어갑니다.'}
+            </p>
+            <ol className="mt-6 flex flex-col gap-1" aria-live="polite">
+              {STEPS.map((s, i) => {
+                const state = doneId || i < step ? 'done' : i === step ? (failed ? 'fail' : 'run') : 'wait'
+                return (
+                  <li key={s.key}>
+                    <div className="flex h-10 items-center gap-3">
+                      {state === 'done' && <CircleCheck size={20} className="text-signal" aria-label="완료" />}
+                      {state === 'run' && <Loader2 size={20} className="animate-spin text-brand" aria-label="진행 중" />}
+                      {state === 'fail' && <CircleAlert size={20} className="text-alert" aria-label="실패" />}
+                      {state === 'wait' && <span className="size-5 rounded-full border-2 border-line-strong" aria-label="대기" />}
+                      <span className={cx('text-[15px] font-medium', state === 'wait' ? 'text-text-faint' : 'text-text')}>{s.name}</span>
+                      {state === 'done' && <span className="tnum ml-auto font-mono text-[13px] text-text-muted">{resultOf(s.key)}</span>}
+                    </div>
+                    {state === 'run' && <StreamBox lines={lines} />}
+                    {state === 'fail' && (
+                      <div className="ml-8 flex items-center gap-3 text-[13px] text-alert">
+                        모델 응답이 형식에 맞지 않았습니다.
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setFailed(false)
+                            setLines([])
+                            setAttempt((a) => a + 1)
+                          }}
+                        >
+                          다시 시도
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ol>
+            <div className="mt-6 flex justify-end gap-2 border-t border-line pt-6">
+              {doneId ? (
+                <Button variant="primary" onClick={() => onDone(doneId)}>
+                  검수하러 가기
+                </Button>
+              ) : (
+                <Button variant="ghost" onClick={onCancel}>
+                  취소
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function StreamBox({ lines }: { lines: string[] }): ReactNode {
+  return (
+    <pre className="mb-2 ml-8 max-h-[150px] overflow-hidden rounded-md bg-panel-sunken px-3 py-2 font-mono text-[13px] leading-[22px] whitespace-pre-wrap text-text-muted">
+      {lines.slice(-6).join('\n')}
+      <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-brand align-middle" aria-hidden />
+    </pre>
+  )
+}

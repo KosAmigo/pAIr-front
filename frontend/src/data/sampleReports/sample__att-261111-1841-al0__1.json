@@ -1,0 +1,742 @@
+{
+  "version" : 2,
+  "attemptId" : "att-261111-1841-al0",
+  "taskId" : "order-deadlock",
+  "taskTitle" : "주문 처리 장애 원인 분석",
+  "taskType" : "dev",
+  "assistant" : "openai / gpt-6-luna",
+  "judgeModel" : "claude-haiku-5-5 + gpt-6.1-terra",
+  "promptVersion" : "20261113-1053_claude_K1-통째로-보완",
+  "settings" : {
+    "judgeRepeat" : 1
+  },
+  "startedAt" : "2026-11-11T09:41:28.938608500Z",
+  "submittedAt" : "2026-11-11T09:41:56.959382600Z",
+  "durationSec" : 28,
+  "chatTurns" : 10,
+  "firstValidMinutes" : 0.3,
+  "total" : 93,
+  "max" : 100,
+  "items" : [ {
+    "key" : "usage",
+    "name" : "AI 활용력",
+    "max" : 20,
+    "score" : 20,
+    "checks" : [ {
+      "code" : "U0",
+      "label" : "AI에게 한 번도 질문하지 않음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 20,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "U1",
+      "label" : "첫 질문에서 무엇을 하려는지(목표)를 밝히지 않음",
+      "method" : "JUDGE",
+      "points" : 4,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T01" ],
+      "reason" : "첫 질문에서 장애 원인을 찾는 목표를 분명히 밝혔습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T01" ],
+        "reason" : "첫 질문에서 장애 원인을 찾는 목표를 분명히 밝혔습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "첫 질문에서 주문 장애의 근본 원인을 찾겠다는 목표를 밝혔습니다."
+      } ]
+    }, {
+      "code" : "U2",
+      "label" : "필요한 코드, 로그, 자료를 붙이지 않아 AI가 추측해서 답하게 함",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T01", "#T03" ],
+      "reason" : "로그와 createOrder 코드를 대화창에 붙여 AI가 추측하지 않고 답하도록 했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T01", "#T03" ],
+        "reason" : "로그와 createOrder 코드를 대화창에 붙여 AI가 추측하지 않고 답하도록 했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "원인 분석에 필요한 장애 로그와 주문 생성 코드를 제공했습니다."
+      } ]
+    }, {
+      "code" : "U3",
+      "label" : "대부분의 질문에서 원하는 출력 형식이나 범위를 정하지 않음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T01", "#T05", "#T07", "#T09" ],
+      "reason" : "질문마다 3줄 이내, 2줄, 메서드 코드만, 테스트 메서드 하나만처럼 답의 형식과 범위를 정했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T01", "#T05", "#T07", "#T09" ],
+        "reason" : "질문마다 3줄 이내, 2줄, 메서드 코드만, 테스트 메서드 하나만처럼 답의 형식과 범위를 정했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "질문마다 답변의 길이, 코드 범위 또는 테스트 범위를 지정했습니다."
+      } ]
+    }, {
+      "code" : "U5",
+      "label" : "막혔을 때 거의 같은 질문을 3번 이상 반복하고 전략을 바꾸지 않음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T01", "#T03", "#T05", "#T07", "#T09" ],
+      "reason" : "같은 질문을 반복하지 않고 원인, 반박, 수정, 검증 순으로 진행했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T01", "#T03", "#T05", "#T07", "#T09" ],
+        "reason" : "같은 질문을 반복하지 않고 원인, 반박, 수정, 검증 순으로 진행했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "같은 질문을 세 번 이상 반복하지 않았습니다."
+      } ]
+    }, {
+      "code" : "U6",
+      "label" : "AI 답변을 받은 뒤 이어서 확인하거나 좁혀 묻는 질문이 없음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T05", "#T09" ],
+      "reason" : "AI의 타임아웃 설명을 받아 그 근거를 따로 묻는 등 앞 답변을 바탕으로 이어서 물었습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T05", "#T09" ],
+        "reason" : "AI의 타임아웃 설명을 받아 그 근거를 따로 묻는 등 앞 답변을 바탕으로 이어서 물었습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "앞선 원인 후보를 코드와 대조하고 타임아웃 연장의 타당성을 이어서 확인했습니다."
+      } ]
+    }, {
+      "code" : "U7",
+      "label" : "핵심 지시가 앞 대화 없이는 뜻이 통하지 않음",
+      "method" : "JUDGE",
+      "points" : 2,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T07" ],
+      "reason" : "'위 createOrder'가 가리키는 코드가 대화에 있고 요청 내용도 명확해서 앞 대화 없이도 뜻이 통합니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T07" ],
+        "reason" : "'위 createOrder'가 가리키는 코드가 대화에 있고 요청 내용도 명확해서 앞 대화 없이도 뜻이 통합니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "핵심 수정 지시에 대상 메서드와 원하는 잠금 및 원복 방식을 명시했습니다."
+      } ]
+    } ]
+  }, {
+    "key" : "control",
+    "name" : "AI 통제력",
+    "max" : 15,
+    "score" : 15,
+    "checks" : [ {
+      "code" : "C0",
+      "label" : "AI를 쓰지 않아 AI 결과를 검증하고 통제하는 모습을 볼 수 없음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 15,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "C1",
+      "label" : "AI가 준 코드나 수치를 실행, 테스트, 자료 대조 없이 최종본에 넣음",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "00:00:17 run passed=1 failed=0 compiled=true", "00:00:27 run passed=3 failed=0 compiled=true" ],
+      "reason" : "AI가 준 수정 코드를 저장한 뒤 테스트를 실행해 통과를 확인하고 제출했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "00:00:17 run passed=1 failed=0 compiled=true", "00:00:27 run passed=3 failed=0 compiled=true" ],
+        "reason" : "AI가 준 수정 코드를 저장한 뒤 테스트를 실행해 통과를 확인하고 제출했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "수정 코드와 테스트를 저장한 뒤 테스트를 실행해 통과 결과를 확인했습니다."
+      } ]
+    }, {
+      "code" : "C2",
+      "label" : "AI의 오답이나 근거 없는 수치가 최종본에 남음",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "NOTES.md", "OrderService.java" ],
+      "reason" : "최종 파일의 수치와 로그 설명이 원본 로그와 맞고 AI의 틀린 내용은 남지 않았습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "NOTES.md", "OrderService.java" ],
+        "reason" : "최종 파일의 수치와 로그 설명이 원본 로그와 맞고 AI의 틀린 내용은 남지 않았습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "AI의 오답이나 근거 없는 수치가 최종 파일에 그대로 남은 흔적은 확인되지 않습니다."
+      } ]
+    }, {
+      "code" : "C3",
+      "label" : "증상만 가리는 제안(타임아웃 늘리기, 전체 잠금 등)이나 근거 없는 주장을 따져 보지 않고 받아들임",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T05", "#T06" ],
+      "reason" : "타임아웃 늘리기를 직접 물어 그 한계를 확인했고 증상 완화책을 채택하지 않았습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T05", "#T06" ],
+        "reason" : "타임아웃 늘리기를 직접 물어 그 한계를 확인했고 증상 완화책을 채택하지 않았습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "타임아웃 연장이 근본 해결책인지 따져 보고 잠금 순서를 수정했습니다."
+      } ]
+    }, {
+      "code" : "C4",
+      "label" : "AI 답변의 근거나 이유를 한 번도 확인하지 않음",
+      "method" : "JUDGE",
+      "points" : 2,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T03", "#T05" ],
+      "reason" : "AI 답변의 근거를 묻는 질문을 여러 번 했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T03", "#T05" ],
+        "reason" : "AI 답변의 근거를 묻는 질문을 여러 번 했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "잠금 순서가 원인인 코드상 근거와 타임아웃을 늘리면 안 되는 이유를 물었습니다."
+      } ]
+    } ]
+  }, {
+    "key" : "decomposition",
+    "name" : "문제 분해력",
+    "max" : 10,
+    "score" : 10,
+    "checks" : [ {
+      "code" : "K0",
+      "label" : "AI를 쓰지 않아 AI에게 일을 나눠 맡기는 모습을 볼 수 없음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 10,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "K1",
+      "label" : "너무 큰 덩어리: 앞 결과에 기대는 여러 단계를 한 요청으로 맡겨 중간 결과를 확인하지 못함",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T01", "#T03", "#T05", "#T07", "#T09" ],
+      "reason" : "원인 파악, 확인, 수정, 검증을 단계별 턴으로 나눠 진행했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T01", "#T03", "#T05", "#T07", "#T09" ],
+        "reason" : "원인 파악, 확인, 수정, 검증을 단계별 턴으로 나눠 진행했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "로그 분석과 코드상 원인 확인을 거쳐 수정과 테스트를 별도로 요청했습니다."
+      } ]
+    }, {
+      "code" : "K2",
+      "label" : "순서 거꾸로: 앞 단계가 끝나기 전에 뒤 단계를 요청함",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T02", "#T03", "#T04", "#T07" ],
+      "reason" : "원인을 확인한 뒤에 수정을 요청했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T02", "#T03", "#T04", "#T07" ],
+        "reason" : "원인을 확인한 뒤에 수정을 요청했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "로그와 코드에서 원인을 확인한 뒤 수정 방식을 요청했습니다."
+      } ]
+    }, {
+      "code" : "K3",
+      "label" : "너무 잘게 쪼갬: 한 번에 해도 되는 단순한 일을 여러 턴으로 나눠 턴만 늘림",
+      "method" : "JUDGE",
+      "points" : 2,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T07", "#T09" ],
+      "reason" : "단순한 일을 잘게 나누지 않고 필요한 단위로 요청했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T07", "#T09" ],
+        "reason" : "단순한 일을 잘게 나누지 않고 필요한 단위로 요청했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "원인 확인, 수정, 테스트 작성이라는 확인 지점에 따라 요청을 나눴습니다."
+      } ]
+    } ]
+  }, {
+    "key" : "delegation",
+    "name" : "위임 판단력",
+    "max" : 10,
+    "score" : 10,
+    "checks" : [ {
+      "code" : "J0",
+      "label" : "AI를 쓰지 않아 위임 판단을 볼 수 없음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 10,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "J1",
+      "label" : "과제의 핵심 판단(근본 원인 결정, 최종 결론과 추천안)을 AI에게 맡기고 자기 판단 없이 그대로 씀",
+      "method" : "JUDGE",
+      "points" : 4,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T03", "#T05", "NOTES.md" ],
+      "reason" : "잠금 순서 문제라는 판단을 로그와 코드로 직접 따져 보고 NOTES.md에 자기 근거로 정리했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T03", "#T05", "NOTES.md" ],
+        "reason" : "잠금 순서 문제라는 판단을 로그와 코드로 직접 따져 보고 NOTES.md에 자기 근거로 정리했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "코드와 로그의 근거를 따져 보고 잠금 순서와 재고 원복 방식을 직접 지정했습니다."
+      } ]
+    }, {
+      "code" : "J2",
+      "label" : "주어진 파일을 열어 보면 바로 아는 내용이나 단순 계산을 AI에게 여러 번 물음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "#T03" ],
+      "reason" : "파일에 적힌 내용을 다시 묻지 않고 코드를 붙여 해석을 요청했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "#T03" ],
+        "reason" : "파일에 적힌 내용을 다시 묻지 않고 코드를 붙여 해석을 요청했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "파일에 그대로 적힌 내용이나 단순 계산을 여러 번 묻지 않았습니다."
+      } ]
+    }, {
+      "code" : "J3",
+      "label" : "AI에게 맡기기 좋은 반복 작업을 직접 하느라 시간을 많이 씀",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "00:00:16 save src/shop/OrderService.java", "00:00:26 save test/shop/OrderServiceTest.java" ],
+      "reason" : "반복 작업을 직접 오래 편집한 흐름이 보이지 않습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "00:00:16 save src/shop/OrderService.java", "00:00:26 save test/shop/OrderServiceTest.java" ],
+        "reason" : "반복 작업을 직접 오래 편집한 흐름이 보이지 않습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "반복 작업을 AI 도움 없이 오래 직접 편집한 흐름은 확인되지 않습니다."
+      } ]
+    } ]
+  }, {
+    "key" : "delivery",
+    "name" : "AI 결과 도출력",
+    "max" : 30,
+    "score" : 30,
+    "checks" : [ {
+      "code" : "D0",
+      "label" : "제출 코드가 컴파일되지 않음 (이 항목 0점)",
+      "method" : "AUTO",
+      "points" : 30,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : null,
+      "judges" : [ ]
+    }, {
+      "code" : "D1",
+      "label" : "숨은 필수 테스트 실패 (1개당)",
+      "method" : "AUTO",
+      "points" : 5,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "숨은 필수 테스트 4/4 통과",
+      "judges" : [ ]
+    }, {
+      "code" : "D2",
+      "label" : "엣지 케이스 누락 (숨은 선택 테스트 실패)",
+      "method" : "AUTO",
+      "points" : 2,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "숨은 선택 테스트 통과",
+      "judges" : [ ]
+    }, {
+      "code" : "D3",
+      "label" : "수정을 확인하는 테스트를 추가하지 않음",
+      "method" : "AUTO",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "테스트 1개 → 3개",
+      "judges" : [ ]
+    }, {
+      "code" : "D4",
+      "label" : "NOTES.md의 원인 설명이 비어 있거나 핵심 원인과 맞지 않음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "NOTES.md" ],
+      "reason" : "NOTES.md에 상품 잠금 순서 불일치로 인한 교착을 핵심 원인으로 설명했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "NOTES.md" ],
+        "reason" : "NOTES.md에 상품 잠금 순서 불일치로 인한 교착을 핵심 원인으로 설명했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "NOTES.md에 역순 잠금으로 인한 교착과 로그 근거를 설명했습니다."
+      } ]
+    }, {
+      "code" : "D5",
+      "label" : "첫 유효 결과가 30분을 넘김(-2) 또는 도달하지 못함(-4)",
+      "method" : "AUTO",
+      "points" : 4,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ ],
+      "reason" : "첫 유효 결과까지 0.3분 (src 코드를 고친 뒤 테스트가 전부 통과한 첫 실행)",
+      "judges" : [ ]
+    } ]
+  }, {
+    "key" : "potential",
+    "name" : "성과 잠재력",
+    "max" : 15,
+    "score" : 8,
+    "checks" : [ {
+      "code" : "P1",
+      "label" : "후속 질문 답변이 근거 없이 한두 마디에 그침",
+      "method" : "JUDGE",
+      "points" : 5,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "Q1", "Q2", "Q3" ],
+      "reason" : "후속 답변마다 로그나 대화 내용을 근거로 들어 설명했습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "Q1", "Q2", "Q3" ],
+        "reason" : "후속 답변마다 로그나 대화 내용을 근거로 들어 설명했습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "후속 질문에 한두 마디 이상의 구체적인 답변을 작성했습니다."
+      } ]
+    }, {
+      "code" : "P2",
+      "label" : "채택하지 않은 AI 제안과 그 이유를 설명하지 못함",
+      "method" : "JUDGE",
+      "points" : 4,
+      "deducted" : 4,
+      "status" : "DEDUCTED",
+      "evidence" : [ "Q2", "#T02", "#T04", "#T06", "#T08", "#T10" ],
+      "reason" : "Q2에서 말한 커넥션 풀과 Redis 분산 락 제안은 대화 기록에 없어서 채택하지 않은 제안으로 인정되지 않습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 1,
+        "evidence" : [ "Q2" ],
+        "reason" : "Q2에서 말한 커넥션 풀과 Redis 분산 락 제안은 대화 기록에 없어서 채택하지 않은 제안으로 인정되지 않습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "Q2", "#T02", "#T04", "#T06", "#T08", "#T10" ],
+        "reason" : "대화에 없는 커넥션 풀 확대와 Redis 분산 락을 AI가 제안했다고 답했습니다."
+      } ]
+    }, {
+      "code" : "P3",
+      "label" : "오류나 테스트 실패에서 원인을 확인하지 않고 같은 시도를 반복함",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 0,
+      "status" : "PASSED",
+      "evidence" : [ "00:00:17 run passed=1 failed=0 compiled=true", "00:00:27 run passed=3 failed=0 compiled=true" ],
+      "reason" : "실행 실패가 없었으므로 반복 시도가 해당하지 않습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ "00:00:17 run passed=1 failed=0 compiled=true", "00:00:27 run passed=3 failed=0 compiled=true" ],
+        "reason" : "실행 실패가 없었으므로 반복 시도가 해당하지 않습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : false,
+        "count" : 0,
+        "evidence" : [ ],
+        "reason" : "실패 후 원인 확인 없이 같은 시도를 반복한 기록은 없습니다."
+      } ]
+    }, {
+      "code" : "P4",
+      "label" : "결과의 한계나 남은 위험을 전혀 언급하지 않음",
+      "method" : "JUDGE",
+      "points" : 3,
+      "deducted" : 3,
+      "status" : "DEDUCTED",
+      "evidence" : [ "NOTES.md", "Q1", "Q2", "Q3" ],
+      "reason" : "결과의 남은 위험이나 추가로 확인할 점을 NOTES.md와 후속 답변 어디에도 언급하지 않았습니다.",
+      "judges" : [ {
+        "judge" : "claude",
+        "model" : "claude-haiku-5-5",
+        "violated" : true,
+        "count" : 1,
+        "evidence" : [ "NOTES.md", "Q1", "Q2", "Q3" ],
+        "reason" : "결과의 남은 위험이나 추가로 확인할 점을 NOTES.md와 후속 답변 어디에도 언급하지 않았습니다."
+      }, {
+        "judge" : "openai",
+        "model" : "gpt-6.1-terra",
+        "violated" : true,
+        "count" : 0,
+        "evidence" : [ "NOTES.md", "Q1", "Q2", "Q3" ],
+        "reason" : "결과의 한계나 남은 위험, 추가로 확인할 사항을 언급하지 않았습니다."
+      } ]
+    } ]
+  } ],
+  "notes" : [ "채점 기준: docs/evaluation/채점_기준표.md (감점식, 총점 100점)", "이중 채점: 판정 체크는 두 채점 모델(claude-haiku-5-5, gpt-6.1-terra)의 감점을 평균함. 근거(대화 턴, 파일) 없이 걸렸다고 한 판정은 감점하지 않음. 일부만 걸렸다고 하면 '판정 엇갈림'으로 평균만큼 감점(소수점 버림)", "프롬프트 버전: 20261113-1053_claude_K1-통째로-보완 (K1-통째로-보완)" ],
+  "hiddenTests" : [ {
+    "passed" : true,
+    "name" : "required_reverseOrderConcurrent_noDeadlock"
+  }, {
+    "passed" : true,
+    "name" : "required_outOfStock_rollsBackOtherItems"
+  }, {
+    "passed" : true,
+    "name" : "required_duplicateItems_decreaseTotal"
+  }, {
+    "passed" : true,
+    "name" : "optional_manyThreads_stockConsistent"
+  }, {
+    "passed" : true,
+    "name" : "required_locksReleasedAfterFailure"
+  } ],
+  "tokens" : {
+    "assistant" : {
+      "output" : 1824,
+      "input" : 4883
+    },
+    "judge_claude" : {
+      "cachedInput" : 5852,
+      "model" : "claude-haiku-5-5",
+      "input" : 12394,
+      "output" : 3528
+    },
+    "judge_openai" : {
+      "cachedInput" : 3160,
+      "model" : "gpt-6.1-terra",
+      "input" : 7056,
+      "output" : 1162
+    }
+  },
+  "transcript" : [ {
+    "text" : "목표: 주문 생성이 3초 멈춘 뒤 LockTimeoutException으로 실패하는 장애의 근본 원인을 찾는 것입니다. 아래는 장애 시간대 로그입니다. 가능한 원인 후보를 3줄 이내로 정리해 주세요.\n2026-11-10 21:02:09.114 [order-7] POST /orders items=[10:1, 22:2]\n2026-11-10 21:02:09.131 [order-9] POST /orders items=[22:1, 10:1]\n21:02:12.140 ERROR [order-9] LockTimeoutException (stock.product_id=10)\n21:02:12.141 ERROR [order-7] LockTimeoutException (stock.product_id=22)\n21:05:02.500 WARN stock check: product_id=22 expected=118 actual=116 (diff -2)\n21:05:02.501 WARN stock check: product_id=10 expected=240 actual=239 (diff -1)",
+    "turn" : 1,
+    "role" : "user",
+    "time" : "00:00:00"
+  }, {
+    "text" : "- 두 주문이 재고를 서로 반대 순서(10→22, 22→10)로 잠그며 교착 상태가 발생해 3초 후 타임아웃된 것으로 보입니다.\n- 타임아웃 실패 후에도 재고 차감이 일부 남았을 가능성이 있습니다. 차이(-1, -2)가 주문 수량과 일치합니다.\n- 트랜잭션이 재고 차감과 주문 생성을 함께 롤백하는지 확인해야 합니다.",
+    "turn" : 2,
+    "role" : "ai",
+    "time" : "00:00:04"
+  }, {
+    "text" : "아래는 OrderService.createOrder 코드입니다. 앞에서 말한 후보 중 잠금 순서 문제가 맞는지, 이 코드의 어느 줄 때문인지 근거와 함께 짧게 설명해 주세요.\npublic Order createOrder(long userId, List<OrderItem> items) throws InterruptedException {\n    Order order = new Order(userId);\n    List<Long> locked = new ArrayList<>();\n    try {\n        for (OrderItem item : items) {\n            inventory.lock(item.productId());\n            locked.add(item.productId());\n            Db.simulateLatency();\n            inventory.decrease(item.productId(), item.quantity());\n            order.add(item);\n        }\n        return order;\n    } finally {\n        for (Long productId : locked) inventory.unlock(productId);\n    }\n}\n// inventory.lock = ReentrantLock.tryLock(3000ms), 실패 시 LockTimeoutException",
+    "turn" : 3,
+    "role" : "user",
+    "time" : "00:00:04"
+  }, {
+    "text" : "네, 잠금 순서 문제가 맞습니다. `for (OrderItem item : items)`가 입력 순서대로 잠그므로, 두 요청이 각각 `[10, 22]`와 `[22, 10]` 순서로 실행되면 서로 첫 상품의 잠금을 가진 채 상대 상품을 기다리는 교착 상태가 발생합니다. 로그의 약 3초 뒤 `LockTimeoutException`도 `tryLock(3000ms)`와 일치합니다.",
+    "turn" : 4,
+    "role" : "ai",
+    "time" : "00:00:06"
+  }, {
+    "text" : "LockTimeoutException의 타임아웃(3000ms)을 10초로 늘리면 해결되지 않나요? 늘리면 안 되는 근거를 2줄로 설명해 주세요.",
+    "turn" : 5,
+    "role" : "user",
+    "time" : "00:00:06"
+  }, {
+    "text" : "아니요. 교착 상태의 원인인 서로 반대 순서의 잠금 획득은 그대로라, 10초로 늘리면 실패가 늦어질 뿐 해결되지 않습니다.\n대기 시간이 길어져 스레드와 요청 자원을 더 오래 점유하고, 지연·정체가 커질 수 있습니다.",
+    "turn" : 6,
+    "role" : "ai",
+    "time" : "00:00:08"
+  }, {
+    "text" : "상품 ID 오름차순으로 모든 잠금을 먼저 잡고, 차감 중 실패하면 이미 차감한 재고를 되돌리도록 위 createOrder를 고쳐 주세요. 메서드 코드만 주세요.",
+    "turn" : 7,
+    "role" : "user",
+    "time" : "00:00:08"
+  }, {
+    "text" : "```java\npublic Order createOrder(long userId, List<OrderItem> items) throws InterruptedException {\n    Order order = new Order(userId);\n    List<Long> productIds = items.stream()\n            .map(OrderItem::productId)\n            .distinct()\n            .sorted()\n            .toList();\n    List<Long> locked = new ArrayList<>();\n    List<OrderItem> decreased = new ArrayList<>();\n\n    try {\n        for (Long productId : productIds) {\n            inventory.lock(productId);\n            locked.add(productId);\n        }\n\n        try {\n            for (OrderItem item : items) {\n                inventory.decrease(item.productId(), item.quantity());\n                decreased.add(item);\n                order.add(item);\n            }\n            return order;\n        } catch (RuntimeException | Error e) {\n            for (int i = decreased.size() - 1; i >= 0; i--) {\n                OrderItem item = decreased.get(i);\n                inventory.increase(item.productId(), item.quantity());\n            }\n            throw e;\n        }\n    } finally {\n        for (int i = locked.size() - 1; i >= 0; i--) {\n            inventory.unlock(locked.get(i));\n        }\n    }\n}\n```",
+    "turn" : 8,
+    "role" : "ai",
+    "time" : "00:00:16"
+  }, {
+    "text" : "10→22 주문과 22→10 주문을 동시에 실행해도 2초 안에 끝나는지 확인하는 JUnit 5 테스트 메서드 하나만 작성해 주세요. InventoryService.register(id, count), countOf(id), new OrderItem(id, qty)를 씁니다.",
+    "turn" : 9,
+    "role" : "user",
+    "time" : "00:00:17"
+  }, {
+    "text" : "```java\n@Test\nvoid createOrdersWithOppositeItemOrderFinishWithinTwoSeconds() {\n    InventoryService inventory = new InventoryService();\n    inventory.register(10, 2);\n    inventory.register(22, 2);\n    OrderService service = new OrderService(inventory);\n\n    ExecutorService executor = Executors.newFixedThreadPool(2);\n    CountDownLatch start = new CountDownLatch(1);\n\n    try {\n        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {\n            Future<Order> first = executor.submit(() -> {\n                start.await();\n                return service.createOrder(1L, List.of(\n                        new OrderItem(10, 1), new OrderItem(22, 1)));\n            });\n            Future<Order> second = executor.submit(() -> {\n                start.await();\n                return service.createOrder(2L, List.of(\n                        new OrderItem(22, 1), new OrderItem(10, 1)));\n            });\n\n            start.countDown();\n            first.get();\n            second.get();\n        });\n    } finally {\n        executor.shutdownNow();\n    }\n}\n```",
+    "turn" : 10,
+    "role" : "ai",
+    "time" : "00:00:26"
+  } ],
+  "graderRun" : {
+    "n" : 1,
+    "runId" : "20261113-105312",
+    "source" : "sample"
+  }
+}
