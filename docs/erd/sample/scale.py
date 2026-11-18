@@ -33,7 +33,7 @@ COPY = {
     "text_answers": {"text_answer_id": "text_answer", "attempt_id": "attempt"},
     "choice_answers": {"attempt_id": "attempt"},
     "checkpoints": {"checkpoint_id": "checkpoint", "attempt_id": "attempt"},
-    "checkpoint_files": {"checkpoint_id": "checkpoint"},
+    "checkpoint_files": {"checkpoint_file_id": "checkpoint_file", "checkpoint_id": "checkpoint"},
     "scorings": {"scoring_id": "scoring", "attempt_id": "attempt"},
     "judge_calls": {"judge_call_id": "judge_call", "scoring_id": "scoring"},
     "check_results": {"result_id": "result", "scoring_id": "scoring"},
@@ -49,7 +49,7 @@ COPY = {
 SERIES = {"user": ("users", "user_id"), "attempt": ("attempts", "attempt_id"),
           "attempt_file": ("attempt_files", "attempt_file_id"), "turn": ("chat_turns", "turn_id"),
           "attachment": ("chat_attachments", "attachment_id"), "event": ("attempt_events", "event_id"),
-          "text_answer": ("text_answers", "text_answer_id"), "checkpoint": ("checkpoints", "checkpoint_id"),
+          "text_answer": ("text_answers", "text_answer_id"), "checkpoint": ("checkpoints", "checkpoint_id"), "checkpoint_file": ("checkpoint_files", "checkpoint_file_id"),
           "scoring": ("scorings", "scoring_id"), "judge_call": ("judge_calls", "judge_call_id"),
           "result": ("check_results", "result_id"), "verdict": ("judge_verdicts", "verdict_id"),
           "session": ("exam_sessions", "session_id"), "participant": ("exam_participants", "participant_id"), "proctor_event": ("proctor_events", "proctor_event_id")}

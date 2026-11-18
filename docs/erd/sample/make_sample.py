@@ -239,7 +239,7 @@ put("chat_attachments", ["attachment_id", "turn_id", "source_type", "task_file_i
 # 체크포인트: 개발 모범 응시 4번째 턴 시점 + 그 시점 NOTES.md 사본, 그리고 거기서 롤백한 응시 1건
 n_avn = attempt_id["att-261111-1841-avn"]
 put("checkpoints", ["checkpoint_id", "attempt_id", "turn_no", "label", "created_at"], [1, n_avn, 4, "원인 파악 직후", "2026-11-11T09:41:17Z"])
-put("checkpoint_files", ["checkpoint_id", "path", "content"], [1, "NOTES.md", open(os.path.join(TASKS, "order-deadlock", "files", "NOTES.md"), encoding="utf-8").read()])
+put("checkpoint_files", ["checkpoint_file_id", "checkpoint_id", "path", "content"], [1, 1, "NOTES.md", open(os.path.join(TASKS, "order-deadlock", "files", "NOTES.md"), encoding="utf-8").read()])
 put("attempts", ["attempt_id", "user_id", "task_id", "mode", "status", "assistant_model", "forked_from_checkpoint_id",
                  "started_at", "submitted_at", "followups_done_at"],
     [len(idx) + 1, 2, task_id["order-deadlock"], "SELF", "SOLVING", "gpt-6-luna", 1, "2026-11-12T10:00:00Z", None, None])

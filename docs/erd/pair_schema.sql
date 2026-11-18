@@ -352,12 +352,14 @@ ALTER TABLE attempts
     FOREIGN KEY (forked_from_checkpoint_id) REFERENCES checkpoints (checkpoint_id);
 
 CREATE TABLE checkpoint_files (
-    checkpoint_id  BIGINT       NOT NULL REFERENCES checkpoints (checkpoint_id),
-    path           VARCHAR(255) NOT NULL,
-    content        TEXT         NOT NULL,
-    PRIMARY KEY (checkpoint_id, path)
+    checkpoint_file_id  BIGSERIAL    PRIMARY KEY,
+    checkpoint_id       BIGINT       NOT NULL REFERENCES checkpoints (checkpoint_id),
+    path                VARCHAR(255) NOT NULL,
+    content             TEXT         NOT NULL,
+    UNIQUE (checkpoint_id, path)
 );
 COMMENT ON TABLE  checkpoint_files IS '체크포인트 파일';
+COMMENT ON COLUMN checkpoint_files.checkpoint_file_id IS '체크포인트 파일 ID';
 COMMENT ON COLUMN checkpoint_files.checkpoint_id IS '체크포인트 ID';
 COMMENT ON COLUMN checkpoint_files.path IS '파일 경로';
 COMMENT ON COLUMN checkpoint_files.content IS '내용';
