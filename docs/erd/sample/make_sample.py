@@ -247,8 +247,8 @@ put("attempts", ["attempt_id", "user_id", "participant_id", "task_id", "mode", "
 # ── 실전 시험 · 감독 (예시) ──
 # 예시테크 담당자가 과제 2개(개발, 비개발)로 회차 1개를 열고 3명을 초대. 2명은 입장해 개발 과제를 풀었고(4, 5번),
 # 응시자A는 비개발 과제도 시작했다(풀던 중). 1명은 입장하지 않음. 시간은 회차 전체로 본다.
-put("exam_sessions", ["session_id", "company_id", "title", "entry_code", "starts_at", "ends_at", "proctoring", "created_by", "created_at"],
-    [1, 1, "2026 하반기 백엔드 신입 실전", "PAIR-7K2Q", "2026-11-11T09:40:00Z", "2026-11-11T10:40:00Z",
+put("exam_sessions", ["session_id", "company_id", "title", "starts_at", "ends_at", "proctoring", "created_by", "created_at"],
+    [1, 1, "2026 하반기 백엔드 신입 실전", "2026-11-11T09:40:00Z", "2026-11-11T10:40:00Z",
      "true", 4, "2026-11-10T12:00:00Z"])
 put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [1, task_id["order-deadlock"], 1])
 put("exam_session_tasks", ["session_id", "task_id", "sort_order"], [1, task_id["pricing-plan"], 2])

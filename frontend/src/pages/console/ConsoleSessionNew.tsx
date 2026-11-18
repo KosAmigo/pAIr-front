@@ -1,13 +1,13 @@
-// DESIGN.md §7-9-4 회차 만들기: 공개 과제 고르기 → 이름 → 일시 → 감독 → 입장 코드
+// DESIGN.md §7-9-4 회차 만들기: 공개 과제 고르기 → 이름 → 일시 → 감독 (입장은 대상자별 링크로만)
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Check, CircleAlert, RefreshCw, Search } from 'lucide-react'
+import { Camera, Check, CircleAlert, Search } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
 import { useAuth } from '../../auth/auth'
-import { createSession, makeEntryCode, useCompanies } from '../../data/consoleSessions'
+import { createSession, useCompanies } from '../../data/consoleSessions'
 import { kindName, useConsoleTasks } from '../../data/consoleTasks'
 import { useMyCompanyId } from './format'
 
@@ -34,7 +34,6 @@ export default function ConsoleSessionNew() {
   const [start, setStart] = useState('14:00')
   const [end, setEnd] = useState<string | null>(null)
   const [proctoring, setProctoring] = useState(true)
-  const [code, setCode] = useState(makeEntryCode)
   const [tried, setTried] = useState(false)
 
   const startAt = new Date(`${date}T${start}`)
@@ -66,7 +65,6 @@ export default function ConsoleSessionNew() {
               taskTitle: task.title,
               taskMinutes: task.minutes,
               title: title.trim(),
-              entryCode: code,
               startsAt: startAt.toISOString(),
               endsAt: endAt.toISOString(),
               proctoring,
@@ -166,21 +164,9 @@ export default function ConsoleSessionNew() {
             </label>
           </Section>
 
-          <Section n={5} title="입장 코드">
-            <div className="flex items-center gap-3">
-              <span className="rounded-md border border-line bg-panel-sunken px-5 py-3 font-mono text-[28px] font-semibold tracking-[0.12em] text-text">{code}</span>
-              <button
-                type="button"
-                onClick={() => setCode(makeEntryCode())}
-                aria-label="입장 코드 다시 만들기"
-                title="다시 만들기"
-                className="inline-flex size-10 items-center justify-center rounded-md border border-line-strong text-text-muted hover:bg-panel-raised hover:text-text"
-              >
-                <RefreshCw size={18} aria-hidden />
-              </button>
-            </div>
-            <p className="text-[13px] text-text-muted">대상자에게 보내는 메일에는 사람마다 다른 입장 링크도 함께 들어갑니다.</p>
-          </Section>
+          <p className="text-[14px] leading-6 text-text-muted">
+            회차를 만든 뒤 대상자를 등록하면 사람마다 다른 입장 링크가 메일로 나갑니다. 실전 시험은 이 링크로만 입장할 수 있습니다.
+          </p>
 
           <div className="flex justify-end gap-2 border-t border-line pt-6">
             <Button variant="ghost" onClick={() => nav('/console/sessions')}>
