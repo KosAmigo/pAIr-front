@@ -123,3 +123,19 @@ users.role 의 `COMPANY` 를 `MANAGER`(회차·과제·대상자·결과 + 감�
 |---|---|
 | 정합성 27종 (바뀜: 회차를 만든 사람은 같은 회사 매니저·관리자, 감독 판단자는 같은 회사 감독관·매니저·관리자, 초대 권한, 가입자 권한 = 초대 권한) | 모두 0건 |
 | 잘못된 데이터 차단 54종 (새로: 회사 없는 매니저·감독관, 회사에 속한 일반 회원, 없는 권한 COMPANY, 응시자 권한으로 기업 초대) | 모두 차단 |
+
+## 팀 DDL(eXERD 중간 최종본)과 머지 (2026-11-18)
+팀이 eXERD에서 뽑은 DDL과 비교해 질문으로 정한 대로 합쳤다. 테이블 38개 · 외래 키 59개 그대로.
+- **가져온 것:** `users.member_status`(ACTIVE/WITHDRAWN/PENDING, WITHDRAWN ↔ deleted_at CHECK), `companies.contact`·`employee_list_path`, 과제 상태 3개(`OPEN`/`CLOSED`/`HIDDEN`, 기본 HIDDEN), `exam_sessions.participants_csv_key`(팀 DDL의 files_path = 대상자 CSV 원본)
+- **우리 쪽 유지:** 한 사람은 한 회사(company_members 다대다 대신 users.company_id + MANAGER/PROCTOR), 실전은 회원 연결·입장 코드 없이 링크 토큰 해시, 테이블·컬럼 이름(exam_session_tasks, document_pages.text, accepted, label), VECTOR(1536) + HNSW, 모든 외래 키·CHECK·부분 인덱스
+- **상태 이름:** 팀 DDL의 `CLOSE` 는 `OPEN`·`HIDDEN` 과 꼴을 맞춰 `CLOSED` 로 했다.
+- **팀 DDL에서 고쳐야 했던 것:** 임베딩이 차원 없는 vector 라 ivfflat 인덱스를 만들 수 없음, `uq_choice_answers_single` 에 `WHERE question_type = 'SINGLE'` 이 빠져 복수 선택(MULTI)이 막힘, task_files→tasks 등 외래 키와 CHECK 다수 누락
+- 샘플: 탈퇴 회원 WITHDRAWN, 이메일 인증 전 회원 1명(7번), 숨김 초안 과제는 HIDDEN, 회사 연락처·직원 명단 키, 회차 1의 대상자 CSV 키
+
+| 검증 | 결과 |
+|---|---|
+| 총점 7건 | 리포트와 같음 |
+| 정합성 28종 (새로: 회차에 숨김 과제) | 모두 0건 |
+| 잘못된 데이터 차단 58종 (새로: 공개 시각 없는 CLOSED, 탈퇴 상태 ↔ 탈퇴 시각 불일치, 없는 회원 상태) | 모두 차단 |
+
+- CSV 빈 칸은 NULL 로 들어가 DB 기본값(member_status = ACTIVE)이 쓰이지 않는다. 샘플 생성 코드에서 기본값을 채운다.

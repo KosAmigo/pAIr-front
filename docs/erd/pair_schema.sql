@@ -10,12 +10,16 @@ CREATE TABLE companies (
     company_id   BIGSERIAL    PRIMARY KEY,
     name         VARCHAR(100) NOT NULL,
     business_no  VARCHAR(20)  UNIQUE,
+    contact      VARCHAR(50),
+    employee_list_path  VARCHAR(255),
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE  companies IS '회사(실전 시험을 여는 기업)';
 COMMENT ON COLUMN companies.company_id IS '회사 ID';
 COMMENT ON COLUMN companies.name IS '회사 이름';
 COMMENT ON COLUMN companies.business_no IS '사업자등록번호';
+COMMENT ON COLUMN companies.contact IS '회사 연락처';
+COMMENT ON COLUMN companies.employee_list_path IS '직원 명단 파일 저장 위치(S3 키)';
 COMMENT ON COLUMN companies.created_at IS '등록 시각';
 
 CREATE TABLE users (
@@ -23,17 +27,20 @@ CREATE TABLE users (
     email          VARCHAR(255) NOT NULL UNIQUE,
     password_hash  VARCHAR(100) NOT NULL,
     name           VARCHAR(50)  NOT NULL,
+    member_status  VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE' CHECK (member_status IN ('ACTIVE', 'WITHDRAWN', 'PENDING')),
     role           VARCHAR(10)  NOT NULL DEFAULT 'USER' CHECK (role IN ('USER', 'MANAGER', 'PROCTOR', 'ADMIN')),
     company_id     BIGINT       REFERENCES companies (company_id),
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
     deleted_at     TIMESTAMPTZ,
-    CHECK ((role IN ('MANAGER', 'PROCTOR')) = (company_id IS NOT NULL))
+    CHECK ((role IN ('MANAGER', 'PROCTOR')) = (company_id IS NOT NULL)),
+    CHECK ((member_status = 'WITHDRAWN') = (deleted_at IS NOT NULL))
 );
 COMMENT ON TABLE  users IS '회원';
 COMMENT ON COLUMN users.user_id IS '회원 ID';
 COMMENT ON COLUMN users.email IS '이메일(로그인 ID)';
 COMMENT ON COLUMN users.password_hash IS '비밀번호 해시(BCrypt)';
 COMMENT ON COLUMN users.name IS '이름';
+COMMENT ON COLUMN users.member_status IS '회원 상태(ACTIVE 정상/WITHDRAWN 탈퇴/PENDING 이메일 인증 전)';
 COMMENT ON COLUMN users.role IS '권한(USER 응시자/MANAGER 기업 매니저/PROCTOR 기업 감독관/ADMIN 관리자)';
 COMMENT ON COLUMN users.company_id IS '소속 회사 ID(MANAGER·PROCTOR만)';
 COMMENT ON COLUMN users.created_at IS '가입 시각';
@@ -127,13 +134,13 @@ CREATE TABLE tasks (
     difficulty      VARCHAR(10)  NOT NULL,
     time_limit_min  INT          NOT NULL,
     usage           VARCHAR(10)  NOT NULL CHECK (usage IN ('SELF', 'LIVE')),
-    status          VARCHAR(20)  NOT NULL DEFAULT 'CLOSED' CHECK (status IN ('OPEN', 'CLOSED')),
+    status          VARCHAR(20)  NOT NULL DEFAULT 'HIDDEN' CHECK (status IN ('OPEN', 'CLOSED', 'HIDDEN')),
     parent_task_id  BIGINT       REFERENCES tasks (task_id),
     created_by      BIGINT       NOT NULL REFERENCES users (user_id),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     published_at    TIMESTAMPTZ,
-    CHECK (status = 'CLOSED' OR published_at IS NOT NULL),
+    CHECK (status = 'HIDDEN' OR published_at IS NOT NULL),
     UNIQUE (task_id, usage)
 );
 COMMENT ON TABLE  tasks IS '과제';
@@ -148,14 +155,14 @@ COMMENT ON COLUMN tasks.category IS '과제 형태';
 COMMENT ON COLUMN tasks.difficulty IS '난이도';
 COMMENT ON COLUMN tasks.time_limit_min IS '제한 시간(분)';
 COMMENT ON COLUMN tasks.usage IS '용도(SELF 자가진단/LIVE 기업 실전)';
-COMMENT ON COLUMN tasks.status IS '상태(OPEN 공개/CLOSED 숨김)';
+COMMENT ON COLUMN tasks.status IS '상태(OPEN 공개·응시 가능/CLOSED 목록에만 보임·응시 막힘/HIDDEN 숨김·검수 대기)';
 COMMENT ON COLUMN tasks.parent_task_id IS '복제 원본 과제 ID';
 COMMENT ON COLUMN tasks.created_by IS '만든 관리자 회원 ID';
 COMMENT ON COLUMN tasks.created_at IS '생성 시각';
 COMMENT ON COLUMN tasks.updated_at IS '수정 시각';
 COMMENT ON COLUMN tasks.published_at IS '처음 공개한 시각(없으면 한 번도 공개 안 됨)';
 
--- 관리자가 AI로 만든 과제도 여기에 숨김(CLOSED)으로 들어가고, 검수 후 공개(OPEN)한다. 생성 요청 기록은 따로 두지 않는다.
+-- 관리자가 AI로 만든 과제도 여기에 숨김(HIDDEN)으로 들어가고, 검수 후 공개(OPEN)한다. 생성 요청 기록은 따로 두지 않는다.
 
 
 CREATE TABLE task_files (
@@ -650,6 +657,7 @@ CREATE TABLE exam_sessions (
     starts_at     TIMESTAMPTZ  NOT NULL,
     ends_at       TIMESTAMPTZ  NOT NULL,
     proctoring    BOOLEAN      NOT NULL DEFAULT true,
+    participants_csv_key  VARCHAR(255),
     created_by    BIGINT       NOT NULL REFERENCES users (user_id),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
     canceled_at   TIMESTAMPTZ,
@@ -663,6 +671,7 @@ COMMENT ON COLUMN exam_sessions.title IS '회차 이름';
 COMMENT ON COLUMN exam_sessions.starts_at IS '시작 시각(전원 동시)';
 COMMENT ON COLUMN exam_sessions.ends_at IS '종료 시각(전원 동시)';
 COMMENT ON COLUMN exam_sessions.proctoring IS '감독 사용 여부';
+COMMENT ON COLUMN exam_sessions.participants_csv_key IS '업로드한 대상자 CSV 원본 저장 위치(S3 키)';
 COMMENT ON COLUMN exam_sessions.created_by IS '만든 회원 ID(같은 회사 MANAGER 또는 관리자)';
 COMMENT ON COLUMN exam_sessions.created_at IS '생성 시각';
 COMMENT ON COLUMN exam_sessions.canceled_at IS '취소 시각(시작 전에만 취소 가능)';

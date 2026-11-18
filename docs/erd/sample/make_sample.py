@@ -51,7 +51,8 @@ def b(v):
 
 
 # ── 회사 · 회원 ──
-put("companies", ["company_id", "name", "business_no", "created_at"], [1, "예시테크", "123-45-67890", "2026-11-01T00:00:00Z"])
+put("companies", ["company_id", "name", "business_no", "contact", "employee_list_path", "created_at"],
+    [1, "예시테크", "123-45-67890", "02-1234-5678", "companies/1/employees.csv", "2026-11-01T00:00:00Z"])
 U = ["user_id", "email", "password_hash", "name", "role", "company_id", "created_at"]
 put("users", U, [1, "admin@pair.test", "$2a$10$sampleAdminHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "관리자", "ADMIN", None, "2026-11-01T00:00:00Z"])
 put("users", U, [2, "a@pair.test", "$2a$10$sampleUserAHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "응시자A", "USER", None, "2026-11-02T00:00:00Z"])
@@ -59,7 +60,9 @@ put("users", U, [3, "b@pair.test", "$2a$10$sampleUserBHashxxxxxxxxxxxxxxxxxxxxxx
 # 기업 회원: MANAGER(회차 만들기·과제 고르기·대상자·결과), PROCTOR(감독만)
 put("users", U, [4, "hr@example-tech.test", "$2a$10$sampleCompanyHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "예시테크 매니저", "MANAGER", 1, "2026-11-04T00:00:00Z"])
 # 탈퇴 회원: 이메일·이름·비밀번호를 익명값으로 바꾸고 기록(크레딧 원장)은 남긴다
-put("users", U + ["deleted_at"], [5, "deleted-5@deleted.pair.invalid", "!", "탈퇴 회원", "USER", None, "2026-11-05T00:00:00Z", "2026-11-15T00:00:00Z"])
+put("users", U + ["member_status", "deleted_at"], [5, "deleted-5@deleted.pair.invalid", "!", "탈퇴 회원", "USER", None, "2026-11-05T00:00:00Z", "WITHDRAWN", "2026-11-15T00:00:00Z"])
+# 이메일 인증 전 회원
+put("users", U + ["member_status"], [7, "new@pair.test", "$2a$10$samplePendingHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "인증 전 회원", "USER", None, "2026-11-17T00:00:00Z", "PENDING"])
 
 put("users", U, [6, "proctor@example-tech.test", "$2a$10$sampleProctorHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "예시테크 감독관", "PROCTOR", 1, "2026-11-06T00:00:00Z"])
 
@@ -125,9 +128,9 @@ for code in ["order-deadlock", "pricing-plan"]:
                 put("task_files", ["task_file_id", "task_id", "path", "content", "storage_key", "mime_type", "size_bytes", "visibility", "read_only"],
                     [fid, task_id[code], rel, text, None, MIME.get(os.path.splitext(rel)[1], "text/plain"), len(text.encode()), vis, b(ro)])
 
-# ── AI로 만든 숨김 초안 과제 (예시): 검수 전이라 CLOSED, 공개 시각 없음 ──
+# ── AI로 만든 숨김 초안 과제 (예시): 검수 전이라 HIDDEN, 공개 시각 없음 ──
 put("tasks", TK, [3, "inventory-sync", "재고 동기화 지연 원인 분석", "주문 직후 재고가 늦게 줄어드는 문제를 찾아 고치세요.", "(AI 생성 초안) 주문 서비스와 재고 서비스 사이 이벤트 처리가 늦어 …",
-                  "- 지연 원인을 찾아 NOTES.md에 정리\n- 지연을 없애는 수정\n- 회귀 테스트 추가", "DEV", "장애 분석", "중급", 60, "SELF", "CLOSED", None, 1,
+                  "- 지연 원인을 찾아 NOTES.md에 정리\n- 지연을 없애는 수정\n- 회귀 테스트 추가", "DEV", "장애 분석", "중급", 60, "SELF", "HIDDEN", None, 1,
                   "2026-11-16T03:00:00Z", "2026-11-16T03:00:00Z", None])
 # ── 기업용(LIVE) 과제: 자가진단 목록에 나오지 않는다. 자가진단 과제를 바탕으로 복제했다고 가정(복제 원본 = 1, 2번) ──
 put("tasks", TK, [4, "payment-lock-live", "결제 승인 교착 원인 분석", "결제 승인 요청이 몰리면 멈춥니다. 잠금 순서를 찾아 고치세요.", "(기업용) 결제 승인과 포인트 차감이 서로 잠금을 기다리며 …",
@@ -298,6 +301,8 @@ put("attempts", ["attempt_id", "user_id", "participant_id", "task_id", "mode", "
 put("exam_sessions", ["session_id", "company_id", "title", "starts_at", "ends_at", "proctoring", "created_by", "created_at"],
     [1, 1, "2026 하반기 백엔드 신입 실전", "2026-11-11T09:40:00Z", "2026-11-11T10:40:00Z",
      "true", 4, "2026-11-10T12:00:00Z"])
+rows["exam_sessions"][0].append("participants_csv_key")
+rows["exam_sessions"][1][-1]["participants_csv_key"] = "sessions/1/participants.csv"  # 업로드한 대상자 CSV 원본
 put("exam_sessions", ["session_id", "company_id", "title", "starts_at", "ends_at", "proctoring", "created_by", "created_at", "canceled_at"],
     [2, 1, "2026 하반기 백엔드 신입 실전 (일정 변경으로 취소)", "2026-11-20T05:00:00Z", "2026-11-20T06:00:00Z",
      "true", 4, "2026-11-12T00:00:00Z", "2026-11-14T00:00:00Z"])
@@ -384,6 +389,10 @@ for u, at, reason, amt, pid, att, tid in sorted(ev, key=lambda e: (e[1], e[0])):
     assert bal[u] >= 0, (u, at, bal[u])
     put("credit_ledger", ["ledger_id", "user_id", "amount", "balance_after", "reason", "purchase_id", "attempt_id", "turn_id", "created_at"],
         [lid, u, amt, bal[u], reason, pid, att, tid, at])
+
+# CSV 빈 칸은 NULL 로 들어가 DB 기본값이 안 쓰이므로, 기본값이 필요한 컬럼은 여기서 채운다
+for r in rows["users"][1]:
+    r.setdefault("member_status", "ACTIVE")
 
 for table, (cols, rs) in rows.items():
     with open(os.path.join(OUT, table + ".csv"), "w", encoding="utf-8", newline="") as f:

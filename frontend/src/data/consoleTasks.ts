@@ -5,7 +5,8 @@ import { KINDS } from './catalog'
 import { fileContents } from './mock'
 import { getSessions, phaseOf } from './consoleSessions'
 
-export type TaskStatus = 'OPEN' | 'CLOSED'
+/** tasks.status: OPEN 공개·응시 가능 / CLOSED 목록에만 보이고 응시 막힘 / HIDDEN 숨김(초안·검수 대기) */
+export type TaskStatus = 'OPEN' | 'CLOSED' | 'HIDDEN'
 export type Track = 'DEV' | 'BIZ'
 export type Difficulty = '초급' | '중급' | '고급'
 export type QType = 'SINGLE' | 'MULTI' | 'SHORT' | 'ESSAY'
@@ -56,9 +57,9 @@ export type CTask = {
   questions: CQuestion[]
 }
 
-/** 목록 탭: 테이블 status 와 같이 둘뿐이다. 검수 대기 = CLOSED, 공개 = OPEN (공개를 취소한 과제도 검수 대기) */
-export type TaskTab = 'draft' | 'open'
-export const tabOf = (t: CTask): TaskTab => (t.status === 'OPEN' ? 'open' : 'draft')
+/** 목록 탭: 테이블 status 와 1:1. 검수 대기 = HIDDEN, 공개 = OPEN, 응시 마감 = CLOSED (공개를 취소한 과제는 검수 대기) */
+export type TaskTab = 'draft' | 'open' | 'closed'
+export const tabOf = (t: CTask): TaskTab => (t.status === 'OPEN' ? 'open' : t.status === 'CLOSED' ? 'closed' : 'draft')
 
 export const kindName = (key: string) => KINDS.find((k) => k.key === key)?.name ?? key
 export const QTYPE_LABEL: Record<QType, string> = { SINGLE: '객관식 1개', MULTI: '객관식 여러 개', SHORT: '단답형', ESSAY: '서술형' }
@@ -212,7 +213,7 @@ function seed(): CTask[] {
       category: 'feature',
       difficulty: '중급',
       minutes: 60,
-      status: 'CLOSED',
+      status: 'HIDDEN',
       updatedAt: '2026-11-18T08:40:00Z',
       files: draftDev,
       questions: followups(['50% 상한 규칙은 어디에서 처리했고, 왜 그 위치를 골랐나요?']),
@@ -228,7 +229,7 @@ function seed(): CTask[] {
       category: 'cs',
       difficulty: '초급',
       minutes: 40,
-      status: 'CLOSED',
+      status: 'HIDDEN',
       updatedAt: '2026-11-18T09:12:00Z',
       files: [pdfFile('자료/환불_정책.pdf', ['제3조 7일 이내 전액 환불', '제5조 사용 이력이 있으면 일할 계산']), textFile('매뉴얼.md', '# 환불 응대 매뉴얼\n')],
       questions: [
@@ -260,7 +261,7 @@ function seed(): CTask[] {
       category: 'data',
       difficulty: '초급',
       minutes: 45,
-      status: 'CLOSED',
+      status: 'HIDDEN',
       publishedAt: '2026-10-01T09:00:00Z',
       updatedAt: '2026-11-05T11:00:00Z',
       files: [textFile('리포트.md', '# 월간 리포트\n')],
@@ -305,7 +306,7 @@ export function duplicateTask(id: string) {
   copy.id = newId('t')
   copy.code = `${src.code}-copy${seq}`
   copy.title = `${src.title} (복제)`
-  copy.status = 'CLOSED'
+  copy.status = 'HIDDEN'
   copy.publishedAt = undefined
   copy.parentId = src.id
   copy.updatedAt = now()
@@ -387,7 +388,7 @@ export function createDraft(input: DraftInput) {
     category: input.category,
     difficulty: input.difficulty,
     minutes: input.minutes,
-    status: 'CLOSED',
+    status: 'HIDDEN',
     updatedAt: now(),
     files,
     questions: qs,

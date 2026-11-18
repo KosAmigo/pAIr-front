@@ -86,6 +86,8 @@ UNION ALL SELECT '초대 권한 없음(관리자, 또는 같은 회사 매니저
 UNION ALL SELECT '초대로 가입한 담당자의 회사·이메일이 초대와 다름', COUNT(*) FROM company_invites i
   JOIN users u ON u.user_id = i.accepted_user_id
   WHERE u.role <> i.role OR u.company_id <> i.company_id OR u.email <> i.email
+UNION ALL SELECT '회차에 숨김(HIDDEN) 과제', COUNT(*) FROM exam_session_tasks st
+  JOIN tasks t ON t.task_id = st.task_id WHERE t.status = 'HIDDEN'
 UNION ALL SELECT '탈퇴 회원에 개인정보가 남음', COUNT(*) FROM users
   WHERE deleted_at IS NOT NULL AND (email NOT LIKE 'deleted-%' OR name <> '탈퇴 회원');
 
@@ -115,6 +117,10 @@ DECLARE a bigint := (SELECT max(attempt_id) FROM attempts);
   ['한 개만 고르는 문항에 보기 두 개', format($q$INSERT INTO choice_answers(attempt_id,question_id,question_type,choice_id) VALUES (%s,%s,'SINGLE',%s)$q$, (ca).attempt_id, (ca).question_id, other_choice)],
   ['없는 상태값(DRAFT) 과제', $q$UPDATE tasks SET status = 'DRAFT' WHERE task_id = (SELECT min(task_id) FROM tasks)$q$],
   ['공개 시각 없이 공개', $q$UPDATE tasks SET status = 'OPEN', published_at = NULL WHERE task_id = (SELECT min(task_id) FROM tasks)$q$],
+  ['공개 시각 없이 응시 마감(CLOSED)', $q$UPDATE tasks SET status = 'CLOSED', published_at = NULL WHERE task_id = (SELECT min(task_id) FROM tasks)$q$],
+  ['탈퇴 상태인데 탈퇴 시각 없음', $q$UPDATE users SET member_status = 'WITHDRAWN' WHERE user_id = 2$q$],
+  ['탈퇴 시각이 있는데 정상 상태', $q$UPDATE users SET deleted_at = now() WHERE user_id = 2$q$],
+  ['없는 회원 상태', $q$UPDATE users SET member_status = 'BANNED' WHERE user_id = 2$q$],
   ['같은 체크포인트에 같은 경로 파일 두 번', $q$INSERT INTO checkpoint_files(checkpoint_id,path,content) SELECT checkpoint_id,path,'x' FROM checkpoint_files LIMIT 1$q$],
   ['같은 문항에 같은 인정 답안 두 번', $q$INSERT INTO short_answer_keys(question_id,accepted) SELECT question_id,accepted FROM short_answer_keys LIMIT 1$q$],
   ['같은 코드·직군 체크', format($q$INSERT INTO rubric_checks(item_key,code,track,method,points,label) VALUES (%L,%L,%L,%L,1,'x')$q$, (rc).item_key, (rc).code, (rc).track, (rc).method)],
@@ -216,7 +222,7 @@ SELECT DISTINCT ON (l.user_id) l.user_id AS 회원, u.name AS 이름, l.balance_
        (SELECT COUNT(*) FROM credit_ledger x WHERE x.user_id = l.user_id AND x.reason = 'CHAT_TURN') AS 채팅_턴
 FROM credit_ledger l JOIN users u ON u.user_id = l.user_id ORDER BY l.user_id, l.ledger_id DESC;
 \echo '-- 자가진단 과제 목록 (기업용 과제는 나오지 않아야 함)'
-SELECT task_id, code, usage, status FROM tasks WHERE usage = 'SELF' AND status = 'OPEN' ORDER BY task_id;
+SELECT task_id, code, usage, status FROM tasks WHERE usage = 'SELF' AND status IN ('OPEN', 'CLOSED') ORDER BY task_id;
 \echo '-- 채점 모델별 토큰 합계'
 SELECT model, SUM(input_tokens) AS 입력, SUM(output_tokens) AS 출력, SUM(cached_tokens) AS 캐시 FROM judge_calls GROUP BY model;
 

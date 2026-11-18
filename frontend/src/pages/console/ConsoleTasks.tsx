@@ -1,4 +1,4 @@
-// DESIGN.md §7-9-1 과제 목록 (ADMIN): 검수 대기(CLOSED) / 공개(OPEN)
+// DESIGN.md §7-9-1 과제 목록 (ADMIN): 검수 대기(HIDDEN) / 공개(OPEN) / 응시 마감(CLOSED)
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, FileStack, Search, Sparkles } from 'lucide-react'
@@ -28,7 +28,7 @@ export default function ConsoleTasks() {
   const [closing, setClosing] = useState<CTask | null>(null)
 
   const counts = useMemo(() => {
-    const c = { draft: 0, open: 0 }
+    const c = { draft: 0, open: 0, closed: 0 }
     all.forEach((t) => c[tabOf(t)]++)
     return c
   }, [all])
@@ -56,6 +56,7 @@ export default function ConsoleTasks() {
             tabs={[
               { value: 'draft', label: <>검수 대기 <Count n={counts.draft} warn /></> },
               { value: 'open', label: <>공개 <Count n={counts.open} /></> },
+              { value: 'closed', label: <>응시 마감 <Count n={counts.closed} /></> },
             ]}
           />
           <div className="ml-auto flex items-center gap-2 pb-2">
@@ -157,9 +158,17 @@ export default function ConsoleTasks() {
                                 nav(`/console/tasks/${id}`)
                               },
                             },
-                            t.status === 'OPEN'
-                              ? { text: '공개 취소', danger: true, onClick: () => setClosing(t) }
-                              : { text: '공개하기', onClick: () => nav(`/console/tasks/${t.id}?publish=1`) },
+                            ...(t.status === 'OPEN'
+                              ? [
+                                  { text: '응시 마감', onClick: () => (setTaskStatus(t.id, 'CLOSED'), toast.show('응시를 마감했습니다. 목록에는 남고 새 응시만 막힙니다')) },
+                                  { text: '공개 취소', danger: true, onClick: () => setClosing(t) },
+                                ]
+                              : t.status === 'CLOSED'
+                                ? [
+                                    { text: '다시 공개', onClick: () => (setTaskStatus(t.id, 'OPEN'), toast.show('다시 공개했습니다')) },
+                                    { text: '공개 취소', danger: true, onClick: () => setClosing(t) },
+                                  ]
+                                : [{ text: '공개하기', onClick: () => nav(`/console/tasks/${t.id}?publish=1`) }]),
                           ]}
                         />
                         <ChevronRight size={16} className="text-text-faint" aria-hidden />
@@ -181,7 +190,7 @@ export default function ConsoleTasks() {
           disabled={activeSessionCount(closing.id) > 0}
           onClose={() => setClosing(null)}
           onConfirm={() => {
-            setTaskStatus(closing.id, 'CLOSED')
+            setTaskStatus(closing.id, 'HIDDEN')
             setClosing(null)
             toast.show('공개를 취소했습니다. 검수 대기로 옮겼습니다')
           }}
