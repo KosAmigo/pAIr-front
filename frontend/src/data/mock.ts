@@ -444,7 +444,10 @@ export const examInfo = {
   title: '2026 하반기 신입 개발자 AI 활용 역량평가',
   start: '2026.11.10 15:00',
   duration: '60분',
-  tasks: '개발 과제 1문항 + 후속 질문 3문항',
+  tasks: '과제 2개 (자유롭게 오가며 풀기) + 과제마다 후속 질문',
+  /** 회차 과제 (응시 화면 LIVE_TASKS 와 같은 순서) */
+  taskTitles: [task.title, bizTask.title],
   proctor: '카메라, 화면 공유, 브라우저 이탈 감지',
-  seat: 'NC-2026-0417',
+  /** 응시자는 기업이 등록한 이름과 이메일로만 구분한다 (exam_participants). 수험번호는 없다 */
+  applicant: { name: '김지원', email: 'jiwon.kim@example.com' },
 }

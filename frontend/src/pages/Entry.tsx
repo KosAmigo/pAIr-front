@@ -39,7 +39,7 @@ import { duration, easing, scale, springs, stagger } from '../lib/motion'
 // DESIGN.md §7-6 시험 입장 (2026-11-19 개편)
 // 입장 방법은 메일로 받은 응시자별 입장 링크(/entry?invite=<토큰>) 하나뿐이다.
 // 상단 바 아래 따로 둔 여정 띠(단계 아이콘 4개, 넉넉한 여백) + 1–3단계는 "왼쪽 스포트라이트 + 오른쪽 내용"으로 나뉜 유리 카드.
-//   1 입장권(회사, 시험, 수험번호) │ 2 응시자 카드 + 동의 고리 │ 3 카메라 틀 + 점검 게이지.
+//   1 입장권(회사, 시험, 시작 시각) │ 2 응시자 카드 + 동의 고리 │ 3 카메라 틀 + 점검 게이지.
 // 4단계 대기실: 화면 전체가 스포트라이트. 원형 진행 고리 안의 큰 카운트다운, 마지막 10초는 숫자가 바뀔 때마다 톡 튄다.
 // 상단 2px alert 라인은 "실전 영역" 표시로 모든 단계에 유지한다.
 const STEPS: { label: string; icon: LucideIcon }[] = [
@@ -48,7 +48,7 @@ const STEPS: { label: string; icon: LucideIcon }[] = [
   { label: '환경 점검', icon: ScanFace },
   { label: '대기실', icon: Hourglass },
 ]
-const APPLICANT = { name: '김지원', email: 'jiwon.kim@example.com' }
+const APPLICANT = examInfo.applicant
 
 /** 여정 띠: 단계 노드 4개(44px, 단계 아이콘)를 잇는 선이 지난 단계까지 그라데이션으로 차오른다. 지금 노드는 맥동 고리 */
 function Journey({ current, stage }: { current: number; stage?: boolean }) {
@@ -175,23 +175,26 @@ function EntryPass() {
         <span className="absolute -top-3 -left-3 size-6 rounded-full bg-white/90" />
         <span className="absolute -top-3 -right-3 size-6 rounded-full bg-white/90" />
       </div>
-      <p className="label text-stage-faint">SEAT NO.</p>
-      <p className="tnum mt-1 font-mono text-[30px] leading-9 font-bold tracking-[-0.02em]">
-        <GradientText>{examInfo.seat}</GradientText>
+      <p className="label text-stage-faint">STARTS AT</p>
+      <p className="tnum mt-1 font-mono text-[40px] leading-[44px] font-bold tracking-[-0.03em]">
+        <GradientText>{examInfo.start.slice(11)}</GradientText>
       </p>
-      <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] gap-4">
+      <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-4">
         <div>
-          <p className="label text-stage-faint">START</p>
-          <p className="tnum mt-1 font-mono text-[14px] font-semibold whitespace-nowrap text-stage-text">{examInfo.start}</p>
+          <p className="label text-stage-faint">DATE</p>
+          <p className="tnum mt-1 font-mono text-[14px] font-semibold whitespace-nowrap text-stage-text">{examInfo.start.slice(0, 10)}</p>
         </div>
         <div>
           <p className="label text-stage-faint">DURATION</p>
           <p className="tnum mt-1 font-mono text-[14px] font-semibold text-stage-text">{examInfo.duration}</p>
         </div>
       </div>
+      <p className="mt-4 text-[13px] text-stage-muted">
+        {APPLICANT.name} │ <span className="font-mono">{APPLICANT.email}</span>
+      </p>
       {/* 바코드 띠: 꾸밈 */}
       <div aria-hidden className="mt-auto flex h-14 items-stretch justify-between gap-[3px] pt-6 opacity-70">
-        {examInfo.seat
+        {examInfo.start
           .replace(/\D/g, '')
           .split('')
           .concat('31725846'.split(''))
@@ -249,7 +252,7 @@ function InfoStep({ onNext }: { onNext: () => void }) {
 
 // ── 2. 응시자 정보·동의: 왼쪽 응시자 카드 + 동의 고리 ──────────
 const CONSENTS: { title: string; body: string; icon: LucideIcon }[] = [
-  { title: '[필수] 개인정보 수집 및 이용 동의', body: '이름, 이메일, 수험번호를 응시자 확인과 결과 전달 목적으로 수집하며, 시험 종료 후 1년간 보관합니다.', icon: Lock },
+  { title: '[필수] 개인정보 수집 및 이용 동의', body: '이름과 이메일을 응시자 확인과 결과 전달 목적으로 수집하며, 시험 종료 후 1년간 보관합니다.', icon: Lock },
   { title: '[필수] 감독을 위한 카메라와 화면 녹화 동의', body: '시험 중 카메라 영상과 화면이 녹화되며, 부정행위 검토 목적으로만 기업 담당자에게 제공됩니다.', icon: Video },
   { title: '[필수] AI 대화 기록 평가 활용 동의', body: '내장 AI와의 대화 전체가 AI 활용 역량 평가 근거로 사용됩니다.', icon: Bot },
 ]
@@ -310,10 +313,6 @@ function ApplicantCard({ agreed }: { agreed: number }) {
         <div>
           <dt className="label text-stage-faint">EMAIL</dt>
           <dd className="mt-0.5 truncate font-mono text-[14px] text-stage-text">{APPLICANT.email}</dd>
-        </div>
-        <div>
-          <dt className="label text-stage-faint">SEAT NO.</dt>
-          <dd className="tnum mt-0.5 font-mono text-[14px] font-semibold text-stage-text">{examInfo.seat}</dd>
         </div>
       </dl>
       <p className="mt-3 text-[12px] leading-5 text-stage-muted">입장 링크로 확인된 정보입니다. 수정이 필요하면 기업 담당자에게 문의하세요.</p>
@@ -650,7 +649,7 @@ export default function Entry() {
     setStep((s) => s - 1)
   }
   const enterByDemoLink = () => {
-    setParams({ invite: examInfo.seat })
+    setParams({ invite: 'demo' })
     setStep(0)
   }
   const waiting = viaLink && step === 3
