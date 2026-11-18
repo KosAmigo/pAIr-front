@@ -28,6 +28,7 @@ import {
 import { ConfirmModal, Modal, RowMenu } from './common'
 import { fmtAgo, fmtHm, fmtLeft, fmtShort, fmtTime, useMyCompanyId, useNow, useToast } from './format'
 import ProctorPanel from './ProctorPanel'
+import { canManageSessions, useAuth } from '../../auth/auth'
 
 type Tab = 'overview' | 'participants' | 'live' | 'results'
 const ITEM_KEYS = [
@@ -257,6 +258,8 @@ function parseLines(text: string, existing: string[]) {
 }
 
 function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; toast: (t: string) => void }) {
+  // 대상자 추가·메일·명단 빼기는 매니저(와 관리자)만. 감독관은 명단을 보기만 한다
+  const canManage = canManageSessions(useAuth().user?.role)
   const [text, setText] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const parsed = useMemo(() => parseLines(text, s.participants.map((p) => p.email)), [text, s.participants])
@@ -265,7 +268,7 @@ function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; to
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      {phase !== 'ended' && (
+      {phase !== 'ended' && canManage && (
         <section className="flex h-fit flex-col gap-3 rounded-md border border-line bg-panel p-5 shadow-sm">
           <div className="flex items-center gap-2">
             <span className="label">INVITE</span>
@@ -357,7 +360,7 @@ function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; to
                   <td className="tnum px-4 font-mono text-[13px] text-text-muted">{fmtShort(p.invitedAt)}</td>
                   <td className="tnum px-4 font-mono text-[13px]">{p.enteredAt ? <span className="text-text">{fmtShort(p.enteredAt)}</span> : <span className="text-text-faint">미입장</span>}</td>
                   <td className="w-12 px-2">
-                    <RowMenu
+                    {canManage && <RowMenu
                       label={`${p.name} 메뉴`}
                       items={[
                         {
@@ -370,7 +373,7 @@ function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; to
                         { text: '메일 다시 보내기', disabled: phase === 'ended', onClick: () => toast(`${p.email}로 다시 보냈습니다 (목업)`) },
                         { text: '명단에서 빼기', danger: true, disabled: !!p.enteredAt, onClick: () => setRemoving(p) },
                       ]}
-                    />
+                    />}
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,6 @@
 // 콘솔 화면 공용 도우미: 시각 표기, 난이도 색, 토스트
 import { useEffect, useState } from 'react'
-import { useAuth } from '../../auth/auth'
+import { useAuth, isCompanyRole } from '../../auth/auth'
 import { useCompanies } from '../../data/consoleSessions'
 
 /** 잠깐 떴다 사라지는 알림. show(text) 로 띄운다 */
@@ -68,7 +68,7 @@ export const fmtAgo = (iso: string | undefined, now: number) => {
 export function useMyCompanyId(): number | null {
   const { user } = useAuth()
   const companies = useCompanies()
-  if (user?.role !== 'COMPANY') return null
+  if (!isCompanyRole(user?.role)) return null
   return companies.find((c) => c.name === user.companyName)?.id ?? -1
 }
 
