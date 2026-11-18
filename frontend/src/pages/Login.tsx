@@ -4,8 +4,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, Check, Eye, EyeOff, TriangleAlert, User } from 'lucide-react'
 import { cx } from '../components/cx'
 import { Button, Logo } from '../components/ui'
-import { ACCOUNTS, homeFor, useAuth } from '../auth/auth'
-import { addManager, createCompany, getCompanies } from '../data/consoleSessions'
+import { homeFor, useAuth } from '../auth/auth'
 
 const inputCls =
   'h-11 w-full rounded-sm border border-line-strong bg-panel px-3 text-[16px] text-text outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-text-faint focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
@@ -135,9 +134,6 @@ export default function Login() {
 
 type Kind = 'user' | 'company'
 
-/** 회사 이름 비교용: 띄어쓰기와 대소문자를 무시한다 ("예시 테크" = "예시테크") */
-const norm = (v: string) => v.replace(/\s+/g, '').toLowerCase()
-
 export function Signup() {
   const { user, signedIn, signup } = useAuth()
   const nav = useNavigate()
@@ -159,9 +155,7 @@ export function Signup() {
     { ok: password.length >= 8, text: '8자 이상' },
     { ok: password.length > 0 && password === confirm, text: '비밀번호 확인과 같음' },
   ]
-  // 이미 있는 회사에는 가입으로 들어갈 수 없다. 그 회사 담당자가 콘솔에서 초대해야 한다 (남의 회사 데이터를 보지 못하게)
-  const taken = isCompany && companyName.trim() ? getCompanies().find((c) => norm(c.name) === norm(companyName)) : undefined
-  const companyOk = !isCompany || (companyName.trim() && !taken)
+  const companyOk = !isCompany || companyName.trim()
   const valid = companyOk && name.trim() && email.trim() && rules.every((r) => r.ok) && agree
 
   const pick = (k: Kind) => {
@@ -180,14 +174,8 @@ export function Signup() {
       if (r.error) return setError(r.error)
       return nav(next ?? '/tasks', { replace: true })
     }
-    // 기업 회원 (목업): 회사를 새로 등록하고, 가입한 사람을 첫 담당자로 넣는다
-    if (ACCOUNTS.some((a) => a.email === email.trim().toLowerCase())) return setError('이미 가입된 이메일입니다')
-    const c = createCompany(companyName)
-    if (c.error) return setError(c.error)
-    const company = getCompanies().find((x) => x.id === c.id)!
-    const m = addManager(company.id, name, email)
-    if (m) return setError(m)
-    const r = signup(name, email, password, company.name)
+    // 기업 회원: 회사 이름은 계정 정보로만 남긴다 (회사를 따로 등록하지 않는다)
+    const r = signup(name, email, password, companyName.trim())
     if (r.error) return setError(r.error)
     nav('/console/sessions', { replace: true })
   }
@@ -234,27 +222,8 @@ export function Signup() {
       {error && <ErrorBanner>{error}</ErrorBanner>}
       <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
         {isCompany && (
-          <Field
-            id="company"
-            label="회사 이름"
-            hint={taken ? undefined : '회사를 새로 등록하고, 가입하는 분이 첫 담당자가 됩니다. 같은 회사의 다른 담당자는 콘솔에서 초대합니다.'}
-          >
-            <input
-              id="company"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              autoComplete="organization"
-              required
-              maxLength={100}
-              aria-invalid={!!taken}
-              aria-describedby={taken ? 'company-taken' : undefined}
-              className={cx(inputCls, taken && 'border-alert focus:border-alert focus:shadow-[0_0_0_3px_rgb(204_38_54/0.15)]')}
-            />
-            {taken && (
-              <p id="company-taken" className="text-[13px] text-alert">
-                이미 등록된 회사입니다. {taken.name} 담당자에게 콘솔에서 초대를 요청하세요.
-              </p>
-            )}
+          <Field id="company" label="회사 이름">
+            <input id="company" value={companyName} onChange={(e) => setCompanyName(e.target.value)} autoComplete="organization" required maxLength={100} className={inputCls} />
           </Field>
         )}
         <Field id="name" label={isCompany ? '담당자 이름' : '이름'}>
