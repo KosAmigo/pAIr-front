@@ -34,7 +34,7 @@ function TaskCard({ t }: { t: CatalogTask }) {
   )
   const cls = 'group flex min-h-[144px] flex-col rounded-md border bg-panel p-4'
   return ready ? (
-    <Link to={t.start!} className={cx(cls, 'border-line transition-colors duration-[120ms] hover:border-signal focus-visible:border-signal')}>
+    <Link to={t.start!} className={cx(cls, 'border-line transition-[border-color,box-shadow] duration-150 hover:border-brand hover:shadow-md focus-visible:border-brand')}>
       {body}
     </Link>
   ) : (

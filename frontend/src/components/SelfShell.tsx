@@ -36,7 +36,7 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
               >
                 {t.label}
                 <span
-                  className={cx('absolute inset-x-0 -bottom-px h-0.5 bg-signal transition-opacity duration-[180ms]', active ? 'opacity-100' : 'opacity-0')}
+                  className={cx('absolute inset-x-0 -bottom-px h-0.5 bg-brand transition-opacity duration-[180ms]', active ? 'opacity-100' : 'opacity-0')}
                   aria-hidden
                 />
               </NavLink>

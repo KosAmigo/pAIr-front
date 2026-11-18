@@ -36,12 +36,12 @@ function Node({ n, dim, active }: { n: TreeNode; dim: boolean; active: boolean }
   return (
     <g className={cx('transition-opacity duration-300', dim && 'opacity-35')} style={style}>
       {active && <circle cx={x} cy={y} r={14} fill="none" stroke="var(--color-text)" strokeOpacity={0.5} strokeDasharray="3 3" />}
-      {n.kind === 'checkpoint' && <circle cx={x} cy={y} r={5} fill="var(--color-bg)" stroke={c} strokeWidth={3} />}
+      {n.kind === 'checkpoint' && <circle cx={x} cy={y} r={5} fill="var(--color-panel)" stroke={c} strokeWidth={3} />}
       {n.kind === 'fork' && <circle cx={x} cy={y} r={7} fill={c} className="glow-svg" />}
       {n.kind === 'submit' && (
         <g className="glow-svg">
           <rect x={x - 13} y={y - 9} width={26} height={18} rx={4} fill={c} />
-          <text x={x} y={y + 3.5} textAnchor="middle" className="fill-bg font-mono text-[10px] font-semibold">
+          <text x={x} y={y + 3.5} textAnchor="middle" className="fill-on-accent font-mono text-[10px] font-semibold">
             {n.score}
           </text>
         </g>

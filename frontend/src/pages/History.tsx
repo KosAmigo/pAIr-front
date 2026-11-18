@@ -56,7 +56,7 @@ export default function History() {
           {rows && rows.length === 0 && (
             <p className="px-4 py-6 text-[15px] text-text-muted">
               아직 응시한 과제가 없습니다.{' '}
-              <Link to="/tasks" className="text-signal underline-offset-4 hover:underline">
+              <Link to="/tasks" className="text-brand underline-offset-4 hover:underline">
                 과제 탭
               </Link>
               에서 시작하세요.

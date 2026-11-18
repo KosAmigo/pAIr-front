@@ -1,102 +1,92 @@
-import { Link } from 'react-router-dom'
-import { ArrowRight, FlaskConical, History, TicketCheck } from 'lucide-react'
-import { cx } from '../components/cx'
-import { Logo, Sep } from '../components/ui'
-
-// DESIGN.md §7-1 초기화면
-const tiles = [
-  {
-    to: '/tasks',
-    over: 'SELF-CHECK',
-    overCls: 'text-info',
-    hover: 'hover:border-info focus-visible:border-info',
-    title: '자가진단',
-    desc: ['혼자 바로 응시하고 결과 리포트를 받습니다.', '원하는 시점으로 되돌아가 다시 풀어볼 수 있습니다.'],
-    meta: ['복기 가능', '리포트 제공'],
-    icon: History,
-  },
-  {
-    to: '/entry',
-    over: 'LIVE EXAM',
-    overCls: 'text-alert',
-    hover: 'hover:border-alert focus-visible:border-alert',
-    title: '테스트 응시',
-    desc: ['기업이 발급한 입장 코드나 메일 링크로 입장합니다.', '감독 환경에서 다른 응시자와 동시에 진행됩니다.'],
-    meta: ['입장 코드 또는 메일 링크', '감독 진행'],
-    icon: TicketCheck,
-  },
-]
+// DESIGN.md §7-1 초기화면(소개 무대). 스크롤하며 pAIr를 자랑하는 페이지.
+// 이 파일과 home/ 폴더는 App.tsx에서 lazy 로 불러, GSAP·Lenis가 작업 화면 번들에 섞이지 않게 한다.
+import { useEffect, useRef } from 'react'
+import Lenis from 'lenis'
+import './home/home.css'
+import { Logo } from '../components/ui'
+import Finale from './home/Finale'
+import Hero from './home/Hero'
+import HomeHeader from './home/HomeHeader'
+import LiveSection from './home/LiveSection'
+import ReplaySection from './home/ReplaySection'
+import ReportSection from './home/ReportSection'
+import Spine from './home/Spine'
+import { LenisContext, MOTION_OK, ScrollTrigger, gsap, prefersReducedMotion, useGSAP } from './home/motion'
 
 export default function Home() {
+  const lenis = useRef<Lenis | null>(null)
+  const page = useRef<HTMLDivElement>(null)
+  const content = useRef<HTMLDivElement>(null)
+
+  // Lenis 부드러운 스크롤 (초기화면에서만). GSAP 시계에 묶어 ScrollTrigger와 맞춘다.
+  useEffect(() => {
+    if (prefersReducedMotion()) return
+    const l = new Lenis({ lerp: 0.1 })
+    l.on('scroll', ScrollTrigger.update)
+    const tick = (t: number) => l.raf(t * 1000)
+    gsap.ticker.add(tick)
+    gsap.ticker.lagSmoothing(0)
+    lenis.current = l
+    return () => {
+      gsap.ticker.remove(tick)
+      l.destroy()
+      lenis.current = null
+    }
+  }, [])
+
+  // 섹션 머리 공통 등장: 줄 단위로 아래에서 올라온다
+  useGSAP(
+    () => {
+      const mm = gsap.matchMedia()
+      mm.add(MOTION_OK, () => {
+        gsap.utils.toArray<HTMLElement>('[data-reveal]').forEach((el) => {
+          gsap.from(el.children, {
+            y: 32,
+            opacity: 0,
+            duration: 0.7,
+            stagger: 0.08,
+            ease: 'expo.out',
+            scrollTrigger: { trigger: el, start: 'top 82%' },
+          })
+        })
+      })
+      // 폰트가 늦게 오면 높이가 바뀌므로 다시 잰다
+      document.fonts?.ready.then(() => ScrollTrigger.refresh())
+    },
+    { scope: page },
+  )
+
   return (
-    <div className="dot-grid flex min-h-full flex-col">
-      <header className="flex h-14 items-center px-12">
-        <Logo />
-        {/* 채점 툴: 아이콘만 */}
-        <Link
-          to="/grader"
-          aria-label="채점 툴"
-          title="채점 툴"
-          className="ml-auto inline-flex size-9 items-center justify-center rounded-md border border-line text-text-muted transition-colors duration-[120ms] hover:border-line-strong hover:bg-panel-raised hover:text-text"
-        >
-          <FlaskConical size={18} aria-hidden />
-        </Link>
-      </header>
-
-      <main className="flex flex-1 flex-col items-center justify-center px-12 pb-24">
-        <h1 className="text-center text-hero font-bold tracking-[-0.02em] text-text">
-          AI와 함께 일하는 방식까지
-          <br />
-          평가합니다
-        </h1>
-        <p className="mt-4 max-w-[560px] text-center text-[16px] leading-6 text-text-muted">
-          결과물만이 아니라 AI 활용, 통제, 재현성까지 과정 전체를 기록합니다.
-          <br />
-          실전 시험 전에 같은 환경에서 먼저 연습해 보세요.
-        </p>
-
-        <div className="mt-12 flex gap-4">
-          {tiles.map((t) => (
-            <Link
-              key={t.title}
-              to={t.to}
-              className={cx(
-                'group flex h-[280px] w-[440px] flex-col rounded-lg border border-line bg-panel p-8 transition-colors duration-[120ms] ease-out',
-                t.hover,
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span className={cx('label', t.overCls)}>{t.over}</span>
-                <t.icon size={22} strokeWidth={1.75} className="text-text-muted" aria-hidden />
-              </div>
-              <h2 className="mt-6 text-h1 font-bold text-text">{t.title}</h2>
-              <p className="mt-2 text-[16px] leading-6 text-text-muted">
-                {t.desc[0]}
-                <br />
-                {t.desc[1]}
-              </p>
-              <div className="mt-auto flex items-center gap-3 border-t border-line pt-4">
-                {t.meta.map((m, i) => (
-                  <span key={m} className="flex items-center gap-3 font-mono text-[13px] text-text-muted">
-                    {i > 0 && <Sep />}
-                    {m}
-                  </span>
-                ))}
-                <ArrowRight
-                  size={20}
-                  className="ml-auto text-text-muted transition-transform duration-[120ms] group-hover:translate-x-1 group-hover:text-text"
-                  aria-hidden
-                />
-              </div>
-            </Link>
-          ))}
+    <LenisContext.Provider value={lenis}>
+      <div ref={page} className="home-root relative min-h-full overflow-x-clip bg-bg">
+        <div className="aurora" aria-hidden>
+          <i />
+          <i />
+          <i />
         </div>
-      </main>
+        <div className="home-dots" aria-hidden />
 
-      <footer className="flex h-12 items-center gap-6 border-t border-line px-12 font-mono text-[13px] text-text-faint">
-        <span>v0.1 PROTOTYPE</span>
-        <span className="ml-auto">© 2026 pAIr</span>
-      </footer>
-    </div>
+        <HomeHeader />
+
+        <main className="relative z-10">
+          <div ref={content} className="relative mx-auto max-w-[1264px] px-8">
+            <Spine rootRef={content} />
+            <Hero />
+            <ReplaySection />
+            <ReportSection />
+            <LiveSection />
+            <Finale />
+          </div>
+        </main>
+
+        <footer className="relative z-10 border-t border-line bg-panel/60 backdrop-blur">
+          <div className="mx-auto flex h-20 max-w-[1264px] items-center gap-4 px-8">
+            <Logo />
+            <span className="font-mono text-[13px] text-text-faint">v0.1 PROTOTYPE</span>
+            <span className="ml-auto font-mono text-[13px] text-text-faint">© 2026 pAIr</span>
+          </div>
+        </footer>
+      </div>
+    </LenisContext.Provider>
   )
 }
