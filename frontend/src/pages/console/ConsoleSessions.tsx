@@ -1,18 +1,17 @@
 // DESIGN.md §7-9-4 회차 목록 (ADMIN, COMPANY)
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarClock, Camera, ChevronRight, Copy, Plus } from 'lucide-react'
+import { CalendarClock, Camera, ChevronRight, Plus } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { PageHeader } from '../../components/SelfShell'
 import { ButtonLink, Tabs } from '../../components/ui'
 import { companyName, phaseOf, useCompanies, useSessions, type Session, type SessionPhase } from '../../data/consoleSessions'
-import { fmtHm, fmtLeft, fmtShort, useMyCompanyId, useNow, useToast } from './format'
+import { fmtHm, fmtLeft, fmtShort, useMyCompanyId, useNow } from './format'
 
 export default function ConsoleSessions() {
   const all = useSessions()
   const now = useNow(1000)
   const nav = useNavigate()
-  const toast = useToast()
   const mine = useMyCompanyId()
   const companies = useCompanies()
   const [company, setCompany] = useState<number | 'ALL'>('ALL')
@@ -75,8 +74,8 @@ export default function ConsoleSessions() {
             <table className="w-full text-[14px]">
               <thead>
                 <tr className="h-10 border-b border-line text-left">
-                  {['회차', '과제', '일시', '입장 코드', '대상자', '감독', '상태', ''].map((h, i) => (
-                    <th key={i} className={cx('px-4 text-[13px] font-semibold text-text-muted', i === 4 && 'text-right')}>
+                  {['회차', '과제', '일시', '대상자', '감독', '상태', ''].map((h, i) => (
+                    <th key={i} className={cx('px-4 text-[13px] font-semibold text-text-muted', i === 3 && 'text-right')}>
                       {h}
                     </th>
                   ))}
@@ -90,10 +89,6 @@ export default function ConsoleSessions() {
                     now={now}
                     showCompany={mine == null}
                     onOpen={() => nav(`/console/sessions/${s.id}`)}
-                    onCopy={() => {
-                      navigator.clipboard?.writeText(s.entryCode).catch(() => {})
-                      toast.show(`입장 코드 ${s.entryCode}를 복사했습니다`)
-                    }}
                   />
                 ))}
               </tbody>
@@ -101,12 +96,11 @@ export default function ConsoleSessions() {
           )}
         </div>
       </div>
-      {toast.node}
     </>
   )
 }
 
-function Row({ s, now, showCompany, onOpen, onCopy }: { s: Session; now: number; showCompany: boolean; onOpen: () => void; onCopy: () => void }) {
+function Row({ s, now, showCompany, onOpen }: { s: Session; now: number; showCompany: boolean; onOpen: () => void }) {
   const phase = phaseOf(s, now)
   const entered = s.participants.filter((p) => p.enteredAt).length
   return (
@@ -118,21 +112,6 @@ function Row({ s, now, showCompany, onOpen, onCopy }: { s: Session; now: number;
       <td className="px-4 text-text-muted">{s.taskTitle}</td>
       <td className="tnum px-4 font-mono text-[13px] text-text-muted">
         {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
-      </td>
-      <td className="px-4">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onCopy()
-          }}
-          title="입장 코드 복사"
-          aria-label={`입장 코드 ${s.entryCode} 복사`}
-          className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 font-mono text-[13px] font-semibold text-text hover:bg-panel"
-        >
-          {s.entryCode}
-          <Copy size={13} className="text-text-faint" aria-hidden />
-        </button>
       </td>
       <td className="tnum px-4 text-right font-mono text-[13px] text-text-muted">
         <span className="text-text">{entered}</span> / {s.participants.length}

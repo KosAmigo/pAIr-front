@@ -533,7 +533,6 @@ CREATE TABLE exam_sessions (
     session_id    BIGSERIAL    PRIMARY KEY,
     company_id    BIGINT       NOT NULL REFERENCES companies (company_id),
     title         VARCHAR(100) NOT NULL,
-    entry_code    VARCHAR(20)  NOT NULL UNIQUE,
     starts_at     TIMESTAMPTZ  NOT NULL,
     ends_at       TIMESTAMPTZ  NOT NULL,
     proctoring    BOOLEAN      NOT NULL DEFAULT true,
@@ -545,7 +544,6 @@ COMMENT ON TABLE  exam_sessions IS '시험 회차';
 COMMENT ON COLUMN exam_sessions.session_id IS '회차 ID';
 COMMENT ON COLUMN exam_sessions.company_id IS '회사 ID(회차를 연 회사)';
 COMMENT ON COLUMN exam_sessions.title IS '회차 이름';
-COMMENT ON COLUMN exam_sessions.entry_code IS '입장 코드';
 COMMENT ON COLUMN exam_sessions.starts_at IS '시작 시각(전원 동시)';
 COMMENT ON COLUMN exam_sessions.ends_at IS '종료 시각(전원 동시)';
 COMMENT ON COLUMN exam_sessions.proctoring IS '감독 사용 여부';
@@ -579,7 +577,7 @@ COMMENT ON COLUMN exam_participants.participant_id IS '대상자 ID';
 COMMENT ON COLUMN exam_participants.session_id IS '회차 ID';
 COMMENT ON COLUMN exam_participants.email IS '초대 이메일';
 COMMENT ON COLUMN exam_participants.name IS '이름';
-COMMENT ON COLUMN exam_participants.invite_token IS '메일 입장 링크 토큰';
+COMMENT ON COLUMN exam_participants.invite_token IS '입장 링크 토큰(유일한 입장 방법)';
 COMMENT ON COLUMN exam_participants.invited_at IS '초대 시각';
 COMMENT ON COLUMN exam_participants.entered_at IS '입장 시각';
 

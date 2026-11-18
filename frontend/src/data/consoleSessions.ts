@@ -137,7 +137,6 @@ export type Session = {
   taskTitle: string
   taskMinutes: number
   title: string
-  entryCode: string
   startsAt: string
   endsAt: string
   proctoring: boolean
@@ -154,11 +153,8 @@ const nid = (p: string) => `${p}-${++seq}`
 const iso = (ms: number) => new Date(ms).toISOString()
 const MIN = 60_000
 
-export function makeEntryCode() {
-  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  return `PAIR-${Array.from({ length: 4 }, () => A[Math.floor(Math.random() * A.length)]).join('')}`
-}
 const token = () => Array.from({ length: 16 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('')
+// 입장 링크가 유일한 입장 방법이다(회차 공용 입장 코드 없음)
 export const inviteLink = (p: Participant) => `${location.origin}/entry?invite=inv_${p.id.replace(/\D/g, '')}${token().slice(0, 8)}`
 
 const ev = (type: PEventType, at: string, o: Partial<PEvent> = {}): PEvent => ({
@@ -241,7 +237,6 @@ function seed(): Session[] {
       taskTitle: '주문 처리 장애 원인 분석',
       taskMinutes: 60,
       title: '2026 하반기 백엔드 경력 실전 2차',
-      entryCode: 'PAIR-Q8MZ',
       startsAt: iso(liveStart),
       endsAt: iso(liveStart + 60 * MIN),
       proctoring: true,
@@ -255,7 +250,6 @@ function seed(): Session[] {
       taskTitle: '주문 처리 장애 원인 분석',
       taskMinutes: 60,
       title: '2026 하반기 백엔드 경력 실전 3차',
-      entryCode: 'PAIR-7HNC',
       startsAt: iso(Math.ceil((now + 24 * 60 * MIN) / (60 * MIN)) * 60 * MIN),
       endsAt: iso(Math.ceil((now + 24 * 60 * MIN) / (60 * MIN)) * 60 * MIN + 60 * MIN),
       proctoring: true,
@@ -272,7 +266,6 @@ function seed(): Session[] {
       taskTitle: '주문 처리 장애 원인 분석',
       taskMinutes: 60,
       title: '2026 하반기 백엔드 신입 실전',
-      entryCode: 'PAIR-7K2Q',
       startsAt: iso(ended1),
       endsAt: iso(ended1 + 60 * MIN),
       proctoring: true,
@@ -286,7 +279,6 @@ function seed(): Session[] {
       taskTitle: '신규 저가 요금제 출시 기획안',
       taskMinutes: 60,
       title: '서비스 기획 인턴 실전',
-      entryCode: 'PAIR-B3VX',
       startsAt: iso(ended2),
       endsAt: iso(ended2 + 60 * MIN),
       proctoring: false,
