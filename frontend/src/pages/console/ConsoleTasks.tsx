@@ -16,8 +16,10 @@ import {
   tabOf,
   useConsoleTasks,
   type CTask,
+  type TaskStatus,
   type TaskTab,
 } from '../../data/consoleTasks'
+import { CONSOLE_USES_API } from '../../data/consoleApi'
 import { ConfirmModal, RowMenu } from './common'
 import { fmtTime, useToast } from './format'
 import { ReviewQueue } from './ReviewQueue'
@@ -43,27 +45,41 @@ export default function ConsoleTasks() {
       (track === 'ALL' || t.track === track) &&
       (!q.trim() || `${t.title} ${t.code}`.toLowerCase().includes(q.trim().toLowerCase())),
   )
+  // 상태 바꾸기는 서버 저장이라 실패할 수 있다 (관리자만). 실패하면 이유를 알려 준다
+  const change = (t: CTask, status: TaskStatus, done: string) =>
+    void setTaskStatus(t.id, status)
+      .then(() => toast.show(done))
+      .catch((er: Error) => toast.show(`바꾸지 못했습니다: ${er.message}`))
+  // api 모드: 과제 내용은 아직 파일이라 복제·응시 마감(CLOSED)이 없고, 공개는 바로 서버에 저장한다
   const menuFor = (t: CTask) =>
     [
-      { text: '편집', onClick: () => nav(`/console/tasks/${t.id}`) },
-      {
-        text: '복제',
-        onClick: () => {
-          const id = duplicateTask(t.id)
-          nav(`/console/tasks/${id}`)
-        },
-      },
+      { text: CONSOLE_USES_API ? '응시자로 보기' : '편집', onClick: () => nav(`/console/tasks/${t.id}`) },
+      ...(CONSOLE_USES_API
+        ? []
+        : [
+            {
+              text: '복제',
+              onClick: () => {
+                const id = duplicateTask(t.id)
+                nav(`/console/tasks/${id}`)
+              },
+            },
+          ]),
       ...(t.status === 'OPEN'
         ? [
-            { text: '응시 마감', onClick: () => (setTaskStatus(t.id, 'CLOSED'), toast.show('응시를 마감했습니다. 목록에는 남고 새 응시만 막힙니다')) },
+            ...(CONSOLE_USES_API ? [] : [{ text: '응시 마감', onClick: () => change(t, 'CLOSED', '응시를 마감했습니다. 목록에는 남고 새 응시만 막힙니다') }]),
             { text: '공개 취소', danger: true, onClick: () => setClosing(t) },
           ]
         : t.status === 'CLOSED'
           ? [
-              { text: '다시 공개', onClick: () => (setTaskStatus(t.id, 'OPEN'), toast.show('다시 공개했습니다')) },
+              { text: '다시 공개', onClick: () => change(t, 'OPEN', '다시 공개했습니다') },
               { text: '공개 취소', danger: true, onClick: () => setClosing(t) },
             ]
-          : [{ text: '공개하기', onClick: () => nav(`/console/tasks/${t.id}?publish=1`) }]),
+          : [
+              CONSOLE_USES_API
+                ? { text: '공개하기', onClick: () => change(t, 'OPEN', '공개했습니다. 이제 회차에 넣을 수 있습니다') }
+                : { text: '공개하기', onClick: () => nav(`/console/tasks/${t.id}?publish=1`) },
+            ]),
     ]
   const visibleQuestions = (t: CTask) => t.questions.filter((x) => x.stage === 'TASK').length
 
@@ -208,9 +224,8 @@ export default function ConsoleTasks() {
           disabled={activeSessionCount(closing.id) > 0}
           onClose={() => setClosing(null)}
           onConfirm={() => {
-            setTaskStatus(closing.id, 'HIDDEN')
+            change(closing, 'HIDDEN', '공개를 취소했습니다. 검수 대기로 옮겼습니다')
             setClosing(null)
-            toast.show('공개를 취소했습니다. 검수 대기로 옮겼습니다')
           }}
           body={
             activeSessionCount(closing.id) > 0 ? (

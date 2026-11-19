@@ -1,6 +1,10 @@
-// 콘솔 과제 목업 저장소 (DESIGN.md §7-9-1 ~ 9-3). 테이블 tasks, task_files, task_questions, question_choices,
-// short_answer_keys, question_sources 를 화면에서 쓰기 좋게 한 덩어리로 묶었다. 새로 고치면 처음 상태로 돌아간다.
-import { useSyncExternalStore } from 'react'
+// 콘솔 과제 저장소 (DESIGN.md §7-9-1 ~ 9-3). 테이블 tasks, task_files, task_questions, question_choices,
+// short_answer_keys, question_sources 를 화면에서 쓰기 좋게 한 덩어리로 묶었다.
+// - 기본(api): 과제 목록과 공개 상태(HIDDEN/OPEN)는 백엔드에서. 과제 내용 편집(파일·문항)은 과제 DB(팀원 2·3)가 생기기 전까지
+//   브라우저 안에서만 바뀐다 (저장되지 않음).
+// - VITE_CONSOLE_DATA=mock: 예시 과제. 새로 고치면 처음 상태로 돌아간다.
+import { useEffect, useSyncExternalStore } from 'react'
+import { CONSOLE_USES_API, consoleApi, type ApiTask } from './consoleApi'
 import { KINDS } from './catalog'
 import { fileContents } from './mock'
 import { getSessions, phaseOf } from './consoleSessions'
@@ -271,7 +275,8 @@ function seed(): CTask[] {
 }
 
 // ── 저장소 ──
-let tasks: CTask[] = seed()
+let tasks: CTask[] = CONSOLE_USES_API ? [] : seed()
+let taskError: string | null = null
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((l) => l())
 const subscribe = (l: () => void) => {
@@ -279,7 +284,48 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l)
 }
 
+/** 백엔드 과제(정의 파일 + 공개 상태)를 화면 모양으로. 파일·문항은 과제 DB 가 생기면 채운다 */
+function fromApi(t: ApiTask, prev?: CTask): CTask {
+  return {
+    ...(prev ?? {
+      code: t.id,
+      summary: '',
+      description: '',
+      requirements: [],
+      category: t.type === 'dev' ? 'incident' : 'planning',
+      difficulty: '중급' as Difficulty,
+      files: [],
+      questions: [],
+    }),
+    id: t.id,
+    title: t.title,
+    track: t.type === 'dev' ? 'DEV' : 'BIZ',
+    minutes: t.minutes,
+    status: t.status,
+    publishedAt: t.publishedAt ?? undefined,
+    updatedAt: t.updatedAt ?? prev?.updatedAt ?? '',
+  }
+}
+
+export async function refreshTasks() {
+  if (!CONSOLE_USES_API) return
+  try {
+    const list = await consoleApi.tasks()
+    const prev = new Map(tasks.map((t) => [t.id, t]))
+    tasks = list.map((t) => fromApi(t, prev.get(t.id)))
+    taskError = null
+  } catch (e) {
+    taskError = e instanceof Error ? e.message : String(e)
+  }
+  emit()
+}
+
+export const useConsoleTasksError = () => useSyncExternalStore(subscribe, () => taskError)
+
 export function useConsoleTasks() {
+  useEffect(() => {
+    if (CONSOLE_USES_API) void refreshTasks()
+  }, [])
   return useSyncExternalStore(subscribe, () => tasks)
 }
 export function useConsoleTask(id: string | undefined) {
@@ -292,7 +338,17 @@ export function saveTask(t: CTask) {
   emit()
 }
 
-export function setTaskStatus(id: string, status: TaskStatus) {
+/**
+ * 공개 상태 바꾸기. api 모드는 서버에 저장한다 (관리자만).
+ * 응시 마감(CLOSED)은 아직 백엔드에 없어 api 모드에서는 숨김(HIDDEN)으로 처리한다.
+ */
+export async function setTaskStatus(id: string, status: TaskStatus) {
+  if (CONSOLE_USES_API) {
+    const saved = status === 'OPEN' ? await consoleApi.publishTask(id) : await consoleApi.hideTask(id)
+    tasks = tasks.map((t) => (t.id === id ? fromApi(saved, t) : t))
+    emit()
+    return
+  }
   tasks = tasks.map((t) =>
     t.id === id ? { ...t, status, publishedAt: status === 'OPEN' ? (t.publishedAt ?? now()) : t.publishedAt, updatedAt: now() } : t,
   )

@@ -175,6 +175,17 @@ export const camHub = {
     })
   },
 
+  /**
+   * 브라우저 이벤트(탭·창 이탈, 전체 화면 해제, 외부 붙여넣기)를 회차 감독 기록으로 보낸다.
+   * 카메라 이벤트와 같은 아웃박스를 써서 네트워크가 끊겨도 잃지 않는다. 연결(connect) 전이면 버린다.
+   */
+  recordBrowser(v: CamViolation) {
+    if (!outbox || v.source !== 'BROWSER') return
+    void outbox.enqueue(v)
+    // 이탈 경고는 anti-cheating 경고 창이 이미 보여 주므로, 감독 패널에는 붙여넣기만 띄운다
+    if (v.type === 'PASTE') pushLog(v)
+  },
+
   /** 시험이 끝나면 카메라·폰 연결을 모두 끈다 */
   async stop() {
     stopLoop?.()

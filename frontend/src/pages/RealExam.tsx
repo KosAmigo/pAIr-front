@@ -10,6 +10,9 @@ import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, ty
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
 import { splitReply } from '../lib/edits'
 import { useAntiCheating, ViolationCounter, WarningModal } from '../anti-cheating'
+import { PasteDetector } from '../anti-cheating/core/PasteDetector.ts'
+import type { Violation } from '../anti-cheating/core/types.ts'
+import { toBrowserViolation } from '../proctor/core/events.ts'
 import { proctorApi } from '../proctor/api/proctorApi.ts'
 import { camHub } from '../proctor/camHub.ts'
 import { clearLiveExam, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
@@ -539,10 +542,27 @@ export default function RealExam() {
   const [fuIndex, setFuIndex] = useState(0)
   const [fuAnswers, setFuAnswers] = useState<string[] | null>(null)
   const [refTab, setRefTab] = useState<'prompts' | 'file'>('prompts')
-  const antiCheating = useAntiCheating({
-    sessionId,
-    active: Boolean(live && view && (view.attempt.status === 'SOLVING' || view.attempt.status === 'FOLLOWUP')),
-  })
+  const watching = Boolean(live && view && (view.attempt.status === 'SOLVING' || view.attempt.status === 'FOLLOWUP'))
+  // 감독 회차면 브라우저 이탈도 회차 감독 기록(proctor_events, source=BROWSER)에 함께 남긴다
+  const forwardViolation = useCallback(
+    (v: Violation) => {
+      const type = v.signals[0]?.type
+      if (!live?.proctoring || !type) return
+      camHub.recordBrowser(toBrowserViolation(type, v.occurredAt, live.serverOffsetMs, { signals: v.signals.length }))
+    },
+    [live],
+  )
+  const antiCheating = useAntiCheating({ sessionId, active: watching, onViolation: forwardViolation })
+
+  // 외부 붙여넣기: 시험 화면 안에서 복사한 글이 아닌 것을 붙이면 PASTE 이벤트 (글자 수·위치만, 내용은 보내지 않음)
+  useEffect(() => {
+    if (!watching || !live?.proctoring) return
+    const detector = new PasteDetector((p) =>
+      camHub.recordBrowser(toBrowserViolation('PASTE', p.occurredAt, live.serverOffsetMs, { chars: p.chars, lines: p.lines, target: p.target })),
+    )
+    detector.start()
+    return () => detector.stop()
+  }, [watching, live])
   const doneUrl = live ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`
 
   // 실전: 종료 시각(서버 기준)이 지나면 서버가 자동 제출한다. 화면은 감독을 끄고 제출 완료로 간다

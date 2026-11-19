@@ -10,12 +10,13 @@ import { PageHeader } from '../../components/SelfShell'
 import { ButtonLink } from '../../components/ui'
 import { Reveal, RevealGroup, RevealItem, Spotlight, StageSection } from '../../components/fx'
 import { StatTabs } from './StatTabs'
-import { companyName, phaseOf, taskTitles, unreviewed, useCompanies, useSessions, type Session, type SessionPhase } from '../../data/consoleSessions'
+import { companyName, enteredCount, openEventCount, participantCount, phaseOf, taskTitles, useCompanies, useSessions, useSessionsLoad, type Session, type SessionPhase } from '../../data/consoleSessions'
 import { fmtHm, fmtLeft, fmtShort, useMyCompanyId, useNow } from './format'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
 export default function ConsoleSessions() {
   const all = useSessions()
+  const load = useSessionsLoad()
   const now = useNow(1000)
   const nav = useNavigate()
   const mine = useMyCompanyId()
@@ -39,6 +40,11 @@ export default function ConsoleSessions() {
         )}
       </PageHeader>
       <div className="flex flex-col gap-6 p-8">
+        {load.error && (
+          <p role="alert" className="rounded-md bg-alert/8 px-4 py-3 text-[14px] text-alert">
+            회차를 불러오지 못했습니다: {load.error}
+          </p>
+        )}
         {/* 단계 카드 3장 = 탭 */}
         <div className="flex items-end gap-4">
           <StatTabs
@@ -118,11 +124,14 @@ export default function ConsoleSessions() {
 
 function Row({ s, now, showCompany, onOpen }: { s: Session; now: number; showCompany: boolean; onOpen: () => void }) {
   const phase = phaseOf(s, now)
-  const entered = s.participants.filter((p) => p.enteredAt).length
+  const entered = enteredCount(s)
   return (
     <tr onClick={onOpen} className="h-14 cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised">
       <td className="px-4 py-2">
-        <p className="text-[15px] font-semibold text-text">{s.title}</p>
+        <p className="text-[15px] font-semibold text-text">
+          {s.title}
+          {s.canceledAt && <span className="ml-2 text-[12px] font-semibold text-alert">취소</span>}
+        </p>
         {showCompany && <p className="text-[12px] text-text-muted">{companyName(s.companyId)}</p>}
       </td>
       <td className="px-4 text-text-muted">{taskTitles(s)}</td>
@@ -130,7 +139,7 @@ function Row({ s, now, showCompany, onOpen }: { s: Session; now: number; showCom
         {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
       </td>
       <td className="tnum px-4 text-right font-mono text-[13px] text-text-muted">
-        <span className="text-text">{entered}</span> / {s.participants.length}
+        <span className="text-text">{entered}</span> / {participantCount(s)}
       </td>
       <td className="px-4 text-text-muted">{s.proctoring ? <Camera size={16} aria-label="감독 사용" /> : <span aria-label="감독 안 함">—</span>}</td>
       <td className="px-4">
@@ -165,8 +174,8 @@ function LiveBoard({ rows, now, showCompany, onOpen }: { rows: Session[]; now: n
           {rows.map((s) => {
             const left = Date.parse(s.endsAt) - now
             const total = Date.parse(s.endsAt) - Date.parse(s.startsAt)
-            const entered = s.participants.filter((p) => p.enteredAt).length
-            const open = s.participants.reduce((n, p) => n + unreviewed(p), 0)
+            const entered = enteredCount(s)
+            const open = openEventCount(s)
             return (
               <RevealItem key={s.id} className="flex">
                 <Spotlight
@@ -195,7 +204,7 @@ function LiveBoard({ rows, now, showCompany, onOpen }: { rows: Session[]; now: n
                     <div className="ml-auto flex shrink-0 gap-4 pb-1.5 text-[14px] whitespace-nowrap text-stage-muted">
                       <span className="inline-flex items-center gap-1.5">
                         <Users size={16} aria-hidden />
-                        <b className="tnum font-mono text-stage-text">{entered}</b>/{s.participants.length}
+                        <b className="tnum font-mono text-stage-text">{entered}</b>/{participantCount(s)}
                       </span>
                       <span className={cx('inline-flex items-center gap-1.5', open > 0 && 'text-stage-caution')}>
                         <CircleAlert size={16} aria-hidden />

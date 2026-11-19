@@ -46,6 +46,14 @@ const phoneCam = (
   </Suspense>
 )
 
+// 감독 오탐률 측정 (관리자). 분석 모델이 무거워 따로 불러온다
+const FalsePositiveLab = lazy(() => import('./proctor/react/FalsePositiveLab.tsx'))
+const proctorLab = (
+  <Suspense fallback={<div className="min-h-full bg-bg" />}>
+    <FalsePositiveLab />
+  </Suspense>
+)
+
 // 실제 응시 ID(att-...)는 백엔드에 연결된 응시 화면, 그 밖의 ID는 기존 목업 화면
 // 실전 응시(mode=live)는 로그인 없이 본다 (DESIGN.md §7-8). 자가진단 응시는 로그인이 필요하다.
 function ExamRoute() {
@@ -95,6 +103,7 @@ export default function App() {
           {/* 채점 툴: 관리자 */}
           <Route element={<RequireAuth roles={['ADMIN']} />}>
             <Route path="/grader" element={<Grader />} />
+            <Route path="/proctor/lab" element={proctorLab} />
             <Route path="/grader/result/:runId/:file" element={<GraderResult />} />
           </Route>
 

@@ -9,7 +9,8 @@ export const isCompanyRole = (r: Role | undefined): r is CompanyRole => r === 'M
 export const canManageSessions = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER'
 /** 감독 이벤트 판단: 감독관, 매니저(감독 권한 포함), 관리자 */
 export const canReviewProctor = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER' || r === 'PROCTOR'
-export type AuthUser = { id: number; email: string; name: string; role: Role; companyName?: string }
+/** companyId: 기업 회원의 회사 ID (백엔드 exam_sessions.company_id 와 같은 값). 콘솔 API 헤더로 보낸다 */
+export type AuthUser = { id: number; email: string; name: string; role: Role; companyName?: string; companyId?: number }
 
 // 목업 계정. 비밀번호는 모두 pair1234 (개발용 테스트 값, pAIr-docs/설계/erd 샘플 회원과 같은 이메일)
 /**
@@ -24,8 +25,8 @@ export const ACCOUNTS: AuthUser[] = [
   { id: 1, email: 'admin@pair.test', name: '관리자', role: 'ADMIN' },
   { id: 2, email: 'a@pair.test', name: '응시자A', role: 'USER' },
   { id: 3, email: 'b@pair.test', name: '응시자B', role: 'USER' },
-  { id: 4, email: 'hr@example-tech.test', name: '예시테크 매니저', role: 'MANAGER', companyName: '예시테크' },
-  { id: 6, email: 'proctor@example-tech.test', name: '예시테크 감독관', role: 'PROCTOR', companyName: '예시테크' },
+  { id: 4, email: 'hr@example-tech.test', name: '예시테크 매니저', role: 'MANAGER', companyName: '예시테크', companyId: 1 },
+  { id: 6, email: 'proctor@example-tech.test', name: '예시테크 감독관', role: 'PROCTOR', companyName: '예시테크', companyId: 1 },
 ]
 
 /** 로그인 뒤 권한별 첫 화면 */
