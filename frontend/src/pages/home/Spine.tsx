@@ -26,13 +26,13 @@ const NODES: NodeDef[] = [
   { at: 'replay-end', lane: 1, color: 'var(--color-branch-2)', label: 'b2', score: 88 },
   { at: 'report', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:31' },
   { at: 'report-end', lane: 1, color: 'var(--color-branch-3)', label: 'b3', score: 91 },
-  { at: 'live', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:42', stage: true },
-  { at: 'live-end', lane: 1, color: 'var(--color-branch-4)', label: 'b4', score: 85, stage: true },
+  { at: 'live', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:42' },
+  { at: 'live-end', lane: 1, color: 'var(--color-branch-4)', label: 'b4', score: 85 },
   { at: 'create', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:47' },
   { at: 'create-end', lane: 1, color: 'var(--color-branch-5)', label: 'b5', score: 93 },
-  { at: 'proctor', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:50', stage: true },
-  { at: 'proctor-end', lane: 1, color: 'var(--color-branch-1)', label: 'b6', score: 90, stage: true },
-  { at: 'finale', lane: 0, color: 'var(--color-brand-blue)', label: 'main', time: '00:52', stage: true },
+  { at: 'proctor', lane: 0, color: 'var(--color-brand)', label: 'main', time: '00:50' },
+  { at: 'proctor-end', lane: 1, color: 'var(--color-branch-1)', label: 'b6', score: 90 },
+  { at: 'finale', lane: 0, color: 'var(--color-brand-blue)', label: 'main', time: '00:52' },
 ]
 
 const BRANCHES = [
@@ -45,8 +45,9 @@ const BRANCHES = [
 
 /** 가지가 다 그려지는 스크롤 위치 (문서 좌표) */
 function branchDone(a: Pt, b: Pt) {
-  // 그리기 선은 화면 위에서 DRAW_LINE 지점이다. 끝 노드가 화면 아래 끝에 닿을 때 그리기 선의 위치
-  const whenVisible = b.y - window.innerHeight * (1 - DRAW_LINE + FOCUS_MARGIN)
+  // 그리기 선은 화면 위에서 DRAW_LINE 지점이다. 끝 노드가 화면 위에서 (1 - FOCUS_MARGIN) 지점, 즉 아래 끝에서
+  // 20% 올라온 곳에 왔을 때의 그리기 선 위치. (2026-11-19: 예전 식은 부호가 틀려 끝 노드가 화면 밖에 있을 때 다 찼다)
+  const whenVisible = b.y - window.innerHeight * (1 - FOCUS_MARGIN - DRAW_LINE)
   return Math.max(a.y + (b.y - a.y) * BRANCH_MIN_RATIO, whenVisible)
 }
 

@@ -67,7 +67,7 @@ export default function Home() {
           <i />
         </div>
         <div className="home-dots" aria-hidden />
-        <ShaderBackground className="absolute inset-x-0 top-0 z-0 h-screen min-h-[720px]" />
+        <ShaderBackground className="absolute inset-x-0 top-0 z-0 h-screen min-h-[720px] [mask-image:linear-gradient(to_bottom,black_55%,transparent)]" />
 
         <HomeHeader />
 
