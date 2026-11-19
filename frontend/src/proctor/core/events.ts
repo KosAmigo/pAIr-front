@@ -6,8 +6,14 @@ import type { Fired } from './RuleEngine.ts'
 export type ProctorEventType =
   | 'NO_FACE' | 'MULTI_FACE' | 'HEAD_TURN' | 'HEAD_DOWN' | 'GAZE_AWAY' | 'TORSO_SHIFT' | 'TORSO_TURN'
   | 'HAND_MISSING' | 'HAND_MOVED' | 'ARM_MOVE' | 'PHONE' | 'EXTRA_SCREEN' | 'BOOK' | 'PHONE_DISCONNECTED'
+  | BrowserEventType
+
+/** 브라우저 이벤트 (anti-cheating 이탈 신호 + 외부 붙여넣기) */
+export type BrowserEventType = 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'MOUSE_LEAVE' | 'FULLSCREEN_EXIT' | 'PASTE'
 
 export type CamSource = 'PC_CAM' | 'PHONE_CAM'
+/** 서버로 보내는 감지 위치. 브라우저 이벤트는 사진을 붙이지 않는다 */
+export type EventSource = CamSource | 'BROWSER'
 
 const KIND_TO_TYPE: Record<string, ProctorEventType> = {
   no_face: 'NO_FACE',
@@ -38,7 +44,7 @@ export interface CamViolation {
   id: string
   kind: string
   type: ProctorEventType
-  source: CamSource
+  source: EventSource
   message: string
   startedAt: number
   ts: number
@@ -76,6 +82,35 @@ export function toCamViolation(
     durationMs: Math.round(f.durationMs),
     detail,
     snapshot,
+  }
+}
+
+const BROWSER_MESSAGES: Record<BrowserEventType, string> = {
+  TAB_HIDDEN: '다른 탭으로 이동했습니다',
+  WINDOW_BLUR: '다른 창으로 이동했습니다',
+  MOUSE_LEAVE: '마우스가 시험 화면 밖으로 나갔습니다',
+  FULLSCREEN_EXIT: '전체 화면을 나갔습니다',
+  PASTE: '외부에서 붙여 넣었습니다',
+}
+
+/** 브라우저 이벤트를 전송용 이벤트로. occurredAt 은 응시자 PC 시각이라 서버 시각 보정을 더한다 */
+export function toBrowserViolation(
+  type: BrowserEventType,
+  occurredAt: string,
+  serverOffsetMs = 0,
+  detail?: CamViolation['detail'],
+): CamViolation {
+  const ts = Math.round(Date.parse(occurredAt) + serverOffsetMs)
+  return {
+    id: `BROWSER-${ts}-${seq++}`,
+    kind: type.toLowerCase(),
+    type,
+    source: 'BROWSER',
+    message: BROWSER_MESSAGES[type],
+    startedAt: ts,
+    ts,
+    durationMs: 0,
+    detail,
   }
 }
 

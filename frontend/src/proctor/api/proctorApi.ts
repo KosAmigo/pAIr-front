@@ -1,6 +1,6 @@
 // 실전 시험·감독 API 어댑터. 백엔드 호출은 전부 이 파일을 거친다 (pAIr-docs/API/실전시험_감독_API.md §1).
 // 팀원 백엔드의 주소·경로가 바뀌면 이 파일만 고친다.
-import type { CamSource, ProctorEventType } from '../core/events.ts'
+import type { EventSource, ProctorEventType } from '../core/events.ts'
 
 /** 백엔드가 다른 호스트면 VITE_API_BASE (예: https://api.pair.test). 비우면 같은 호스트의 /api (Vite 프록시) */
 const BASE = ((import.meta.env?.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '')
@@ -36,7 +36,7 @@ export type TaskStatus = {
 
 export type ProctorEventRequest = {
   type: ProctorEventType
-  source: CamSource
+  source: EventSource
   startedAt: string
   durationMs: number
   confidence?: number
