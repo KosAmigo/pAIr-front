@@ -8,7 +8,7 @@ import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
 import { useAuth } from '../../auth/auth'
-import { CSV_TEMPLATE, createSession, inviteParticipants, parseParticipantsCsv, updateSession, useCompanies, type CsvRow } from '../../data/consoleSessions'
+import { CSV_TEMPLATE, createSession, parseParticipantsCsv, uploadParticipantsCsv, useCompanies, type CsvRow } from '../../data/consoleSessions'
 import { kindName, useConsoleTasks } from '../../data/consoleTasks'
 import { useMyCompanyId } from './format'
 
@@ -33,12 +33,15 @@ export default function ConsoleSessionNew() {
     setEnd(null)
   }
   // 대상자 CSV (기획_결정사항 §1): 양식(이름,이메일)에 맞춘 파일, 올리기 전에 오류를 미리 보여 준다
-  const [csv, setCsv] = useState<{ name: string; rows: CsvRow[] } | null>(null)
+  // 미리 보기는 브라우저에서 바로 하고, 저장할 때는 원본 파일을 서버에 그대로 올린다 (서버가 원본을 보관하고 다시 검사)
+  const [csv, setCsv] = useState<{ name: string; file: File; rows: CsvRow[] } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const csvBad = csv ? csv.rows.filter((r) => r.error).length : 0
   const csvOk = csv ? csv.rows.length - csvBad : 0
   const readCsv = (f: File | undefined) => {
     if (!f) return
-    f.text().then((text) => setCsv({ name: f.name, rows: parseParticipantsCsv(text) }))
+    f.text().then((text) => setCsv({ name: f.name, file: f, rows: parseParticipantsCsv(text) }))
   }
   const templateHref = `data:text/csv;charset=utf-8,${encodeURIComponent('\uFEFF' + CSV_TEMPLATE)}`
   const companies = useCompanies()
@@ -78,20 +81,26 @@ export default function ConsoleSessionNew() {
             e.preventDefault()
             setTried(true)
             if (Object.values(errors).some(Boolean) || !chosen.length) return
-            const s = createSession({
-              companyId: company,
-              tasks: chosen.map((t) => ({ id: t.id, title: t.title, minutes: t.minutes })),
-              title: title.trim(),
-              startsAt: startAt.toISOString(),
-              endsAt: endAt.toISOString(),
-              proctoring,
-            })
-            // CSV 로 올린 대상자를 바로 초대한다 (등록 즉시 입장 링크 메일 1번)
-            if (csv && csvOk) {
-              inviteParticipants(s.id, csv.rows.filter((r) => !r.error).map((r) => ({ name: r.name, email: r.email })))
-              updateSession(s.id, { participantsCsv: csv.name })
-            }
-            nav(`/console/sessions/${s.id}?tab=participants`)
+            setSaving(true)
+            setSaveError(null)
+            void (async () => {
+              try {
+                const s = await createSession({
+                  companyId: company,
+                  tasks: chosen.map((t) => ({ id: t.id, title: t.title, minutes: t.minutes })),
+                  title: title.trim(),
+                  startsAt: startAt.toISOString(),
+                  endsAt: endAt.toISOString(),
+                  proctoring,
+                })
+                // CSV 로 올린 대상자를 바로 초대한다 (등록 즉시 입장 링크 메일 1번)
+                if (csv && csvOk) await uploadParticipantsCsv(s.id, csv.file)
+                nav(`/console/sessions/${s.id}?tab=participants`)
+              } catch (er) {
+                setSaveError(er instanceof Error ? er.message : String(er))
+                setSaving(false)
+              }
+            })()
           }}
           className="glass flex flex-col gap-8 rounded-2xl bg-white/90! p-8 shadow-md!"
         >
@@ -235,12 +244,17 @@ export default function ConsoleSessionNew() {
             실전 시험은 메일로 받은 입장 링크로만 입장할 수 있습니다. 시작 전까지는 시간, 과제, 대상자를 고치거나 회차를 취소할 수 있습니다.
           </p>
 
+          {saveError && (
+            <p role="alert" className="flex items-center gap-2 rounded-md bg-alert/8 px-3 py-2 text-[14px] text-alert">
+              <CircleAlert size={16} aria-hidden /> {saveError}
+            </p>
+          )}
           <div className="flex justify-end gap-2 border-t border-line pt-6">
             <Button variant="ghost" onClick={() => nav('/console/sessions')}>
               취소
             </Button>
-            <Button type="submit" variant="primary" size="lg">
-              회차 만들기
+            <Button type="submit" variant="primary" size="lg" disabled={saving}>
+              {saving ? '만드는 중…' : '회차 만들기'}
             </Button>
           </div>
         </form>

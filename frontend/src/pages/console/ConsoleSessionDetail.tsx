@@ -12,9 +12,13 @@ import {
   companyName,
   EVENT_LABEL,
   PSTATE_LABEL,
-  deleteSession,
+  CAN_COPY_INVITE_LINK,
+  cancelSession,
   inviteLink,
   inviteParticipants,
+  resendInvite,
+  uploadParticipantsCsv,
+  useSessionsLoad,
   isCameraEvent,
   phaseOf,
   removeParticipant,
@@ -33,6 +37,7 @@ import { ConfirmModal, Modal, RowMenu } from './common'
 import { fmtAgo, fmtHm, fmtLeft, fmtShort, fmtTime, useMyCompanyId, useNow, useToast } from './format'
 import ProctorPanel from './ProctorPanel'
 import { canManageSessions, useAuth } from '../../auth/auth'
+import { CONSOLE_USES_API } from '../../data/consoleApi'
 
 type Tab = 'overview' | 'participants' | 'live' | 'results'
 const ITEM_KEYS = [
@@ -47,12 +52,16 @@ const ITEM_KEYS = [
 export default function ConsoleSessionDetail() {
   const { sessionId } = useParams()
   const s = useSession(sessionId)
+  const load = useSessionsLoad()
   const mine = useMyCompanyId()
+  if (!s && CONSOLE_USES_API && !load.error) {
+    return <p className="py-32 text-center text-[15px] text-text-muted">회차를 불러오는 중…</p>
+  }
   if (!s || (mine != null && s.companyId !== mine)) {
     return (
       <div className="flex flex-col items-center gap-3 py-32 text-center">
         <CircleAlert size={28} className="text-text-faint" aria-hidden />
-        <p className="text-[15px] text-text-muted">찾을 수 없는 회차입니다.</p>
+        <p className="text-[15px] text-text-muted">{load.error ?? '찾을 수 없는 회차입니다.'}</p>
         <Link to="/console/sessions" className="text-[14px] font-semibold text-brand hover:underline">
           회차 목록으로
         </Link>
@@ -83,7 +92,7 @@ function Detail({ s }: { s: Session }) {
       <div className="flex flex-col gap-5 px-8 pt-6">
         <ConsoleHero
           label="회차 요약"
-          badge={<PhaseBadge phase={phase} />}
+          badge={s.canceledAt ? <CanceledBadge /> : <PhaseBadge phase={phase} />}
           title={s.title}
           meta={
             <>
@@ -133,6 +142,10 @@ function Detail({ s }: { s: Session }) {
   )
 }
 
+function CanceledBadge() {
+  return <span className="inline-flex h-6 items-center rounded-full bg-alert/15 px-2.5 text-[13px] font-semibold text-alert">취소</span>
+}
+
 function PhaseBadge({ phase }: { phase: SessionPhase }) {
   return phase === 'live' ? (
     <span
@@ -149,7 +162,6 @@ function PhaseBadge({ phase }: { phase: SessionPhase }) {
 }
 // ── 개요 ──
 function Overview({ s, phase }: { s: Session; phase: SessionPhase }) {
-  const nav = useNavigate()
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const rows: [string, ReactNode][] = [
@@ -170,7 +182,7 @@ function Overview({ s, phase }: { s: Session; phase: SessionPhase }) {
                 회차 수정
               </Button>
               <Button size="sm" variant="danger" onClick={() => setDeleting(true)}>
-                회차 삭제
+                회차 취소
               </Button>
             </div>
           )}
@@ -183,20 +195,24 @@ function Overview({ s, phase }: { s: Session; phase: SessionPhase }) {
             </div>
           ))}
         </dl>
-        {phase !== 'upcoming' && <p className="px-4 py-3 text-[13px] text-text-muted">시작한 회차는 수정하거나 삭제할 수 없습니다.</p>}
+        {s.canceledAt ? (
+          <p className="px-4 py-3 text-[13px] text-alert">{fmtTime(s.canceledAt)}에 취소한 회차입니다. 대상자에게 취소 안내 메일을 보냈습니다.</p>
+        ) : (
+          phase !== 'upcoming' && <p className="px-4 py-3 text-[13px] text-text-muted">시작한 회차는 수정하거나 취소할 수 없습니다.</p>
+        )}
       </section>
       {editing && <EditModal s={s} onClose={() => setEditing(false)} />}
       {deleting && (
         <ConfirmModal
-          title="회차를 삭제할까요?"
+          title="회차를 취소할까요?"
           danger
-          confirm="삭제"
+          confirm="회차 취소"
           onClose={() => setDeleting(false)}
           onConfirm={() => {
-            deleteSession(s.id)
-            nav('/console/sessions', { replace: true })
+            setDeleting(false)
+            cancelSession(s.id).catch((er: Error) => window.alert(`취소하지 못했습니다: ${er.message}`))
           }}
-          body={`「${s.title}」과 대상자 ${s.participants.length}명의 초대가 사라집니다. 이미 보낸 입장 링크는 더 이상 쓸 수 없습니다.`}
+          body={`「${s.title}」을 취소합니다. 기록은 남고, 대상자 ${s.participants.length}명에게 취소 안내 메일이 갑니다. 이미 보낸 입장 링크는 더 이상 쓸 수 없습니다.`}
         />
       )}
     </div>
@@ -220,7 +236,8 @@ function EditModal({ s, onClose }: { s: Session; onClose: () => void }) {
             disabled={!title.trim()}
             onClick={() => {
               updateSession(s.id, { title: title.trim(), proctoring })
-              onClose()
+                .then(onClose)
+                .catch((er: Error) => window.alert(`저장하지 못했습니다: ${er.message}`))
             }}
           >
             저장
@@ -298,11 +315,20 @@ function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; to
               hidden
               onChange={async (e) => {
                 const f = e.target.files?.[0]
-                if (f) {
-                  const body = (await f.text()).replace(/^.*이름.*\n/, '')
-                  setText((t) => (t ? t + '\n' : '') + body)
-                }
                 e.target.value = ''
+                if (!f) return
+                if (CONSOLE_USES_API) {
+                  // 원본 파일을 서버에 그대로 올린다 (원본 보관, 줄마다 검사, 틀린 줄만 빼고 등록)
+                  try {
+                    const r = await uploadParticipantsCsv(s.id, f)
+                    toast(r.rejected.length ? `${r.added}명 초대, ${r.rejected.length}줄 제외 (${r.rejected.map((x) => `${x.line}행 ${x.reason}`).join(', ')})` : `${r.added}명을 초대했습니다`)
+                  } catch (er) {
+                    toast(`CSV를 올리지 못했습니다: ${(er as Error).message}`)
+                  }
+                  return
+                }
+                const body = (await f.text()).replace(/^.*이름.*\n/, '')
+                setText((t) => (t ? t + '\n' : '') + body)
               }}
             />
           </div>
@@ -323,8 +349,12 @@ function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; to
                 disabled={ok.length === 0}
                 onClick={() => {
                   inviteParticipants(s.id, ok.map(({ name, email }) => ({ name, email })))
-                  setText('')
-                  toast(`${ok.length}명을 초대했습니다 (목업: 메일은 보내지 않음)`)
+                    .then((r) => {
+                      setText('')
+                      const msg = CONSOLE_USES_API ? '초대 메일을 보냅니다' : '목업: 메일은 보내지 않음'
+                      toast(r.rejected.length ? `${r.added}명 초대, ${r.rejected.length}명 제외 (${msg})` : `${r.added}명을 초대했습니다 (${msg})`)
+                    })
+                    .catch((er: Error) => toast(`초대하지 못했습니다: ${er.message}`))
                 }}
               >
                 <UserPlus size={16} aria-hidden /> {ok.length}명 초대하기
@@ -359,21 +389,41 @@ function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; to
                 <tr key={p.id} className="h-11 border-b border-line last:border-0">
                   <td className="px-4 font-medium text-text">{p.name}</td>
                   <td className="px-4 font-mono text-[13px] text-text-muted">{p.email}</td>
-                  <td className="tnum px-4 font-mono text-[13px] text-text-muted">{fmtShort(p.invitedAt)}</td>
+                  <td className="tnum px-4 font-mono text-[13px] text-text-muted">
+                    {fmtShort(p.invitedAt)}
+                    {p.inviteStatus === 'FAILED' && (
+                      <span title={p.inviteError} className="ml-2 font-sans text-[12px] text-alert">
+                        메일 실패
+                      </span>
+                    )}
+                    {p.inviteStatus === 'PENDING' && <span className="ml-2 font-sans text-[12px] text-text-faint">보내는 중</span>}
+                  </td>
                   <td className="tnum px-4 font-mono text-[13px]">{p.enteredAt ? <span className="text-text">{fmtShort(p.enteredAt)}</span> : <span className="text-text-faint">미입장</span>}</td>
                   <td className="w-12 px-2">
                     {canManage && <RowMenu
                       label={`${p.name} 메뉴`}
                       items={[
+                        // 입장 토큰은 해시로만 저장해 서버도 링크를 모른다. api 모드는 메일 다시 보내기로 새 링크를 보낸다
+                        ...(CAN_COPY_INVITE_LINK
+                          ? [
+                              {
+                                text: '입장 링크 복사',
+                                onClick: () => {
+                                  navigator.clipboard?.writeText(inviteLink(p)).catch(() => {})
+                                  toast('입장 링크를 복사했습니다')
+                                },
+                              },
+                            ]
+                          : []),
                         {
-                          text: '입장 링크 복사',
-                          onClick: () => {
-                            navigator.clipboard?.writeText(inviteLink(p)).catch(() => {})
-                            toast('입장 링크를 복사했습니다')
-                          },
+                          text: '메일 다시 보내기 (새 링크)',
+                          disabled: phase === 'ended',
+                          onClick: () =>
+                            resendInvite(s.id, p.id)
+                              .then(() => toast(`${p.email}로 새 입장 링크를 보냈습니다. 이전 링크는 막힙니다`))
+                              .catch((er: Error) => toast(`보내지 못했습니다: ${er.message}`)),
                         },
-                        { text: '메일 다시 보내기', disabled: phase === 'ended', onClick: () => toast(`${p.email}로 다시 보냈습니다 (목업)`) },
-                        { text: '명단에서 빼기', danger: true, disabled: !!p.enteredAt, onClick: () => setRemoving(p) },
+                        { text: '명단에서 빼기', danger: true, disabled: !!p.enteredAt || phase !== 'upcoming', onClick: () => setRemoving(p) },
                       ]}
                     />}
                   </td>
@@ -390,8 +440,9 @@ function Participants({ s, phase, toast }: { s: Session; phase: SessionPhase; to
           confirm="빼기"
           onClose={() => setRemoving(null)}
           onConfirm={() => {
-            removeParticipant(s.id, removing.id)
+            const who = removing
             setRemoving(null)
+            removeParticipant(s.id, who.id).catch((er: Error) => toast(`빼지 못했습니다: ${er.message}`))
           }}
           body={`${removing.name}(${removing.email})의 입장 링크를 더 이상 쓸 수 없게 됩니다.`}
         />
@@ -425,7 +476,7 @@ function Live({ s, now }: { s: Session; now: number }) {
   const seenRef = useRef<Set<string> | null>(null)
   const [fresh, setFresh] = useState<Set<string>>(new Set())
 
-  // 5초마다 갱신 (목업: tickLive 로 응시자 활동을 흉내 낸다)
+  // 5초마다 갱신 (api: 서버에서 다시 읽기, 목업: tickLive 로 응시자 활동을 흉내 낸다)
   useEffect(() => {
     if (paused) return
     const t = window.setInterval(() => {
@@ -651,11 +702,13 @@ function Results({ s }: { s: Session }) {
         <tbody>
           {rows.map((p) => {
             const done = p.score != null
+            // 채점 전이어도 감독 이벤트가 있으면 열어서 판정할 수 있다
+            const openable = done || p.events.length > 0
             return (
               <tr
                 key={p.id}
-                onClick={() => done && nav(`/console/sessions/${s.id}/attempts/${p.id}`)}
-                className={cx('h-14 border-b border-line last:border-0', done ? 'cursor-pointer hover:bg-panel-raised' : 'text-text-faint')}
+                onClick={() => openable && nav(`/console/sessions/${s.id}/attempts/${p.id}`)}
+                className={cx('h-14 border-b border-line last:border-0', openable ? 'cursor-pointer hover:bg-panel-raised' : 'text-text-faint')}
               >
                 <td className="w-16 px-4">
                   {rankOf(p.id) != null ? (
