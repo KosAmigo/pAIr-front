@@ -1,8 +1,11 @@
-// 콘솔 회차 목업 저장소 (DESIGN.md §7-9-4). 테이블 companies, exam_sessions, exam_participants, proctor_events 를
-// 화면에서 쓰기 좋게 묶었다. 진행 중 회차는 지금 시각 기준으로 만들고, 실시간 현황은 tickLive 로 흉내 낸다.
-// 새로 고치면 처음 상태로 돌아간다.
-import { useSyncExternalStore } from 'react'
+// 콘솔 회차 저장소 (DESIGN.md §7-9-4). 테이블 companies, exam_sessions, exam_participants, proctor_events 를
+// 화면에서 쓰기 좋게 묶었다.
+// - 기본(api): 회차·대상자·감독 이벤트·결과를 백엔드(consoleApi.ts)에서 읽고 쓴다. 화면은 이 파일의 훅·함수만 쓴다.
+// - VITE_CONSOLE_DATA=mock: 브라우저 안 예시 데이터 (화면 시안·발표용). 새로 고치면 처음 상태로 돌아간다.
+// 회사 목록은 아직 목업이다 (기업 도입 문의·승인은 팀원 1 영역).
+import { useEffect, useSyncExternalStore } from 'react'
 import type { Report } from '../api'
+import { CONSOLE_USES_API, consoleApi, type ApiEvent, type ApiParticipant, type ApiResultRow, type ApiSessionSummary } from './consoleApi'
 
 // ── 회사 (DESIGN.md §7-9-5) ──
 export type Manager = { id: string; name: string; email: string; createdAt: string }
@@ -75,18 +78,35 @@ export function removeManager(id: number, managerId: string) {
   emitCompanies()
 }
 
-export type PEventType = 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'PASTE' | 'FULLSCREEN_EXIT' | 'NO_FACE' | 'MULTI_FACE' | 'HEAD_TURN' | 'PHONE'
+/** proctor_event_types.code (백엔드 ProctorEvent.Type 과 같은 이름) */
+export type PEventType =
+  | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'MOUSE_LEAVE' | 'PASTE' | 'FULLSCREEN_EXIT'
+  | 'NO_FACE' | 'MULTI_FACE' | 'HEAD_TURN' | 'HEAD_DOWN' | 'GAZE_AWAY' | 'TORSO_SHIFT' | 'TORSO_TURN'
+  | 'HAND_MISSING' | 'HAND_MOVED' | 'ARM_MOVE' | 'PHONE' | 'EXTRA_SCREEN' | 'BOOK' | 'PHONE_DISCONNECTED'
 export const EVENT_LABEL: Record<PEventType, string> = {
   TAB_HIDDEN: '탭 전환',
   WINDOW_BLUR: '창 이탈',
+  MOUSE_LEAVE: '마우스 이탈',
   PASTE: '외부 붙여넣기',
   FULLSCREEN_EXIT: '전체 화면 해제',
   NO_FACE: '얼굴 없음',
   MULTI_FACE: '여러 얼굴',
   HEAD_TURN: '고개 돌림',
+  HEAD_DOWN: '오래 숙임',
+  GAZE_AWAY: '시선 이탈',
+  TORSO_SHIFT: '자리 이동',
+  TORSO_TURN: '몸 돌림',
+  HAND_MISSING: '손 이탈',
+  HAND_MOVED: '손 위치 이탈',
+  ARM_MOVE: '팔 움직임',
   PHONE: '휴대폰',
+  EXTRA_SCREEN: '다른 화면',
+  BOOK: '책·자료',
+  PHONE_DISCONNECTED: '휴대폰 캠 끊김',
 }
-export const isCameraEvent = (t: PEventType) => t === 'NO_FACE' || t === 'MULTI_FACE' || t === 'HEAD_TURN' || t === 'PHONE'
+const BROWSER_EVENTS: ReadonlySet<PEventType> = new Set(['TAB_HIDDEN', 'WINDOW_BLUR', 'MOUSE_LEAVE', 'PASTE', 'FULLSCREEN_EXIT'])
+/** 카메라(PC·휴대폰) 이벤트: 사진이 붙을 수 있다 */
+export const isCameraEvent = (t: PEventType) => !BROWSER_EVENTS.has(t)
 
 export type Review = 'OK' | 'SUSPECT'
 export type PEvent = {
@@ -123,6 +143,10 @@ export type Participant = {
   state: PState
   aiTurns: number
   lastActiveAt?: string
+  /** 초대 메일 결과 (api 모드) */
+  inviteStatus?: 'PENDING' | 'SENT' | 'FAILED'
+  inviteError?: string
+  remindedAt?: string
   /** 종료 회차: 채점 결과 (샘플 리포트 파일 이름과 요약) */
   reportFile?: string
   score?: number
@@ -144,12 +168,24 @@ export type Session = {
   endsAt: string
   proctoring: boolean
   createdAt: string
+  /** 시작 전 취소한 시각. 취소해도 지우지 않는다 */
+  canceledAt?: string
   participants: Participant[]
+  /** api 모드 목록: 대상자를 아직 안 불러온 회차의 인원 집계 (상세를 불러오면 participants 로 센다) */
+  counts?: { participants: number; entered: number; submitted: number; unreviewed: number }
 }
 
 export type SessionPhase = 'upcoming' | 'live' | 'ended'
+/** 취소한 회차는 끝난 것으로 본다 (화면에는 "취소" 표시) */
 export const phaseOf = (s: Session, now = Date.now()): SessionPhase =>
-  now < Date.parse(s.startsAt) ? 'upcoming' : now < Date.parse(s.endsAt) ? 'live' : 'ended'
+  s.canceledAt ? 'ended' : now < Date.parse(s.startsAt) ? 'upcoming' : now < Date.parse(s.endsAt) ? 'live' : 'ended'
+
+/** 목록 화면용 인원 집계: 상세를 불러왔으면 대상자로, 아니면 서버 집계로 */
+export const participantCount = (s: Session) => (s.counts && !s.participants.length ? s.counts.participants : s.participants.length)
+export const enteredCount = (s: Session) =>
+  s.counts && !s.participants.length ? s.counts.entered : s.participants.filter((p) => p.enteredAt).length
+export const openEventCount = (s: Session) =>
+  s.counts && !s.participants.length ? s.counts.unreviewed : s.participants.reduce((n, p) => n + unreviewed(p), 0)
 
 let seq = 500
 const nid = (p: string) => `${p}-${++seq}`
@@ -157,7 +193,9 @@ const iso = (ms: number) => new Date(ms).toISOString()
 const MIN = 60_000
 
 const token = () => Array.from({ length: 16 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('')
-// 입장 링크가 유일한 입장 방법이다(회차 공용 입장 코드 없음)
+// 입장 링크가 유일한 입장 방법이다(회차 공용 입장 코드 없음).
+// api 모드에서는 토큰 원문이 서버에도 없어(해시만 저장) 링크를 복사할 수 없다. 메일 다시 보내기로 새 링크를 보낸다
+export const CAN_COPY_INVITE_LINK = !CONSOLE_USES_API
 export const inviteLink = (p: Participant) => `${location.origin}/entry?invite=inv_${p.id.replace(/\D/g, '')}${token().slice(0, 8)}`
 
 const ev = (type: PEventType, at: string, o: Partial<PEvent> = {}): PEvent => ({
@@ -291,7 +329,9 @@ function seed(): Session[] {
 }
 
 // ── 저장소 ──
-let sessions: Session[] = seed()
+let sessions: Session[] = CONSOLE_USES_API ? [] : seed()
+type LoadState = { loading: boolean; error: string | null }
+let loadState: LoadState = { loading: false, error: null }
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((l) => l())
 const subscribe = (l: () => void) => {
@@ -302,6 +342,11 @@ const patchSession = (id: string, f: (s: Session) => Session) => {
   sessions = sessions.map((s) => (s.id === id ? f(s) : s))
   emit()
 }
+const setLoad = (next: LoadState) => {
+  loadState = next
+  emit()
+}
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** 회차 과제 이름을 한 줄로 (목록·머리에 쓴다) */
 export const taskTitles = (s: Session) => (s.tasks.length <= 1 ? (s.tasks[0]?.title ?? '') : `${s.tasks[0].title} 외 ${s.tasks.length - 1}개`)
@@ -329,37 +374,262 @@ export function parseParticipantsCsv(text: string): CsvRow[] {
 }
 
 export const getSessions = () => sessions
-export const useSessions = () => useSyncExternalStore(subscribe, () => sessions)
+/** 불러오는 중·오류 (api 모드). 화면은 오류를 배너로 보여 준다 */
+export const useSessionsLoad = () => useSyncExternalStore(subscribe, () => loadState)
+
+export function useSessions() {
+  useEffect(() => {
+    if (CONSOLE_USES_API) void refreshSessions()
+  }, [])
+  return useSyncExternalStore(subscribe, () => sessions)
+}
 export function useSession(id: string | undefined) {
-  return useSessions().find((s) => s.id === id)
+  useEffect(() => {
+    if (CONSOLE_USES_API && id) void refreshSession(id)
+  }, [id])
+  return useSyncExternalStore(subscribe, () => sessions).find((s) => s.id === id)
 }
 
-export function createSession(input: Omit<Session, 'id' | 'createdAt' | 'participants'>) {
-  const s: Session = { ...input, id: nid('s'), createdAt: new Date().toISOString(), participants: [] }
-  sessions = [s, ...sessions]
+// ── api 모드: 백엔드 응답 → 화면 모양 ──
+let taskInfo: Map<string, SessionTask> | null = null
+async function tasksById(): Promise<Map<string, SessionTask>> {
+  if (taskInfo) return taskInfo
+  try {
+    const list = await consoleApi.tasks()
+    taskInfo = new Map(list.map((t) => [t.id, { id: t.id, title: t.title, minutes: t.minutes }]))
+  } catch {
+    taskInfo = new Map() // 과제 이름을 못 읽어도 회차는 보여 준다 (ID 로 표시)
+  }
+  return taskInfo
+}
+const taskOf = (map: Map<string, SessionTask>, id: string): SessionTask => map.get(id) ?? { id, title: id, minutes: 0 }
+
+function fromSummary(a: ApiSessionSummary, map: Map<string, SessionTask>, prev?: Session): Session {
+  return {
+    id: String(a.id),
+    companyId: a.companyId,
+    tasks: a.taskIds.map((t) => taskOf(map, t)),
+    title: a.title,
+    startsAt: a.startsAt,
+    endsAt: a.endsAt,
+    proctoring: a.proctoring,
+    createdAt: a.createdAt,
+    canceledAt: a.canceledAt ?? undefined,
+    participantsCsv: prev?.participantsCsv,
+    participants: prev?.participants ?? [],
+    counts: { participants: a.participants, entered: a.entered, submitted: a.submitted, unreviewed: a.unreviewedEvents },
+  }
+}
+
+/** 백엔드 역량 이름 → 화면 키 (Rubric.java 와 같은 이름) */
+const ITEM_KEY_BY_NAME: Record<string, string> = {
+  'AI 활용력': 'usage',
+  'AI 통제력': 'control',
+  '문제 분해력': 'decomposition',
+  '위임 판단력': 'delegation',
+  'AI 결과 도출력': 'delivery',
+  '성과 잠재력': 'potential',
+}
+
+/** 상세 JSON 을 한 줄 설명으로 (붙여넣기 글자 수, 고개 각도 등) */
+function detailText(type: string, raw: string | null): string | undefined {
+  if (!raw) return undefined
+  try {
+    const d = JSON.parse(raw) as Record<string, unknown>
+    if (type === 'PASTE' && typeof d.chars === 'number') return `붙여넣기 ${d.chars}자${typeof d.target === 'string' ? ` (${d.target})` : ''}`
+    if (typeof d.faceCount === 'number') return `얼굴 ${d.faceCount}개`
+    if (typeof d.yaw === 'number') return `고개 ${Math.round(Math.abs(d.yaw))}°`
+    return Object.entries(d).map(([k, v]) => `${k} ${v}`).join(', ')
+  } catch {
+    return raw
+  }
+}
+
+function fromEvent(e: ApiEvent): PEvent {
+  return {
+    id: String(e.id),
+    type: e.type as PEventType,
+    at: e.startedAt,
+    durationMs: e.durationMs,
+    confidence: e.confidence ?? undefined,
+    detail: detailText(e.type, e.detail),
+    snapshot: e.snapshot ?? undefined,
+    review: e.review ?? undefined,
+    reviewNote: e.reviewNote ?? undefined,
+    reviewedBy: e.reviewedBy == null ? undefined : `회원 #${e.reviewedBy}`,
+    reviewedAt: e.reviewedAt ?? undefined,
+  }
+}
+
+function fromParticipant(p: ApiParticipant, events: PEvent[], row?: ApiResultRow): Participant {
+  const state: PState = p.submittedAt ? 'SUBMITTED' : p.startedAt ? 'SOLVING' : 'NOT_ENTERED'
+  const items = row?.score != null ? Object.fromEntries(Object.entries(row.items).map(([k, v]) => [ITEM_KEY_BY_NAME[k] ?? k, v])) : undefined
+  return {
+    id: String(p.id),
+    name: p.name,
+    email: p.email,
+    invitedAt: p.invitedAt,
+    enteredAt: p.enteredAt ?? undefined,
+    state,
+    // AI 대화 수·마지막 활동은 응시 기록(팀원 3)에 있어 아직 콘솔 API 로 오지 않는다
+    aiTurns: 0,
+    lastActiveAt: p.submittedAt ?? p.startedAt ?? p.enteredAt ?? undefined,
+    inviteStatus: p.inviteStatus,
+    inviteError: p.inviteError ?? undefined,
+    remindedAt: p.remindedAt ?? undefined,
+    score: row?.score ?? undefined,
+    items,
+    events,
+  }
+}
+
+/** 회차 목록 다시 읽기. 이미 불러온 회차의 대상자는 그대로 둔다 */
+export async function refreshSessions() {
+  if (!CONSOLE_USES_API) return
+  setLoad({ loading: true, error: null })
+  try {
+    const [list, map] = await Promise.all([consoleApi.sessions(), tasksById()])
+    const prev = new Map(sessions.map((s) => [s.id, s]))
+    sessions = list.map((a) => fromSummary(a, map, prev.get(String(a.id))))
+    setLoad({ loading: false, error: null })
+  } catch (e) {
+    setLoad({ loading: false, error: errorText(e) })
+  }
+}
+
+/** 회차 하나를 대상자·감독 이벤트·결과까지 다시 읽기 (상세 화면, 실시간 탭은 5초마다) */
+export async function refreshSession(id: string) {
+  if (!CONSOLE_USES_API) return
+  try {
+    const [detail, events, map] = await Promise.all([consoleApi.session(id), consoleApi.events(id), tasksById()])
+    // 결과(점수)는 매니저만, 시작한 회차만. 감독관(403)·채점 전이면 점수 없이 보여 준다
+    const results = detail.session.phase === 'UPCOMING' ? null : await consoleApi.results(id).catch(() => null)
+    const rows = new Map((results?.rows ?? []).map((r) => [r.participantId, r]))
+    const byParticipant = new Map<number, PEvent[]>()
+    for (const e of events) byParticipant.set(e.participantId, [...(byParticipant.get(e.participantId) ?? []), fromEvent(e)])
+    const prev = sessions.find((s) => s.id === id)
+    const next: Session = {
+      ...fromSummary(detail.session, map, prev),
+      participants: detail.participants.map((p) => fromParticipant(p, byParticipant.get(p.id) ?? [], rows.get(p.id))),
+    }
+    sessions = prev ? sessions.map((s) => (s.id === id ? next : s)) : [next, ...sessions]
+    setLoad({ loading: false, error: null })
+  } catch (e) {
+    setLoad({ loading: false, error: errorText(e) })
+  }
+}
+
+// ── 바꾸기 (api 모드는 서버에 저장한 뒤 다시 읽는다) ──
+export type NewSession = Omit<Session, 'id' | 'createdAt' | 'participants'>
+
+export async function createSession(input: NewSession): Promise<Session> {
+  if (!CONSOLE_USES_API) {
+    const s: Session = { ...input, id: nid('s'), createdAt: new Date().toISOString(), participants: [] }
+    sessions = [s, ...sessions]
+    emit()
+    return s
+  }
+  const created = await consoleApi.create({
+    companyId: input.companyId,
+    title: input.title,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    proctoring: input.proctoring,
+    taskIds: input.tasks.map((t) => t.id),
+  })
+  const s = fromSummary(created, await tasksById())
+  sessions = [s, ...sessions.filter((x) => x.id !== s.id)]
   emit()
   return s
 }
-export function updateSession(id: string, patch: Partial<Session>) {
-  patchSession(id, (s) => ({ ...s, ...patch }))
-}
-export function deleteSession(id: string) {
-  sessions = sessions.filter((s) => s.id !== id)
-  emit()
+
+export async function updateSession(id: string, patch: Partial<Pick<Session, 'title' | 'proctoring' | 'startsAt' | 'endsAt' | 'tasks'>>) {
+  const cur = sessions.find((s) => s.id === id)
+  if (!cur) return
+  if (!CONSOLE_USES_API) {
+    patchSession(id, (s) => ({ ...s, ...patch }))
+    return
+  }
+  const next = { ...cur, ...patch }
+  await consoleApi.update(id, {
+    companyId: next.companyId,
+    title: next.title,
+    startsAt: next.startsAt,
+    endsAt: next.endsAt,
+    proctoring: next.proctoring,
+    taskIds: next.tasks.map((t) => t.id),
+  })
+  await refreshSession(id)
 }
 
-export function inviteParticipants(id: string, people: { name: string; email: string }[]) {
-  const t = new Date().toISOString()
-  patchSession(id, (s) => ({
-    ...s,
-    participants: [...s.participants, ...people.map((p) => ({ id: nid('p'), ...p, invitedAt: t, state: 'NOT_ENTERED' as const, aiTurns: 0, events: [] }))],
-  }))
+/** 시작 전 취소. 지우지 않고 취소 기록을 남기며, 서버가 대상자에게 안내 메일을 보낸다 */
+export async function cancelSession(id: string) {
+  if (!CONSOLE_USES_API) {
+    patchSession(id, (s) => ({ ...s, canceledAt: new Date().toISOString() }))
+    return
+  }
+  await consoleApi.cancel(id)
+  await refreshSession(id)
 }
-export function removeParticipant(id: string, pid: string) {
+
+export type InviteResult = { added: number; rejected: { line: number; name: string; email: string; reason: string }[] }
+
+export async function inviteParticipants(id: string, people: { name: string; email: string }[]): Promise<InviteResult> {
+  if (!CONSOLE_USES_API) {
+    const t = new Date().toISOString()
+    patchSession(id, (s) => ({
+      ...s,
+      participants: [...s.participants, ...people.map((p) => ({ id: nid('p'), ...p, invitedAt: t, state: 'NOT_ENTERED' as const, aiTurns: 0, events: [] }))],
+    }))
+    return { added: people.length, rejected: [] }
+  }
+  const r = await consoleApi.addParticipants(id, people)
+  await refreshSession(id)
+  return r
+}
+
+/** 대상자 CSV 원본을 그대로 올린다 (서버가 원본을 보관하고 줄마다 검사). dryRun 이면 미리 보기만 */
+export async function uploadParticipantsCsv(id: string, file: File, dryRun = false): Promise<InviteResult> {
+  if (!CONSOLE_USES_API) {
+    const rows = parseParticipantsCsv(await file.text())
+    const ok = rows.filter((r) => !r.error)
+    if (!dryRun) {
+      await inviteParticipants(id, ok.map(({ name, email }) => ({ name, email })))
+      patchSession(id, (s) => ({ ...s, participantsCsv: file.name }))
+    }
+    return { added: ok.length, rejected: rows.filter((r) => r.error).map((r) => ({ line: r.line, name: r.name, email: r.email, reason: r.error! })) }
+  }
+  const r = await consoleApi.uploadCsv(id, file, dryRun)
+  if (!dryRun) {
+    patchSession(id, (s) => ({ ...s, participantsCsv: file.name }))
+    await refreshSession(id)
+  }
+  return r
+}
+
+export async function removeParticipant(id: string, pid: string) {
+  if (CONSOLE_USES_API) {
+    await consoleApi.removeParticipant(id, pid)
+    await refreshSession(id)
+    return
+  }
   patchSession(id, (s) => ({ ...s, participants: s.participants.filter((p) => p.id !== pid) }))
 }
 
-export function reviewEvent(sid: string, pid: string, eid: string, review: Review | undefined, note: string | undefined, by: string) {
+/** 초대 메일 다시 보내기 (새 링크, 이전 링크는 막힘) */
+export async function resendInvite(id: string, pid: string) {
+  if (CONSOLE_USES_API) {
+    await consoleApi.resendInvite(id, pid)
+    await refreshSession(id)
+  }
+}
+
+export async function reviewEvent(sid: string, pid: string, eid: string, review: Review | undefined, note: string | undefined, by: string) {
+  let saved: Partial<PEvent> | null = null
+  if (CONSOLE_USES_API) {
+    const e = fromEvent(await consoleApi.review(sid, eid, review ?? null, note))
+    saved = { review: e.review, reviewNote: e.reviewNote, reviewedBy: e.reviewedBy, reviewedAt: e.reviewedAt }
+  }
   patchSession(sid, (s) => ({
     ...s,
     participants: s.participants.map((p) =>
@@ -370,17 +640,25 @@ export function reviewEvent(sid: string, pid: string, eid: string, review: Revie
             events: p.events.map((e) =>
               e.id !== eid
                 ? e
-                : review
-                  ? { ...e, review, reviewNote: note ?? e.reviewNote, reviewedBy: by, reviewedAt: new Date().toISOString() }
-                  : { ...e, review: undefined, reviewNote: undefined, reviewedBy: undefined, reviewedAt: undefined },
+                : saved
+                  ? { ...e, ...saved }
+                  : review
+                    ? { ...e, review, reviewNote: note ?? e.reviewNote, reviewedBy: by, reviewedAt: new Date().toISOString() }
+                    : { ...e, review: undefined, reviewNote: undefined, reviewedBy: undefined, reviewedAt: undefined },
             ),
           },
     ),
   }))
 }
 
-/** 실시간 현황 흉내: 응시자 활동과 감독 이벤트를 조금씩 바꾼다 */
+/** 실시간 현황 갱신: api 모드는 서버에서 다시 읽고, mock 모드는 활동을 흉내 낸다 */
 export function tickLive(id: string) {
+  if (CONSOLE_USES_API) void refreshSession(id)
+  else mockTick(id)
+}
+
+/** 실시간 현황 흉내: 응시자 활동과 감독 이벤트를 조금씩 바꾼다 */
+function mockTick(id: string) {
   const now = Date.now()
   const r = Math.random
   patchSession(id, (s) => ({

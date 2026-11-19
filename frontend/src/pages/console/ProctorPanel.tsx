@@ -1,7 +1,15 @@
 // DESIGN.md §7-9-4a 감독 패널: 시험 시간 축 + 이벤트 카드 + 담당자 판단(문제 없음 / 부정 의심)
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AppWindow,
+  BookOpen,
+  Eye,
+  Hand,
+  Monitor,
+  MousePointer2,
+  Move,
+  PersonStanding,
+  Unplug,
   Camera,
   ClipboardPaste,
   EyeOff,
@@ -26,6 +34,7 @@ import {
   type Review,
   type Session,
 } from '../../data/consoleSessions'
+import { CONSOLE_USES_API, consoleApi } from '../../data/consoleApi'
 import { Modal } from './common'
 import { fmtTime } from './format'
 
@@ -38,6 +47,17 @@ const ICON: Record<PEventType, LucideIcon> = {
   MULTI_FACE: Users,
   HEAD_TURN: ScanFace,
   PHONE: Smartphone,
+  MOUSE_LEAVE: MousePointer2,
+  HEAD_DOWN: ScanFace,
+  GAZE_AWAY: Eye,
+  TORSO_SHIFT: Move,
+  TORSO_TURN: PersonStanding,
+  HAND_MISSING: Hand,
+  HAND_MOVED: Hand,
+  ARM_MOVE: Move,
+  EXTRA_SCREEN: Monitor,
+  BOOK: BookOpen,
+  PHONE_DISCONNECTED: Unplug,
 }
 const LOW = 0.8
 
@@ -134,11 +154,14 @@ export default function ProctorPanel({ session, p, className }: { session: Sessi
             {shown.map((e) => (
               <EventCard
                 key={e.id}
+                sessionId={session.id}
                 e={e}
                 time={elapsed(session, e.at)}
                 focused={focus === e.id}
                 onPhoto={() => setPhoto(e)}
-                onReview={(r, note, by) => reviewEvent(session.id, p.id, e.id, r, note, by)}
+                onReview={(r, note, by) =>
+                  void reviewEvent(session.id, p.id, e.id, r, note, by).catch((er: Error) => window.alert(`판정을 저장하지 못했습니다: ${er.message}`))
+                }
               />
             ))}
           </ol>
@@ -147,7 +170,7 @@ export default function ProctorPanel({ session, p, className }: { session: Sessi
 
       {photo && (
         <Modal title={`${EVENT_LABEL[photo.type]} 스냅샷`} onClose={() => setPhoto(null)} actions={null}>
-          <SnapshotPlaceholder big />
+          <SnapshotImage sessionId={session.id} e={photo} big />
           <p className="tnum mt-3 font-mono text-[13px]">
             {elapsed(session, photo.at)} │ 확신도 {photo.confidence?.toFixed(2)}
           </p>
@@ -158,12 +181,14 @@ export default function ProctorPanel({ session, p, className }: { session: Sessi
 }
 
 function EventCard({
+  sessionId,
   e,
   time,
   focused,
   onPhoto,
   onReview,
 }: {
+  sessionId: string
   e: PEvent
   time: string
   focused: boolean
@@ -217,7 +242,7 @@ function EventCard({
                 보관 기간 지나 삭제됨
               </span>
             ) : (
-              <SnapshotPlaceholder />
+              <SnapshotImage sessionId={sessionId} e={e} />
             )}
           </button>
         )}
@@ -267,6 +292,31 @@ function EventCard({
 }
 
 /** 목업 스냅샷: 실제 사진 대신 카메라 화면 자리 */
+/** 감독 사진. api 모드는 인증 헤더를 붙여 받아 오고, 목업은 자리만 그린다 */
+function SnapshotImage({ sessionId, e, big }: { sessionId: string; e: PEvent; big?: boolean }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    if (!CONSOLE_USES_API || e.snapshot !== 'ok') return
+    let alive = true
+    let made: string | null = null
+    consoleApi
+      .snapshotUrl(sessionId, e.id)
+      .then((u) => {
+        made = u
+        if (alive) setUrl(u)
+        else URL.revokeObjectURL(u)
+      })
+      .catch(() => alive && setFailed(true))
+    return () => {
+      alive = false
+      if (made) URL.revokeObjectURL(made)
+    }
+  }, [sessionId, e.id, e.snapshot])
+  if (!url || failed) return <SnapshotPlaceholder big={big} />
+  return <img src={url} alt={`${EVENT_LABEL[e.type]} 순간 사진`} className={cx('aspect-video w-full bg-panel-raised object-cover', big && 'rounded-md')} />
+}
+
 function SnapshotPlaceholder({ big }: { big?: boolean }) {
   return (
     <span className={cx('flex aspect-video w-full items-center justify-center bg-panel-raised text-text-faint', big ? 'rounded-md' : '')}>

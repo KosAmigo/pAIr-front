@@ -11,11 +11,18 @@ export function useAntiCheating({
   sessionId,
   active,
   config = DEFAULT_ANTI_CHEATING_CONFIG,
+  onViolation,
 }: {
   sessionId: string
   active: boolean
   config?: AntiCheatingConfig
+  /** 새 이탈 1건이 생길 때 (실전 회차 감독 기록으로 넘기는 데 쓴다) */
+  onViolation?: (violation: Violation) => void
 }) {
+  const onViolationRef = useRef(onViolation)
+  useEffect(() => {
+    onViolationRef.current = onViolation
+  }, [onViolation])
   const [countState, setCountState] = useState(() => ({
     sessionId,
     count: ViolationOutbox.cachedCount(sessionId),
@@ -38,8 +45,10 @@ export function useAntiCheating({
 
     let sync: () => Promise<number | null> = async () => null
     const manager = new ViolationManager(sessionId, config, outbox.localCount, (violation, isNew, localCount) => {
-      if (isNew) setWarning(violation)
-      else setWarning((current) => (current ? violation : current))
+      if (isNew) {
+        setWarning(violation)
+        onViolationRef.current?.(violation)
+      } else setWarning((current) => (current ? violation : current))
       updateCount(localCount)
       outbox.enqueue(violation, localCount)
       void sync()
