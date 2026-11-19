@@ -23,6 +23,15 @@ export type EntryInfo = {
   taskIds: string[]
   /** 과제 ID → 응시 ID */
   attempts: Record<string, string>
+  /** 과제별 진행 상태 (과제별 제출) */
+  tasks: TaskStatus[]
+}
+
+export type TaskStatus = {
+  taskId: string
+  /** 시작 전이면 null */
+  attemptId: string | null
+  submitted: boolean
 }
 
 export type ProctorEventRequest = {
@@ -84,6 +93,10 @@ export const proctorApi = {
     call<EntryInfo>('POST', `/api/entry/${enc(invite)}/consent`, { consentVersion, envCheck }),
   enter: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/enter`),
   start: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/start`),
+  /** 과제 하나 제출. 모든 과제를 내면 submittedAt 이 채워진다 */
+  submitTask: (invite: string, taskId: string) =>
+    call<EntryInfo>('POST', `/api/entry/${enc(invite)}/tasks/${enc(taskId)}/submit`),
+  /** 남은 과제 모두 제출 (시험 끝내기) */
   submit: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/submit`),
   recordEvent: (invite: string, event: ProctorEventRequest) =>
     call<{ id: number }>('POST', `/api/entry/${enc(invite)}/proctor-events`, event),
