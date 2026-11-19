@@ -10,10 +10,8 @@ import com.pair.exam.domain.ExamParticipant;
 import com.pair.exam.domain.ExamSession;
 import com.pair.exam.domain.ProctorEvent;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -54,9 +52,10 @@ public final class ExamDtos {
 
     // ── 콘솔: 대상자 ──
 
-    public record ParticipantInput(@NotBlank @Size(max = 50) String name, @NotBlank @Email @Size(max = 255) String email) {}
+    /** 행 단위 검증(형식·길이·중복)은 서비스가 한다. 잘못된 행 하나 때문에 전체를 거절하지 않고 이유와 함께 돌려준다 */
+    public record ParticipantInput(String name, String email) {}
 
-    public record AddParticipantsRequest(@NotEmpty @Size(max = 1000) List<@Valid ParticipantInput> participants) {}
+    public record AddParticipantsRequest(@NotEmpty @Size(max = 1000) List<@NotNull ParticipantInput> participants) {}
 
     /** line: 엑셀 행 번호(헤더 = 1) 또는 요청 목록 순서(1부터) */
     public record Rejected(int line, String name, String email, String reason) {}

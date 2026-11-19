@@ -2,6 +2,7 @@ package com.pair.exam.service;
 
 import java.util.Base64;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.pair.exam.ExamProperties;
@@ -13,6 +14,7 @@ public class SnapshotValidator {
 
     private final int maxBytes;
 
+    @Autowired
     public SnapshotValidator(ExamProperties props) {
         this(props.snapshotMaxBytes());
     }

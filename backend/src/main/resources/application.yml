@@ -54,7 +54,13 @@ pair:
     # 종료 시각이 지난 회차를 찾아 자동 제출하는 주기
     auto-submit-interval-ms: 2000
     # 감독 사진 저장소: local = pilot-data/exam-snapshots (개발용). 운영은 파일 서버 구현으로 바꾼다
-    snapshot-storage: local
+    snapshot-storage: ${PAIR_SNAPSHOT_STORAGE:local}
+    # snapshot-storage=s3 일 때. 접근 키는 여기 쓰지 않는다 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY 환경 변수나 IAM 역할)
+    s3:
+      bucket: ${PAIR_S3_BUCKET:}
+      region: ${PAIR_S3_REGION:ap-northeast-2}
+      prefix: exam-snapshots/
+      endpoint: ${PAIR_S3_ENDPOINT:}
     # 감독 사진 보관 기간. 지나면 파일을 지우고 snapshot_deleted_at 을 남긴다
     snapshot-retention-hours: 168
     # 사진 1장 최대 크기 (cam-proctor 는 320px JPEG 로 보통 10~20KB)

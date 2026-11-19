@@ -26,6 +26,7 @@ ext {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+        mavenBom 'software.amazon.awssdk:bom:2.33.4'
     }
 }
 
@@ -42,6 +43,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     // 대상자 엑셀(.xlsx) 업로드
     implementation 'org.apache.poi:poi-ooxml:5.4.1'
+    // 감독 사진 파일 서버 (S3). pair.exam.snapshot-storage=s3 일 때만 쓴다
+    implementation 'software.amazon.awssdk:s3'
 
     // AI 어시스턴트와 OpenAI 채점 (Spring AI OpenAI), Claude 채점 (Spring AI Anthropic)
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
