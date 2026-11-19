@@ -1,5 +1,6 @@
-// 대시보드 목업 데이터 (DESIGN.md §7-2, 2026-11-19 개편).
-// 역량은 현재 채점 기준의 6개 항목(§1.5)과 배점을 쓴다. 예전 5개 항목 목업(mock.ts COMPETENCIES)은 리포트·복기 예시에서만 쓴다.
+// 대시보드 스탯 설정과 데이터 불러오기 (DESIGN.md §7-2, 2026-11-19 개편).
+// 역량은 현재 채점 기준의 6개 항목(§1.5)과 배점을 쓴다 (백엔드 Rubric 의 item key 와 같다).
+import { api, type ReportItem } from '../api'
 
 export type StatKey = 'usage' | 'control' | 'decomposition' | 'delegation' | 'delivery' | 'potential'
 
@@ -14,16 +15,40 @@ export const STATS: { key: StatKey; name: string; short: string; max: number; co
 
 export type StatScores = Record<StatKey, number>
 
-/** 응시 회차별 항목 점수 (배점 기준). 마지막이 최근 */
-export const STAT_HISTORY: { date: string; task: string; scores: StatScores }[] = [
-  { date: '09.02', task: '로그인 버그 재현과 수정', scores: { usage: 11, control: 7, decomposition: 5, delegation: 5, delivery: 16, potential: 8 } },
-  { date: '09.16', task: '고객 VOC 분류 리포트', scores: { usage: 12, control: 8, decomposition: 5, delegation: 6, delivery: 18, potential: 9 } },
-  { date: '09.30', task: '고객 VOC 분류 리포트', scores: { usage: 13, control: 9, decomposition: 6, delegation: 6, delivery: 19, potential: 10 } },
-  { date: '10.14', task: '정산 배치 서비스 리팩터링', scores: { usage: 15, control: 9, decomposition: 6, delegation: 7, delivery: 21, potential: 10 } },
-  { date: '10.28', task: '신규 요금제 출시 기획안', scores: { usage: 15, control: 10, decomposition: 7, delegation: 7, delivery: 22, potential: 10 } },
-  { date: '11.07', task: '주문 API 장애 원인 분석', scores: { usage: 17, control: 10, decomposition: 8, delegation: 8, delivery: 23, potential: 10 } },
-]
+/** 응시 회차 하나의 항목 점수 (배점 기준) */
+export type StatEntry = { id: string; date: string; task: string; scores: StatScores }
 
 export const total = (s: StatScores) => STATS.reduce((n, st) => n + s[st.key], 0)
 
-export const PROFILE = { name: '김지원' }
+/** 리포트 항목(key, score)을 스탯 점수로. 없는 항목은 0 */
+export function toStatScores(items: ReportItem[]): StatScores {
+  const s = Object.fromEntries(STATS.map((st) => [st.key, 0])) as StatScores
+  for (const it of items) if (it.key in s) s[it.key as StatKey] = it.score
+  return s
+}
+
+/**
+ * 채점이 끝난 최근 응시(최대 limit 개)의 항목 점수. 오래된 것부터, 마지막이 최근.
+ * GET /api/attempts 로 목록을 받고, 항목 점수는 응시마다 GET /api/attempts/{id}/report 로 받는다.
+ */
+export async function loadStatHistory(limit = 6): Promise<{ entries: StatEntry[]; attempts: number }> {
+  const rows = await api.list()
+  const done = rows
+    .filter((r) => r.status === 'DONE' && r.total != null && !r.legacyReport)
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+    .slice(-limit)
+  const reports = await Promise.all(done.map((r) => api.report(r.id)))
+  const entries: StatEntry[] = []
+  done.forEach((r, i) => {
+    const rep = reports[i].report
+    if (!rep || (rep.version ?? 1) < 2) return
+    const d = new Date(r.startedAt)
+    entries.push({
+      id: r.id,
+      date: `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`,
+      task: r.taskTitle,
+      scores: toStatScores(rep.items),
+    })
+  })
+  return { entries, attempts: rows.length }
+}

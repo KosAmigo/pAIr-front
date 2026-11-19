@@ -1,6 +1,7 @@
 // 목업 로그인 (DESIGN.md §7-8). 백엔드 인증이 붙기 전까지 브라우저 안에서만 동작한다.
 // 로그인 상태는 이 브라우저의 localStorage 에만 남는다 (개발용 편의).
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { setAuthHeaders } from '../api'
 import { ACCOUNTS, AuthContext, MOCK_AUTO_LOGIN, MOCK_PASSWORD, type AuthApi, type AuthUser } from './auth'
 
 const KEY = 'pair.auth'
@@ -30,9 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u)
   }, [])
 
+  const current = user ?? (MOCK_AUTO_LOGIN ? ACCOUNTS[0] : null)
+  // 백엔드 요청에 로그인 헤더를 붙인다. 렌더 중에 바로 넣어야 자식 화면의 첫 요청부터 헤더가 실린다
+  setAuthHeaders(current)
+
   const api = useMemo<AuthApi>(
     () => ({
-      user: user ?? (MOCK_AUTO_LOGIN ? ACCOUNTS[0] : null),
+      user: current,
       signedIn: user != null,
       login: (email, password) => {
         const found = ACCOUNTS.find((a) => a.email === email.trim().toLowerCase())
@@ -48,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: 100 + Math.floor(Math.random() * 900),
           email: e,
           name: name.trim(),
-          ...(company ? { role: 'MANAGER' as const, companyName: company } : { role: 'USER' as const }),
+          ...(company ? { role: 'MANAGER' as const, companyId: 1, companyName: company } : { role: 'USER' as const }),
         }
         set(u)
         return { user: u }
@@ -59,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         set(base)
       },
     }),
-    [user, set],
+    [user, current, set],
   )
 
   return <AuthContext.Provider value={api}>{children}</AuthContext.Provider>

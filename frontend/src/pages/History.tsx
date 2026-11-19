@@ -1,17 +1,17 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { CircleAlert, FileBarChart2, GitBranch, Loader2, Play, Trophy } from 'lucide-react'
+import { FileBarChart2, GitBranch, Loader2, Play, Trophy } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ButtonLink, StatusDot } from '../components/ui'
 import { CountUp, Glass, GradientText, RevealGroup, RevealItem, Spotlight } from '../components/fx'
 import { api, ApiError, type AttemptStatus, type AttemptSummary } from '../api'
-import { attempts as mockAttempts } from '../data/mock'
+import { ErrorState } from '../components/ErrorState'
 import { duration, easing } from '../lib/motion'
 
 // DESIGN.md §7-2b 내 기록 — "풀이 타임라인" (2026-11-19 전면 개편)
 // 위: 요약 숫자 4개(유리 카드). 아래: 복기 트리처럼 세로 줄기를 따라 응시가 노드로 매달린다.
-// 실제 응시(백엔드) 줄기가 먼저, 예시(목업) 줄기가 그 아래. 노드 색은 점수 구간(signal/info/caution/alert)이고 숫자를 함께 쓴다.
+// 응시 기록은 백엔드(GET /api/attempts)에서 받는다. 노드 색은 점수 구간(signal/info/caution/alert)이고 숫자를 함께 쓴다.
 
 const statusLabel: Record<AttemptStatus, { s: 'ok' | 'check' | 'down'; t: string }> = {
   SOLVING: { s: 'check', t: '응시 중' },
@@ -37,7 +37,6 @@ type Node = {
   score: number | null
   status?: ReactNode
   actions: ReactNode
-  example?: boolean
 }
 
 /** 세로 줄기 하나: 줄기는 위에서 아래로 그려지고, 노드 카드는 차례로 나온다 */
@@ -75,7 +74,6 @@ function Trunk({ label, title, nodes, empty }: { label: string; title: string; n
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 truncate text-[16px] font-semibold text-text">
                       {n.title}
-                      {n.example && <span className="rounded-sm bg-panel-raised px-1.5 font-mono text-[11px] font-medium text-text-faint">예시</span>}
                     </p>
                     <p className="mt-0.5 flex items-center gap-3 text-[13px] text-text-muted">
                       {n.type}
@@ -122,14 +120,25 @@ function Stat({ label, value, unit, icon }: { label: string; value: number | nul
 export default function History() {
   const [rows, setRows] = useState<AttemptSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
   useEffect(() => {
-    api.list().then(setRows).catch((e: ApiError) => setError(e.message))
-  }, [])
+    let alive = true
+    api
+      .list()
+      .then((r) => {
+        if (!alive) return
+        setRows(r)
+        setError(null)
+      })
+      .catch((e: ApiError) => alive && setError(e.message))
+    return () => {
+      alive = false
+    }
+  }, [tick])
 
-  // 요약: 백엔드가 응답하면 실제 응시로(0건이면 0), 백엔드에 닿지 못하면 예시로 계산하고 그렇다고 밝힌다
-  const fromExamples = rows === null
-  const scored = !fromExamples ? rows.filter((r) => r.total != null && !r.legacyReport).map((r) => Math.round(r.total!)) : mockAttempts.map((a) => a.score)
-  const count = !fromExamples ? rows.length : mockAttempts.length
+  // 요약: 백엔드 응시 기록으로만 계산한다 (불러오기 전·실패 시에는 '-')
+  const scored = (rows ?? []).filter((r) => r.total != null && !r.legacyReport).map((r) => Math.round(r.total!))
+  const count = rows ? rows.length : null
   const best = scored.length ? Math.max(...scored) : null
   const avg = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null
   const latest = scored.length ? scored[0] : null
@@ -147,38 +156,20 @@ export default function History() {
           <Play size={16} aria-hidden /> 이어서 풀기
         </Link>
       ) : (
-        <Link to={`/report/${r.id}`} className={linkCls}>
-          <FileBarChart2 size={16} aria-hidden /> 리포트
-        </Link>
+        <>
+          <Link to={`/report/${r.id}`} className={linkCls}>
+            <FileBarChart2 size={16} aria-hidden /> 리포트
+          </Link>
+          {r.status === 'DONE' && (
+            <Link to={`/replay/${r.id}`} className={linkCls}>
+              <GitBranch size={16} aria-hidden /> 복기
+            </Link>
+          )}
+        </>
       ),
   }))
-  const exampleNodes: Node[] = mockAttempts.map((a) => ({
-    id: a.id,
-    date: a.date,
-    title: a.task,
-    type: a.type,
-    score: a.score,
-    example: true,
-    actions: (
-      <>
-        <Link to="/report/a-1107" className={linkCls}>
-          <FileBarChart2 size={16} aria-hidden /> 리포트
-        </Link>
-        {a.replay ? (
-          <Link to="/replay/t-order-api" className={linkCls}>
-            <GitBranch size={16} aria-hidden /> 복기
-          </Link>
-        ) : (
-          <span className="inline-flex h-8 items-center px-2.5 text-[14px] text-text-faint">복기 없음</span>
-        )}
-      </>
-    ),
-  }))
-
   const realEmpty = error ? (
-    <p className="flex items-center gap-2 rounded-xl border border-alert/30 bg-alert/5 px-5 py-4 text-[15px] text-alert">
-      <CircleAlert size={18} aria-hidden /> 응시 기록을 불러오지 못했습니다 ({error})
-    </p>
+    <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
   ) : !rows ? (
     <p className="flex items-center gap-2 px-1 py-4 text-[15px] text-text-muted">
       <Loader2 size={16} className="animate-spin" aria-hidden /> 불러오는 중
@@ -206,7 +197,9 @@ export default function History() {
       <div className="mx-auto flex max-w-[1200px] flex-col gap-10 px-8 py-8">
         <div>
           <p className="text-[28px] leading-9 font-bold tracking-[-0.02em] text-text">
-            {count > 0 ? (
+            {count == null ? (
+              <>내 기록</>
+            ) : count > 0 ? (
               <>
                 지금까지 <GradientText>{count}번</GradientText> 풀었어요
               </>
@@ -216,7 +209,6 @@ export default function History() {
               </>
             )}
           </p>
-          {error && <p className="mt-1 text-[14px] text-text-muted">응시 기록을 불러오지 못해 아래 예시 기록으로 계산했습니다.</p>}
           <RevealGroup className="mt-5 grid grid-cols-4 gap-3">
             <RevealItem>
               <Stat label="ATTEMPTS" value={count} unit="회" />
@@ -234,7 +226,6 @@ export default function History() {
         </div>
 
         <Trunk label="MY ATTEMPTS" title="응시 기록" nodes={realNodes} empty={realEmpty} />
-        <Trunk label="EXAMPLES" title="예시 기록" nodes={exampleNodes} />
       </div>
     </SelfShell>
   )

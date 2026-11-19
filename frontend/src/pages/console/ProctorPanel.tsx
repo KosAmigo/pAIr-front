@@ -1,11 +1,18 @@
 // DESIGN.md §7-9-4a 감독 패널: 시험 시간 축 + 이벤트 카드 + 담당자 판단(문제 없음 / 부정 의심)
-import { useState } from 'react'
+// 이벤트는 백엔드(응시자별 감독 이벤트)에서 불러오고, 판단은 바로 백엔드에 저장한다.
+import { useEffect, useState } from 'react'
 import {
   AppWindow,
+  BookOpen,
   Camera,
   ClipboardPaste,
   EyeOff,
+  Hand,
+  Loader2,
   Maximize2,
+  Monitor,
+  MousePointer2,
+  PersonStanding,
   ScanFace,
   Smartphone,
   Users,
@@ -15,68 +22,109 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cx } from '../../components/cx'
+import { ErrorState } from '../../components/ErrorState'
 import { canReviewProctor, useAuth } from '../../auth/auth'
-import {
-  EVENT_LABEL,
-  isCameraEvent,
-  reviewEvent,
-  type PEvent,
-  type PEventType,
-  type Participant,
-  type Review,
-  type Session,
-} from '../../data/consoleSessions'
+import { consoleApi, type EventReview, type EventType, type ParticipantView, type ProctorEventView, type SessionSummary } from '../../consoleApi'
+import { EVENT_LABEL, isCameraEvent, useLoad } from '../../data/consoleSessions'
 import { Modal } from './common'
 import { fmtTime } from './format'
+import { Loading } from './Loading'
 
-const ICON: Record<PEventType, LucideIcon> = {
+const ICON: Record<EventType, LucideIcon> = {
   TAB_HIDDEN: AppWindow,
   WINDOW_BLUR: EyeOff,
+  MOUSE_LEAVE: MousePointer2,
   PASTE: ClipboardPaste,
   FULLSCREEN_EXIT: Maximize2,
   NO_FACE: ScanFace,
   MULTI_FACE: Users,
   HEAD_TURN: ScanFace,
+  HEAD_DOWN: ScanFace,
+  GAZE_AWAY: EyeOff,
+  TORSO_SHIFT: PersonStanding,
+  TORSO_TURN: PersonStanding,
+  HAND_MISSING: Hand,
+  HAND_MOVED: Hand,
+  ARM_MOVE: Hand,
   PHONE: Smartphone,
+  EXTRA_SCREEN: Monitor,
+  BOOK: BookOpen,
+  PHONE_DISCONNECTED: Smartphone,
 }
 const LOW = 0.8
 
-const elapsed = (s: Session, iso: string) => {
+const elapsed = (s: SessionSummary, iso: string) => {
   const sec = Math.max(0, Math.round((Date.parse(iso) - Date.parse(s.startsAt)) / 1000))
   return `${String(Math.floor(sec / 3600)).padStart(2, '0')}:${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`
 }
 
-type Filter = 'all' | 'open' | 'suspect'
+/** detail(JSON 문자열)을 읽기 쉬운 한 줄로 */
+function detailText(detail: string | null): string | null {
+  if (!detail) return null
+  try {
+    const o = JSON.parse(detail) as unknown
+    if (o && typeof o === 'object')
+      return Object.entries(o as Record<string, unknown>)
+        .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+        .join(' │ ')
+    return String(o)
+  } catch {
+    return detail
+  }
+}
 
-export default function ProctorPanel({ session, p, className }: { session: Session; p: Participant; className?: string }) {
+type Filter = 'all' | 'open' | 'suspect'
+const byTime = (list: ProctorEventView[]) => [...list].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))
+
+export default function ProctorPanel({
+  session,
+  p,
+  pollMs,
+  className,
+}: {
+  session: SessionSummary
+  p: ParticipantView
+  /** 주면 이 간격(ms)으로 이벤트를 다시 불러온다 (실시간 현황) */
+  pollMs?: number
+  className?: string
+}) {
   const [filter, setFilter] = useState<Filter>('all')
-  const [focus, setFocus] = useState<string | null>(null)
-  const [photo, setPhoto] = useState<PEvent | null>(null)
-  const events = [...p.events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
+  const [focus, setFocus] = useState<number | null>(null)
+  const [photo, setPhoto] = useState<ProctorEventView | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const loaded = useLoad(session.proctoring ? `pev-${session.id}-${p.id}` : null, () => consoleApi.participantEvents(session.id, p.id), pollMs)
+  const events = byTime(loaded.data ?? [])
   const shown = events.filter((e) => (filter === 'open' ? !e.review : filter === 'suspect' ? e.review === 'SUSPECT' : true))
   const span = Date.parse(session.endsAt) - Date.parse(session.startsAt)
   const pos = (iso: string) => Math.min(100, Math.max(0, ((Date.parse(iso) - Date.parse(session.startsAt)) / span) * 100))
+  const review = (e: ProctorEventView, r: EventReview | null, note: string | undefined) => {
+    setSaveError(null)
+    consoleApi.review(session.id, e.id, r, note).then(
+      // 저장하면 돌아온 이벤트로 바로 바꾼다
+      (u) => loaded.setData((list) => list && list.map((x) => (x.id === u.id ? u : x))),
+      (err: unknown) => setSaveError(err instanceof Error ? err.message : String(err)),
+    )
+  }
 
   return (
     <section className={cx('flex flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-md', className)} aria-label="감독 기록">
       <header className="border-b border-line bg-[linear-gradient(120deg,var(--color-brand-dim),transparent_70%)] px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="label">PROCTORING</span>
-          <span className="tnum ml-auto font-mono text-[12px] text-text-muted">
-            이벤트 {events.length}건
-          </span>
+          <span className="tnum ml-auto font-mono text-[12px] text-text-muted">이벤트 {events.length}건</span>
         </div>
         {session.proctoring ? (
-          <p className="mt-1 text-[13px] text-text-muted">
-            {p.enteredAt ? `${fmtTime(p.enteredAt)} 동의` : '아직 입장 전'}
-            {p.enteredAt && ' │ 카메라 정상 │ 전체 화면 정상 │ Chrome 142'}
-          </p>
+          <p className="mt-1 text-[13px] text-text-muted">{p.enteredAt ? `${fmtTime(p.enteredAt)} 입장` : '아직 입장 전'}</p>
         ) : (
           <p className="mt-1 text-[13px] text-text-muted">감독을 쓰지 않은 회차입니다.</p>
         )}
       </header>
 
-      {session.proctoring && (
+      {session.proctoring && loaded.error && <ErrorState compact className="m-4" message={loaded.error} onRetry={loaded.reload} />}
+      {session.proctoring && loaded.loading && <Loading text="감독 이벤트를 불러오는 중" className="py-8" />}
+      {saveError && <ErrorState compact className="mx-4 mt-3" message={`판단을 저장하지 못했습니다: ${saveError}`} />}
+
+      {session.proctoring && loaded.data && (
         <>
           {/* 시험 시간 축 */}
           <div className="border-b border-line px-4 py-4">
@@ -91,14 +139,14 @@ export default function ProctorPanel({ session, p, className }: { session: Sessi
                     setFocus(e.id)
                     document.getElementById(`ev-${e.id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
                   }}
-                  aria-label={`${EVENT_LABEL[e.type]} ${elapsed(session, e.at)}`}
-                  title={`${EVENT_LABEL[e.type]} ${elapsed(session, e.at)}`}
+                  aria-label={`${EVENT_LABEL[e.type]} ${elapsed(session, e.startedAt)}`}
+                  title={`${EVENT_LABEL[e.type]} ${elapsed(session, e.startedAt)}`}
                   className={cx(
                     'absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 border-2 border-panel',
-                    isCameraEvent(e.type) ? 'rounded-full bg-alert' : 'rotate-45 rounded-[2px] bg-caution',
+                    isCameraEvent(e) ? 'rounded-full bg-alert' : 'rotate-45 rounded-[2px] bg-caution',
                     focus === e.id && 'ring-2 ring-brand',
                   )}
-                  style={{ left: `${pos(e.at)}%` }}
+                  style={{ left: `${pos(e.startedAt)}%` }}
                 />
               ))}
             </div>
@@ -132,14 +180,7 @@ export default function ProctorPanel({ session, p, className }: { session: Sessi
           <ol className="fx-cards flex flex-col gap-3 p-4">
             {shown.length === 0 && <li className="py-8 text-center text-[14px] text-text-muted">{events.length ? '조건에 맞는 이벤트가 없습니다.' : '감독 이벤트가 없습니다.'}</li>}
             {shown.map((e) => (
-              <EventCard
-                key={e.id}
-                e={e}
-                time={elapsed(session, e.at)}
-                focused={focus === e.id}
-                onPhoto={() => setPhoto(e)}
-                onReview={(r, note, by) => reviewEvent(session.id, p.id, e.id, r, note, by)}
-              />
+              <EventCard key={e.id} e={e} time={elapsed(session, e.startedAt)} focused={focus === e.id} onPhoto={() => setPhoto(e)} onReview={(r, note) => review(e, r, note)} />
             ))}
           </ol>
         </>
@@ -147,9 +188,10 @@ export default function ProctorPanel({ session, p, className }: { session: Sessi
 
       {photo && (
         <Modal title={`${EVENT_LABEL[photo.type]} 스냅샷`} onClose={() => setPhoto(null)} actions={null}>
-          <SnapshotPlaceholder big />
+          <Snapshot sessionId={session.id} eventId={photo.id} />
           <p className="tnum mt-3 font-mono text-[13px]">
-            {elapsed(session, photo.at)} │ 확신도 {photo.confidence?.toFixed(2)}
+            {elapsed(session, photo.startedAt)}
+            {photo.confidence != null && ` │ 확신도 ${photo.confidence.toFixed(2)}`}
           </p>
         </Modal>
       )}
@@ -164,27 +206,24 @@ function EventCard({
   onPhoto,
   onReview,
 }: {
-  e: PEvent
+  e: ProctorEventView
   time: string
   focused: boolean
   onPhoto: () => void
-  onReview: (r: Review | undefined, note: string | undefined, by: string) => void
+  onReview: (r: EventReview | null, note: string | undefined) => void
 }) {
   const { user } = useAuth()
   // 판단은 감독관·매니저·관리자 (모든 콘솔 권한). 권한이 늘면 canReviewProctor 에서 막는다
   const canReview = canReviewProctor(user?.role)
   const [note, setNote] = useState(e.reviewNote ?? '')
-  const Icon = ICON[e.type]
+  const Icon = ICON[e.type] ?? Camera
   const low = e.confidence != null && e.confidence < LOW
-  const cam = isCameraEvent(e.type)
+  const cam = isCameraEvent(e)
+  const detail = detailText(e.detail)
   return (
     <li
       id={`ev-${e.id}`}
-      className={cx(
-        'relative overflow-hidden rounded-md border bg-panel transition-shadow',
-        focused ? 'border-brand shadow-md' : 'border-line',
-        !e.review && 'border-l-2 border-l-caution',
-      )}
+      className={cx('relative overflow-hidden rounded-md border bg-panel transition-shadow', focused ? 'border-brand shadow-md' : 'border-line', !e.review && 'border-l-2 border-l-caution')}
     >
       <div className={cx('flex gap-3 p-3', low && 'opacity-60')}>
         <span className={cx('inline-flex size-9 shrink-0 items-center justify-center rounded-md', cam ? 'bg-alert/10 text-alert' : 'bg-caution/10 text-caution')}>
@@ -192,7 +231,7 @@ function EventCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="text-[15px] font-semibold text-text">{EVENT_LABEL[e.type]}</p>
+            <p className="text-[15px] font-semibold text-text">{EVENT_LABEL[e.type] ?? e.type}</p>
             {low && <span className="rounded-sm bg-panel-raised px-1.5 text-[11px] font-semibold text-text-muted">확신도 낮음</span>}
           </div>
           <p className="tnum font-mono text-[12px] text-text-muted">
@@ -200,9 +239,9 @@ function EventCard({
             {e.durationMs > 0 && ` │ ${(e.durationMs / 1000).toFixed(e.durationMs < 10000 ? 1 : 0)}초`}
             {e.confidence != null && ` │ 확신도 ${e.confidence.toFixed(2)}`}
           </p>
-          {e.detail && <p className="mt-1 text-[13px] text-text">{e.detail}</p>}
+          {detail && <p className="mt-1 text-[13px] break-all text-text">{detail}</p>}
         </div>
-        {cam && (
+        {e.snapshot && (
           <button
             type="button"
             onClick={onPhoto}
@@ -217,7 +256,9 @@ function EventCard({
                 보관 기간 지나 삭제됨
               </span>
             ) : (
-              <SnapshotPlaceholder />
+              <span className="flex aspect-video w-full items-center justify-center bg-panel-raised text-text-faint">
+                <Camera size={16} aria-hidden />
+              </span>
             )}
           </button>
         )}
@@ -237,7 +278,7 @@ function EventCard({
               aria-checked={e.review === v}
               disabled={!canReview}
               title={canReview ? undefined : '감독관만 판단할 수 있습니다'}
-              onClick={() => onReview(e.review === v ? undefined : v, note || undefined, user?.name ?? '감독관')}
+              onClick={() => onReview(e.review === v ? null : v, note || undefined)}
               className={cx(
                 'inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60',
                 e.review === v ? on : 'border-line-strong bg-panel text-text-muted hover:text-text',
@@ -251,14 +292,15 @@ function EventCard({
           aria-label="판단 메모"
           value={note}
           onChange={(x) => setNote(x.target.value)}
-          onBlur={() => e.review && note !== (e.reviewNote ?? '') && onReview(e.review, note, user?.name ?? '감독관')}
+          onBlur={() => e.review && note !== (e.reviewNote ?? '') && onReview(e.review, note)}
           readOnly={!canReview}
           placeholder={canReview ? '메모 (선택)' : '감독관만 판단할 수 있습니다'}
           className="mt-2 h-8 w-full rounded-sm border border-line bg-panel px-2 text-[13px] outline-none focus:border-brand"
         />
         {e.review && e.reviewedAt && (
           <p className="tnum mt-1.5 font-mono text-[11px] text-text-faint">
-            {e.reviewedBy} │ {fmtTime(e.reviewedAt)}
+            {e.reviewedBy != null && `검토자 #${e.reviewedBy} │ `}
+            {fmtTime(e.reviewedAt)}
           </p>
         )}
       </div>
@@ -266,11 +308,38 @@ function EventCard({
   )
 }
 
-/** 목업 스냅샷: 실제 사진 대신 카메라 화면 자리 */
-function SnapshotPlaceholder({ big }: { big?: boolean }) {
+/** 스냅샷 사진: 로그인 헤더가 필요해 blob URL 로 받는다. 닫으면 URL 을 풀어 준다 */
+function Snapshot({ sessionId, eventId }: { sessionId: number; eventId: number }) {
+  const [state, setState] = useState<{ id: number; url?: string; error?: string } | null>(null)
+  useEffect(() => {
+    let alive = true
+    let url: string | undefined
+    consoleApi.snapshotUrl(sessionId, eventId).then(
+      (u) => {
+        if (!alive) return URL.revokeObjectURL(u)
+        url = u
+        setState({ id: eventId, url: u })
+      },
+      (e: unknown) => alive && setState({ id: eventId, error: e instanceof Error ? e.message : String(e) }),
+    )
+    return () => {
+      alive = false
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [sessionId, eventId])
+  const cur = state?.id === eventId ? state : null
+  if (cur?.url) return <img src={cur.url} alt="감독 스냅샷" className="w-full rounded-md" />
   return (
-    <span className={cx('flex aspect-video w-full items-center justify-center bg-panel-raised text-text-faint', big ? 'rounded-md' : '')}>
-      <Camera size={big ? 32 : 16} aria-hidden />
+    <span className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-md bg-panel-raised px-4 text-center text-[13px] text-text-muted">
+      {cur?.error ? (
+        <>
+          <ImageOff size={28} aria-hidden /> 사진을 불러오지 못했습니다 ({cur.error})
+        </>
+      ) : (
+        <>
+          <Loader2 size={24} className="animate-spin text-brand" aria-hidden /> 사진을 불러오는 중
+        </>
+      )}
     </span>
   )
 }

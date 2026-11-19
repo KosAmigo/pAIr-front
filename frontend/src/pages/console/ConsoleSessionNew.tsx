@@ -1,16 +1,19 @@
 // DESIGN.md §7-9-4 회차 만들기: 공개 과제 고르기 → 이름 → 일시 → 감독 (입장은 대상자별 링크로만)
+// 과제 목록은 백엔드 콘솔 과제(공개된 것만), 회차 만들기·대상자 CSV 등록도 백엔드로 보낸다.
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarClock, Camera, Check, CircleAlert, Download, FileSpreadsheet, Search, Upload, Users, X } from 'lucide-react'
+import { CalendarClock, Camera, Check, CircleAlert, Download, FileSpreadsheet, Loader2, Search, Upload, Users, X } from 'lucide-react'
 import { StageSection } from '../../components/fx'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
 import { useAuth } from '../../auth/auth'
-import { CSV_TEMPLATE, createSession, inviteParticipants, parseParticipantsCsv, updateSession, useCompanies, type CsvRow } from '../../data/consoleSessions'
-import { kindName, useConsoleTasks } from '../../data/consoleTasks'
+import { ErrorState } from '../../components/ErrorState'
+import { companyLabel, CSV_TEMPLATE, parseParticipantsCsv, useLoad, type CsvRow } from '../../data/consoleSessions'
+import { consoleApi } from '../../consoleApi'
 import { useMyCompanyId } from './format'
+import { Loading } from './Loading'
 
 const input = 'h-10 rounded-sm border border-line-strong bg-panel px-3 text-[15px] text-text outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
 const p2 = (n: number) => String(n).padStart(2, '0')
@@ -22,7 +25,9 @@ export default function ConsoleSessionNew() {
   const nav = useNavigate()
   const { user } = useAuth()
   const mine = useMyCompanyId()
-  const open = useConsoleTasks().filter((t) => t.status === 'OPEN')
+  const taskList = useLoad('console-tasks', () => consoleApi.tasks())
+  // 회차에는 공개한 기업 실전(LIVE) 과제만 건다
+  const open = (taskList.data ?? []).filter((t) => t.status === 'OPEN' && t.usage === 'LIVE')
   const [q, setQ] = useState('')
   // 회차 과제는 여러 개 (기획_결정사항 §1). 고른 순서 = 응시 화면 순서(sort_order)
   const [taskIds, setTaskIds] = useState<string[]>([])
@@ -33,16 +38,18 @@ export default function ConsoleSessionNew() {
     setEnd(null)
   }
   // 대상자 CSV (기획_결정사항 §1): 양식(이름,이메일)에 맞춘 파일, 올리기 전에 오류를 미리 보여 준다
-  const [csv, setCsv] = useState<{ name: string; rows: CsvRow[] } | null>(null)
+  const [csv, setCsv] = useState<{ file: File; name: string; rows: CsvRow[] } | null>(null)
   const csvBad = csv ? csv.rows.filter((r) => r.error).length : 0
   const csvOk = csv ? csv.rows.length - csvBad : 0
   const readCsv = (f: File | undefined) => {
     if (!f) return
-    f.text().then((text) => setCsv({ name: f.name, rows: parseParticipantsCsv(text) }))
+    f.text().then((text) => setCsv({ file: f, name: f.name, rows: parseParticipantsCsv(text) }))
   }
   const templateHref = `data:text/csv;charset=utf-8,${encodeURIComponent('\uFEFF' + CSV_TEMPLATE)}`
-  const companies = useCompanies()
-  const [company, setCompany] = useState<number>(mine ?? companies[0]?.id ?? 0)
+  // 회사 목록 API 가 아직 없어 관리자는 회사 번호를 직접 넣는다. 기업 회원은 백엔드가 로그인한 회사로 정한다
+  const [company, setCompany] = useState<string>(mine != null && mine > 0 ? String(mine) : '')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   // 화면을 연 시각 기준: 기본 날짜는 내일 14:00
   const [openedAt] = useState(() => Date.now())
@@ -62,6 +69,7 @@ export default function ConsoleSessionNew() {
     task: !chosen.length ? '과제를 하나 이상 고르세요' : null,
     csv: csvBad ? `CSV에 오류가 있는 행이 ${csvBad}개 있습니다. 고친 파일을 다시 올리세요` : null,
     title: !title.trim() ? '회차 이름을 입력하세요' : null,
+    company: user?.role === 'ADMIN' && !(Number(company) > 0) ? '회사 번호를 입력하세요' : null,
     time: isNaN(startAt.getTime()) ? '시작 일시를 입력하세요' : startAt.getTime() < openedAt ? '시작 시각이 지났습니다' : spanMin <= 0 ? '종료가 시작보다 늦어야 합니다' : null,
   }
   const short = chosen.length > 0 && spanMin > 0 && spanMin < totalMin
@@ -77,33 +85,42 @@ export default function ConsoleSessionNew() {
           onSubmit={(e) => {
             e.preventDefault()
             setTried(true)
-            if (Object.values(errors).some(Boolean) || !chosen.length) return
-            const s = createSession({
-              companyId: company,
-              tasks: chosen.map((t) => ({ id: t.id, title: t.title, minutes: t.minutes })),
-              title: title.trim(),
-              startsAt: startAt.toISOString(),
-              endsAt: endAt.toISOString(),
-              proctoring,
-            })
-            // CSV 로 올린 대상자를 바로 초대한다 (등록 즉시 입장 링크 메일 1번)
-            if (csv && csvOk) {
-              inviteParticipants(s.id, csv.rows.filter((r) => !r.error).map((r) => ({ name: r.name, email: r.email })))
-              updateSession(s.id, { participantsCsv: csv.name })
+            if (saving || Object.values(errors).some(Boolean) || !chosen.length) return
+            setSaving(true)
+            setSaveError(null)
+            const create = async () => {
+              const s = await consoleApi.createSession({
+                companyId: user?.role === 'ADMIN' ? Number(company) : undefined,
+                taskIds: chosen.map((t) => t.id),
+                title: title.trim(),
+                startsAt: startAt.toISOString(),
+                endsAt: endAt.toISOString(),
+                proctoring,
+              })
+              // CSV 로 올린 대상자를 바로 등록한다 (등록 즉시 입장 링크 메일 1번). 실패해도 회차는 만들어졌으니 대상자 탭으로 간다
+              let csvError: string | null = null
+              if (csv && csvOk) await consoleApi.importCsv(s.id, csv.file, false).catch((e: unknown) => (csvError = e instanceof Error ? e.message : String(e)))
+              nav(`/console/sessions/${s.id}?tab=participants`, { state: csvError ? { csvError } : undefined })
             }
-            nav(`/console/sessions/${s.id}?tab=participants`)
+            create().catch((e: unknown) => {
+              setSaving(false)
+              setSaveError(e instanceof Error ? e.message : String(e))
+            })
           }}
           className="glass flex flex-col gap-8 rounded-2xl bg-white/90! p-8 shadow-md!"
         >
           {user?.role === 'ADMIN' && (
-            <Section n={0} title="회사">
-              <select value={company} onChange={(e) => setCompany(Number(e.target.value))} className={cx(input, 'w-60')}>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+            <Section n={0} title="회사" error={tried ? errors.company : null}>
+              <input
+                aria-label="회사 번호"
+                type="number"
+                min={1}
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder="회사 번호"
+                className={cx(input, 'tnum w-60 font-mono')}
+              />
+              <p className="-mt-1 text-[13px] text-text-muted">회사 목록 기능은 준비 중입니다. 회차를 열 회사의 번호를 넣으세요.</p>
             </Section>
           )}
 
@@ -114,6 +131,8 @@ export default function ConsoleSessionNew() {
               <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-faint" aria-hidden />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="과제 제목" className={cx(input, 'w-full pl-9')} />
             </label>
+            {taskList.error && <ErrorState compact message={taskList.error} onRetry={taskList.reload} />}
+            {taskList.loading && <Loading text="과제를 불러오는 중" className="py-6" />}
             <ul aria-label="과제" className="flex max-h-[260px] flex-col gap-2 overflow-auto">
               {list.map((t) => (
                 <li key={t.id}>
@@ -135,7 +154,7 @@ export default function ConsoleSessionNew() {
                     <span className="flex-1">
                       <span className="block text-[15px] font-semibold text-text">{t.title}</span>
                       <span className="text-[13px] text-text-muted">
-                        {t.track === 'DEV' ? '개발' : '비개발'} │ {kindName(t.category)} │ {t.difficulty}
+                        {t.type === 'dev' ? '개발' : '비개발'}
                       </span>
                     </span>
                     <span className="tnum font-mono text-[13px] text-text-muted">{t.minutes}분</span>
@@ -143,7 +162,7 @@ export default function ConsoleSessionNew() {
                   </button>
                 </li>
               ))}
-              {list.length === 0 && <li className="py-6 text-center text-[14px] text-text-muted">공개된 과제가 없습니다.</li>}
+              {taskList.data && list.length === 0 && <li className="py-6 text-center text-[14px] text-text-muted">공개된 과제가 없습니다.</li>}
             </ul>
           </Section>
 
@@ -235,12 +254,13 @@ export default function ConsoleSessionNew() {
             실전 시험은 메일로 받은 입장 링크로만 입장할 수 있습니다. 시작 전까지는 시간, 과제, 대상자를 고치거나 회차를 취소할 수 있습니다.
           </p>
 
+          {saveError && <ErrorState compact message={`회차를 만들지 못했습니다: ${saveError}`} />}
           <div className="flex justify-end gap-2 border-t border-line pt-6">
             <Button variant="ghost" onClick={() => nav('/console/sessions')}>
               취소
             </Button>
-            <Button type="submit" variant="primary" size="lg">
-              회차 만들기
+            <Button type="submit" variant="primary" size="lg" disabled={saving}>
+              {saving && <Loader2 size={16} className="animate-spin" aria-hidden />} 회차 만들기
             </Button>
           </div>
         </form>
@@ -250,7 +270,7 @@ export default function ConsoleSessionNew() {
               <CalendarClock size={14} aria-hidden /> SESSION PREVIEW
             </p>
             <div>
-              <p className="text-[13px] text-stage-muted">{companies.find((c) => c.id === company)?.name ?? '회사'}</p>
+              <p className="text-[13px] text-stage-muted">{Number(company) > 0 ? companyLabel(Number(company)) : user?.companyName ?? '회사'}</p>
               <p className={cx('text-[22px] leading-8 font-bold', title.trim() ? 'text-stage-text' : 'text-stage-faint')}>{title.trim() || '회차 이름'}</p>
             </div>
             <div className="glass-stage rounded-xl px-4 py-3">

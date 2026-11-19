@@ -112,12 +112,28 @@ export type ReportResponse = { status: AttemptStatus; error: string | null; repo
 
 export class ApiError extends Error {}
 
-async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
+/**
+ * 로그인 정보 헤더 (백엔드 HeaderCurrentUserResolver, pair.auth.mode=header).
+ * 회원 API 가 생기기 전까지 목업 계정의 id·권한·회사를 그대로 보낸다. AuthProvider 가 로그인 상태가 바뀔 때마다 넣는다.
+ */
+let authHeaders: Record<string, string> = {}
+export function setAuthHeaders(user: { id: number; role: string; companyId?: number } | null) {
+  authHeaders = user
+    ? {
+        'X-Pair-User-Id': String(user.id),
+        'X-Pair-Role': user.role,
+        ...(user.companyId != null ? { 'X-Pair-Company-Id': String(user.companyId) } : {}),
+      }
+    : {}
+}
+export const getAuthHeaders = () => authHeaders
+
+export async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response
   try {
     res = await fetch(url, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers: { ...authHeaders, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
@@ -158,6 +174,8 @@ export const api = {
   followUps: (id: string, answers: string[]) => call<Attempt>('POST', `/api/attempts/${enc(id)}/followups`, { answers }),
   rescore: (id: string) => call<Attempt>('POST', `/api/attempts/${enc(id)}/rescore`),
   report: (id: string) => call<ReportResponse>('GET', `/api/attempts/${enc(id)}/report`),
+  /** 과제 정의 (목록 API 는 없어 id 로 하나씩 받는다) */
+  task: (taskId: string) => call<Task>('GET', `/api/tasks/${enc(taskId)}`),
 }
 
 /**
@@ -211,9 +229,6 @@ export async function chatStream(id: string, message: string, onDelta: (t: strin
   }
   throw new ApiError('AI 답변을 끝까지 받지 못했습니다. 다시 보내 주세요.')
 }
-
-/** 실제 응시 ID인지 (목업 ID 'a-1107' 등과 구분) */
-export const isRealAttempt = (id: string | undefined) => !!id && id.startsWith('att-')
 
 // ── 채점 툴 (임시 기능) ─────────────────────
 

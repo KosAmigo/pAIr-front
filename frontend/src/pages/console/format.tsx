@@ -1,7 +1,6 @@
 // 콘솔 화면 공용 도우미: 시각 표기, 난이도 색, 토스트
 import { useEffect, useState } from 'react'
 import { useAuth, isCompanyRole } from '../../auth/auth'
-import { useCompanies } from '../../data/consoleSessions'
 
 /** 잠깐 떴다 사라지는 알림. show(text) 로 띄운다 */
 export function useToast() {
@@ -64,11 +63,10 @@ export const fmtAgo = (iso: string | undefined, now: number) => {
   return s < 60 ? `${s}초 전` : s < 3600 ? `${Math.floor(s / 60)}분 전` : `${Math.floor(s / 3600)}시간 전`
 }
 
-/** 지금 계정이 볼 수 있는 회사 (기업 담당자는 자기 회사만) */
+/** 지금 계정이 볼 수 있는 회사 (기업 회원은 자기 회사만, 관리자는 null = 전체). 백엔드도 로그인한 회사로 거른다 */
 export function useMyCompanyId(): number | null {
   const { user } = useAuth()
-  const companies = useCompanies()
   if (!isCompanyRole(user?.role)) return null
-  return companies.find((c) => c.name === user.companyName)?.id ?? -1
+  return user.companyId ?? -1
 }
 

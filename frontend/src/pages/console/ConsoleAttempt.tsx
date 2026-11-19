@@ -1,34 +1,47 @@
 // DESIGN.md §7-9-4a 응시자 상세: 왼쪽 결과 리포트 본문, 오른쪽 감독 패널(판단 남기기)
-import { useEffect, useState } from 'react'
+// 주소의 attemptId 는 대상자(participant) ID 다. 대상자는 과제마다 응시(attempt)가 하나씩 있어
+// 과제를 골라 그 응시의 리포트를 백엔드(api.report)에서 불러온다.
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CircleAlert, Loader2 } from 'lucide-react'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
+import { ErrorState } from '../../components/ErrorState'
 import { Glass } from '../../components/fx'
-import { PSTATE_LABEL } from '../../data/consoleSessions'
-import type { Report } from '../../api'
+import { cx } from '../../components/cx'
+import { api } from '../../api'
+import { consoleApi } from '../../consoleApi'
+import { PSTATE_LABEL, stateOf, taskTitle, useLoad, useTaskMap } from '../../data/consoleSessions'
 import { ReportView } from '../RealReport'
-import { loadReport, useSession } from '../../data/consoleSessions'
-import { useMyCompanyId } from './format'
+import { Loading } from './Loading'
 import ProctorPanel from './ProctorPanel'
 
 export default function ConsoleAttempt() {
   const { sessionId, attemptId } = useParams()
-  const s = useSession(sessionId)
-  const mine = useMyCompanyId()
-  const p = s?.participants.find((x) => x.id === attemptId)
+  const sid = Number(sessionId)
+  const pid = Number(attemptId)
+  const detail = useLoad(Number.isFinite(sid) ? `session-${sid}` : null, () => consoleApi.session(sid))
+  const tasks = useTaskMap()
+  const s = detail.data?.session
+  const p = detail.data?.participants.find((x) => x.id === pid)
   useConsoleCrumbs(s && p ? [s.title, p.name] : [])
-  const [report, setReport] = useState<{ file: string; r: Report | null } | null>(null)
+  const taskIds = p ? (s?.taskIds ?? []).filter((t) => p.attempts[t]).concat(Object.keys(p.attempts).filter((t) => !s?.taskIds.includes(t))) : []
+  const [picked, setPicked] = useState<string | null>(null)
+  const taskId = picked && taskIds.includes(picked) ? picked : (taskIds[0] ?? null)
+  const attempt = p && taskId ? p.attempts[taskId] : null
+  const report = useLoad(attempt ? `report-${attempt}` : null, () => api.report(attempt!))
 
-  useEffect(() => {
-    if (!p?.reportFile) return
-    let alive = true
-    loadReport(p.reportFile).then((r) => alive && setReport({ file: p.reportFile!, r }))
-    return () => {
-      alive = false
-    }
-  }, [p?.reportFile])
-
-  if (!s || !p || (mine != null && s.companyId !== mine)) {
+  if (detail.error && !detail.data) {
+    return (
+      <div className="flex flex-col items-center gap-4 px-8 py-24 text-center">
+        <ErrorState message={detail.error} onRetry={detail.reload} />
+        <Link to="/console/sessions" className="text-[14px] font-semibold text-brand hover:underline">
+          회차 목록으로
+        </Link>
+      </div>
+    )
+  }
+  if (detail.loading) return <Loading text="응시 정보를 불러오는 중" className="py-32" />
+  if (!s || !p) {
     return (
       <div className="flex flex-col items-center gap-3 py-32 text-center">
         <CircleAlert size={28} className="text-text-faint" aria-hidden />
@@ -39,7 +52,7 @@ export default function ConsoleAttempt() {
       </div>
     )
   }
-  const loaded = report && report.file === p.reportFile ? report.r : undefined
+  const rr = report.data
 
   return (
     <div className="grid items-start gap-6 p-8 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -53,21 +66,43 @@ export default function ConsoleAttempt() {
               {p.email} │ {s.title}
             </p>
           </div>
-          <span className="ml-2 rounded-full bg-panel-raised px-2.5 py-1 text-[13px] font-semibold text-text-muted">{PSTATE_LABEL[p.state]}</span>
+          <span className="ml-2 rounded-full bg-panel-raised px-2.5 py-1 text-[13px] font-semibold text-text-muted">{PSTATE_LABEL[stateOf(p)]}</span>
           <Link to={`/console/sessions/${s.id}?tab=results`} className="ml-auto text-[14px] font-semibold text-brand hover:underline">
             결과 목록으로
           </Link>
         </Glass>
-        {!p.reportFile ? (
-          <p className="rounded-xl border border-line bg-panel py-16 text-center text-[14px] text-text-muted shadow-sm">아직 채점 결과가 없습니다.</p>
-        ) : loaded === undefined ? (
+        {taskIds.length > 1 && (
+          <div role="tablist" aria-label="과제" className="mb-4 flex flex-wrap gap-1.5">
+            {taskIds.map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={t === taskId}
+                onClick={() => setPicked(t)}
+                className={cx('h-8 rounded-full px-3 text-[13px] font-medium', t === taskId ? 'bg-brand-dim text-brand' : 'bg-panel-raised text-text-muted hover:text-text')}
+              >
+                {taskTitle(tasks.map, t)}
+              </button>
+            ))}
+          </div>
+        )}
+        {!attempt ? (
+          <p className="rounded-xl border border-line bg-panel py-16 text-center text-[14px] text-text-muted shadow-sm">아직 응시 기록이 없습니다.</p>
+        ) : report.error ? (
+          <ErrorState message={report.error} onRetry={report.reload} />
+        ) : !rr ? (
           <p className="flex items-center justify-center gap-2 py-16 text-[14px] text-text-muted">
             <Loader2 size={18} className="animate-spin text-brand" aria-hidden /> 리포트를 불러오는 중
           </p>
-        ) : loaded ? (
-          <ReportView r={loaded} bare />
+        ) : rr.status === 'DONE' && rr.report ? (
+          <ReportView r={rr.report} bare />
+        ) : rr.status === 'ERROR' ? (
+          <ErrorState message={rr.error ?? '채점에 실패했습니다'} onRetry={report.reload} />
         ) : (
-          <p className="py-16 text-center text-[14px] text-alert">리포트를 찾을 수 없습니다.</p>
+          <p className="rounded-xl border border-line bg-panel py-16 text-center text-[14px] text-text-muted shadow-sm">
+            {rr.status === 'SCORING' ? '채점 중입니다. 잠시 뒤 다시 확인하세요.' : '아직 제출하지 않은 응시입니다.'}
+          </p>
         )}
       </div>
       <ProctorPanel session={s} p={p} className="xl:sticky xl:top-4" />

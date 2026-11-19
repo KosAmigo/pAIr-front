@@ -8,19 +8,19 @@ import { cx } from '../components/cx'
 import { Button, Logo } from '../components/ui'
 import { Aurora, Glass, GlowBorder, GradientText, Reveal, StageSection } from '../components/fx'
 import { StatHex } from '../components/dashboard/StatHex'
-import { STAT_HISTORY, STATS, total } from '../data/dashboard'
+import { STATS } from '../data/dashboard'
 import { homeFor, useAuth } from '../auth/auth'
-import { submitInquiry } from '../data/inquiries'
 
 const inputCls =
   'h-11 w-full rounded-sm border border-line-strong bg-panel px-3 text-[16px] text-text outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-text-faint focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
 
-const DEMO = STAT_HISTORY[STAT_HISTORY.length - 1].scores
-const DEMO_STATS = STATS.map((st) => ({ key: st.key, name: st.name, score: DEMO[st.key], max: st.max, color: st.color }))
+// 쇼케이스 육각형은 실제 점수가 아니라 장식이다: 항목(채점 기준 상수)마다 배점의 3/4 을 채운 모양만 보여 준다
+const DEMO_STATS = STATS.map((st) => ({ key: st.key, name: st.name, score: Math.round(st.max * 0.75), max: st.max, color: st.color }))
+const DEMO_TOTAL = DEMO_STATS.reduce((n, st) => n + st.score, 0)
 const CHIPS = [
-  { icon: Sparkles, text: 'AI 질문 18턴 분석', cls: 'top-[16%] right-[8%]', delay: '0s' },
-  { icon: GitBranch, text: '복기 분기 b2 +16', cls: 'bottom-[22%] left-[6%]', delay: '-2s' },
-  { icon: ShieldCheck, text: '감점 근거 대화 #T07', cls: 'bottom-[9%] right-[12%]', delay: '-4s' },
+  { icon: Sparkles, text: 'AI 질문 전체 분석', cls: 'top-[16%] right-[8%]', delay: '0s' },
+  { icon: GitBranch, text: '복기 분기로 다시 풀기', cls: 'bottom-[22%] left-[6%]', delay: '-2s' },
+  { icon: ShieldCheck, text: '감점 근거 대화 표시', cls: 'bottom-[9%] right-[12%]', delay: '-4s' },
 ]
 
 function AuthLayout({ title, children, footer }: { title: string; children: ReactNode; footer: ReactNode }) {
@@ -40,7 +40,7 @@ function AuthLayout({ title, children, footer }: { title: string; children: Reac
             <p className="mt-4 max-w-[440px] text-[17px] leading-7 text-stage-muted">풀이 과정 전체를 6가지 역량으로 채점하고, 아쉬웠던 순간으로 돌아가 다시 풀어 볼 수 있습니다.</p>
           </Reveal>
           <div className="relative mt-auto flex justify-center" aria-hidden>
-            <StatHex stats={DEMO_STATS} total={total(DEMO)} active={active} onActive={setActive} size={400} />
+            <StatHex stats={DEMO_STATS} total={DEMO_TOTAL} active={active} onActive={setActive} size={400} />
             {CHIPS.map((c) => (
               <span key={c.text} className={`auth-float glass-stage absolute inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold text-stage-text ${c.cls}`} style={{ animationDelay: c.delay }}>
                 <c.icon size={14} className="text-stage-brand" />
@@ -294,67 +294,27 @@ export function Signup() {
 /**
  * 기업 도입 문의 (기획_결정사항 §4, company_inquiries). 기업 회원은 자체 가입하지 않는다:
  * 문의 → 관리자 승인(회사 등록) → 담당자에게 초대 메일 → 초대 링크로 계정을 만든다.
+ * 문의 접수 API 가 아직 백엔드에 없어 지금은 준비 중 안내만 보여 준다 (가짜로 저장하지 않는다).
  */
 function CompanyInquiry({ onBack }: { onBack: () => void }) {
-  const [f, setF] = useState({ companyName: '', businessNo: '', contactName: '', contactEmail: '', message: '' })
-  const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
-  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }))
   return (
     <AuthLayout
-      title={done ? '문의를 받았습니다' : '기업 도입 문의'}
+      title="기업 도입 문의"
       footer={
         <button type="button" onClick={onBack} className="font-semibold text-brand hover:underline">
           일반 회원가입으로
         </button>
       }
     >
-      {done ? (
-        <div className="mt-6 flex flex-col gap-4 text-[15px] leading-7 text-text-muted">
-          <p className="flex items-center gap-2 font-semibold text-signal">
-            <Check size={18} aria-hidden /> 접수 완료
-          </p>
-          <p>
-            관리자가 확인하고 승인하면 <span className="font-semibold text-text">{f.contactEmail}</span>로 담당자 초대 메일을 보냅니다. 메일의 초대 링크로 계정을 만들면 콘솔에서 시험 회차를 열 수 있습니다.
-          </p>
-          <Link to="/" className="font-semibold text-brand hover:underline">
-            처음으로
-          </Link>
-        </div>
-      ) : (
-        <>
-          <p className="mt-2 text-[14px] leading-6 text-text-muted">기업 계정은 직접 가입하지 않습니다. 문의를 남기면 관리자가 승인한 뒤 담당자에게 초대 메일을 보냅니다.</p>
-          {error && <ErrorBanner>{error}</ErrorBanner>}
-          <form
-            className="mt-6 flex flex-col gap-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const err = submitInquiry({ ...f, message: f.message.trim() || undefined })
-              setError(err)
-              if (!err) setDone(true)
-            }}
-          >
-            <Field id="iq-company" label="회사 이름">
-              <input id="iq-company" value={f.companyName} onChange={set('companyName')} autoComplete="organization" required maxLength={100} className={inputCls} />
-            </Field>
-            <Field id="iq-bno" label="사업자등록번호" hint="000-00-00000">
-              <input id="iq-bno" value={f.businessNo} onChange={set('businessNo')} required maxLength={20} className={cx(inputCls, 'tnum font-mono')} />
-            </Field>
-            <Field id="iq-name" label="담당자 이름">
-              <input id="iq-name" value={f.contactName} onChange={set('contactName')} autoComplete="name" required maxLength={50} className={inputCls} />
-            </Field>
-            <Field id="iq-email" label="담당자 이메일" hint="승인되면 이 주소로 초대 메일이 갑니다.">
-              <input id="iq-email" type="email" value={f.contactEmail} onChange={set('contactEmail')} autoComplete="email" required className={inputCls} />
-            </Field>
-            <Field id="iq-msg" label="문의 내용 (선택)">
-              <textarea id="iq-msg" rows={3} value={f.message} onChange={set('message')} className={cx(inputCls, 'h-auto py-2 leading-6')} />
-            </Field>
-            <Button type="submit" variant="primary" size="lg" className="mt-2 w-full">
-              문의 보내기
-            </Button>
-          </form>
-        </>
-      )}
+      <p className="mt-2 text-[14px] leading-6 text-text-muted">기업 계정은 직접 가입하지 않습니다. 문의를 남기면 관리자가 승인한 뒤 담당자에게 초대 메일을 보냅니다.</p>
+      <div role="status" className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-dashed border-line-strong bg-panel px-6 py-10 text-center">
+        <Building2 size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
+        <p className="text-[16px] font-semibold text-text">준비 중인 기능입니다</p>
+        <p className="text-[14px] leading-6 break-keep text-text-muted">온라인 문의 접수는 아직 준비 중입니다. 도입을 원하시면 pAIr 운영팀에 직접 연락해 주세요.</p>
+        <Link to="/" className="text-[14px] font-semibold text-brand hover:underline">
+          처음으로
+        </Link>
+      </div>
     </AuthLayout>
   )
 }

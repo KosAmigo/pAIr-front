@@ -1,37 +1,36 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, ArrowUpRight, Clock, Coins, History as HistoryIcon, Play, Target } from 'lucide-react'
+import { ArrowUpRight, Coins, History as HistoryIcon, Loader2, Play, Target } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
-import { ButtonLink, Panel, Sep } from '../components/ui'
+import { ButtonLink, Panel } from '../components/ui'
+import { ErrorState } from '../components/ErrorState'
 import { CountUp, GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
 import { MiniHex, StatHex, type HexStat } from '../components/dashboard/StatHex'
-import { PROFILE, STAT_HISTORY, STATS, total, type StatScores } from '../data/dashboard'
-import { recommended } from '../data/mock'
+import { loadStatHistory, STATS, total, type StatEntry, type StatScores } from '../data/dashboard'
 import { duration, easing } from '../lib/motion'
-import { useCredits } from '../data/credits'
+import { useAuth } from '../auth/auth'
+import type { ApiError } from '../api'
 
 // DESIGN.md §7-2 개인 대시보드 (2026-11-19 전면 개편: "역량 시트")
 // 위: 다크 무대에 역량 육각형, 총점과 등급, 6개 스탯 막대. 육각형과 막대는 마우스 강조를 함께 쓴다.
-// 아래: 성장 곡선, 다음 목표(가장 약한 항목 + 추천 과제), 최근 응시 카드(작은 육각형).
-
-const latest = STAT_HISTORY[STAT_HISTORY.length - 1]
-const previous = STAT_HISTORY[STAT_HISTORY.length - 2]
+// 아래: 성장 곡선, 다음 목표(가장 약한 항목), 최근 응시 카드(작은 육각형).
+// 점수는 백엔드의 채점된 응시(GET /api/attempts + 응시별 리포트 항목)로만 그린다. 추천 과제·크레딧은 API 가 없어 준비 중.
 const toHex = (s: StatScores): HexStat[] => STATS.map((st) => ({ key: st.key, name: st.name, score: s[st.key], max: st.max, color: st.color }))
 
 /** 다크 무대 위 스탯 막대 한 줄 (게임 스탯처럼: 이름, 점수/배점, 차오르는 막대, 지난 응시 대비) */
-function StatRow({ i, active, onActive }: { i: number; active: boolean; onActive: (on: boolean) => void }) {
+function StatRow({ i, latest, previous, active, onActive }: { i: number; latest: StatEntry; previous?: StatEntry; active: boolean; onActive: (on: boolean) => void }) {
   const st = STATS[i]
   const v = latest.scores[st.key]
-  const d = v - previous.scores[st.key]
+  const d = previous ? v - previous.scores[st.key] : 0
   return (
     <li onMouseEnter={() => onActive(true)} onMouseLeave={() => onActive(false)} className={cx('rounded-md px-3 py-2 transition-colors duration-150', active && 'bg-stage-raised')}>
       <div className="flex items-baseline gap-2">
         <span className="size-2 shrink-0 translate-y-[-1px] rounded-full" style={{ background: st.color, boxShadow: `0 0 10px ${st.color}` }} aria-hidden />
         <span className="text-[15px] font-semibold text-stage-text">{st.name}</span>
         <span className={cx('tnum ml-auto font-mono text-[12px] font-semibold', d > 0 ? 'text-stage-signal' : d < 0 ? 'text-stage-alert' : 'text-stage-faint')}>
-          {d > 0 ? `+${d}` : d < 0 ? d : '±0'}
+          {previous ? (d > 0 ? `+${d}` : d < 0 ? d : '±0') : ''}
         </span>
         <span className="tnum w-14 text-right font-mono text-[15px] font-semibold text-stage-text">
           {v}
@@ -52,20 +51,20 @@ function StatRow({ i, active, onActive }: { i: number; active: boolean; onActive
 }
 
 /** 성장 곡선: 총점 영역 차트. 마우스를 올린 항목이 있으면 그 항목 선(배점 대비 %)을 겹쳐 그린다 */
-function GrowthChart({ focus }: { focus: string | null }) {
+function GrowthChart({ focus, history }: { focus: string | null; history: StatEntry[] }) {
   const reduce = useReducedMotion()
   const W = 760
   const H = 240
   const pad = { l: 40, r: 20, t: 20, b: 32 }
-  const x = (i: number) => pad.l + (i * (W - pad.l - pad.r)) / (STAT_HISTORY.length - 1)
-  const y = (v: number) => pad.t + ((100 - v) / 60) * (H - pad.t - pad.b) // 40~100
-  const totals = STAT_HISTORY.map((h) => total(h.scores))
+  const x = (i: number) => (history.length < 2 ? (pad.l + W - pad.r) / 2 : pad.l + (i * (W - pad.l - pad.r)) / (history.length - 1))
+  const y = (v: number) => pad.t + ((100 - v) / 100) * (H - pad.t - pad.b) // 0~100
+  const totals = history.map((h) => total(h.scores))
   const line = totals.map((v, i) => `${i ? 'L' : 'M'} ${x(i)} ${y(v)}`).join(' ')
   const area = `${line} L ${x(totals.length - 1)} ${H - pad.b} L ${x(0)} ${H - pad.b} Z`
   const fst = STATS.find((s) => s.key === focus)
-  const fLine = fst ? STAT_HISTORY.map((h, i) => `${i ? 'L' : 'M'} ${x(i)} ${y((h.scores[fst.key] / fst.max) * 100)}`).join(' ') : null
+  const fLine = fst ? history.map((h, i) => `${i ? 'L' : 'M'} ${x(i)} ${y((h.scores[fst.key] / fst.max) * 100)}`).join(' ') : null
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`총점 성장 곡선: ${STAT_HISTORY.map((h, i) => `${h.date} ${totals[i]}점`).join(', ')}`}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`총점 성장 곡선: ${history.map((h, i) => `${h.date} ${totals[i]}점`).join(', ')}`}>
       <defs>
         <linearGradient id="growth-area" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" style={{ stopColor: 'var(--color-brand)', stopOpacity: 0.28 }} />
@@ -76,7 +75,7 @@ function GrowthChart({ focus }: { focus: string | null }) {
           <stop offset="100%" style={{ stopColor: 'var(--color-brand-blue)' }} />
         </linearGradient>
       </defs>
-      {[40, 60, 80, 100].map((v) => (
+      {[0, 25, 50, 75, 100].map((v) => (
         <g key={v}>
           <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} stroke="var(--color-line)" strokeDasharray={v === 100 ? undefined : '3 5'} />
           <text x={pad.l - 10} y={y(v) + 4} textAnchor="end" className="fill-text-muted font-mono text-[12px]">
@@ -84,9 +83,9 @@ function GrowthChart({ focus }: { focus: string | null }) {
           </text>
         </g>
       ))}
-      {STAT_HISTORY.map((h, i) => (
-        <text key={h.date} x={x(i)} y={H - 8} textAnchor="middle" className="fill-text-muted font-mono text-[12px]">
-          {h.date}
+      {history.map((h, i) => (
+        <text key={h.id} x={x(i)} y={H - 8} textAnchor="middle" className="fill-text-muted font-mono text-[12px]">
+          {h.date.slice(5)}
         </text>
       ))}
       <motion.path d={area} fill="url(#growth-area)" initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: duration.crawl, delay: 0.6 }} />
@@ -130,19 +129,28 @@ function GrowthChart({ focus }: { focus: string | null }) {
 }
 
 export default function Dashboard() {
-  const [active, setActive] = useState<string | null>(null)
-  const credits = useCredits()
-  const score = total(latest.scores)
-  const prevScore = total(previous.scores)
-  const delta = score - prevScore
-  // 가장 약한 항목 = 배점 대비 비율이 가장 낮은 항목
-  const weakest = [...STATS].sort((a, b) => latest.scores[a.key] / a.max - latest.scores[b.key] / b.max)[0]
-  const weakPct = Math.round((latest.scores[weakest.key] / weakest.max) * 100)
+  const { user } = useAuth()
+  const [data, setData] = useState<{ entries: StatEntry[]; attempts: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    let alive = true
+    loadStatHistory()
+      .then((d) => {
+        if (!alive) return
+        setData(d)
+        setError(null)
+      })
+      .catch((e: ApiError) => alive && setError(e.message))
+    return () => {
+      alive = false
+    }
+  }, [tick])
 
   return (
     <SelfShell
       header={
-        <PageHeader label="SELF-CHECK DASHBOARD" title={`${PROFILE.name}님의 역량 시트`}>
+        <PageHeader label="SELF-CHECK DASHBOARD" title={`${user?.name ?? ''}님의 역량 시트`}>
           <Magnetic>
             <ButtonLink to="/tasks" variant="primary">
               <Play size={18} aria-hidden /> 새 과제 응시
@@ -151,6 +159,39 @@ export default function Dashboard() {
         </PageHeader>
       }
     >
+      {error ? (
+        <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} className="mt-16" />
+      ) : !data ? (
+        <p className="m-8 flex items-center gap-2 text-body text-text-muted">
+          <Loader2 size={18} className="animate-spin" aria-hidden /> 불러오는 중
+        </p>
+      ) : data.entries.length === 0 ? (
+        <div className="mx-auto mt-16 flex max-w-[560px] flex-col items-center gap-3 rounded-2xl border border-dashed border-line-strong bg-panel/60 px-10 py-12 text-center">
+          <HistoryIcon size={28} className="text-text-faint" aria-hidden />
+          <p className="text-[17px] font-semibold text-text">아직 데이터가 없습니다</p>
+          <p className="text-[14px] text-text-muted">과제를 풀고 채점이 끝나면 역량 시트가 채워집니다.</p>
+          <ButtonLink to="/tasks" variant="primary" className="mt-2">
+            <Play size={18} aria-hidden /> 과제 보러 가기
+          </ButtonLink>
+        </div>
+      ) : (
+        <DashboardBody history={data.entries} attempts={data.attempts} />
+      )}
+    </SelfShell>
+  )
+}
+
+function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: number }) {
+  const [active, setActive] = useState<string | null>(null)
+  const latest = history[history.length - 1]
+  const previous = history.length > 1 ? history[history.length - 2] : undefined
+  const score = total(latest.scores)
+  const delta = previous ? score - total(previous.scores) : null
+  // 가장 약한 항목 = 배점 대비 비율이 가장 낮은 항목
+  const weakest = [...STATS].sort((a, b) => latest.scores[a.key] / a.max - latest.scores[b.key] / b.max)[0]
+  const weakPct = Math.round((latest.scores[weakest.key] / weakest.max) * 100)
+
+  return (
       <div className="mx-auto flex max-w-[1440px] flex-col gap-6 px-8 py-6">
         {/* ── 역량 시트: 이 화면의 다크 무대 ── */}
         <StageSection aria-label="역량 시트">
@@ -159,7 +200,7 @@ export default function Dashboard() {
             <div className="flex flex-col gap-5">
               <GlowBorder className="w-fit max-w-full rounded-full">
                 <span className="glass-stage inline-flex h-9 max-w-full items-center gap-2 rounded-full px-4 text-[13px] font-semibold text-stage-text">
-                  <span className="tnum font-mono text-stage-brand">2026.{latest.date}</span>
+                  <span className="tnum font-mono text-stage-brand">{latest.date}</span>
                   <span className="truncate">{latest.task}</span>
                 </span>
               </GlowBorder>
@@ -172,27 +213,29 @@ export default function Dashboard() {
                   />
                   <span className="font-mono text-[18px] text-stage-muted">/100</span>
                 </div>
-                <p className="mt-1 text-[15px] text-stage-muted">
-                  <b className="tnum font-mono font-semibold text-stage-signal">
-                    {delta >= 0 ? '+' : ''}
-                    {delta}
-                  </b>{' '}
-                  지난 응시 대비
-                </p>
+                {delta != null && (
+                  <p className="mt-1 text-[15px] text-stage-muted">
+                    <b className={cx('tnum font-mono font-semibold', delta >= 0 ? 'text-stage-signal' : 'text-stage-alert')}>
+                      {delta >= 0 ? '+' : ''}
+                      {delta}
+                    </b>{' '}
+                    지난 응시 대비
+                  </p>
+                )}
               </div>
               <dl className="grid grid-cols-2 gap-2">
                 <div className="glass-stage rounded-lg px-3 py-2.5">
                   <dt className="label text-stage-muted">CREDITS</dt>
                   <dd className="mt-0.5 flex items-center gap-1.5 text-[15px] text-stage-text">
                     <Coins size={16} className="text-stage-caution" aria-hidden />
-                    <CountUp value={credits} className="font-mono text-[22px] font-semibold" />
+                    <span className="text-[14px] font-semibold text-stage-muted">준비 중</span>
                   </dd>
                 </div>
                 <div className="glass-stage rounded-lg px-3 py-2.5">
                   <dt className="label text-stage-muted">ATTEMPTS</dt>
                   <dd className="mt-0.5 flex items-center gap-1.5 text-[15px] text-stage-text">
                     <HistoryIcon size={16} className="text-stage-brand" aria-hidden />
-                    <CountUp value={STAT_HISTORY.length} className="font-mono text-[22px] font-semibold" />회
+                    <CountUp value={attempts} className="font-mono text-[22px] font-semibold" />회
                   </dd>
                 </div>
               </dl>
@@ -200,7 +243,7 @@ export default function Dashboard() {
 
             {/* 가운데: 육각형 */}
             <div className="flex justify-center">
-              <StatHex stats={toHex(latest.scores)} prev={STATS.map((s) => previous.scores[s.key])} total={score} active={active} onActive={setActive} size={500} />
+              <StatHex stats={toHex(latest.scores)} prev={previous ? STATS.map((s) => previous.scores[s.key]) : undefined} total={score} active={active} onActive={setActive} size={500} />
             </div>
 
             {/* 오른쪽: 6개 스탯 */}
@@ -213,7 +256,7 @@ export default function Dashboard() {
               </div>
               <ul className="flex flex-col gap-0.5">
                 {STATS.map((st, i) => (
-                  <StatRow key={st.key} i={i} active={active === st.key} onActive={(on) => setActive(on ? st.key : null)} />
+                  <StatRow key={st.key} i={i} latest={latest} previous={previous} active={active === st.key} onActive={(on) => setActive(on ? st.key : null)} />
                 ))}
               </ul>
             </div>
@@ -229,7 +272,7 @@ export default function Dashboard() {
             className="col-span-8"
             actions={<span className="text-[13px] text-text-muted">{active ? `${STATS.find((s) => s.key === active)?.name} 선을 겹쳐 보는 중` : '위 스탯에 마우스를 올리면 항목 선이 겹쳐집니다'}</span>}
           >
-            <GrowthChart focus={active} />
+            <GrowthChart focus={active} history={history} />
           </Panel>
 
           {/* 다음 목표 */}
@@ -264,26 +307,8 @@ export default function Dashboard() {
                   />
                 </div>
               </div>
-              <ul className="divide-y divide-line border-t border-line">
-                {recommended['개발'].slice(0, 3).map((r) => (
-                  <li key={r.title}>
-                    <Spotlight as={Link} to="/tasks" className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-panel-raised">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[15px] font-medium text-text">{r.title}</div>
-                        <div className="mt-0.5 flex items-center gap-2 text-[13px] text-text-muted">
-                          <span className="flex items-center gap-1 font-mono">
-                            <Clock size={14} aria-hidden />
-                            {r.minutes}m
-                          </span>
-                          <Sep />
-                          {r.level}
-                        </div>
-                      </div>
-                      <ArrowRight size={18} className="text-text-muted transition-transform duration-150 group-hover:translate-x-1 group-hover:text-brand" aria-hidden />
-                    </Spotlight>
-                  </li>
-                ))}
-              </ul>
+              {/* 추천 과제: 추천 API 가 아직 없어 준비 중 */}
+              <p className="border-t border-line px-5 py-4 text-[14px] text-text-muted">맞춤 추천 과제는 준비 중인 기능입니다.</p>
             </Panel>
           </GlowBorder>
         </div>
@@ -299,17 +324,17 @@ export default function Dashboard() {
             </Link>
           </div>
           <RevealGroup className="grid grid-cols-3 gap-3 xl:grid-cols-6">
-            {[...STAT_HISTORY].reverse().map((h, i, arr) => {
+            {[...history].reverse().map((h, i, arr) => {
               const t = total(h.scores)
               const before = arr[i + 1] ? total(arr[i + 1].scores) : null
               return (
-                <RevealItem key={h.date} className="flex">
+                <RevealItem key={h.id} className="flex">
                   <Spotlight
                     as={Link}
-                    to="/report/a-1107"
+                    to={`/report/${h.id}`}
                     className="group flex w-full flex-col items-center gap-2 rounded-xl border border-line bg-panel px-4 py-4 text-center shadow-sm transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-1 hover:border-brand/50 hover:shadow-md"
                   >
-                    <span className="tnum self-start font-mono text-[12px] text-text-muted">2026.{h.date}</span>
+                    <span className="tnum self-start font-mono text-[12px] text-text-muted">{h.date}</span>
                     <MiniHex stats={toHex(h.scores)} size={84} />
                     <span className="tnum font-mono text-[26px] leading-8 font-semibold text-text">{t}</span>
                     {before != null && (
@@ -326,6 +351,5 @@ export default function Dashboard() {
           </RevealGroup>
         </section>
       </div>
-    </SelfShell>
   )
 }

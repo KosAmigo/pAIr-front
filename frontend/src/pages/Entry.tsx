@@ -6,36 +6,28 @@ import {
   Bot,
   Building2,
   CalendarClock,
-  Camera,
   Check,
   ChevronDown,
   Eye,
   FileText,
-  Globe,
   Hourglass,
   ListChecks,
   Loader2,
   Lock,
   Mail,
   MailCheck,
-  Mic,
-  MonitorUp,
-  RefreshCw,
   ScanFace,
   ShieldCheck,
   Timer,
-  Users,
   Video,
-  Wifi,
   type LucideIcon,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { CheckMark } from '../components/CheckMark'
 import { cx } from '../components/cx'
-import { Button, Logo, StatusDot, type Status } from '../components/ui'
-import { Aurora, Glass, GlowBorder, GradientText, Magnetic, Particles, RevealGroup, RevealItem, StageSection } from '../components/fx'
-import { examInfo } from '../data/mock'
-import { duration, easing, scale, springs, stagger } from '../lib/motion'
+import { Button, Logo } from '../components/ui'
+import { Aurora, Glass, GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, StageSection } from '../components/fx'
+import { duration, easing, scale, springs } from '../lib/motion'
 import { proctorApi, serverOffsetFrom, type EntryInfo } from '../proctor/api/proctorApi.ts'
 import { camHub } from '../proctor/camHub.ts'
 import { saveLiveExam } from '../proctor/liveExam.ts'
@@ -58,9 +50,8 @@ const STEPS: { label: string; icon: LucideIcon }[] = [
   { label: '환경 점검', icon: ScanFace },
   { label: '대기실', icon: Hourglass },
 ]
-/** 화면에 보이는 시험 정보. 데모 링크는 목업, 실제 입장 링크는 입장 API 로 채운다 */
+/** 화면에 보이는 시험 정보. 입장 API(proctorApi.entry)로 받은 값으로 채운다 */
 type ExamView = { company: string; title: string; start: string; duration: string; tasks: string; proctor: string; applicant: { name: string; email: string } }
-const DEMO_VIEW: ExamView = examInfo
 
 const pad = (n: number) => String(n).padStart(2, '0')
 /** 응시자 PC 의 현지 시각으로 "2026.12.01 15:00" */
@@ -168,7 +159,7 @@ function LinkChip({ text = '입장 링크 확인됨' }: { text?: string }) {
 }
 
 // ── 링크 없이 들어온 경우 ───────────────────
-function NoLink({ onDemo }: { onDemo: () => void }) {
+function NoLink() {
   return (
     <Glass className="w-[640px] rounded-2xl bg-white/85! p-12 text-center shadow-lg!">
       <GlowBorder className="mx-auto w-fit rounded-3xl">
@@ -185,12 +176,6 @@ function NoLink({ onDemo }: { onDemo: () => void }) {
         시험 안내 메일의 <span className="font-semibold text-text">시험 입장하기</span> 버튼을 눌러 주세요. 시작 30분 전부터 입장할 수 있습니다.
       </p>
       <p className="mt-3 text-[14px] text-text-muted">메일을 받지 못했다면 시험을 안내한 기업 담당자에게 문의하세요.</p>
-      <div className="mt-8 flex items-center justify-center gap-3 border-t border-line/70 pt-6">
-        <span className="text-[14px] text-text-muted">프로토타입에서는 데모 링크로 입장할 수 있습니다.</span>
-        <Button variant="secondary" onClick={onDemo}>
-          데모 링크로 입장 <ArrowRight size={18} aria-hidden />
-        </Button>
-      </div>
     </Glass>
   )
 }
@@ -428,143 +413,6 @@ function ConsentStep({ view, busy, error, onNext, onBack }: { view: ExamView; bu
   )
 }
 
-// ── 3. 환경 점검: 왼쪽 카메라 틀 + 점검 게이지, 오른쪽 항목이 위에서부터 하나씩 확인된다 ──
-const CHECKS: { key: string; label: string; detail: string; icon: typeof Camera }[] = [
-  { key: 'cam', label: '카메라', detail: 'FaceTime HD Camera', icon: Camera },
-  { key: 'mic', label: '마이크', detail: '내장 마이크, 입력 감지됨', icon: Mic },
-  { key: 'screen', label: '화면 공유', detail: '전체 화면 공유 필요', icon: MonitorUp },
-  { key: 'browser', label: '브라우저', detail: 'Chrome 131, 지원됨', icon: Globe },
-  { key: 'network', label: '네트워크', detail: '42 Mbps, 지연 18ms', icon: Wifi },
-]
-const RESULT: Record<string, Status> = { cam: 'ok', mic: 'ok', screen: 'check', browser: 'ok', network: 'ok' }
-
-function CameraFrame({ states, allOk }: { states: (Status | 'run')[]; allOk: boolean }) {
-  const ok = states.filter((s) => s === 'ok').length
-  return (
-    <>
-      <p className="label text-stage-brand">CAMERA PREVIEW</p>
-      {/* 카메라 미리보기 자리: 네 귀퉁이 틀 + 얼굴 안내 타원 + 훑는 빛 */}
-      <div className="relative mt-3 aspect-[4/3] overflow-hidden rounded-xl border border-stage-line bg-stage-raised">
-        <span aria-hidden className="env-scan pointer-events-none absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-transparent via-stage-brand/20 to-transparent [--scan-h:220px]" />
-        {(['top-3 left-3 border-t-2 border-l-2', 'top-3 right-3 border-t-2 border-r-2', 'bottom-3 left-3 border-b-2 border-l-2', 'bottom-3 right-3 border-b-2 border-r-2'] as const).map((c) => (
-          <span key={c} aria-hidden className={cx('absolute size-5 rounded-[3px]', c, allOk ? 'border-stage-signal' : 'border-stage-brand')} />
-        ))}
-        <span aria-hidden className={cx('absolute top-1/2 left-1/2 h-[64%] w-[42%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border-2 border-dashed', allOk ? 'border-stage-signal/70' : 'border-stage-brand/50')} />
-        <span className="absolute inset-x-0 bottom-3 text-center text-[12px] font-semibold text-stage-muted">얼굴이 타원 안에 오도록 앉아 주세요</span>
-      </div>
-      <div className="mt-auto pt-6">
-        <div className="flex items-baseline justify-between">
-          <p className="label text-stage-faint">CHECKS</p>
-          <p className="tnum font-mono text-[22px] font-bold text-stage-text">
-            {ok}
-            <span className="text-[14px] text-stage-faint">/{CHECKS.length}</span>
-          </p>
-        </div>
-        {/* 항목마다 한 칸: 정상 signal, 확인 필요 caution, 확인 중 흐림 */}
-        <div className="mt-2 flex gap-1.5" aria-hidden>
-          {states.map((s, i) => (
-            <span key={i} className="h-2 flex-1 overflow-hidden rounded-full bg-stage-line">
-              <motion.span
-                className={cx('block h-full origin-left', s === 'ok' ? 'bg-stage-signal' : s === 'check' ? 'bg-stage-caution' : 'bg-stage-line')}
-                initial={false}
-                animate={{ scaleX: s === 'run' ? 0 : 1 }}
-                transition={{ duration: duration.normal, ease: easing.expo }}
-              />
-            </span>
-          ))}
-        </div>
-        <p className={cx('mt-3 flex items-center gap-1.5 text-[13px] font-semibold', allOk ? 'text-stage-signal' : 'text-stage-muted')}>
-          {allOk ? <Check size={15} strokeWidth={2.5} aria-hidden /> : <Loader2 size={15} className={cx(states.includes('run') && 'animate-spin')} aria-hidden />}
-          {allOk ? '응시 준비 완료' : states.includes('run') ? '점검하는 중' : '확인이 필요한 항목이 있습니다'}
-        </p>
-      </div>
-    </>
-  )
-}
-
-function EnvStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  const reduce = useReducedMotion()
-  // 확인이 끝난 항목 수. 움직임 줄이기면 처음부터 다 끝난 상태
-  const [done, setDone] = useState(reduce ? CHECKS.length : 0)
-  const [fixed, setFixed] = useState<Record<string, boolean>>({})
-  useEffect(() => {
-    if (done >= CHECKS.length) return
-    const t = window.setTimeout(() => setDone((d) => d + 1), 420)
-    return () => window.clearTimeout(t)
-  }, [done])
-  const statusOf = (k: string, i: number): Status | 'run' => (i >= done ? 'run' : fixed[k] ? 'ok' : RESULT[k])
-  const states = CHECKS.map((c, i) => statusOf(c.key, i))
-  const allOk = done >= CHECKS.length && states.every((s) => s === 'ok')
-  return (
-    <StepCard
-      no={3}
-      title="응시 환경을 점검합니다"
-      aside={<CameraFrame states={states} allOk={allOk} />}
-      footer={
-        <>
-          <Button variant="ghost" onClick={onBack}>
-            <ArrowLeft size={18} aria-hidden /> 이전
-          </Button>
-          <span className="ml-auto text-[14px] text-text-muted">{done < CHECKS.length ? '점검하는 중' : allOk ? '모든 항목 정상' : '확인이 필요한 항목이 있습니다'}</span>
-          <Button variant="primary" size="lg" disabled={!allOk} onClick={onNext}>
-            대기실 입장 <ArrowRight size={18} aria-hidden />
-          </Button>
-        </>
-      }
-    >
-      {/* 모든 항목이 정상이 되는 순간 한 번 터진다 */}
-      <Particles fire={allOk && !reduce} origin={{ x: 0.3, y: 0.55 }} />
-      <ul className="flex flex-col gap-2">
-        {CHECKS.map((c, i) => {
-          const st = states[i]
-          return (
-            <motion.li
-              key={c.key}
-              initial={reduce ? false : { opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: duration.normal, ease: easing.expo, delay: i * stagger.normal }}
-              className={cx(
-                'flex h-16 items-center gap-3 rounded-xl border bg-panel px-4 transition-colors duration-200',
-                st === 'ok' ? 'border-signal/30' : st === 'check' ? 'border-caution/40 bg-caution/5' : 'border-line',
-              )}
-            >
-              <span
-                aria-hidden
-                className={cx(
-                  'inline-flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors duration-200',
-                  st === 'ok' ? 'bg-signal/10 text-signal' : st === 'check' ? 'bg-caution/12 text-caution' : 'bg-panel-raised text-text-muted',
-                )}
-              >
-                <c.icon size={20} strokeWidth={1.75} />
-              </span>
-              <div className="flex min-w-0 flex-col">
-                <span className="text-[15px] leading-5 font-semibold">{c.label}</span>
-                <span className="truncate text-[13px] leading-5 text-text-muted">{c.detail}</span>
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                {st === 'run' ? (
-                  <span className="inline-flex items-center gap-1.5 text-[14px] text-text-muted">
-                    <Loader2 size={16} className="animate-spin text-brand" aria-hidden /> 확인 중
-                  </span>
-                ) : (
-                  <motion.span initial={reduce ? false : { scale: scale.press, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={springs.snappy}>
-                    <StatusDot status={st} />
-                  </motion.span>
-                )}
-                {st === 'check' && (
-                  <Button size="sm" variant="secondary" onClick={() => setFixed({ ...fixed, [c.key]: true })}>
-                    <RefreshCw size={16} aria-hidden /> 공유 시작
-                  </Button>
-                )}
-              </div>
-            </motion.li>
-          )
-        })}
-      </ul>
-    </StepCard>
-  )
-}
-
 // ── 3. 환경 점검 (실제 입장 링크): 왼쪽 카메라·휴대폰 QR, 오른쪽 실제 점검 목록 ──
 function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () => void; onBack: () => void }) {
   const [saving, setSaving] = useState(false)
@@ -617,7 +465,6 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
 }
 
 // ── 4. 대기실: 다크 무대 ─────────────────────
-const DEMO_WAIT = 4 * 60 + 32
 const START_RETRY_MS = 1000
 const WAIT_TIPS = [
   '시험이 시작되면 응시 화면으로 자동 이동합니다.',
@@ -698,44 +545,6 @@ function WaitingStage({ view, left, total, chips, footer }: { view: ExamView; le
 
       <div className="mt-10 flex items-center gap-4">{footer}</div>
     </div>
-  )
-}
-
-function DemoWaitingRoom({ view, onStart }: { view: ExamView; onStart: () => void }) {
-  const [left, setLeft] = useState(DEMO_WAIT)
-  useEffect(() => {
-    const id = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000)
-    return () => clearInterval(id)
-  }, [])
-  return (
-    <WaitingStage
-      view={view}
-      left={left}
-      total={DEMO_WAIT}
-      chips={
-        <>
-          <StageChip>
-            <Dot ok /> 카메라 정상
-          </StageChip>
-          <StageChip>
-            <Dot ok /> 화면 공유 정상
-          </StageChip>
-          <StageChip>
-            <Users size={14} className="text-stage-brand" aria-hidden /> 응시자 128명 대기 중
-          </StageChip>
-        </>
-      }
-      footer={
-        <>
-          <span className="text-[14px] text-stage-muted">프로토타입에서는 바로 시작할 수 있습니다.</span>
-          <Magnetic>
-            <Button variant="primary" size="lg" onClick={onStart}>
-              바로 시작 <ArrowRight size={18} aria-hidden />
-            </Button>
-          </Magnetic>
-        </>
-      }
-    />
   )
 }
 
@@ -863,24 +672,22 @@ function noticeFor(live: LiveEntry): ReactNode {
 }
 
 export default function Entry() {
-  // 입장 링크: /entry?invite=<응시자별 토큰>. 토큰이 없으면 링크 안내만 보여 준다. invite=demo 는 목업 시연
-  const [params, setParams] = useSearchParams()
+  // 입장 링크: /entry?invite=<응시자별 토큰>. 토큰이 없으면 링크 안내만 보여 준다
+  const [params] = useSearchParams()
   const invite = params.get('invite')
   const viaLink = invite !== null
-  const isDemo = invite === 'demo'
-  const live = useLiveEntry(viaLink && !isDemo ? invite : null)
+  const live = useLiveEntry(viaLink ? invite : null)
   const info = live.info
   const [step, setStep] = useState(0)
   const [dir, setDir] = useState(1)
   const [consentBusy, setConsentBusy] = useState(false)
   const [consentError, setConsentError] = useState<string | null>(null)
-  const navigate = useNavigate()
-  const view = isDemo || !info ? DEMO_VIEW : toView(info)
+  const view = info ? toView(info) : null
 
   // 실전 입장: 카메라 허브를 이 응시자로 연결해 휴대폰 QR 을 미리 받아 둔다
   useEffect(() => {
-    if (invite && !isDemo && info?.proctoring) camHub.connect(invite)
-  }, [invite, isDemo, info?.proctoring])
+    if (invite && info?.proctoring) camHub.connect(invite)
+  }, [invite, info?.proctoring])
 
   const go = (to: number) => {
     setDir(to > step ? 1 : -1)
@@ -888,13 +695,9 @@ export default function Entry() {
   }
   const next = () => go(step + 1)
   const back = () => go(step - 1)
-  const enterByDemoLink = () => {
-    setParams({ invite: 'demo' })
-    setStep(0)
-  }
   /** 동의 다음: 감독 회차면 환경 점검으로, 아니면 동의만 저장하고 대기실로 */
   const afterConsent = async () => {
-    if (isDemo || !invite || !info || info.proctoring) return next()
+    if (!invite || !info || info.proctoring) return next()
     setConsentBusy(true)
     setConsentError(null)
     try {
@@ -908,10 +711,11 @@ export default function Entry() {
   }
 
   // 이미 시작한 응시자가 링크로 다시 들어오면 바로 대기실 → 시작(중복 생성 없음) → 응시 화면
-  const resumed = !isDemo && !!info?.startedAt && !info.submittedAt && info.phase === 'LIVE'
+  const resumed = !!info?.startedAt && !info.submittedAt && info.phase === 'LIVE'
   const shownStep = resumed ? 3 : step
-  const notice = viaLink && !isDemo ? noticeFor(live) : null
-  const showSteps = viaLink && !notice
+  const notice = viaLink ? noticeFor(live) : null
+  // 입장 정보(info)를 받은 뒤에만 단계를 보여 준다
+  const showSteps = viaLink && !notice && !!view
   const waiting = showSteps && shownStep === 3
 
   const header = (
@@ -923,7 +727,7 @@ export default function Entry() {
         </span>
       </div>
       <span aria-hidden />
-      {showSteps ? (
+      {showSteps && view ? (
         <span className={cx('justify-self-end truncate text-[13px] font-medium', waiting ? 'text-stage-muted' : 'text-text-muted')}>
           {view.company ? `${view.company} │ ` : ''}
           {view.title}
@@ -934,14 +738,12 @@ export default function Entry() {
     </header>
   )
   const journey = showSteps ? <Journey current={shownStep} stage={waiting} /> : null
-  const realInvite = !isDemo ? invite : null
-  const stepBody = (
+  const stepBody = invite && info && view && (
     <>
       {shownStep === 0 && <InfoStep view={view} onNext={next} />}
       {shownStep === 1 && <ConsentStep view={view} busy={consentBusy} error={consentError} onNext={() => void afterConsent()} onBack={back} />}
-      {shownStep === 2 && (realInvite ? <LiveEnvStep invite={realInvite} onNext={next} onBack={back} /> : <EnvStep onNext={next} onBack={back} />)}
-      {shownStep === 3 && isDemo && <DemoWaitingRoom view={view} onStart={() => navigate('/exam/live-k7q2mx?mode=live')} />}
-      {shownStep === 3 && realInvite && info && <LiveWaitingRoom invite={realInvite} info={info} offsetMs={live.offsetMs} view={view} />}
+      {shownStep === 2 && <LiveEnvStep invite={invite} onNext={next} onBack={back} />}
+      {shownStep === 3 && <LiveWaitingRoom invite={invite} info={info} offsetMs={live.offsetMs} view={view} />}
     </>
   )
   const body = (
@@ -954,7 +756,7 @@ export default function Entry() {
         exit={{ opacity: 0, x: dir * -48 }}
         transition={{ duration: duration.normal, ease: easing.standard }}
       >
-        {!viaLink && <NoLink onDemo={enterByDemoLink} />}
+        {!viaLink && <NoLink />}
         {notice}
         {showSteps && stepBody}
       </motion.div>

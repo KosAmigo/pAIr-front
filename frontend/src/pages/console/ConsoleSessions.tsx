@@ -1,7 +1,7 @@
 // DESIGN.md §7-9-4 회차 목록 (ADMIN, MANAGER, PROCTOR). 회차 만들기는 ADMIN·MANAGER만
 // 2026-11-19 개편 "관제 보드": 위에 단계 카드 3장(진행 중 / 예정 / 종료)이 탭 역할을 한다.
 // 진행 중을 고르면 이 화면의 다크 무대에 진행 중 회차가 큰 카드로 뜬다(남은 시간, 진행 막대, 입장, 미확인 이벤트).
-// 예정·종료는 표 그대로(표 안쪽은 깨끗하게).
+// 예정·종료는 표 그대로(표 안쪽은 깨끗하게). 회차는 백엔드에서 불러오고 30초마다 다시 부른다(단계는 백엔드 phase).
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarCheck, CalendarClock, Camera, ChevronRight, CircleAlert, Plus, Radio, Users } from 'lucide-react'
@@ -10,23 +10,33 @@ import { PageHeader } from '../../components/SelfShell'
 import { ButtonLink } from '../../components/ui'
 import { Reveal, RevealGroup, RevealItem, Spotlight, StageSection } from '../../components/fx'
 import { StatTabs } from './StatTabs'
-import { companyName, phaseOf, taskTitles, unreviewed, useCompanies, useSessions, type Session, type SessionPhase } from '../../data/consoleSessions'
+import { companyLabel, taskTitlesOf, useLoad, useTaskMap } from '../../data/consoleSessions'
+import { consoleApi, type ConsoleTaskSummary, type SessionSummary } from '../../consoleApi'
+import { ErrorState } from '../../components/ErrorState'
 import { fmtHm, fmtLeft, fmtShort, useMyCompanyId, useNow } from './format'
+import { Loading } from './Loading'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
+type Tab = 'live' | 'upcoming' | 'ended'
+/** 취소한 회차는 종료 칸에 함께 보인다 */
+const tabOf = (s: SessionSummary): Tab => (s.phase === 'LIVE' ? 'live' : s.phase === 'UPCOMING' ? 'upcoming' : 'ended')
+
 export default function ConsoleSessions() {
-  const all = useSessions()
+  const list = useLoad('console-sessions', () => consoleApi.sessions(), 30_000)
+  const tasks = useTaskMap()
+  const all = list.data ?? []
   const now = useNow(1000)
   const nav = useNavigate()
   const mine = useMyCompanyId()
   const canCreate = canManageSessions(useAuth().user?.role)
-  const companies = useCompanies()
+  const companyIds = [...new Set(all.map((s) => s.companyId))].sort((a, b) => a - b)
   const [company, setCompany] = useState<number | 'ALL'>('ALL')
-  const visible = all.filter((s) => (mine != null ? s.companyId === mine : company === 'ALL' || s.companyId === company))
-  const count = (p: SessionPhase) => visible.filter((s) => phaseOf(s, now) === p).length
-  const [tab, setTab] = useState<SessionPhase>(() => (count('live') ? 'live' : 'upcoming'))
+  const visible = all.filter((s) => mine != null || company === 'ALL' || s.companyId === company)
+  const count = (p: Tab) => visible.filter((s) => tabOf(s) === p).length
+  const [picked, setTab] = useState<Tab | null>(null)
+  const tab: Tab = picked ?? (count('live') ? 'live' : 'upcoming')
   const rows = visible
-    .filter((s) => phaseOf(s, now) === tab)
+    .filter((s) => tabOf(s) === tab)
     .sort((a, b) => (tab === 'ended' ? Date.parse(b.startsAt) - Date.parse(a.startsAt) : Date.parse(a.startsAt) - Date.parse(b.startsAt)))
 
   return (
@@ -61,9 +71,9 @@ export default function ConsoleSessions() {
                 className="h-9 rounded-md border border-line-strong bg-panel px-2 text-[14px] text-text outline-none focus:border-brand"
               >
                 <option value="ALL">전체</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+                {companyIds.map((id) => (
+                  <option key={id} value={id}>
+                    {companyLabel(id)}
                   </option>
                 ))}
               </select>
@@ -71,9 +81,13 @@ export default function ConsoleSessions() {
           )}
         </div>
 
-        {tab === 'live' && rows.length > 0 && <LiveBoard rows={rows} now={now} showCompany={mine == null} onOpen={(id) => nav(`/console/sessions/${id}`)} />}
+        {list.error && !list.data && <ErrorState message={list.error} onRetry={list.reload} />}
+        {list.error && list.data && <ErrorState compact message={list.error} onRetry={list.reload} />}
+        {list.loading && <Loading text="회차를 불러오는 중" />}
 
-        {!(tab === 'live' && rows.length > 0) && (
+        {tab === 'live' && rows.length > 0 && <LiveBoard rows={rows} now={now} tasks={tasks.map} showCompany={mine == null} onOpen={(id) => nav(`/console/sessions/${id}`)} />}
+
+        {list.data && !(tab === 'live' && rows.length > 0) && (
         <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
@@ -102,6 +116,7 @@ export default function ConsoleSessions() {
                     key={s.id}
                     s={s}
                     now={now}
+                    tasks={tasks.map}
                     showCompany={mine == null}
                     onOpen={() => nav(`/console/sessions/${s.id}`)}
                   />
@@ -116,32 +131,33 @@ export default function ConsoleSessions() {
   )
 }
 
-function Row({ s, now, showCompany, onOpen }: { s: Session; now: number; showCompany: boolean; onOpen: () => void }) {
-  const phase = phaseOf(s, now)
-  const entered = s.participants.filter((p) => p.enteredAt).length
+function Row({ s, now, tasks, showCompany, onOpen }: { s: SessionSummary; now: number; tasks: Map<string, ConsoleTaskSummary>; showCompany: boolean; onOpen: () => void }) {
+  const phase = s.phase
   return (
     <tr onClick={onOpen} className="h-14 cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised">
       <td className="px-4 py-2">
         <p className="text-[15px] font-semibold text-text">{s.title}</p>
-        {showCompany && <p className="text-[12px] text-text-muted">{companyName(s.companyId)}</p>}
+        {showCompany && <p className="text-[12px] text-text-muted">{companyLabel(s.companyId)}</p>}
       </td>
-      <td className="px-4 text-text-muted">{taskTitles(s)}</td>
+      <td className="px-4 text-text-muted">{taskTitlesOf(tasks, s.taskIds)}</td>
       <td className="tnum px-4 font-mono text-[13px] text-text-muted">
         {fmtShort(s.startsAt)} – {fmtHm(s.endsAt)}
       </td>
       <td className="tnum px-4 text-right font-mono text-[13px] text-text-muted">
-        <span className="text-text">{entered}</span> / {s.participants.length}
+        <span className="text-text">{s.entered}</span> / {s.participants}
       </td>
       <td className="px-4 text-text-muted">{s.proctoring ? <Camera size={16} aria-label="감독 사용" /> : <span aria-label="감독 안 함">—</span>}</td>
       <td className="px-4">
-        {phase === 'live' ? (
+        {phase === 'LIVE' ? (
           <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-alert">
             <i className="rec-pulse size-2 rounded-full bg-alert" aria-hidden />
             진행 중
             <span className="tnum font-mono text-[13px] font-normal text-text-muted">{fmtLeft(Date.parse(s.endsAt) - now)}</span>
           </span>
-        ) : phase === 'upcoming' ? (
+        ) : phase === 'UPCOMING' ? (
           <span className="text-[14px] text-info">예정</span>
+        ) : phase === 'CANCELED' ? (
+          <span className="text-[14px] text-text-faint">취소됨</span>
         ) : (
           <span className="text-[14px] text-text-muted">종료</span>
         )}
@@ -154,7 +170,7 @@ function Row({ s, now, showCompany, onOpen }: { s: Session; now: number; showCom
 }
 
 /** 진행 중 회차: 다크 무대 위 큰 카드 */
-function LiveBoard({ rows, now, showCompany, onOpen }: { rows: Session[]; now: number; showCompany: boolean; onOpen: (id: string) => void }) {
+function LiveBoard({ rows, now, tasks, showCompany, onOpen }: { rows: SessionSummary[]; now: number; tasks: Map<string, ConsoleTaskSummary>; showCompany: boolean; onOpen: (id: number) => void }) {
   return (
     <StageSection aria-label="진행 중 회차">
       <div className="px-8 py-7">
@@ -165,8 +181,7 @@ function LiveBoard({ rows, now, showCompany, onOpen }: { rows: Session[]; now: n
           {rows.map((s) => {
             const left = Date.parse(s.endsAt) - now
             const total = Date.parse(s.endsAt) - Date.parse(s.startsAt)
-            const entered = s.participants.filter((p) => p.enteredAt).length
-            const open = s.participants.reduce((n, p) => n + unreviewed(p), 0)
+            const open = s.unreviewedEvents
             return (
               <RevealItem key={s.id} className="flex">
                 <Spotlight
@@ -179,8 +194,8 @@ function LiveBoard({ rows, now, showCompany, onOpen }: { rows: Session[]; now: n
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[18px] font-bold text-stage-text">{s.title}</p>
                       <p className="truncate text-[13px] text-stage-muted">
-                        {showCompany && `${companyName(s.companyId)} │ `}
-                        {taskTitles(s)}
+                        {showCompany && `${companyLabel(s.companyId)} │ `}
+                        {taskTitlesOf(tasks, s.taskIds)}
                       </p>
                     </div>
                     <ChevronRight size={18} className="text-stage-muted" aria-hidden />
@@ -195,7 +210,7 @@ function LiveBoard({ rows, now, showCompany, onOpen }: { rows: Session[]; now: n
                     <div className="ml-auto flex shrink-0 gap-4 pb-1.5 text-[14px] whitespace-nowrap text-stage-muted">
                       <span className="inline-flex items-center gap-1.5">
                         <Users size={16} aria-hidden />
-                        <b className="tnum font-mono text-stage-text">{entered}</b>/{s.participants.length}
+                        <b className="tnum font-mono text-stage-text">{s.entered}</b>/{s.participants}
                       </span>
                       <span className={cx('inline-flex items-center gap-1.5', open > 0 && 'text-stage-caution')}>
                         <CircleAlert size={16} aria-hidden />

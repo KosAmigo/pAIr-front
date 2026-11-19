@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Coins, LayoutDashboard } from 'lucide-react'
-import { CREDIT_COST, useCredits } from '../data/credits'
+import { CREDIT_COST } from '../data/credits'
 import { motion } from 'motion/react'
 import { useAuth } from '../auth/auth'
 import { springs } from '../lib/motion'
@@ -93,21 +93,16 @@ export function PageHeader({ label, title, children }: { label: string; title: R
   )
 }
 
-/** 크레딧 잔액 (기획_결정사항 §3). 응시 시작 비용보다 적으면 caution */
+/** 크레딧 (기획_결정사항 §3). 잔액 API 가 아직 없어 준비 중으로 보여 준다 */
 function CreditPill() {
-  const n = useCredits()
-  const low = n < CREDIT_COST.ATTEMPT_START
   return (
     <span
-      title={`응시 시작 ${CREDIT_COST.ATTEMPT_START}, 롤백 ${CREDIT_COST.ROLLBACK}, AI 채팅 한 턴 ${CREDIT_COST.CHAT_TURN} 크레딧`}
-      className={cx(
-        'mr-3 inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[14px] font-semibold',
-        low ? 'border-caution/40 bg-caution/10 text-caution' : 'border-line bg-panel/70 text-text',
-      )}
+      title={`크레딧 기능은 준비 중입니다. 응시 시작 ${CREDIT_COST.ATTEMPT_START}, 롤백 ${CREDIT_COST.ROLLBACK}, AI 채팅 한 턴 ${CREDIT_COST.CHAT_TURN} 크레딧 예정`}
+      className="mr-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-panel/70 px-3 text-[14px] font-semibold text-text-muted"
     >
-      <Coins size={15} className={low ? 'text-caution' : 'text-brand'} aria-hidden />
-      <span className="tnum font-mono">{n}</span>
-      <span className="text-[12px] font-medium text-text-muted">크레딧</span>
+      <Coins size={15} className="text-text-faint" aria-hidden />
+      <span>크레딧</span>
+      <span className="text-[12px] font-medium text-text-faint">준비 중</span>
     </span>
   )
 }

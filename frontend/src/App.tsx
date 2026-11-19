@@ -1,19 +1,16 @@
 import { lazy, Suspense } from 'react'
 import { MotionConfig } from 'motion/react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
-import Exam from './pages/Exam'
 import RealExam, { NewExam } from './pages/RealExam'
 import Report from './pages/Report'
 import Replay from './pages/Replay'
 import Entry from './pages/Entry'
 import Submitted from './pages/Submitted'
-import SharedReport from './pages/SharedReport'
 import Tasks from './pages/Tasks'
 import History from './pages/History'
 import Grader from './pages/Grader'
 import GraderResult from './pages/GraderResult'
-import { isRealAttempt } from './api'
 import { AntiCheatingSync } from './anti-cheating'
 import { useAuth } from './auth/auth'
 import { AuthProvider } from './auth/AuthProvider'
@@ -46,17 +43,16 @@ const phoneCam = (
   </Suspense>
 )
 
-// 실제 응시 ID(att-...)는 백엔드에 연결된 응시 화면, 그 밖의 ID는 기존 목업 화면
+// 응시 화면은 백엔드 응시(att-...)만 보여 준다
 // 실전 응시(mode=live)는 로그인 없이 본다 (DESIGN.md §7-8). 자가진단 응시는 로그인이 필요하다.
 function ExamRoute() {
-  const { sessionId } = useParams()
   const [params] = useSearchParams()
   const { user } = useAuth()
   const loc = useLocation()
   if (params.get('mode') !== 'live' && !user) {
     return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />
   }
-  return isRealAttempt(sessionId) ? <RealExam /> : <Exam />
+  return <RealExam />
 }
 
 function ConsoleHome() {
@@ -80,7 +76,6 @@ export default function App() {
           <Route path="/proctor/phone" element={phoneCam} />
           <Route path="/exam/:sessionId" element={<ExamRoute />} />
           <Route path="/exam/:sessionId/submitted" element={<Submitted />} />
-          <Route path="/share/:token" element={<SharedReport />} />
 
           {/* 자가진단: 로그인한 누구나 */}
           <Route element={<RequireAuth />}>
@@ -89,7 +84,7 @@ export default function App() {
             <Route path="/history" element={<History />} />
             <Route path="/exam/new" element={<NewExam />} />
             <Route path="/report/:attemptId" element={<Report />} />
-            <Route path="/replay/:taskId" element={<Replay />} />
+            <Route path="/replay/:attemptId" element={<Replay />} />
           </Route>
 
           {/* 채점 툴: 관리자 */}

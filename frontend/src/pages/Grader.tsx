@@ -7,7 +7,7 @@ import { Button, Logo } from '../components/ui'
 import { Aurora, BranchLine, CountUp, Glass, Reveal, StageSection } from '../components/fx'
 import { motion } from 'motion/react'
 import { duration, easing, stagger } from '../lib/motion'
-import { COMPETENCIES } from '../data/mock'
+import { STATS } from '../data/dashboard'
 import { PillTabs } from './console/ConsoleHero'
 import {
   ApiError,
@@ -42,7 +42,7 @@ const areaCls = 'w-full rounded-md border border-line-strong bg-panel-raised p-3
 const th = 'label h-9 px-3 text-left font-medium'
 
 /** 채점 항목 키 → 역량 색 (§1.5). 모르는 키는 브랜드 색 */
-const compColor = (key: string) => COMPETENCIES.find((c) => c.key === key.toLowerCase())?.color ?? 'var(--color-brand)'
+const compColor = (key: string) => STATS.find((c) => c.key === key.toLowerCase())?.color ?? 'var(--color-brand)'
 
 function Box({
   label,

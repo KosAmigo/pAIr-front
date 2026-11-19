@@ -11,7 +11,7 @@ import { Aurora, Glass, PageTransition, StageSection } from './fx'
 import { Logo } from './ui'
 import { UserMenu } from './UserMenu'
 import { homeFor, useAuth, type Role } from '../auth/auth'
-import { tabOf, useConsoleTasks } from '../data/consoleTasks'
+import { useTaskList } from '../data/consoleTasks'
 
 type MenuItem = { to: string; label: string; icon: typeof FileStack; roles: Role[]; count?: number }
 const MENU: MenuItem[] = [
@@ -38,7 +38,9 @@ export function ConsoleShell() {
   const toast = denied ? '접근 권한이 없습니다' : null
 
   const [crumbs, setCrumbs] = useState<string[]>([])
-  const draftCount = useConsoleTasks().filter((t) => tabOf(t) === 'draft').length
+  // 과제 목록은 관리자만 볼 수 있어 관리자일 때만 불러온다
+  const taskList = useTaskList(user?.role === 'ADMIN')
+  const draftCount = taskList.list?.filter((t) => t.status === 'HIDDEN').length ?? 0
 
   if (!user) return null
   // 과제 메뉴 옆 숫자 = 검수 대기 수

@@ -1,64 +1,58 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Clock, Lock, Sparkles } from 'lucide-react'
+import { ArrowRight, Clock, Code2, FileText, Loader2, Sparkles } from 'lucide-react'
 import { motion } from 'motion/react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
-import { LevelPips } from '../components/taskKind'
-import { KIND_ICON } from '../components/taskKindIcons'
+import { ErrorState } from '../components/ErrorState'
 import { cx } from '../components/cx'
 import { GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
-import { CATALOG, KINDS, type CatalogTask, type Track } from '../data/catalog'
+import type { Track } from '../data/catalog'
+import { api, ApiError, type Task } from '../api'
 import { distance, duration, easing, springs } from '../lib/motion'
-import { CREDIT_COST, useCredits } from '../data/credits'
 
 // DESIGN.md §7-2a 과제 목록 — "퀘스트 보드" (2026-11-19 전면 개편)
-// 위: 직군 스위치(미끄러지는 알약) + 난이도·시간 필터 칩(기획_결정사항 §2). 그 아래 다크 무대에 지금 바로 풀 수 있는 추천 과제를 크게.
-// 아래: 과제 형태별 카드. OPEN 카드는 Spotlight + 떠오름, CLOSED(응시 마감)는 자물쇠와 흐림이고 시작이 막힌다.
+// 위: 직군 스위치(미끄러지는 알약) + 시간 필터 칩(기획_결정사항 §2). 그 아래 다크 무대에 지금 바로 풀 수 있는 추천 과제를 크게.
+// 아래: 과제 카드. 과제 목록 API 가 없어, 응시할 수 있는 과제(api.taskIdFor)의 정의를 GET /api/tasks/{id} 로 하나씩 받는다.
 
 const TRACKS: { value: Track; label: string }[] = [
   { value: 'dev', label: '개발 직군' },
   { value: 'biz', label: '비개발 직군' },
 ]
 
+/** 자가진단으로 응시할 수 있는 과제 id (백엔드 과제 정의) */
+const SELF_TASK_IDS = [api.taskIdFor('dev'), api.taskIdFor('biz')]
+const startUrl = (t: Task) => `/exam/new?track=${t.type}`
+const trackName = (t: Task) => (t.type === 'biz' ? '비개발' : '개발')
+const TrackIcon = ({ t, ...rest }: { t: Task; size: number; strokeWidth?: number; className?: string }) =>
+  t.type === 'biz' ? <FileText {...rest} aria-hidden /> : <Code2 {...rest} aria-hidden />
+
 /** 추천 과제: 이 화면의 다크 무대 */
-function Featured({ t }: { t: CatalogTask }) {
-  const kind = KINDS.find((k) => k.key === t.kind)!
-  const credits = useCredits()
-  const short = credits < CREDIT_COST.ATTEMPT_START
-  const Icon = KIND_ICON[t.kind]
+function Featured({ t }: { t: Task }) {
   return (
     <StageSection aria-label="추천 과제">
       <div className="grid grid-cols-[minmax(0,1fr)_320px] items-center gap-10 px-12 py-10">
         <div>
           <span className="inline-flex items-center gap-2 font-mono text-[12px] font-semibold tracking-[0.12em] text-stage-brand">
-            <Sparkles size={14} aria-hidden /> RECOMMENDED │ {kind.name}
+            <Sparkles size={14} aria-hidden /> RECOMMENDED │ {trackName(t)}
           </span>
           <h2 className="mt-3 text-[44px] leading-[52px] font-extrabold tracking-[-0.03em] text-stage-text">
             {t.title.split(' ').slice(0, -2).join(' ')} <GradientText>{t.title.split(' ').slice(-2).join(' ')}</GradientText>
           </h2>
-          <p className="mt-3 max-w-[560px] text-[17px] leading-7 text-stage-muted">{t.summary}</p>
+          <p className="mt-3 max-w-[560px] text-[17px] leading-7 text-stage-muted">{t.description[0]}</p>
           <div className="mt-5 flex flex-wrap items-center gap-5">
             <span className="inline-flex items-center gap-1.5 font-mono text-[14px] text-stage-text">
               <Clock size={16} className="text-stage-muted" aria-hidden /> {t.minutes}분
             </span>
-            <LevelPips level={t.level} stage />
           </div>
           <div className="mt-8 flex items-center gap-4">
-            {short ? (
-              <span className="inline-flex h-14 items-center gap-2 rounded-full border border-stage-caution/50 px-6 text-[15px] font-semibold text-stage-caution">
-                크레딧이 부족합니다 (필요 {CREDIT_COST.ATTEMPT_START}, 잔액 {credits})
-              </span>
-            ) : (
-              <Magnetic>
+            <Magnetic>
                 <Link
-                  to={t.start!}
+                  to={startUrl(t)}
                   className="btn-shimmer bg-brand-gradient inline-flex h-14 items-center gap-2 rounded-full px-8 text-[17px] font-semibold text-on-accent shadow-[0_12px_40px_-8px_rgb(108_71_255/0.7)]"
                 >
                   지금 도전하기 <ArrowRight size={18} aria-hidden />
                 </Link>
               </Magnetic>
-            )}
-            <span className="tnum font-mono text-[13px] text-stage-muted">응시 시작 {CREDIT_COST.ATTEMPT_START} 크레딧 (채점 포함)</span>
           </div>
         </div>
 
@@ -69,7 +63,7 @@ function Featured({ t }: { t: CatalogTask }) {
           <div className="absolute inset-16 rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--color-stage-brand)_45%,transparent),transparent_70%)] blur-xl" />
           <GlowBorder className="absolute inset-[88px] rounded-[28px]">
             <div className="flex size-full items-center justify-center rounded-[28px] bg-stage-panel">
-              <Icon size={48} strokeWidth={1.5} className="text-stage-brand" />
+              <TrackIcon t={t} size={48} strokeWidth={1.5} className="text-stage-brand" />
             </div>
           </GlowBorder>
           {['var(--color-stage-brand)', 'var(--color-stage-blue)'].map((c, i) => (
@@ -81,63 +75,35 @@ function Featured({ t }: { t: CatalogTask }) {
   )
 }
 
-function TaskCard({ t }: { t: CatalogTask }) {
-  const ready = t.status === 'OPEN' && !!t.start
-  const kind = KINDS.find((k) => k.key === t.kind)!
-  const Icon = KIND_ICON[t.kind]
-  const body = (
-    <>
+function TaskCard({ t }: { t: Task }) {
+  return (
+    <Spotlight
+      as={Link}
+      to={startUrl(t)}
+      className="group flex h-full w-full flex-col rounded-xl border border-line bg-panel p-6 shadow-sm transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg"
+    >
       <div className="flex items-start gap-4">
-        <span
-          className={cx(
-            'inline-flex size-14 shrink-0 items-center justify-center rounded-2xl',
-            ready ? 'bg-brand-gradient text-on-accent shadow-[0_10px_24px_-8px_rgb(108_71_255/0.6)]' : 'bg-panel-raised text-text-faint',
-          )}
-        >
-          <Icon size={26} strokeWidth={1.75} aria-hidden />
+        <span className="bg-brand-gradient inline-flex size-14 shrink-0 items-center justify-center rounded-2xl text-on-accent shadow-[0_10px_24px_-8px_rgb(108_71_255/0.6)]">
+          <TrackIcon t={t} size={26} strokeWidth={1.75} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="label">{kind.name}</p>
-          <h3 className={cx('mt-0.5 text-[19px] leading-7 font-bold', ready ? 'text-text' : 'text-text-muted')}>{t.title}</h3>
+          <p className="label">{trackName(t)}</p>
+          <h3 className="mt-0.5 text-[19px] leading-7 font-bold text-text">{t.title}</h3>
         </div>
-        {!ready && (
-          <span className="inline-flex h-7 items-center gap-1 rounded-full bg-panel-raised px-2.5 text-[12px] font-semibold text-text-muted">
-            <Lock size={12} aria-hidden /> 응시 마감
-          </span>
-        )}
       </div>
-      <p className="mt-3 text-[15px] leading-6 text-text-muted">{t.summary}</p>
+      <p className="mt-3 text-[15px] leading-6 text-text-muted">{t.description[0]}</p>
       <div className="mt-auto flex items-center gap-4 border-t border-line pt-4 text-[14px] text-text-muted">
         <span className="inline-flex items-center gap-1 font-mono">
           <Clock size={14} aria-hidden /> {t.minutes}m
         </span>
-        <LevelPips level={t.level} />
-        {ready && <span className="tnum font-mono text-[13px] text-text-muted">{CREDIT_COST.ATTEMPT_START} 크레딧</span>}
-        {ready && (
-          <span className="ml-auto inline-flex items-center gap-1 font-semibold text-brand">
-            도전 <ArrowRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden />
-          </span>
-        )}
+        <span className="ml-auto inline-flex items-center gap-1 font-semibold text-brand">
+          도전 <ArrowRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden />
+        </span>
       </div>
-    </>
-  )
-  const cls = 'group flex h-full w-full flex-col rounded-xl border bg-panel p-6'
-  return ready ? (
-    <Spotlight
-      as={Link}
-      to={t.start!}
-      className={cx(cls, 'border-line shadow-sm transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg')}
-    >
-      {body}
     </Spotlight>
-  ) : (
-    <div className={cx(cls, 'border-dashed border-line-strong/70 bg-panel/60')} aria-disabled="true">
-      {body}
-    </div>
   )
 }
 
-const LEVELS = ['전체', '초급', '중급', '고급'] as const
 const TIMES = [
   { value: 'ALL', label: '전체', ok: () => true },
   { value: 'SHORT', label: '40분 이하', ok: (m: number) => m <= 40 },
@@ -171,21 +137,31 @@ function ChipFilter<T extends string>({ id, label, options, value, onChange }: {
 
 export default function Tasks() {
   const [track, setTrack] = useState<Track>('dev')
-  const [level, setLevel] = useState<(typeof LEVELS)[number]>('전체')
   const [time, setTime] = useState<(typeof TIMES)[number]['value']>('ALL')
+  const [all, setAll] = useState<Task[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    let alive = true
+    Promise.all(SELF_TASK_IDS.map((id) => api.task(id)))
+      .then((list) => {
+        if (!alive) return
+        setAll(list)
+        setError(null)
+      })
+      .catch((e: ApiError) => alive && setError(e.message))
+    return () => {
+      alive = false
+    }
+  }, [tick])
   const timeOk = TIMES.find((t) => t.value === time)!.ok
-  const tasks = CATALOG.filter(
-    (t) => KINDS.find((k) => k.key === t.kind)?.track === track && (level === '전체' || t.level === level) && timeOk(t.minutes),
-  )
-  const featured = tasks.find((t) => t.status === 'OPEN' && t.start)
-  const available = CATALOG.filter((t) => t.status === 'OPEN').length
+  const tasks = (all ?? []).filter((t) => t.type === track && timeOk(t.minutes))
+  const featured = tasks[0]
   return (
     <SelfShell
       header={
         <PageHeader label="TASKS" title="과제">
-          <span className="font-mono text-[13px] text-text-muted">
-            응시 가능 {available}개 / 전체 {CATALOG.length}개
-          </span>
+          {all && <span className="font-mono text-[13px] text-text-muted">응시 가능 {all.length}개</span>}
         </PageHeader>
       }
     >
@@ -195,7 +171,7 @@ export default function Tasks() {
         <div role="tablist" aria-label="직군" className="glass flex w-fit gap-1 rounded-full p-1.5">
           {TRACKS.map((tr) => {
             const on = tr.value === track
-            const n = CATALOG.filter((t) => KINDS.find((k) => k.key === t.kind)?.track === tr.value).length
+            const n = all ? all.filter((t) => t.type === tr.value).length : null
             return (
               <button
                 key={tr.value}
@@ -207,16 +183,22 @@ export default function Tasks() {
               >
                 {on && <motion.span layoutId="track-pill" transition={springs.snappy} className="bg-brand-gradient absolute inset-0 -z-10 rounded-full shadow-[0_8px_24px_-8px_rgb(108_71_255/0.6)]" />}
                 {tr.label}
-                <span className={cx('tnum font-mono text-[13px]', on ? 'text-on-accent/80' : 'text-text-faint')}>{n}</span>
+                {n != null && <span className={cx('tnum font-mono text-[13px]', on ? 'text-on-accent/80' : 'text-text-faint')}>{n}</span>}
               </button>
             )
           })}
         </div>
-          <ChipFilter id="level" label="난이도" options={LEVELS.map((l) => ({ value: l, label: l }))} value={level} onChange={setLevel} />
           <ChipFilter id="time" label="시간" options={TIMES} value={time} onChange={setTime} />
         </div>
 
-        <div key={`${track}-${level}-${time}`} className="flex flex-col gap-8">
+        {error ? (
+          <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
+        ) : !all ? (
+          <p className="flex items-center gap-2 py-10 text-body text-text-muted">
+            <Loader2 size={18} className="animate-spin" aria-hidden /> 불러오는 중
+          </p>
+        ) : (
+        <div key={`${track}-${time}`} className="flex flex-col gap-8">
           {featured && (
             <motion.div initial={{ opacity: 0, y: distance.app }} animate={{ opacity: 1, y: 0 }} transition={{ duration: duration.slow, ease: easing.expo }}>
               <Featured t={featured} />
@@ -224,10 +206,10 @@ export default function Tasks() {
           )}
           <section aria-labelledby="all-h">
             <h2 id="all-h" className="mb-4 text-h2 font-semibold text-text">
-              과제 형태별
+              전체 과제
             </h2>
             {tasks.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center text-[15px] text-text-muted">조건에 맞는 과제가 없습니다. 난이도나 시간 필터를 바꿔 보세요.</p>
+              <p className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center text-[15px] text-text-muted">조건에 맞는 과제가 없습니다. 직군이나 시간 필터를 바꿔 보세요.</p>
             ) : (
               <RevealGroup className="grid grid-cols-2 gap-4">
                 {tasks.map((t) => (
@@ -239,6 +221,7 @@ export default function Tasks() {
             )}
           </section>
         </div>
+        )}
       </div>
     </SelfShell>
   )

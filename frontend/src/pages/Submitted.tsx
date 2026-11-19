@@ -1,26 +1,55 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Building2, Check, Hourglass, Sparkles } from 'lucide-react'
+import { ArrowRight, Building2, Check, Hourglass, Loader2, Sparkles } from 'lucide-react'
+import { useParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { cx } from '../components/cx'
 import { ButtonLink, Logo } from '../components/ui'
 import { Aurora, Glass, GlowBorder, GradientText, Particles, Reveal, RevealGroup, RevealItem } from '../components/fx'
-import { examInfo } from '../data/mock'
+import { ErrorState } from '../components/ErrorState'
+import { api, ApiError, type AttemptView } from '../api'
+import { readLiveExam } from '../proctor/liveExam.ts'
 import { duration, easing } from '../lib/motion'
 
 // DESIGN.md §7 제출 완료 안내 (2026-11-19 2차 개편)
 // 체크 배지 뒤로 물결 고리가 퍼지고, 원과 체크가 그려진 뒤 입자가 터진다. 아래는 과제별 제출 영수증과 "다음 단계" 줄.
 // 실전 결과는 응시자에게 보여 주지 않는다(기획_결정사항 §1): 점수나 리포트 링크를 두지 않는다.
-// 응시자는 기업이 등록한 이름과 이메일로만 구분한다(exam_participants). 수험번호는 없다.
-const SUBMITTED_AT = ['2026.11.10 15:41:08', '2026.11.10 15:58:42']
+// 영수증은 이 응시(GET /api/attempts/{id})의 과제와 제출 시각으로 채운다.
+const pad = (n: number) => String(n).padStart(2, '0')
+/** "2026.11.10 15:41:08" */
+function fmtTime(iso: string | null | undefined): string {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
 
 const NEXT: { label: string; hint: string; icon: typeof Check; state: 'done' | 'now' | 'later' }[] = [
   { label: '제출 완료', hint: '과제와 후속 질문 답변이 저장됐습니다', icon: Check, state: 'done' },
   { label: 'AI 채점', hint: '풀이 과정 전체를 6가지 역량으로 채점합니다', icon: Sparkles, state: 'now' },
-  { label: '기업이 결과 안내', hint: `${examInfo.company}에서 직접 연락드립니다`, icon: Building2, state: 'later' },
+  { label: '기업이 결과 안내', hint: '시험을 안내한 기업에서 직접 연락드립니다', icon: Building2, state: 'later' },
 ]
 
 export default function Submitted() {
   const reduce = useReducedMotion()
+  const { sessionId = '' } = useParams()
+  // 실전 맥락(회차 이름)은 응시 화면이 끝나며 지울 수 있어, 남아 있을 때만 쓴다
+  const [sessionTitle] = useState(() => readLiveExam(sessionId)?.title ?? null)
+  const [view, setView] = useState<AttemptView | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    let alive = true
+    api
+      .attempt(sessionId)
+      .then((v) => {
+        if (!alive) return
+        setView(v)
+        setError(null)
+      })
+      .catch((e: ApiError) => alive && setError(e.message))
+    return () => {
+      alive = false
+    }
+  }, [sessionId, tick])
   const [fire, setFire] = useState(false)
   useEffect(() => {
     const t = window.setTimeout(() => setFire(true), 900)
@@ -34,9 +63,7 @@ export default function Submitted() {
       <Particles fire={fire} origin={{ x: 0.5, y: 0.26 }} />
       <header className="glass relative z-10 flex h-16 items-center justify-between rounded-none! border-0! border-b! border-line/70! px-8 shadow-none!">
         <Logo />
-        <span className="truncate text-[13px] font-medium text-text-muted">
-          {examInfo.company} │ {examInfo.title}
-        </span>
+        {sessionTitle && <span className="truncate text-[13px] font-medium text-text-muted">{sessionTitle}</span>}
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col items-center px-8 pt-14 pb-16">
@@ -60,49 +87,49 @@ export default function Submitted() {
             제출이 <GradientText>완료</GradientText>되었습니다
           </h1>
           <p className="mt-3 text-[17px] leading-7 text-text-muted">
-            {examInfo.applicant.name}님, 수고하셨습니다. 결과는 기업을 통해 안내됩니다.
+            수고하셨습니다. 결과는 기업을 통해 안내됩니다.
             <br />이 시험은 복기를 제공하지 않습니다.
           </p>
         </Reveal>
 
         {/* 제출 영수증: 과제별 제출 줄 + 응시자, 아래 끝은 톱니 모양으로 찢긴 종이 */}
         <Reveal delay={0.9} className="mt-10 w-[640px] max-w-full">
+          {error ? (
+            <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
+          ) : !view ? (
+            <p className="flex items-center justify-center gap-2 py-6 text-[15px] text-text-muted">
+              <Loader2 size={16} className="animate-spin" aria-hidden /> 제출 내역을 불러오는 중
+            </p>
+          ) : (
           <Glass className="submit-receipt rounded-t-2xl bg-white/90! px-8 pt-7 pb-10 shadow-lg!">
             <div className="flex items-baseline justify-between gap-4">
               <p className="label text-brand">SUBMISSION RECEIPT</p>
-              <p className="tnum font-mono text-[12px] text-text-faint">{examInfo.start}</p>
+              <p className="tnum font-mono text-[12px] text-text-faint">{fmtTime(view.attempt.startedAt)}</p>
             </div>
-            <p className="mt-2 text-[18px] leading-7 font-bold text-text">{examInfo.title}</p>
-            <p className="text-[14px] text-text-muted">{examInfo.company}</p>
+            {sessionTitle && <p className="mt-2 text-[18px] leading-7 font-bold text-text">{sessionTitle}</p>}
 
             <RevealGroup as="ul" className="mt-5 flex flex-col gap-2">
-              {examInfo.taskTitles.map((t, i) => (
-                <RevealItem as="li" key={t} className="flex items-center gap-3 rounded-xl border border-signal/25 bg-signal/5 px-4 py-3">
-                  <span aria-hidden className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-signal text-white">
-                    <Check size={16} strokeWidth={3} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[15px] font-semibold text-text">
-                      <span className="mr-2 font-mono text-[12px] text-text-faint">과제 {i + 1}</span>
-                      {t}
-                    </span>
-                    <span className="text-[13px] text-text-muted">제출 │ 후속 질문 답변 완료</span>
-                  </span>
-                  <span className="tnum shrink-0 font-mono text-[13px] text-text-muted">{SUBMITTED_AT[i]?.slice(11)}</span>
-                </RevealItem>
-              ))}
+              <RevealItem as="li" className="flex items-center gap-3 rounded-xl border border-signal/25 bg-signal/5 px-4 py-3">
+                <span aria-hidden className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-signal text-white">
+                  <Check size={16} strokeWidth={3} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-semibold text-text">{view.task.title}</span>
+                  <span className="text-[13px] text-text-muted">제출 완료</span>
+                </span>
+                <span className="tnum shrink-0 font-mono text-[13px] text-text-muted">{fmtTime(view.attempt.submittedAt).slice(11)}</span>
+              </RevealItem>
             </RevealGroup>
 
             <div aria-hidden className="my-6 border-t-2 border-dashed border-line-strong" />
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-[14px]">
-              <dt className="label self-center">APPLICANT</dt>
-              <dd className="font-semibold text-text">{examInfo.applicant.name}</dd>
-              <dt className="label self-center">EMAIL</dt>
-              <dd className="truncate font-mono text-[13px] text-text">{examInfo.applicant.email}</dd>
-              <dt className="label self-center">LAST SUBMIT</dt>
-              <dd className="tnum font-mono text-[13px] text-text">{SUBMITTED_AT[SUBMITTED_AT.length - 1]}</dd>
+              <dt className="label self-center">ATTEMPT</dt>
+              <dd className="truncate font-mono text-[13px] text-text">{view.attempt.id}</dd>
+              <dt className="label self-center">SUBMITTED</dt>
+              <dd className="tnum font-mono text-[13px] text-text">{fmtTime(view.attempt.submittedAt)}</dd>
             </dl>
           </Glass>
+          )}
         </Reveal>
 
         {/* 다음 단계: 제출 완료 → AI 채점(지금) → 기업이 결과 안내 */}
