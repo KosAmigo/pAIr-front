@@ -2,7 +2,7 @@
 // 2026-11-19 개편: 사이드바는 다크 무대 레일. 활성 메뉴 뒤로 빛나는 판이 미끄러지고, 아래에 소속과 권한 카드.
 import { useEffect, useState } from 'react'
 import { CrumbContext } from './consoleCrumbs'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Building2, CalendarClock, FileStack, FlaskConical, ShieldCheck } from 'lucide-react'
 import { motion } from 'motion/react'
 import { springs } from '../lib/motion'
@@ -10,7 +10,7 @@ import { cx } from './cx'
 import { Aurora, Glass, PageTransition, StageSection } from './fx'
 import { Logo } from './ui'
 import { UserMenu } from './UserMenu'
-import { homeFor, useAuth, type Role } from '../auth/auth'
+import { useAuth, type Role } from '../auth/auth'
 import { useTaskList } from '../data/consoleTasks'
 
 type MenuItem = { to: string; label: string; icon: typeof FileStack; roles: Role[]; count?: number }
@@ -24,9 +24,9 @@ const MENU: MenuItem[] = [
 const SECTION: Record<string, string> = { tasks: '과제', sessions: '회차', companies: '회사' }
 
 export function ConsoleShell() {
-  const { user, switchRole } = useAuth()
+  // 토큰에서 확인된 사용자 역할에 맞는 콘솔 메뉴만 표시한다.
+  const { user } = useAuth()
   const { pathname, state, key } = useLocation()
-  const nav = useNavigate()
   // 권한 없는 주소에서 넘어오면(RequireAuth 가 state.denied 를 붙임) 토스트를 잠깐 띄운다
   const [dismissed, setDismissed] = useState<string | null>(null)
   const denied = (state as { denied?: boolean } | null)?.denied && dismissed !== key
@@ -96,13 +96,6 @@ export function ConsoleShell() {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3">
-            <RoleSwitch
-              role={user.role === 'USER' ? 'MANAGER' : user.role}
-              onChange={(r) => {
-                switchRole(r)
-                nav(homeFor(r))
-              }}
-            />
             <span
               className={cx(
                 'inline-flex h-[22px] items-center rounded-sm px-1.5 font-mono text-[12px] font-semibold tracking-[0.08em]',
@@ -163,29 +156,3 @@ function MenuLink({ item }: { item: MenuItem }) {
     </NavLink>
   )
 }
-
-type ConsoleRole = Exclude<Role, 'USER'>
-/** 목업 전용 권한 전환 스위치 (DESIGN.md §7-9). 백엔드 인증이 붙으면 지운다. */
-function RoleSwitch({ role, onChange }: { role: ConsoleRole; onChange: (r: ConsoleRole) => void }) {
-  return (
-    <div role="radiogroup" aria-label="목업 권한 전환" title="개발용: 권한 전환" className="flex items-center gap-0.5 rounded-md border border-dashed border-caution/70 p-0.5">
-      <span className="px-1.5 font-mono text-[11px] text-caution">DEV</span>
-      {(['ADMIN', 'MANAGER', 'PROCTOR'] as const).map((r) => (
-        <button
-          key={r}
-          type="button"
-          role="radio"
-          aria-checked={role === r}
-          onClick={() => role !== r && onChange(r)}
-          className={cx(
-            'h-6 rounded-sm px-2 font-mono text-[11px] font-semibold',
-            role === r ? 'bg-panel-raised text-text' : 'text-text-muted hover:text-text',
-          )}
-        >
-          {r}
-        </button>
-      ))}
-    </div>
-  )
-}
-

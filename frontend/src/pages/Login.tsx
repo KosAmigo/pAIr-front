@@ -1,7 +1,8 @@
 // DESIGN.md §7-8 로그인, 회원가입 (2026-11-19 개편: 반반 쇼케이스)
 // 왼쪽 절반은 다크 무대: 큰 문장 + 역량 육각형 미리보기 + 떠 있는 유리 칩. 오른쪽 절반은 오로라 위 유리 폼 카드(GlowBorder).
+// 로그인과 일반 회원가입은 백엔드 인증 API(/api/auth)에 연결한다. 기업 계정은 도입 문의 → 승인 → 초대로 만든다(준비 중 안내).
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, Check, Eye, EyeOff, GitBranch, ShieldCheck, Sparkles, TriangleAlert, User } from 'lucide-react'
 import { CheckMark } from '../components/CheckMark'
 import { cx } from '../components/cx'
@@ -123,21 +124,33 @@ function safeNext(next: string | null) {
 }
 
 export default function Login() {
-  const { user, signedIn, login } = useAuth()
+  const { user, signedIn, loading, login } = useAuth()
+  const location = useLocation()
   const nav = useNavigate()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(() =>
+    (location.state as { logoutError?: boolean } | null)?.logoutError ? '로그아웃 서버 연결에 실패했습니다. 이 브라우저에서는 로그아웃했습니다.' : null,
+  )
+  const [submitting, setSubmitting] = useState(false)
 
+  if (loading) return null
   if (signedIn && user) return <Navigate to={next ?? homeFor(user.role)} replace />
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
-    const u = login(email, password)
-    if (!u) return setError(true)
-    nav(next ?? homeFor(u.role), { replace: true })
+    setError(null)
+    setSubmitting(true)
+    try {
+      const u = await login(email, password)
+      nav(next ?? homeFor(u.role), { replace: true })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '로그인에 실패했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -152,7 +165,7 @@ export default function Login() {
         </>
       }
     >
-      {error && <ErrorBanner>이메일 또는 비밀번호가 맞지 않습니다</ErrorBanner>}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
         <Field id="email" label="이메일">
           <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required className={inputCls} />
@@ -160,17 +173,10 @@ export default function Login() {
         <Field id="password" label="비밀번호">
           <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="current-password" />
         </Field>
-        <Button type="submit" variant="primary" size="lg" className="mt-2 w-full">
-          로그인
+        <Button type="submit" variant="primary" size="lg" className="mt-2 w-full" disabled={submitting}>
+          {submitting ? '로그인 중…' : '로그인'}
         </Button>
       </form>
-      <p className="mt-6 rounded-md border border-dashed border-caution/60 px-3 py-2 font-mono text-[12px] leading-5 text-text-muted">
-        백엔드 인증 전이라 로그인하지 않아도 관리자 목업 계정으로 들어갑니다. 다른 권한을 시험할 때만 로그인하세요.
-        <br />
-        목업 계정 (비밀번호 pair1234)
-        <br />
-        admin@pair.test │ hr@example-tech.test │ a@pair.test
-      </p>
     </AuthLayout>
   )
 }
@@ -178,7 +184,7 @@ export default function Login() {
 type Kind = 'user' | 'company'
 
 export function Signup() {
-  const { user, signedIn, signup } = useAuth()
+  const { user, signedIn, loading, signup } = useAuth()
   const nav = useNavigate()
   const [params, setParams] = useSearchParams()
   const next = safeNext(params.get('next'))
@@ -189,12 +195,15 @@ export function Signup() {
   const [confirm, setConfirm] = useState('')
   const [agree, setAgree] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
+  if (loading) return null
   if (signedIn && user) return <Navigate to={next ?? homeFor(user.role)} replace />
 
   const isCompany = kind === 'company'
   const rules = [
     { ok: password.length >= 8, text: '8자 이상' },
+    { ok: new TextEncoder().encode(password).length <= 72, text: '72바이트 이하' },
     { ok: password.length > 0 && password === confirm, text: '비밀번호 확인과 같음' },
   ]
   const valid = name.trim() && email.trim() && rules.every((r) => r.ok) && agree
@@ -207,12 +216,19 @@ export function Signup() {
     setError(null)
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!valid) return
-    const r = signup(name, email, password)
-    if (r.error) return setError(r.error)
-    nav(next ?? '/tasks', { replace: true })
+    setError(null)
+    setSubmitting(true)
+    try {
+      await signup(name, email, password)
+      nav(next ?? '/tasks', { replace: true })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '회원가입에 실패했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (isCompany) return <CompanyInquiry onBack={() => pick('user')} />
@@ -283,8 +299,8 @@ export function Signup() {
           <CheckMark on={agree} />
           서비스 이용약관과 개인정보 처리방침에 동의합니다
         </label>
-        <Button type="submit" variant="primary" size="lg" className="mt-2 w-full" disabled={!valid}>
-          가입하기
+        <Button type="submit" variant="primary" size="lg" className="mt-2 w-full" disabled={!valid || submitting}>
+          {submitting ? '가입 중…' : '가입하기'}
         </Button>
       </form>
     </AuthLayout>

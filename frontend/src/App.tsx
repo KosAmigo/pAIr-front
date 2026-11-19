@@ -51,12 +51,13 @@ const proctorLab = (
   </Suspense>
 )
 
-// 응시 화면은 백엔드 응시만 보여 준다
-// 실전 응시(mode=live)는 로그인 없이 본다 (DESIGN.md §7-8). 자가진단 응시는 로그인이 필요하다.
+// 응시 화면은 백엔드 응시만 보여 준다.
+// 실전 응시(mode=live)는 로그인 없이 본다 (DESIGN.md §7-8). 자가진단 응시는 로그인 확인이 끝난 뒤 비로그인 사용자를 로그인 화면으로 보낸다.
 function ExamRoute() {
   const [params] = useSearchParams()
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const loc = useLocation()
+  if (loading) return null
   if (params.get('mode') !== 'live' && !user) {
     return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />
   }

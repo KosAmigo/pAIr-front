@@ -1,4 +1,5 @@
-// 백엔드(backend/, Spring Boot) API 호출. vite 개발 서버가 /api 를 localhost:8180 으로 넘긴다.
+// 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
+import { readAuthSession } from './auth/authApi'
 
 export type TaskType = 'dev' | 'biz'
 
@@ -113,8 +114,9 @@ export type ReportResponse = { status: AttemptStatus; error: string | null; repo
 export class ApiError extends Error {}
 
 /**
- * 로그인 정보 헤더 (백엔드 HeaderCurrentUserResolver, pair.auth.mode=header).
- * 회원 API 가 생기기 전까지 목업 계정의 id·권한·회사를 그대로 보낸다. AuthProvider 가 로그인 상태가 바뀔 때마다 넣는다.
+ * 로그인 정보 헤더. 로그인 토큰이 있으면 Authorization: Bearer 로 보내고(백엔드 /api/auth 로그인),
+ * 백엔드가 헤더 방식(HeaderCurrentUserResolver, pair.auth.mode=header)이어도 되도록 X-Pair-* 도 함께 보낸다.
+ * AuthProvider 가 로그인 상태가 바뀔 때마다 setAuthHeaders 를 부른다.
  */
 let authHeaders: Record<string, string> = {}
 export function setAuthHeaders(user: { id: number; role: string; companyId?: number } | null) {
@@ -126,14 +128,17 @@ export function setAuthHeaders(user: { id: number; role: string; companyId?: num
       }
     : {}
 }
-export const getAuthHeaders = () => authHeaders
+export function getAuthHeaders(): Record<string, string> {
+  const token = readAuthSession()?.token
+  return token ? { ...authHeaders, Authorization: `Bearer ${token}` } : authHeaders
+}
 
 export async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response
   try {
     res = await fetch(url, {
       method,
-      headers: { ...authHeaders, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: { ...getAuthHeaders(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
@@ -187,7 +192,7 @@ export async function chatStream(id: string, message: string, onDelta: (t: strin
   try {
     res = await fetch(`/api/attempts/${enc(id)}/chat/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ message }),
     })
   } catch {
