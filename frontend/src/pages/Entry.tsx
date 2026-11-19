@@ -961,7 +961,7 @@ export default function Entry() {
     </AnimatePresence>
   )
   return (
-    <div className={cx('relative isolate flex min-h-full flex-col overflow-x-clip border-t-2', waiting ? 'border-stage-alert' : 'border-alert')}>
+    <div className="relative isolate flex min-h-full flex-col overflow-x-clip">
       {waiting ? (
         <StageSection shape="inset" className="flex min-h-full flex-1 flex-col rounded-none! border-0! shadow-none!" aria-label="대기실">
           <div className="flex min-h-full flex-col">

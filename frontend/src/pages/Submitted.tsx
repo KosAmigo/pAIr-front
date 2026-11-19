@@ -29,7 +29,7 @@ export default function Submitted() {
   const draw = (delay: number) =>
     reduce ? {} : { initial: { pathLength: 0 }, animate: { pathLength: 1 }, transition: { duration: duration.slow, ease: easing.expo, delay } }
   return (
-    <div className="relative isolate flex min-h-full flex-col overflow-hidden border-t-2 border-alert">
+    <div className="relative isolate flex min-h-full flex-col overflow-hidden">
       <Aurora variant="full" />
       <Particles fire={fire} origin={{ x: 0.5, y: 0.26 }} />
       <header className="glass relative z-10 flex h-16 items-center justify-between rounded-none! border-0! border-b! border-line/70! px-8 shadow-none!">
