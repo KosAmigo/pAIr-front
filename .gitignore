@@ -44,7 +44,8 @@ backend/build/
 .idea/
 *.iml
 
-# 외부 스킬 (각자 설치, 저장소에 올리지 않음)
+# 외부 스킬 도구 폴더 (.claude/skills/ 는 팀이 같이 쓰도록 저장소에 올린다)
 .agents/
-.claude/skills/
 skills-lock.json
+# ui-ux-pro-max 는 .agents/ 를 가리키는 이 PC 전용 링크라 올리지 않는다 (각자 설치)
+.claude/skills/ui-ux-pro-max
