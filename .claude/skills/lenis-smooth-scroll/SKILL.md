@@ -5,7 +5,7 @@ description: How Lenis smooth scrolling is wired in this project (home page only
 
 # Lenis smooth scroll (pAIr)
 
-Lenis 1.3 runs **only on the home page** (`src/pages/Home.tsx`). Home is lazy-loaded, so Lenis and GSAP stay out of the work-screen bundle. Do not add Lenis to work screens (self-check, exam, console) — they use native scroll.
+Lenis 1.3 runs **only on the home page** (`frontend/src/pages/Home.tsx`). Home is lazy-loaded, so Lenis and GSAP stay out of the work-screen bundle. Do not add Lenis to work screens (self-check, exam, console) — they use native scroll.
 
 ## Setup (already in Home.tsx)
 
