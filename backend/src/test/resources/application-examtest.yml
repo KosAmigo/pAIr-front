@@ -1,0 +1,16 @@
+# 회차 통합 테스트: Docker 없이 H2(PostgreSQL 호환 모드) 메모리 DB 로 돈다.
+# 운영 스키마(Flyway V1)의 부분 인덱스는 H2 가 못 읽어서, 테스트에서는 엔티티로 테이블을 만든다.
+spring:
+  datasource:
+    url: jdbc:h2:mem:exam;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+pair:
+  exam:
+    scheduler-enabled: false

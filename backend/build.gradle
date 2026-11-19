@@ -33,6 +33,16 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+    // 실전 시험 회차 (팀원 4): 회차·대상자·감독 이벤트는 PostgreSQL 에 저장. 스키마는 Flyway 마이그레이션으로 관리
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+    // 초대 메일 (개발 중에는 docker-compose 의 Mailpit 이 받는다)
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    // 대상자 엑셀(.xlsx) 업로드
+    implementation 'org.apache.poi:poi-ooxml:5.4.1'
+
     // AI 어시스턴트와 OpenAI 채점 (Spring AI OpenAI), Claude 채점 (Spring AI Anthropic)
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
     implementation 'org.springframework.ai:spring-ai-starter-model-anthropic'
@@ -42,6 +52,8 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // 회차 테스트용 메모리 DB (PostgreSQL 호환 모드). Docker 없이 돌아간다
+    testRuntimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {

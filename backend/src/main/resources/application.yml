@@ -4,6 +4,26 @@ server:
 spring:
   application:
     name: pair-backend
+  # 실전 시험 회차 DB. 저장소 루트에서 docker compose up -d 로 PostgreSQL 과 Mailpit 을 띄운다
+  datasource:
+    url: ${PAIR_DB_URL:jdbc:postgresql://localhost:5432/pair}
+    username: ${PAIR_DB_USER:pair}
+    password: ${PAIR_DB_PASSWORD:pair}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # 스키마는 Flyway(db/migration)가 만든다. 엔티티와 다르면 서버가 켜지지 않는다
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  mail:
+    host: ${PAIR_MAIL_HOST:localhost}
+    port: ${PAIR_MAIL_PORT:1025}
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
   ai:
     # API 키: 값은 여기 쓰지 않는다. 시스템 환경 변수를 가리키기만 한다.
     openai:
@@ -25,6 +45,22 @@ spring:
 pair:
   # 응시 기록을 쌓는 폴더 (bootRun 은 저장소 루트에서 실행되므로 pAIr/pilot-data)
   data-dir: pilot-data
+
+  # 실전 시험 회차 (팀원 4)
+  exam:
+    # 초대 메일 속 입장 링크 앞부분. 뒤에 /entry?token={초대 토큰} 이 붙는다
+    entry-base-url: ${PAIR_ENTRY_BASE_URL:http://localhost:5173}
+    mail-from: no-reply@pair.test
+    # 종료 시각이 지난 회차를 찾아 자동 제출하는 주기
+    auto-submit-interval-ms: 2000
+    # 감독 사진 저장소: local = pilot-data/exam-snapshots (개발용). 운영은 파일 서버 구현으로 바꾼다
+    snapshot-storage: local
+    # 감독 사진 보관 기간. 지나면 파일을 지우고 snapshot_deleted_at 을 남긴다
+    snapshot-retention-hours: 168
+    # 사진 1장 최대 크기 (cam-proctor 는 320px JPEG 로 보통 10~20KB)
+    snapshot-max-bytes: 200000
+    # 엑셀 한 번에 올릴 수 있는 대상자 수
+    max-participants-per-upload: 1000
 
   # 응시자가 쓰는 AI 어시스턴트.
   assistant:
