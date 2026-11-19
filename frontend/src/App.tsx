@@ -38,6 +38,14 @@ const home = (
   </Suspense>
 )
 
+// 휴대폰 보조 캠 (실전 시험, PC 화면의 QR 로 들어온다). 분석 모델이 무거워 따로 불러온다
+const PhoneCamPage = lazy(() => import('./proctor/react/PhoneCamPage.tsx'))
+const phoneCam = (
+  <Suspense fallback={<div className="min-h-full bg-bg" />}>
+    <PhoneCamPage />
+  </Suspense>
+)
+
 // 실제 응시 ID(att-...)는 백엔드에 연결된 응시 화면, 그 밖의 ID는 기존 목업 화면
 // 실전 응시(mode=live)는 로그인 없이 본다 (DESIGN.md §7-8). 자가진단 응시는 로그인이 필요하다.
 function ExamRoute() {
@@ -69,6 +77,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/entry" element={<Entry />} />
+          <Route path="/proctor/phone" element={phoneCam} />
           <Route path="/exam/:sessionId" element={<ExamRoute />} />
           <Route path="/exam/:sessionId/submitted" element={<Submitted />} />
           <Route path="/share/:token" element={<SharedReport />} />

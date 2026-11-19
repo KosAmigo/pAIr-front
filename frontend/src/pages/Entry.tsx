@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -36,6 +36,15 @@ import { Button, Logo, StatusDot, type Status } from '../components/ui'
 import { Aurora, Glass, GlowBorder, GradientText, Magnetic, Particles, RevealGroup, RevealItem, StageSection } from '../components/fx'
 import { examInfo } from '../data/mock'
 import { duration, easing, scale, springs, stagger } from '../lib/motion'
+import { proctorApi, serverOffsetFrom, type EntryInfo } from '../proctor/api/proctorApi.ts'
+import { camHub } from '../proctor/camHub.ts'
+import { saveLiveExam } from '../proctor/liveExam.ts'
+import { useCamHub } from '../proctor/react/useCamHub.ts'
+import type { EnvCheckResult } from '../proctor/react/EnvCheckPanel.tsx'
+
+// 환경 점검은 분석 모델이 무거워 실전 입장 링크로 들어왔을 때만 불러온다
+const EnvCheckPanel = lazy(() => import('../proctor/react/EnvCheckPanel.tsx'))
+const EnvAside = lazy(() => import('../proctor/react/EnvCheckPanel.tsx').then((m) => ({ default: m.EnvAside })))
 
 // DESIGN.md §7-6 시험 입장 (2026-11-19 개편)
 // 입장 방법은 메일로 받은 응시자별 입장 링크(/entry?invite=<토큰>) 하나뿐이다.
@@ -49,7 +58,30 @@ const STEPS: { label: string; icon: LucideIcon }[] = [
   { label: '환경 점검', icon: ScanFace },
   { label: '대기실', icon: Hourglass },
 ]
-const APPLICANT = examInfo.applicant
+/** 화면에 보이는 시험 정보. 데모 링크는 목업, 실제 입장 링크는 입장 API 로 채운다 */
+type ExamView = { company: string; title: string; start: string; duration: string; tasks: string; proctor: string; applicant: { name: string; email: string } }
+const DEMO_VIEW: ExamView = examInfo
+
+const pad = (n: number) => String(n).padStart(2, '0')
+/** 응시자 PC 의 현지 시각으로 "2026.12.01 15:00" */
+function fmtStart(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function toView(info: EntryInfo): ExamView {
+  const minutes = Math.round((Date.parse(info.endsAt) - Date.parse(info.startsAt)) / 60000)
+  const n = info.taskIds.length
+  return {
+    company: info.companyName ?? '',
+    title: info.sessionTitle,
+    start: fmtStart(info.startsAt),
+    duration: `${minutes}분`,
+    tasks: `과제 ${n}개${n > 1 ? ' (자유롭게 오가며 풀기)' : ''} + 과제마다 후속 질문`,
+    proctor: info.proctoring ? '카메라(노트북·휴대폰), 브라우저 이탈 감지' : '브라우저 이탈 감지',
+    applicant: { name: info.name, email: info.email },
+  }
+}
 
 /** 여정 띠: 단계 노드 4개(44px, 단계 아이콘)를 잇는 선이 지난 단계까지 그라데이션으로 차오른다. 지금 노드는 맥동 고리 */
 function Journey({ current, stage }: { current: number; stage?: boolean }) {
@@ -164,13 +196,13 @@ function NoLink({ onDemo }: { onDemo: () => void }) {
 }
 
 // ── 1. 시험 정보: 왼쪽 입장권 + 오른쪽 정보 타일 ─────────────
-function EntryPass() {
+function EntryPass({ view }: { view: ExamView }) {
   return (
     <>
       <LinkChip />
       <p className="label mt-6 text-stage-brand">ENTRY PASS</p>
-      <p className="mt-2 text-[14px] font-semibold text-stage-muted">{examInfo.company}</p>
-      <p className="mt-1 text-[20px] leading-7 font-bold tracking-[-0.01em] text-stage-text">{examInfo.title}</p>
+      <p className="mt-2 text-[14px] font-semibold text-stage-muted">{view.company}</p>
+      <p className="mt-1 text-[20px] leading-7 font-bold tracking-[-0.01em] text-stage-text">{view.title}</p>
       {/* 절취선: 양 끝이 파인 점선 */}
       <div aria-hidden className="relative -mx-6 my-6 border-t-2 border-dashed border-stage-line-strong">
         <span className="absolute -top-3 -left-3 size-6 rounded-full bg-white/90" />
@@ -178,24 +210,24 @@ function EntryPass() {
       </div>
       <p className="label text-stage-faint">STARTS AT</p>
       <p className="tnum mt-1 font-mono text-[40px] leading-[44px] font-bold tracking-[-0.03em]">
-        <GradientText>{examInfo.start.slice(11)}</GradientText>
+        <GradientText>{view.start.slice(11)}</GradientText>
       </p>
       <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-4">
         <div>
           <p className="label text-stage-faint">DATE</p>
-          <p className="tnum mt-1 font-mono text-[14px] font-semibold whitespace-nowrap text-stage-text">{examInfo.start.slice(0, 10)}</p>
+          <p className="tnum mt-1 font-mono text-[14px] font-semibold whitespace-nowrap text-stage-text">{view.start.slice(0, 10)}</p>
         </div>
         <div>
           <p className="label text-stage-faint">DURATION</p>
-          <p className="tnum mt-1 font-mono text-[14px] font-semibold text-stage-text">{examInfo.duration}</p>
+          <p className="tnum mt-1 font-mono text-[14px] font-semibold text-stage-text">{view.duration}</p>
         </div>
       </div>
       <p className="mt-4 text-[13px] text-stage-muted">
-        {APPLICANT.name} │ <span className="font-mono">{APPLICANT.email}</span>
+        {view.applicant.name} │ <span className="font-mono">{view.applicant.email}</span>
       </p>
       {/* 바코드 띠: 꾸밈 */}
       <div aria-hidden className="mt-auto flex h-14 items-stretch justify-between gap-[3px] pt-6 opacity-70">
-        {examInfo.start
+        {view.start
           .replace(/\D/g, '')
           .split('')
           .concat('31725846'.split(''))
@@ -208,20 +240,20 @@ function EntryPass() {
   )
 }
 
-function InfoStep({ onNext }: { onNext: () => void }) {
+function InfoStep({ view, onNext }: { view: ExamView; onNext: () => void }) {
   const rows: [string, string, LucideIcon, boolean?][] = [
-    ['COMPANY', examInfo.company, Building2],
-    ['EXAM', examInfo.title, FileText],
-    ['START', examInfo.start, CalendarClock, true],
-    ['DURATION', examInfo.duration, Timer, true],
-    ['TASKS', examInfo.tasks, ListChecks],
-    ['PROCTORING', examInfo.proctor, Eye],
+    ['COMPANY', view.company, Building2],
+    ['EXAM', view.title, FileText],
+    ['START', view.start, CalendarClock, true],
+    ['DURATION', view.duration, Timer, true],
+    ['TASKS', view.tasks, ListChecks],
+    ['PROCTORING', view.proctor, Eye],
   ]
   return (
     <StepCard
       no={1}
       title="시험 정보를 확인하세요"
-      aside={<EntryPass />}
+      aside={<EntryPass view={view} />}
       footer={
         <Magnetic className="ml-auto">
           <Button variant="primary" size="lg" onClick={onNext}>
@@ -254,7 +286,7 @@ function InfoStep({ onNext }: { onNext: () => void }) {
 // ── 2. 응시자 정보·동의: 왼쪽 응시자 카드 + 동의 고리 ──────────
 const CONSENTS: { title: string; body: string; icon: LucideIcon }[] = [
   { title: '[필수] 개인정보 수집 및 이용 동의', body: '이름과 이메일을 응시자 확인과 결과 전달 목적으로 수집하며, 시험 종료 후 1년간 보관합니다.', icon: Lock },
-  { title: '[필수] 감독을 위한 카메라와 화면 녹화 동의', body: '시험 중 카메라 영상과 화면이 녹화되며, 부정행위 검토 목적으로만 기업 담당자에게 제공됩니다.', icon: Video },
+  { title: '[필수] 카메라 감독 동의', body: '시험 중 노트북·휴대폰 카메라 영상은 이 브라우저 안에서만 분석하고 저장하거나 전송하지 않습니다. 이상이 감지된 순간의 사진 1장과 기록만 부정행위 검토 목적으로 기업 담당자에게 제공하며, 사진은 7일 뒤 삭제합니다. 얼굴로 신원을 식별하지 않습니다.', icon: Video },
   { title: '[필수] AI 대화 기록 평가 활용 동의', body: '내장 AI와의 대화 전체가 AI 활용 역량 평가 근거로 사용됩니다.', icon: Bot },
 ]
 
@@ -297,23 +329,23 @@ function ConsentRing({ n, total }: { n: number; total: number }) {
   )
 }
 
-function ApplicantCard({ agreed }: { agreed: number }) {
+function ApplicantCard({ view, agreed }: { view: ExamView; agreed: number }) {
   return (
     <>
       <LinkChip />
       <div className="mt-6 flex items-center gap-4">
         <span aria-hidden className="bg-brand-gradient inline-flex size-16 items-center justify-center rounded-2xl text-[28px] font-bold text-on-accent shadow-md">
-          {APPLICANT.name.slice(1, 2)}
+          {view.applicant.name.slice(1, 2)}
         </span>
         <div className="min-w-0">
           <p className="label text-stage-brand">APPLICANT</p>
-          <p className="text-[22px] leading-8 font-bold text-stage-text">{APPLICANT.name}</p>
+          <p className="text-[22px] leading-8 font-bold text-stage-text">{view.applicant.name}</p>
         </div>
       </div>
       <dl className="mt-5 flex flex-col gap-3">
         <div>
           <dt className="label text-stage-faint">EMAIL</dt>
-          <dd className="mt-0.5 truncate font-mono text-[14px] text-stage-text">{APPLICANT.email}</dd>
+          <dd className="mt-0.5 truncate font-mono text-[14px] text-stage-text">{view.applicant.email}</dd>
         </div>
       </dl>
       <p className="mt-3 text-[12px] leading-5 text-stage-muted">입장 링크로 확인된 정보입니다. 수정이 필요하면 기업 담당자에게 문의하세요.</p>
@@ -325,7 +357,7 @@ function ApplicantCard({ agreed }: { agreed: number }) {
   )
 }
 
-function ConsentStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+function ConsentStep({ view, busy, error, onNext, onBack }: { view: ExamView; busy?: boolean; error?: string | null; onNext: () => void; onBack: () => void }) {
   const [checked, setChecked] = useState([false, false, false])
   const [open, setOpen] = useState<number | null>(null)
   const all = checked.every(Boolean)
@@ -334,7 +366,7 @@ function ConsentStep({ onNext, onBack }: { onNext: () => void; onBack: () => voi
     <StepCard
       no={2}
       title="응시자 정보와 동의"
-      aside={<ApplicantCard agreed={agreed} />}
+      aside={<ApplicantCard view={view} agreed={agreed} />}
       footer={
         <>
           <Button variant="ghost" onClick={onBack}>
@@ -343,12 +375,17 @@ function ConsentStep({ onNext, onBack }: { onNext: () => void; onBack: () => voi
           <span className="ml-auto text-[14px] text-text-muted">
             <span className="tnum font-mono font-semibold text-text">{agreed}</span> / 3 동의
           </span>
-          <Button variant="primary" size="lg" disabled={!all} onClick={onNext}>
-            다음 <ArrowRight size={18} aria-hidden />
+          <Button variant="primary" size="lg" disabled={!all || busy} onClick={onNext}>
+            {busy && <Loader2 size={18} className="animate-spin" aria-hidden />} 다음 <ArrowRight size={18} aria-hidden />
           </Button>
         </>
       }
     >
+      {error && (
+        <p role="alert" className="mb-3 rounded-lg border border-alert/40 bg-alert/10 px-3 py-2 text-[14px] text-alert">
+          {error}
+        </p>
+      )}
       <label className={cx('flex h-16 cursor-pointer items-center gap-3 rounded-xl border-2 px-5 transition-colors duration-150', all ? 'border-brand bg-brand-dim' : 'border-line bg-panel hover:border-line-strong')}>
         <input type="checkbox" checked={all} onChange={(e) => setChecked(checked.map(() => e.target.checked))} className="sr-only" />
         <CheckMark on={all} />
@@ -528,16 +565,78 @@ function EnvStep({ onNext, onBack }: { onNext: () => void; onBack: () => void })
   )
 }
 
-// ── 4. 대기실: 다크 무대 ─────────────────────
-const TOTAL_WAIT = 4 * 60 + 32
+// ── 3. 환경 점검 (실제 입장 링크): 왼쪽 카메라·휴대폰 QR, 오른쪽 실제 점검 목록 ──
+function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () => void; onBack: () => void }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const save = async (r: EnvCheckResult) => {
+    setSaving(true)
+    setError(null)
+    try {
+      // 점검 결과(휴대폰 결과·검토 필요 표시 포함)를 동의와 함께 저장한다. 사진은 저장하지 않는다
+      await proctorApi.consent(invite, r)
+      onNext()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+  const loading = <p className="text-[14px] text-stage-muted">점검 화면을 불러오는 중입니다</p>
+  return (
+    <StepCard
+      no={3}
+      title="응시 환경을 점검합니다"
+      aside={
+        <>
+          <p className="label mb-3 text-stage-brand">CAMERA · PHONE</p>
+          <Suspense fallback={loading}>
+            <EnvAside />
+          </Suspense>
+        </>
+      }
+      footer={
+        <>
+          <Button variant="ghost" onClick={onBack}>
+            <ArrowLeft size={18} aria-hidden /> 이전
+          </Button>
+          <span className="ml-auto text-[14px] text-text-muted">{saving ? '점검 결과를 저장하는 중' : '모든 항목을 통과하면 대기실로 갑니다'}</span>
+        </>
+      }
+    >
+      {error && (
+        <p role="alert" className="mb-3 rounded-lg border border-alert/40 bg-alert/10 px-3 py-2 text-[14px] text-alert">
+          {error}
+        </p>
+      )}
+      <Suspense fallback={loading}>
+        <EnvCheckPanel withAside={false} onPassed={(r) => void save(r)} />
+      </Suspense>
+    </StepCard>
+  )
+}
 
-function WaitingRoom({ onStart }: { onStart: () => void }) {
+// ── 4. 대기실: 다크 무대 ─────────────────────
+const DEMO_WAIT = 4 * 60 + 32
+const START_RETRY_MS = 1000
+const WAIT_TIPS = [
+  '시험이 시작되면 응시 화면으로 자동 이동합니다.',
+  '브라우저 탭을 벗어나면 이탈로 기록됩니다.',
+  '외부 AI와 검색은 쓸 수 없고, 내장 AI만 쓸 수 있습니다.',
+  '카메라에 얼굴이 계속 보이도록 유지하세요.',
+]
+
+function StageChip({ children }: { children: ReactNode }) {
+  return <span className="glass-stage inline-flex h-8 items-center gap-2 rounded-full px-3 text-[13px] font-semibold text-stage-text">{children}</span>
+}
+
+function Dot({ ok }: { ok: boolean }) {
+  return <i className={cx('size-2 rounded-full', ok ? 'bg-stage-signal' : 'bg-stage-caution')} aria-hidden />
+}
+
+/** 대기실 화면: 원형 진행 고리 + 카운트다운. 시각 계산은 감싸는 쪽(데모·실전)이 한다 */
+function WaitingStage({ view, left, total, chips, footer }: { view: ExamView; left: number; total: number; chips: ReactNode; footer: ReactNode }) {
   const reduce = useReducedMotion()
-  const [left, setLeft] = useState(TOTAL_WAIT)
-  useEffect(() => {
-    const id = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000)
-    return () => clearInterval(id)
-  }, [])
   const mm = String(Math.floor(left / 60)).padStart(2, '0')
   const ss = String(left % 60).padStart(2, '0')
   const R = 150
@@ -545,17 +644,7 @@ function WaitingRoom({ onStart }: { onStart: () => void }) {
   const urgent = left <= 10
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-center gap-3">
-        <span className="glass-stage inline-flex h-8 items-center gap-2 rounded-full px-3 text-[13px] font-semibold text-stage-text">
-          <i className="size-2 rounded-full bg-stage-signal" aria-hidden /> 카메라 정상
-        </span>
-        <span className="glass-stage inline-flex h-8 items-center gap-2 rounded-full px-3 text-[13px] font-semibold text-stage-text">
-          <i className="size-2 rounded-full bg-stage-signal" aria-hidden /> 화면 공유 정상
-        </span>
-        <span className="glass-stage inline-flex h-8 items-center gap-2 rounded-full px-3 text-[13px] font-semibold text-stage-text">
-          <Users size={14} className="text-stage-brand" aria-hidden /> 응시자 128명 대기 중
-        </span>
-      </div>
+      <div className="flex items-center gap-3">{chips}</div>
 
       {/* 원형 진행 고리 + 카운트다운 */}
       <div className="relative mt-10 size-[360px]">
@@ -576,7 +665,7 @@ function WaitingRoom({ onStart }: { onStart: () => void }) {
             strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={C}
-            strokeDashoffset={C * (left / TOTAL_WAIT)}
+            strokeDashoffset={C * Math.min(1, left / Math.max(1, total))}
             style={{ transition: 'stroke-dashoffset 1s linear', filter: 'drop-shadow(0 0 12px color-mix(in srgb, var(--color-stage-brand) 70%, transparent))' }}
           />
         </svg>
@@ -594,12 +683,12 @@ function WaitingRoom({ onStart }: { onStart: () => void }) {
           >
             {mm}:{ss}
           </motion.div>
-          <span className="tnum mt-1 font-mono text-[14px] text-stage-muted">시작 {examInfo.start}</span>
+          <span className="tnum mt-1 font-mono text-[14px] text-stage-muted">시작 {view.start}</span>
         </div>
       </div>
 
       <RevealGroup className="mt-10 grid w-[880px] grid-cols-4 gap-3">
-        {['시험이 시작되면 응시 화면으로 자동 이동합니다.', '브라우저 탭을 벗어나면 이탈로 기록됩니다.', '외부 AI와 검색은 쓸 수 없고, 내장 AI만 쓸 수 있습니다.', '카메라에 얼굴이 계속 보이도록 유지하세요.'].map((t, i) => (
+        {WAIT_TIPS.map((t, i) => (
           <RevealItem key={t} className="glass-stage rounded-xl px-4 py-4">
             <span className="font-mono text-[13px] font-semibold text-stage-brand">{String(i + 1).padStart(2, '0')}</span>
             <p className="mt-1 text-[14px] leading-6 text-stage-text">{t}</p>
@@ -607,38 +696,224 @@ function WaitingRoom({ onStart }: { onStart: () => void }) {
         ))}
       </RevealGroup>
 
-      <div className="mt-10 flex items-center gap-4">
-        <span className="text-[14px] text-stage-muted">프로토타입에서는 바로 시작할 수 있습니다.</span>
-        <Magnetic>
-          <Button variant="primary" size="lg" onClick={onStart}>
-            바로 시작 <ArrowRight size={18} aria-hidden />
-          </Button>
-        </Magnetic>
-      </div>
+      <div className="mt-10 flex items-center gap-4">{footer}</div>
     </div>
   )
 }
 
+function DemoWaitingRoom({ view, onStart }: { view: ExamView; onStart: () => void }) {
+  const [left, setLeft] = useState(DEMO_WAIT)
+  useEffect(() => {
+    const id = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <WaitingStage
+      view={view}
+      left={left}
+      total={DEMO_WAIT}
+      chips={
+        <>
+          <StageChip>
+            <Dot ok /> 카메라 정상
+          </StageChip>
+          <StageChip>
+            <Dot ok /> 화면 공유 정상
+          </StageChip>
+          <StageChip>
+            <Users size={14} className="text-stage-brand" aria-hidden /> 응시자 128명 대기 중
+          </StageChip>
+        </>
+      }
+      footer={
+        <>
+          <span className="text-[14px] text-stage-muted">프로토타입에서는 바로 시작할 수 있습니다.</span>
+          <Magnetic>
+            <Button variant="primary" size="lg" onClick={onStart}>
+              바로 시작 <ArrowRight size={18} aria-hidden />
+            </Button>
+          </Magnetic>
+        </>
+      }
+    />
+  )
+}
+
+const secondsUntil = (atMs: number, offsetMs: number) => Math.max(0, Math.ceil((atMs - (Date.now() + offsetMs)) / 1000))
+
+/**
+ * 실제 대기실: 서버 시각 기준으로 시작 시각까지 센다. 시작 시각이 되면 시작 API 를 부르고 응시 화면으로 간다.
+ * PC 시계가 서버보다 빨라 "아직 시작 시각이 아닙니다"가 오면 1초 뒤 다시 부른다 (판단은 서버만 한다).
+ */
+function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; info: EntryInfo; offsetMs: number; view: ExamView }) {
+  const navigate = useNavigate()
+  const cam = useCamHub()
+  const startsAt = Date.parse(info.startsAt)
+  const [left, setLeft] = useState(() => secondsUntil(startsAt, offsetMs))
+  const [total] = useState(() => Math.max(60, secondsUntil(startsAt, offsetMs)))
+  const [error, setError] = useState<string | null>(null)
+  const starting = useRef(false)
+
+  useEffect(() => {
+    proctorApi.enter(invite).catch((e: Error) => setError(e.message))
+  }, [invite])
+
+  useEffect(() => {
+    const id = window.setInterval(() => setLeft(secondsUntil(startsAt, offsetMs)), 250)
+    return () => window.clearInterval(id)
+  }, [startsAt, offsetMs])
+
+  useEffect(() => {
+    if (left > 0 || starting.current) return
+    starting.current = true
+    let alive = true
+    const tryStart = async () => {
+      try {
+        const next = await proctorApi.start(invite)
+        if (!alive) return
+        const first = next.taskIds.map((t) => next.attempts[t]).find(Boolean)
+        if (!first) throw new Error('응시를 만들지 못했습니다. 기업 담당자에게 문의해 주세요.')
+        saveLiveExam({
+          invite,
+          title: next.sessionTitle,
+          startsAt: next.startsAt,
+          endsAt: next.endsAt,
+          proctoring: next.proctoring,
+          attempts: next.attempts,
+          serverOffsetMs: offsetMs,
+        })
+        navigate(`/exam/${encodeURIComponent(first)}?mode=live`, { replace: true })
+      } catch (e) {
+        if (!alive) return
+        const message = e instanceof Error ? e.message : String(e)
+        if (message.includes('아직 시작 시각이 아닙니다')) window.setTimeout(() => void tryStart(), START_RETRY_MS)
+        else setError(message)
+      }
+    }
+    void tryStart()
+    return () => {
+      alive = false
+    }
+  }, [left, invite, offsetMs, navigate])
+
+  const chips = info.proctoring ? (
+    <>
+      <StageChip>
+        <Dot ok={cam.camera === 'ready'} /> 카메라 {cam.camera === 'ready' ? '정상' : '확인 필요'}
+      </StageChip>
+      <StageChip>
+        <Dot ok={cam.phone === 'connected'} /> 휴대폰 캠 {cam.phone === 'connected' ? '연결됨' : '미연결'}
+      </StageChip>
+    </>
+  ) : (
+    <StageChip>
+      <Dot ok /> 입장 완료
+    </StageChip>
+  )
+  const footer = error ? (
+    <p role="alert" className="text-[14px] text-stage-alert">
+      {error}
+    </p>
+  ) : (
+    <span className="text-[14px] text-stage-muted">{left > 0 ? '시작 시각이 되면 자동으로 시작합니다. 이 화면을 닫지 마세요.' : '시험을 시작하는 중입니다'}</span>
+  )
+  return <WaitingStage view={view} left={left} total={total} chips={chips} footer={footer} />
+}
+
+// ── 실제 입장 링크: 입장 정보 불러오기 ──
+type LiveEntry = { status: 'loading' | 'ok' | 'error'; info?: EntryInfo; offsetMs: number; error?: string }
+
+function useLiveEntry(invite: string | null): LiveEntry {
+  const [state, setState] = useState<LiveEntry>({ status: 'loading', offsetMs: 0 })
+  useEffect(() => {
+    if (!invite) return
+    let alive = true
+    const requestedAt = Date.now()
+    proctorApi
+      .entry(invite)
+      .then((info) => {
+        if (alive) setState({ status: 'ok', info, offsetMs: serverOffsetFrom(info.serverNow, requestedAt) })
+      })
+      .catch((e: Error) => {
+        if (alive) setState({ status: 'error', offsetMs: 0, error: e.message })
+      })
+    return () => {
+      alive = false
+    }
+  }, [invite])
+  return state
+}
+
+function EntryNotice({ title, body }: { title: string; body: string }) {
+  return (
+    <Glass className="w-[640px] rounded-2xl bg-white/85! p-12 text-center shadow-lg!">
+      <h1 className="text-[26px] leading-9 font-bold tracking-[-0.02em] text-text">{title}</h1>
+      <p className="mt-4 text-[16px] leading-7 break-keep text-text-muted">{body}</p>
+    </Glass>
+  )
+}
+
+function noticeFor(live: LiveEntry): ReactNode {
+  const info = live.info
+  if (live.status === 'loading') return <EntryNotice title="입장 링크를 확인하는 중입니다" body="잠시만 기다려 주세요." />
+  if (live.status === 'error') return <EntryNotice title="입장할 수 없습니다" body={`${live.error ?? ''} 메일의 입장 링크를 다시 확인하거나 기업 담당자에게 문의하세요.`} />
+  if (info?.submittedAt) return <EntryNotice title="이미 제출한 시험입니다" body="결과는 기업에서 직접 안내합니다. 수고하셨습니다." />
+  if (info?.phase === 'ENDED') return <EntryNotice title="시험 시간이 끝났습니다" body="종료 시각이 지나 더 이상 입장할 수 없습니다." />
+  return null
+}
+
 export default function Entry() {
-  // 입장 링크: /entry?invite=<응시자별 토큰>. 토큰이 없으면 링크 안내만 보여 준다.
+  // 입장 링크: /entry?invite=<응시자별 토큰>. 토큰이 없으면 링크 안내만 보여 준다. invite=demo 는 목업 시연
   const [params, setParams] = useSearchParams()
-  const viaLink = params.has('invite')
+  const invite = params.get('invite')
+  const viaLink = invite !== null
+  const isDemo = invite === 'demo'
+  const live = useLiveEntry(viaLink && !isDemo ? invite : null)
+  const info = live.info
   const [step, setStep] = useState(0)
   const [dir, setDir] = useState(1)
+  const [consentBusy, setConsentBusy] = useState(false)
+  const [consentError, setConsentError] = useState<string | null>(null)
   const navigate = useNavigate()
-  const next = () => {
-    setDir(1)
-    setStep((s) => s + 1)
+  const view = isDemo || !info ? DEMO_VIEW : toView(info)
+
+  // 실전 입장: 카메라 허브를 이 응시자로 연결해 휴대폰 QR 을 미리 받아 둔다
+  useEffect(() => {
+    if (invite && !isDemo && info?.proctoring) camHub.connect(invite)
+  }, [invite, isDemo, info?.proctoring])
+
+  const go = (to: number) => {
+    setDir(to > step ? 1 : -1)
+    setStep(to)
   }
-  const back = () => {
-    setDir(-1)
-    setStep((s) => s - 1)
-  }
+  const next = () => go(step + 1)
+  const back = () => go(step - 1)
   const enterByDemoLink = () => {
     setParams({ invite: 'demo' })
     setStep(0)
   }
-  const waiting = viaLink && step === 3
+  /** 동의 다음: 감독 회차면 환경 점검으로, 아니면 동의만 저장하고 대기실로 */
+  const afterConsent = async () => {
+    if (isDemo || !invite || !info || info.proctoring) return next()
+    setConsentBusy(true)
+    setConsentError(null)
+    try {
+      await proctorApi.consent(invite, { proctoring: false })
+      go(3)
+    } catch (e) {
+      setConsentError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setConsentBusy(false)
+    }
+  }
+
+  // 이미 시작한 응시자가 링크로 다시 들어오면 바로 대기실 → 시작(중복 생성 없음) → 응시 화면
+  const resumed = !isDemo && !!info?.startedAt && !info.submittedAt && info.phase === 'LIVE'
+  const shownStep = resumed ? 3 : step
+  const notice = viaLink && !isDemo ? noticeFor(live) : null
+  const showSteps = viaLink && !notice
+  const waiting = showSteps && shownStep === 3
+
   const header = (
     <header className={cx('relative z-20 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-6 px-8', waiting ? 'border-b border-stage-line' : 'glass rounded-none! border-0! border-b! border-line/70! shadow-none!')}>
       <div className="flex items-center gap-4">
@@ -648,20 +923,31 @@ export default function Entry() {
         </span>
       </div>
       <span aria-hidden />
-      {viaLink ? (
+      {showSteps ? (
         <span className={cx('justify-self-end truncate text-[13px] font-medium', waiting ? 'text-stage-muted' : 'text-text-muted')}>
-          {examInfo.company} │ {examInfo.title}
+          {view.company ? `${view.company} │ ` : ''}
+          {view.title}
         </span>
       ) : (
         <span aria-hidden />
       )}
     </header>
   )
-  const journey = viaLink ? <Journey current={step} stage={waiting} /> : null
+  const journey = showSteps ? <Journey current={shownStep} stage={waiting} /> : null
+  const realInvite = !isDemo ? invite : null
+  const stepBody = (
+    <>
+      {shownStep === 0 && <InfoStep view={view} onNext={next} />}
+      {shownStep === 1 && <ConsentStep view={view} busy={consentBusy} error={consentError} onNext={() => void afterConsent()} onBack={back} />}
+      {shownStep === 2 && (realInvite ? <LiveEnvStep invite={realInvite} onNext={next} onBack={back} /> : <EnvStep onNext={next} onBack={back} />)}
+      {shownStep === 3 && isDemo && <DemoWaitingRoom view={view} onStart={() => navigate('/exam/live-k7q2mx?mode=live')} />}
+      {shownStep === 3 && realInvite && info && <LiveWaitingRoom invite={realInvite} info={info} offsetMs={live.offsetMs} view={view} />}
+    </>
+  )
   const body = (
     <AnimatePresence mode="wait" custom={dir}>
       <motion.div
-        key={viaLink ? step : 'no-link'}
+        key={!viaLink ? 'no-link' : notice ? 'notice' : shownStep}
         custom={dir}
         initial={{ opacity: 0, x: dir * 48 }}
         animate={{ opacity: 1, x: 0 }}
@@ -669,10 +955,8 @@ export default function Entry() {
         transition={{ duration: duration.normal, ease: easing.standard }}
       >
         {!viaLink && <NoLink onDemo={enterByDemoLink} />}
-        {viaLink && step === 0 && <InfoStep onNext={next} />}
-        {viaLink && step === 1 && <ConsentStep onNext={next} onBack={back} />}
-        {viaLink && step === 2 && <EnvStep onNext={next} onBack={back} />}
-        {waiting && <WaitingRoom onStart={() => navigate('/exam/live-k7q2mx?mode=live')} />}
+        {notice}
+        {showSteps && stepBody}
       </motion.div>
     </AnimatePresence>
   )

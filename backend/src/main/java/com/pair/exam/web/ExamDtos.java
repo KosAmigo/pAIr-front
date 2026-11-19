@@ -64,7 +64,8 @@ public final class ExamDtos {
 
     // ── 응시자: 입장 ──
 
-    public record EntryInfo(String sessionTitle, String name, Instant startsAt, Instant endsAt, Instant serverNow,
+    /** companyName: 기업 테이블이 아직 없어 null (명세상 선택 필드) */
+    public record EntryInfo(String sessionTitle, String companyName, String name, String email, Instant startsAt, Instant endsAt, Instant serverNow,
             ExamSession.Phase phase, boolean proctoring, boolean consented, Instant startedAt, Instant submittedAt,
             List<String> taskIds, Map<String, String> attempts) {}
 

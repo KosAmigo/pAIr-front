@@ -127,7 +127,7 @@ public class ExamEntryService {
 
     private EntryInfo view(ExamParticipant p, Instant now) {
         ExamSession s = p.getSession();
-        return new EntryInfo(s.getTitle(), p.getName(), s.getStartsAt(), s.getEndsAt(), now, s.phase(now), s.isProctoring(),
+        return new EntryInfo(s.getTitle(), null, p.getName(), p.getEmail(), s.getStartsAt(), s.getEndsAt(), now, s.phase(now), s.isProctoring(),
                 consents.existsById(p.getId()), p.getStartedAt(), p.getSubmittedAt(), s.getTaskIds(), p.getAttempts());
     }
 }
