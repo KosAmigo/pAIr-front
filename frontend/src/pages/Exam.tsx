@@ -75,10 +75,7 @@ function StatusBar({
   const tone = stage === 'followup' ? 'text-text' : left <= 180 ? 'text-alert' : left <= 600 ? 'text-caution' : 'text-text'
   return (
     <header
-      className={cx(
-        'grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-panel px-4',
-        mode === 'live' && 'border-t-2 border-t-alert',
-      )}
+      className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-panel px-4"
     >
       <div className="flex min-w-0 items-center gap-3">
         <Logo />
