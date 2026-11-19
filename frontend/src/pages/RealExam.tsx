@@ -781,8 +781,9 @@ export default function RealExam() {
       await api.followUps(sessionId, answers)
       await antiCheating.finish()
       if (live) {
-        // 회차 제출 기록(직접 제출). 실패해도 종료 시각에 서버가 대신 제출하므로 화면은 넘어간다
-        await proctorApi.submit(live.invite).catch(() => undefined)
+        // 이 과제만 회차에 제출 기록(과제별 제출). 실패해도 종료 시각에 서버가 대신 제출하므로 화면은 넘어간다
+        const taskId = Object.keys(live.attempts).find((t) => live.attempts[t] === sessionId)
+        if (taskId) await proctorApi.submitTask(live.invite, taskId).catch(() => undefined)
         await endLiveProctoring()
       }
       navigate(doneUrl)
