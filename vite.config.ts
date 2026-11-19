@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss(), ...(lan ? [basicSsl()] : []), proctorRelay()],
     server: {
       host: lan ? true : undefined,
-      // 백엔드(Spring Boot, backend/)로 API 요청을 넘긴다
+      // 백엔드(Spring Boot, pAIr-back)로 API 요청을 넘긴다
       proxy: {
         '/api': 'http://localhost:8180',
       },
