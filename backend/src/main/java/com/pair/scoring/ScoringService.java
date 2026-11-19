@@ -55,6 +55,7 @@ public class ScoringService {
     private final List<Judge> judges;
     private final PairProperties props;
     private final PromptStore prompts;
+    private final ReferenceDocs referenceDocs;
     /** 채점 작업(실제 응시 채점, 채점 툴 실험 채점). 여러 건을 동시에 채점한다. */
     private final ExecutorService executor;
     /** 두 채점 모델을 동시에 부를 때 쓴다. */
@@ -66,13 +67,14 @@ public class ScoringService {
 
     public ScoringService(AttemptStore store, TaskRepository tasks, CodeRunner runner,
                           ClaudeJudge claudeJudge, OpenAiJudge openAiJudge, PairProperties props,
-                          PromptStore prompts) {
+                          PromptStore prompts, ReferenceDocs referenceDocs) {
         this.store = store;
         this.tasks = tasks;
         this.runner = runner;
         this.judges = List.of(claudeJudge, openAiJudge);
         this.props = props;
         this.prompts = prompts;
+        this.referenceDocs = referenceDocs;
         int parallel = props.grader() == null || props.grader().parallel() < 1 ? 4 : props.grader().parallel();
         this.executor = Executors.newFixedThreadPool(parallel, r -> {
             Thread t = new Thread(r, "scoring");
@@ -263,7 +265,22 @@ public class ScoringService {
                     .forEach(c -> results.put(c.code(), skipped(checks, c.code(), "AI를 쓰지 않아 판정하지 않음 (U0, C0, K0, J0)")));
         }
         String prefix = judgePrefix(task, judgeChecks);
-        String body = judgeBody(task, judgeChecks, transcript(turns, a.startedAt()), files,
+        String reference = null;
+        if (!dev) {
+            // 제공 자료: 통째로 또는 제출물 문장으로 검색한 조각만 (pair.judge.reference-docs)
+            Map<String, String> materials = new LinkedHashMap<>();
+            StringBuilder submission = new StringBuilder();
+            files.forEach((path, content) -> {
+                if (path.startsWith("자료/")) materials.put(path, content);
+                else if (!path.startsWith("logs/")) submission.append(content).append("\n");
+            });
+            boolean rag = props.judge() != null && props.judge().ragDocs();
+            ReferenceDocs.Section ref = referenceDocs.build(materials, submission.toString(), rag);
+            reference = ref.text();
+            extras.put("referenceDocs", Map.of("mode", ref.mode(), "chars", ref.chars(), "chunksUsed", ref.chunksUsed(),
+                    "chunksTotal", ref.chunksTotal(), "embedTokens", ref.embedTokens()));
+        }
+        String body = judgeBody(task, judgeChecks, transcript(turns, a.startedAt()), files, reference,
                 a.followUpQuestions() != null && !a.followUpQuestions().isEmpty() ? a.followUpQuestions() : task.followUps(),
                 a.followUpAnswers(), eventSummary(events, a.startedAt()));
         // 두 채점 모델을 동시에 부른다. 한쪽이 실패하면 남은 한쪽으로만 판정한다.
@@ -395,7 +412,7 @@ public class ScoringService {
     }
 
     /** 응시마다 다른 뒷부분(대화, 이벤트, 파일, 후속 답변). */
-    private String judgeBody(TaskDef task, List<Check> checks, String transcript, Map<String, String> files,
+    private String judgeBody(TaskDef task, List<Check> checks, String transcript, Map<String, String> files, String reference,
                              List<String> questions, List<String> answers, String events) {
         StringBuilder sb = new StringBuilder();
         sb.append("\n# 대화 기록 (응시자는 AI가 대화창에 붙여 넣은 내용만 볼 수 있다는 것을 안내받았음)\n").append(transcript).append("\n");
@@ -407,12 +424,7 @@ public class ScoringService {
             boolean changed = !content.equals(original.get(path));
             sb.append("## ").append(path).append(changed ? " (수정됨)" : " (원본 그대로)").append("\n```\n").append(content).append("\n```\n");
         });
-        if (!task.isDev()) {
-            sb.append("\n# 제공 자료 (수치 대조용)\n");
-            files.forEach((path, content) -> {
-                if (path.startsWith("자료/")) sb.append("## ").append(path).append("\n```\n").append(content).append("\n```\n");
-            });
-        }
+        if (reference != null) sb.append("\n# 제공 자료 (수치 대조용)\n").append(reference);
         sb.append("\n# 후속 질문 답변\n");
         for (int i = 0; i < questions.size(); i++) {
             String ans = answers != null && i < answers.size() ? answers.get(i) : "";

@@ -34,8 +34,15 @@ public record PairProperties(
 
     public record Assistant(String provider, String model, long maxOutputTokens, String reasoningEffort, int maxTurns, int maxInputChars, String systemPrompt) {}
 
-    /** 이중 채점: 판정 체크는 두 모델의 감점을 평균한다. */
-    public record Judge(Model claude, Model openai) {}
+    /**
+     * 이중 채점: 판정 체크는 두 모델의 감점을 평균한다.
+     * referenceDocs: 비개발 채점에 제공 자료를 넣는 방식. full(통째로, 기본) 또는 rag(제출물 문장으로 검색한 조각만, 숫자 표는 통째로)
+     */
+    public record Judge(Model claude, Model openai, String referenceDocs) {
+        public boolean ragDocs() {
+            return "rag".equalsIgnoreCase(referenceDocs);
+        }
+    }
 
     /** effort: OpenAI 는 reasoning_effort(none/minimal/low/medium/high). Claude 는 output_config.effort(low/medium/high/xhigh/max). */
     public record Model(String model, String effort, long maxTokens) {}
