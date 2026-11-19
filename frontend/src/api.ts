@@ -1,4 +1,5 @@
-// 백엔드(backend/, Spring Boot) API 호출. vite 개발 서버가 /api 를 localhost:8180 으로 넘긴다.
+// 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
+import { readAuthSession } from './auth/authApi'
 
 export type TaskType = 'dev' | 'biz'
 
@@ -115,9 +116,13 @@ export class ApiError extends Error {}
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response
   try {
+    const token = readAuthSession()?.token
     res = await fetch(url, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers: {
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
@@ -167,9 +172,14 @@ export const api = {
 export async function chatStream(id: string, message: string, onDelta: (t: string) => void): Promise<Turn[]> {
   let res: Response
   try {
+    const token = readAuthSession()?.token
     res = await fetch(`/api/attempts/${enc(id)}/chat/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ message }),
     })
   } catch {

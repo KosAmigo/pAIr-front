@@ -1,6 +1,5 @@
-// 기업 콘솔 ↔ 백엔드 (pAIr-docs API/실전시험_감독_API.md 3절). 콘솔 화면은 이 파일만 거쳐 백엔드를 부른다.
-// 로그인은 아직 목업이라, 목업 계정을 헤더(X-Pair-*)로 보낸다. 백엔드에 Spring Security 가 붙으면 authHeaders 만 바꾼다.
-import { ACCOUNTS, MOCK_AUTO_LOGIN, type AuthUser } from '../auth/auth'
+// 기업 콘솔 API를 호출하고 현재 로그인 토큰을 bearer 헤더로 전달한다.
+import { readAuthSession } from '../auth/authApi'
 
 const BASE = ((import.meta.env?.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '')
 
@@ -81,22 +80,9 @@ export type ApiTaskStatus = 'HIDDEN' | 'OPEN'
 export type ApiTask = { id: string; type: string; title: string; minutes: number; status: ApiTaskStatus; publishedAt: string | null; updatedAt: string | null }
 export type SessionInput = { companyId?: number; title: string; startsAt: string; endsAt: string; proctoring: boolean; taskIds: string[] }
 
-/** 지금 계정 (AuthProvider 와 같은 저장소를 읽는다) */
-function currentUser(): AuthUser | null {
-  try {
-    const raw = localStorage.getItem('pair.auth')
-    if (raw) return JSON.parse(raw) as AuthUser
-  } catch {
-    /* 저장소를 못 읽으면 자동 접속 계정 */
-  }
-  return MOCK_AUTO_LOGIN ? ACCOUNTS[0] : null
-}
-
-export function authHeaders(user: AuthUser | null = currentUser()): Record<string, string> {
-  if (!user) return {}
-  const h: Record<string, string> = { 'X-Pair-User-Id': String(user.id), 'X-Pair-Role': user.role }
-  if (user.companyId != null) h['X-Pair-Company-Id'] = String(user.companyId)
-  return h
+export function authHeaders(): Record<string, string> {
+  const token = readAuthSession()?.token
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 async function send(method: string, path: string, body?: unknown): Promise<Response> {
