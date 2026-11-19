@@ -3,9 +3,9 @@
 import { useRef } from 'react'
 import { Camera, Mail, MonitorUp, ShieldAlert, TriangleAlert } from 'lucide-react'
 import SectionHead, { Grad } from './SectionHead'
-import Points, { Glow } from './Points'
+import Points from './Points'
 import { floatCard, mockFrame } from './homeStyles'
-import { GlowBorder, StageSection } from '../../components/fx'
+import { GlowBorder } from '../../components/fx'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
 const TOKEN = 'inv_8f3a'
@@ -55,8 +55,7 @@ export default function LiveSection() {
   )
 
   return (
-    <section ref={root} id="live" className="relative mt-40">
-      <StageSection shape="bleed" as="div" className="pt-32 pb-40 md:pl-[160px]">
+    <section ref={root} id="live" className="relative pt-40 md:pl-[160px]">
       <div data-spine="live" aria-hidden className="h-0" />
       <SectionHead
         label="LIVE EXAM"
@@ -73,7 +72,6 @@ export default function LiveSection() {
       <div className="mt-16 grid items-start gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         {/* 실전 시험 화면 축소판 */}
         <div data-console className="relative" role="img" aria-label="실전 시험 화면: 입장 링크, 녹화 표시, 남은 시간 3분, 브라우저 이탈 감지 경고">
-          <Glow />
           <GlowBorder className="rounded-[28px]">
           <div className={mockFrame}>
             <div className="flex flex-wrap items-center gap-4 border-b border-line px-6 py-4">
@@ -136,8 +134,7 @@ export default function LiveSection() {
 
         <Points items={FEATURES} className="lg:pt-6" />
       </div>
-      <div data-spine="live-end" aria-hidden className="absolute -bottom-24 left-0" />
-      </StageSection>
+      <div data-spine="live-end" aria-hidden className="absolute bottom-0 left-0" />
     </section>
   )
 }
