@@ -22,9 +22,12 @@ for t in $ORDER; do
   if [ "$t" = attempts ]; then
     # attempts ↔ checkpoints 가 서로를 가리키므로, 롤백 출발점은 체크포인트를 넣은 뒤에 채운다
     SQL+="
-CREATE TEMP TABLE attempts_in (LIKE attempts);
+CREATE TEMP TABLE attempts_in (LIKE attempts INCLUDING DEFAULTS);
 COPY attempts_in ($cols) FROM '/sample/attempts.csv' CSV HEADER;
-INSERT INTO attempts SELECT attempt_id, user_id, participant_id, task_id, mode, status, assistant_model, NULL, started_at, submitted_at, followups_done_at, share_token_hash, shared_at FROM attempts_in;"
+INSERT INTO attempts (attempt_id, user_id, participant_id, task_id, mode, status, assistant_model, forked_from_checkpoint_id,
+                      started_at, submitted_at, followups_done_at, auto_submitted, share_token_hash, shared_at)
+SELECT attempt_id, user_id, participant_id, task_id, mode, status, assistant_model, NULL,
+       started_at, submitted_at, followups_done_at, auto_submitted, share_token_hash, shared_at FROM attempts_in;"
   else
     SQL+="
 COPY $t ($cols) FROM '/sample/$t.csv' CSV HEADER;"

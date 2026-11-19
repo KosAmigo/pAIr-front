@@ -326,19 +326,21 @@ LIVE = {L1: 1, L2: 2, L3: 2}  # 응시 번호 → 대상자 번호
 ENV = json.dumps({"camera": True, "fullscreen": True, "browser": "Chrome 142"})
 for p in sorted(set(LIVE.values())):  # 감독 동의는 대상자마다 회차당 1번
     put("proctor_consents", ["participant_id", "consent_version", "env_check", "consented_at"], [p, "v1", ENV, "2026-11-11T09:41:50Z"])
-PE = ["proctor_event_id", "attempt_id", "type", "started_at", "duration_ms", "confidence", "detail", "snapshot_key", "snapshot_deleted_at",
-      "review", "review_note", "reviewed_by", "reviewed_at"]
+PE = ["proctor_event_id", "participant_id", "attempt_id", "type", "started_at", "duration_ms", "confidence", "detail", "snapshot_key",
+      "snapshot_deleted_at", "review", "review_note", "reviewed_by", "reviewed_at"]
 NR = [None, None, None, None]  # 아직 확인하지 않은 이벤트
-put("proctor_events", PE, [1, L1, "TAB_HIDDEN", "2026-11-11T09:42:10Z", 12000, None, None, None, None,
+put("proctor_events", PE, [1, LIVE[L1], L1, "TAB_HIDDEN", "2026-11-11T09:42:10Z", 12000, None, None, None, None,
                            "OK", "응시자 문의: 감독 프로그램 알림을 닫다가 탭이 바뀜", 6, "2026-11-11T11:05:00Z"])
-put("proctor_events", PE, [2, L1, "PASTE", "2026-11-11T09:42:12Z", 0, None,
+put("proctor_events", PE, [2, LIVE[L1], L1, "PASTE", "2026-11-11T09:42:12Z", 0, None,
                            json.dumps({"chars": 840, "fromAssistant": False}), None, None,
                            "SUSPECT", "외부에서 840자 붙여넣기. 리포트 대화와 대조 필요", 6, "2026-11-11T11:07:00Z"])
-put("proctor_events", PE, [3, L1, "NO_FACE", "2026-11-11T09:42:13Z", 7000, 0.93, json.dumps({"faces": 0}),
+put("proctor_events", PE, [3, LIVE[L1], L1, "NO_FACE", "2026-11-11T09:42:13Z", 7000, 0.93, json.dumps({"faces": 0}),
                            f"proctor/{L1}/3.jpg", None, *NR])
-put("proctor_events", PE, [4, L2, "HEAD_TURN", "2026-11-11T09:42:01Z", 3500, 0.71, json.dumps({"yawDeg": 48}),
+put("proctor_events", PE, [4, LIVE[L2], L2, "HEAD_TURN", "2026-11-11T09:42:01Z", 3500, 0.71, json.dumps({"yawDeg": 48}),
                            f"proctor/{L2}/4.jpg", "2026-12-11T00:00:00Z", *NR])
-put("proctor_events", PE, [5, L2, "WINDOW_BLUR", "2026-11-11T09:42:05Z", 2000, None, None, None, None, *NR])
+put("proctor_events", PE, [5, LIVE[L2], L2, "WINDOW_BLUR", "2026-11-11T09:42:05Z", 2000, None, None, None, None, *NR])
+# 과제 목록 화면(응시 없음)에서 생긴 이벤트: 대상자에만 붙는다
+put("proctor_events", PE, [6, LIVE[L3], None, "MOUSE_LEAVE", "2026-11-11T10:25:40Z", 1500, None, None, None, None, *NR])
 
 # ── 채점 결과 (K1 보완 버전, 실제 결과) ──
 sc = jc = rid = vid_n = 0
