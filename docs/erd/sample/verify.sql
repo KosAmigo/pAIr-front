@@ -47,7 +47,7 @@ UNION ALL SELECT '실전 응시가 시험 시간 밖에 시작', COUNT(*) FROM a
   JOIN exam_participants p ON p.participant_id = a.participant_id JOIN exam_sessions s ON s.session_id = p.session_id
   WHERE a.started_at NOT BETWEEN s.starts_at AND s.ends_at
 UNION ALL SELECT '감독 판단자가 같은 회사 감독관·매니저·관리자가 아님', COUNT(*) FROM proctor_events e
-  JOIN attempts a ON a.attempt_id = e.attempt_id JOIN exam_participants p ON p.participant_id = a.participant_id
+  JOIN exam_participants p ON p.participant_id = e.participant_id
   JOIN exam_sessions s ON s.session_id = p.session_id
   JOIN users u ON u.user_id = e.reviewed_by WHERE NOT (u.role = 'ADMIN' OR (u.role IN ('PROCTOR', 'MANAGER') AND u.company_id = s.company_id))
 UNION ALL SELECT '감독 회차인데 동의 없이 응시', COUNT(*) FROM attempts a
@@ -55,8 +55,10 @@ UNION ALL SELECT '감독 회차인데 동의 없이 응시', COUNT(*) FROM attem
   WHERE s.proctoring AND NOT EXISTS (SELECT 1 FROM proctor_consents c WHERE c.participant_id = p.participant_id)
 UNION ALL SELECT '감독 이벤트가 실전 응시가 아님', COUNT(*) FROM proctor_events e
   JOIN attempts a ON a.attempt_id = e.attempt_id WHERE a.mode <> 'LIVE'
+UNION ALL SELECT '감독 이벤트의 응시가 다른 대상자 것', COUNT(*) FROM proctor_events e
+  JOIN attempts a ON a.attempt_id = e.attempt_id WHERE a.participant_id <> e.participant_id
 UNION ALL SELECT '감독 이벤트가 시험 시간 밖', COUNT(*) FROM proctor_events e
-  JOIN attempts a ON a.attempt_id = e.attempt_id JOIN exam_participants p ON p.participant_id = a.participant_id
+  JOIN exam_participants p ON p.participant_id = e.participant_id
   JOIN exam_sessions s ON s.session_id = p.session_id
   WHERE e.started_at NOT BETWEEN s.starts_at AND s.ends_at
 UNION ALL SELECT '취소된 회차에 입장·응시 기록', COUNT(*) FROM exam_participants p
@@ -142,8 +144,19 @@ DECLARE a bigint := (SELECT max(attempt_id) FROM attempts);
   ['대상자가 연결된 자가진단 응시', $q$INSERT INTO attempts(user_id,participant_id,task_id,mode,status,assistant_model) SELECT 2,3,task_id,'SELF','SOLVING','x' FROM attempts LIMIT 1$q$],
   ['같은 회차에 같은 이메일 초대', $q$INSERT INTO exam_participants(session_id,email,name,invite_token_hash) SELECT session_id,email,'x',repeat('0',64) FROM exam_participants LIMIT 1$q$],
   ['같은 대상자에 감독 동의 두 번', $q$INSERT INTO proctor_consents(participant_id,consent_version,env_check) SELECT participant_id,'v2','{}' FROM proctor_consents LIMIT 1$q$],
-  ['없는 감독 이벤트 종류', $q$INSERT INTO proctor_events(attempt_id,type,started_at) SELECT attempt_id,'SCREENSHOT',started_at FROM proctor_events LIMIT 1$q$],
-  ['확신도 1 초과', $q$INSERT INTO proctor_events(attempt_id,type,started_at,confidence) SELECT attempt_id,'NO_FACE',started_at,1.5 FROM proctor_events LIMIT 1$q$],
+  ['없는 감독 이벤트 종류', $q$INSERT INTO proctor_events(participant_id,attempt_id,type,started_at) SELECT participant_id,attempt_id,'SCREENSHOT',started_at FROM proctor_events LIMIT 1$q$],
+  ['확신도 1 초과', $q$INSERT INTO proctor_events(participant_id,attempt_id,type,started_at,confidence) SELECT participant_id,attempt_id,'NO_FACE',started_at,1.5 FROM proctor_events LIMIT 1$q$],
+  ['대상자 없는 감독 이벤트', $q$INSERT INTO proctor_events(attempt_id,type,started_at) SELECT attempt_id,'NO_FACE',started_at FROM proctor_events WHERE attempt_id IS NOT NULL LIMIT 1$q$],
+  ['다른 대상자의 응시에 감독 이벤트', $q$INSERT INTO proctor_events(participant_id,attempt_id,type,started_at) SELECT p.participant_id,a.attempt_id,'NO_FACE',now() FROM attempts a JOIN exam_participants p ON p.participant_id <> a.participant_id WHERE a.mode = 'LIVE' LIMIT 1$q$],
+  ['없는 응시 상태', $q$UPDATE attempts SET status = 'IN_PROGRESS' WHERE attempt_id = (SELECT min(attempt_id) FROM attempts)$q$],
+  ['제출 시각 없이 채점 중', $q$UPDATE attempts SET status = 'SCORING', submitted_at = NULL WHERE attempt_id = (SELECT min(attempt_id) FROM attempts)$q$],
+  ['자가진단 응시를 자동 제출', $q$UPDATE attempts SET auto_submitted = true WHERE attempt_id = (SELECT min(attempt_id) FROM attempts WHERE mode = 'SELF')$q$],
+  ['없는 작업 기록 종류', $q$INSERT INTO attempt_events(attempt_id,type) SELECT min(attempt_id),'DOWNLOAD' FROM attempts$q$],
+  ['없는 대화 역할', $q$INSERT INTO chat_turns(attempt_id,turn_no,role,content) SELECT min(attempt_id),999,'SYSTEM','x' FROM attempts$q$],
+  ['없는 채점 상태', $q$UPDATE scorings SET status = 'QUEUED' WHERE scoring_id = (SELECT min(scoring_id) FROM scorings)$q$],
+  ['같은 응시 두 번 환불', $q$WITH r AS (INSERT INTO credit_ledger(user_id,amount,balance_after,reason,attempt_id,note) SELECT user_id,10,999,'REFUND',attempt_id,'채점 실패' FROM credit_ledger WHERE reason = 'ATTEMPT_START' LIMIT 1 RETURNING user_id, attempt_id) INSERT INTO credit_ledger(user_id,amount,balance_after,reason,attempt_id,note) SELECT user_id,10,1009,'REFUND',attempt_id,'채점 실패' FROM r$q$],
+  ['음수 환불', $q$INSERT INTO credit_ledger(user_id,amount,balance_after,reason) VALUES (2,-10,0,'REFUND')$q$],
+  ['메모 없는 관리자 조정', $q$INSERT INTO credit_ledger(user_id,amount,balance_after,reason) VALUES (2,50,50,'ADJUST')$q$],
   ['회원이 연결된 실전 응시', $q$INSERT INTO attempts(user_id,participant_id,task_id,mode,status,assistant_model) SELECT 2,3,(SELECT task_id FROM tasks WHERE usage = 'LIVE' LIMIT 1),'LIVE','SOLVING','x'$q$],
   ['회원 없는 자가진단 응시', $q$INSERT INTO attempts(task_id,mode,status,assistant_model) SELECT task_id,'SELF','SOLVING','x' FROM attempts LIMIT 1$q$],
   ['없는 감독 판단', $q$UPDATE proctor_events SET review='MAYBE', reviewed_by=4, reviewed_at=now() WHERE proctor_event_id=(SELECT min(proctor_event_id) FROM proctor_events)$q$],
@@ -181,7 +194,8 @@ SELECT * FROM bad;
 
 \echo '== 5. 자동 번호가 적재 후에도 겹치지 않는지 (새 행을 넣고 되돌림) =='
 BEGIN;
-INSERT INTO attempts(user_id, task_id, mode, status, assistant_model) SELECT 1, 1, 'SELF', 'IN_PROGRESS', 'x'
+INSERT INTO attempts(user_id, task_id, mode, status, assistant_model)
+  SELECT 1, (SELECT task_id FROM tasks WHERE usage = 'SELF' LIMIT 1), 'SELF', 'SOLVING', 'x'
   RETURNING attempt_id AS 새_응시_ID, (SELECT max(attempt_id) FROM attempts) AS 기존_최댓값;
 ROLLBACK;
 
@@ -209,14 +223,16 @@ SELECT c.name AS 회사, s.title AS 회차, (SELECT COUNT(*) FROM exam_session_t
        COUNT(DISTINCT a.attempt_id) AS 응시, COUNT(e.proctor_event_id) AS 감독_이벤트,
        COUNT(e.proctor_event_id) FILTER (WHERE e.snapshot_key IS NOT NULL) AS 스냅샷
 FROM exam_sessions s JOIN companies c ON c.company_id = s.company_id JOIN exam_participants p ON p.session_id = s.session_id
-LEFT JOIN attempts a ON a.participant_id = p.participant_id LEFT JOIN proctor_events e ON e.attempt_id = a.attempt_id
+LEFT JOIN attempts a ON a.participant_id = p.participant_id LEFT JOIN proctor_events e ON e.participant_id = p.participant_id
 GROUP BY c.name, s.session_id, s.title;
 \echo '-- 대상자별 과제 진행 (기업 화면)'
 SELECT p.name AS 대상자, t.title AS 과제, st.sort_order AS 순서, COALESCE(a.status, '미시작') AS 상태
 FROM exam_participants p JOIN exam_session_tasks st ON st.session_id = p.session_id JOIN tasks t ON t.task_id = st.task_id
 LEFT JOIN attempts a ON a.participant_id = p.participant_id AND a.task_id = st.task_id ORDER BY p.participant_id, st.sort_order;
-\echo '-- 응시별 감독 주의 구간 (리포트용, 앞 10개)'
-SELECT attempt_id, type, started_at, duration_ms, confidence FROM proctor_events ORDER BY attempt_id, started_at LIMIT 10;
+\echo '-- 대상자별 감독 주의 구간 (리포트용, 앞 10개. 응시가 비어 있으면 과제 목록 화면에서 생긴 이벤트)'
+SELECT e.participant_id, e.attempt_id, e.type, t.source, t.severity, e.started_at, e.duration_ms, e.confidence
+  FROM proctor_events e JOIN proctor_event_types t ON t.code = e.type
+ ORDER BY e.participant_id, e.started_at LIMIT 10;
 \echo '-- 회원별 크레딧 잔액과 사용 내역 (최신 원장의 처리 후 잔액)'
 SELECT DISTINCT ON (l.user_id) l.user_id AS 회원, u.name AS 이름, l.balance_after AS 잔액,
        (SELECT COUNT(*) FROM credit_ledger x WHERE x.user_id = l.user_id AND x.reason = 'CHAT_TURN') AS 채팅_턴

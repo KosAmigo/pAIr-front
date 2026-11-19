@@ -27,7 +27,7 @@ CREATE TABLE users (
     email          VARCHAR(255) NOT NULL UNIQUE,
     password_hash  VARCHAR(100) NOT NULL,
     name           VARCHAR(50)  NOT NULL,
-    member_status  VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE' CHECK (member_status IN ('ACTIVE', 'WITHDRAWN', 'PENDING')),
+    member_status  VARCHAR(20)  NOT NULL DEFAULT 'PENDING' CHECK (member_status IN ('ACTIVE', 'WITHDRAWN', 'PENDING')),
     role           VARCHAR(10)  NOT NULL DEFAULT 'USER' CHECK (role IN ('USER', 'MANAGER', 'PROCTOR', 'ADMIN')),
     company_id     BIGINT       REFERENCES companies (company_id),
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -40,7 +40,7 @@ COMMENT ON COLUMN users.user_id IS '회원 ID';
 COMMENT ON COLUMN users.email IS '이메일(로그인 ID)';
 COMMENT ON COLUMN users.password_hash IS '비밀번호 해시(BCrypt)';
 COMMENT ON COLUMN users.name IS '이름';
-COMMENT ON COLUMN users.member_status IS '회원 상태(ACTIVE 정상/WITHDRAWN 탈퇴/PENDING 이메일 인증 전)';
+COMMENT ON COLUMN users.member_status IS '회원 상태(PENDING 이메일 인증 전(기본값)/ACTIVE 정상/WITHDRAWN 탈퇴). 초대 링크로 만든 기업 계정처럼 인증이 필요 없으면 서비스 코드가 ACTIVE로 넣는다';
 COMMENT ON COLUMN users.role IS '권한(USER 응시자/MANAGER 기업 매니저/PROCTOR 기업 감독관/ADMIN 관리자)';
 COMMENT ON COLUMN users.company_id IS '소속 회사 ID(MANAGER·PROCTOR만)';
 COMMENT ON COLUMN users.created_at IS '가입 시각';
@@ -290,12 +290,14 @@ CREATE TABLE attempts (
     participant_id             BIGINT,
     task_id                    BIGINT       NOT NULL,
     mode                       VARCHAR(10)  NOT NULL CHECK (mode IN ('SELF', 'LIVE')),
-    status                     VARCHAR(20)  NOT NULL,
+    status                     VARCHAR(20)  NOT NULL DEFAULT 'SOLVING'
+                               CHECK (status IN ('SOLVING', 'FOLLOWUP', 'SCORING', 'DONE', 'ERROR')),
     assistant_model            VARCHAR(50)  NOT NULL,
     forked_from_checkpoint_id  BIGINT,
     started_at                 TIMESTAMPTZ  NOT NULL DEFAULT now(),
     submitted_at               TIMESTAMPTZ,
     followups_done_at          TIMESTAMPTZ,
+    auto_submitted             BOOLEAN      NOT NULL DEFAULT FALSE,
     share_token_hash           CHAR(64)     UNIQUE,
     shared_at                  TIMESTAMPTZ,
     FOREIGN KEY (task_id, mode) REFERENCES tasks (task_id, usage),
@@ -303,7 +305,14 @@ CREATE TABLE attempts (
     CHECK (share_token_hash IS NULL OR mode = 'SELF'),
     CHECK ((share_token_hash IS NULL) = (shared_at IS NULL)),
     CHECK ((mode = 'LIVE') = (participant_id IS NOT NULL)),
-    UNIQUE (participant_id, task_id)
+    -- 풀이 중이 아니면 제출 시각이 있고, 채점 단계면 후속 질문을 마쳤거나 자동 제출된 것
+    CHECK (status = 'SOLVING' OR submitted_at IS NOT NULL),
+    CHECK (status IN ('SOLVING', 'FOLLOWUP') OR followups_done_at IS NOT NULL OR auto_submitted),
+    -- 자동 제출은 실전 회차 종료 때만
+    CHECK (NOT auto_submitted OR mode = 'LIVE'),
+    UNIQUE (participant_id, task_id),
+    -- proctor_events 가 (응시, 대상자) 복합 외래 키로 가리킨다
+    UNIQUE (attempt_id, participant_id)
 );
 COMMENT ON TABLE  attempts IS '응시';
 COMMENT ON COLUMN attempts.attempt_id IS '응시 ID';
@@ -311,12 +320,13 @@ COMMENT ON COLUMN attempts.user_id IS '회원 ID(자가진단만. 실전 응시�
 COMMENT ON COLUMN attempts.participant_id IS '대상자 ID(실전만. 회차 과제마다 응시 1건)';
 COMMENT ON COLUMN attempts.task_id IS '과제 ID';
 COMMENT ON COLUMN attempts.mode IS '모드(SELF 자가진단/LIVE 실전, 과제 용도와 같아야 함)';
-COMMENT ON COLUMN attempts.status IS '상태';
+COMMENT ON COLUMN attempts.status IS '상태(SOLVING 풀이 중 → FOLLOWUP 후속 질문 중 → SCORING 채점 중 → DONE 완료, 채점 실패 시 ERROR. ERROR는 다시 채점하면 SCORING)';
 COMMENT ON COLUMN attempts.assistant_model IS '어시스턴트 모델';
 COMMENT ON COLUMN attempts.forked_from_checkpoint_id IS '롤백 출발 체크포인트 ID';
 COMMENT ON COLUMN attempts.started_at IS '시작 시각';
 COMMENT ON COLUMN attempts.submitted_at IS '제출 시각';
 COMMENT ON COLUMN attempts.followups_done_at IS '후속 질문 완료 시각';
+COMMENT ON COLUMN attempts.auto_submitted IS '실전 회차 종료 시각에 자동 제출됐는지(후속 질문 없이 바로 채점)';
 COMMENT ON COLUMN attempts.share_token_hash IS '리포트 공유 링크 토큰 해시(자가진단만, 끄면 비움)';
 COMMENT ON COLUMN attempts.shared_at IS '공유 시작 시각';
 
@@ -339,7 +349,7 @@ CREATE TABLE chat_turns (
     turn_id        BIGSERIAL    PRIMARY KEY,
     attempt_id     BIGINT       NOT NULL REFERENCES attempts (attempt_id),
     turn_no        INT          NOT NULL,
-    role           VARCHAR(10)  NOT NULL,
+    role           VARCHAR(10)  NOT NULL CHECK (role IN ('USER', 'AI')),
     content        TEXT         NOT NULL,
     model          VARCHAR(50),
     input_tokens   INT,
@@ -361,14 +371,15 @@ COMMENT ON COLUMN chat_turns.created_at IS '생성 시각';
 CREATE TABLE attempt_events (
     event_id    BIGSERIAL    PRIMARY KEY,
     attempt_id  BIGINT       NOT NULL REFERENCES attempts (attempt_id),
-    type        VARCHAR(20)  NOT NULL,
+    type        VARCHAR(20)  NOT NULL CHECK (type IN ('START', 'SAVE', 'BUILD', 'RUN', 'CHAT', 'CHAT_EMPTY',
+                                                      'AI_EDIT', 'SUBMIT', 'FOLLOWUPS', 'FIRST_VALID')),
     payload     JSONB,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE  attempt_events IS '작업 기록';
 COMMENT ON COLUMN attempt_events.event_id IS '이벤트 ID';
 COMMENT ON COLUMN attempt_events.attempt_id IS '응시 ID';
-COMMENT ON COLUMN attempt_events.type IS '종류(SAVE/BUILD/RUN/AI_EDIT/SUBMIT)';
+COMMENT ON COLUMN attempt_events.type IS '종류(START 시작/SAVE 저장/BUILD 빌드/RUN 실행/CHAT 질문/CHAT_EMPTY AI 빈 답(채점 제외)/AI_EDIT 수정 제안 적용·거절/SUBMIT 제출/FOLLOWUPS 후속 답변/FIRST_VALID 첫 유효 결과)';
 COMMENT ON COLUMN attempt_events.payload IS '상세 내용';
 COMMENT ON COLUMN attempt_events.created_at IS '발생 시각';
 
@@ -417,25 +428,36 @@ CREATE TABLE credit_ledger (
     user_id        BIGINT       NOT NULL REFERENCES users (user_id),
     amount         INT          NOT NULL CHECK (amount <> 0),
     balance_after  INT          NOT NULL CHECK (balance_after >= 0),
-    reason         VARCHAR(20)  NOT NULL CHECK (reason IN ('SIGNUP', 'PURCHASE', 'ATTEMPT_START', 'ROLLBACK', 'CHAT_TURN')),
+    reason         VARCHAR(20)  NOT NULL CHECK (reason IN ('SIGNUP', 'PURCHASE', 'REFUND', 'ADJUST',
+                                                           'ATTEMPT_START', 'ROLLBACK', 'CHAT_TURN')),
     purchase_id    BIGINT       UNIQUE REFERENCES credit_purchases (purchase_id),
-    attempt_id     BIGINT       UNIQUE REFERENCES attempts (attempt_id),
+    attempt_id     BIGINT       REFERENCES attempts (attempt_id),
     turn_id        BIGINT       UNIQUE REFERENCES chat_turns (turn_id),
+    note           TEXT,
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    CHECK ((reason IN ('SIGNUP', 'PURCHASE')) = (amount > 0)),
+    -- 적립(가입·구매·환불)은 +, 사용(응시 시작·롤백·채팅)은 -, 관리자 조정은 양쪽 다
+    CHECK ((reason IN ('SIGNUP', 'PURCHASE', 'REFUND') AND amount > 0)
+        OR (reason IN ('ATTEMPT_START', 'ROLLBACK', 'CHAT_TURN') AND amount < 0)
+        OR reason = 'ADJUST'),
     CHECK ((reason = 'PURCHASE') = (purchase_id IS NOT NULL)),
-    CHECK ((reason IN ('ATTEMPT_START', 'ROLLBACK')) = (attempt_id IS NOT NULL)),
-    CHECK ((reason = 'CHAT_TURN') = (turn_id IS NOT NULL))
+    -- 응시 시작·롤백은 응시가 꼭 있고, 환불은 응시가 있을 수 있다(채점 실패 등)
+    CHECK (reason NOT IN ('ATTEMPT_START', 'ROLLBACK') OR attempt_id IS NOT NULL),
+    CHECK (attempt_id IS NULL OR reason IN ('ATTEMPT_START', 'ROLLBACK', 'REFUND')),
+    CHECK ((reason = 'CHAT_TURN') = (turn_id IS NOT NULL)),
+    CHECK (reason <> 'ADJUST' OR note IS NOT NULL),
+    -- 한 응시에 같은 사유는 한 번만(시작 차감 1번, 환불 1번). 롤백으로 생긴 응시는 ROLLBACK만 차감한다(서비스 코드)
+    UNIQUE (attempt_id, reason)
 );
 COMMENT ON TABLE  credit_ledger IS '크레딧 원장';
 COMMENT ON COLUMN credit_ledger.ledger_id IS '원장 ID';
 COMMENT ON COLUMN credit_ledger.user_id IS '회원 ID';
 COMMENT ON COLUMN credit_ledger.amount IS '증감(+ 적립/- 사용)';
 COMMENT ON COLUMN credit_ledger.balance_after IS '처리 후 잔액';
-COMMENT ON COLUMN credit_ledger.reason IS '사유(SIGNUP 가입/PURCHASE 구매/ATTEMPT_START 응시 시작/ROLLBACK 롤백/CHAT_TURN 채팅 턴)';
+COMMENT ON COLUMN credit_ledger.reason IS '사유(SIGNUP 가입/PURCHASE 구매/REFUND 환불/ADJUST 관리자 조정/ATTEMPT_START 응시 시작/ROLLBACK 롤백/CHAT_TURN 채팅 턴)';
 COMMENT ON COLUMN credit_ledger.purchase_id IS '구매 ID(구매 적립만)';
-COMMENT ON COLUMN credit_ledger.attempt_id IS '응시 ID(응시 시작·롤백만)';
+COMMENT ON COLUMN credit_ledger.attempt_id IS '응시 ID(응시 시작·롤백 필수, 환불은 선택)';
 COMMENT ON COLUMN credit_ledger.turn_id IS '대화 턴 ID(채팅 턴만)';
+COMMENT ON COLUMN credit_ledger.note IS '메모(관리자 조정은 필수, 환불 사유 등)';
 COMMENT ON COLUMN credit_ledger.created_at IS '처리 시각';
 
 CREATE TABLE chat_attachments (
@@ -558,7 +580,7 @@ CREATE TABLE scorings (
     scoring_id   BIGSERIAL    PRIMARY KEY,
     attempt_id   BIGINT       NOT NULL REFERENCES attempts (attempt_id),
     version_id   BIGINT       NOT NULL REFERENCES prompt_versions (version_id),
-    status       VARCHAR(20)  NOT NULL,
+    status       VARCHAR(20)  NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'DONE', 'ERROR')),
     error        TEXT,
     started_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
     finished_at  TIMESTAMPTZ
@@ -567,7 +589,7 @@ COMMENT ON TABLE  scorings IS '채점(실제 응시 채점. 채점 툴 실험 �
 COMMENT ON COLUMN scorings.scoring_id IS '채점 ID';
 COMMENT ON COLUMN scorings.attempt_id IS '응시 ID';
 COMMENT ON COLUMN scorings.version_id IS '버전 ID';
-COMMENT ON COLUMN scorings.status IS '상태';
+COMMENT ON COLUMN scorings.status IS '상태(RUNNING 채점 중/DONE 완료/ERROR 실패)';
 COMMENT ON COLUMN scorings.error IS '오류 내용';
 COMMENT ON COLUMN scorings.started_at IS '시작 시각';
 COMMENT ON COLUMN scorings.finished_at IS '종료 시각';
@@ -593,7 +615,7 @@ CREATE TABLE check_results (
     scoring_id  BIGINT      NOT NULL REFERENCES scorings (scoring_id),
     check_id    BIGINT      NOT NULL REFERENCES rubric_checks (check_id),
     deducted    INT         NOT NULL DEFAULT 0,
-    status      VARCHAR(20) NOT NULL,
+    status      VARCHAR(20) NOT NULL CHECK (status IN ('DEDUCTED', 'PASSED', 'SPLIT', 'NO_EVIDENCE', 'SKIPPED')),
     reason      TEXT,
     UNIQUE (scoring_id, check_id)
 );
@@ -728,11 +750,47 @@ COMMENT ON COLUMN proctor_consents.consent_version IS '동의서 버전';
 COMMENT ON COLUMN proctor_consents.env_check IS '환경 점검 결과(카메라, 브라우저, 전체화면)';
 COMMENT ON COLUMN proctor_consents.consented_at IS '동의 시각';
 
+-- 감독 이벤트 종류(기준 데이터). 감지 종류가 늘면 행만 추가한다. 코드 이름은 docs/api/실전시험_감독_API.md 와 같다.
+CREATE TABLE proctor_event_types (
+    code      VARCHAR(20)  PRIMARY KEY,
+    source    VARCHAR(10)  NOT NULL CHECK (source IN ('BROWSER', 'PC_CAM', 'PHONE_CAM')),
+    label     VARCHAR(100) NOT NULL,
+    severity  VARCHAR(10)  NOT NULL CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH'))
+);
+COMMENT ON TABLE  proctor_event_types IS '감독 이벤트 종류';
+COMMENT ON COLUMN proctor_event_types.code IS '종류 코드';
+COMMENT ON COLUMN proctor_event_types.source IS '감지 위치(BROWSER 브라우저/PC_CAM 노트북 캠/PHONE_CAM 휴대폰 캠)';
+COMMENT ON COLUMN proctor_event_types.label IS '경고 문구(기업 화면, 리포트에 표시)';
+COMMENT ON COLUMN proctor_event_types.severity IS '심각도(LOW/MEDIUM/HIGH, 결과 화면 정렬·강조용)';
+
+INSERT INTO proctor_event_types (code, source, label, severity) VALUES
+    ('TAB_HIDDEN',         'BROWSER',   '다른 탭으로 이동했습니다',               'MEDIUM'),
+    ('WINDOW_BLUR',        'BROWSER',   '다른 창으로 이동했습니다',               'MEDIUM'),
+    ('MOUSE_LEAVE',        'BROWSER',   '마우스가 시험 화면 밖으로 나갔습니다',      'LOW'),
+    ('PASTE',              'BROWSER',   '외부에서 붙여 넣었습니다',               'HIGH'),
+    ('FULLSCREEN_EXIT',    'BROWSER',   '전체 화면을 나갔습니다',                 'MEDIUM'),
+    ('NO_FACE',            'PC_CAM',    '얼굴이 화면에 보이지 않습니다',           'HIGH'),
+    ('MULTI_FACE',         'PC_CAM',    '여러 사람이 감지되었습니다',             'HIGH'),
+    ('HEAD_TURN',          'PC_CAM',    '고개를 화면 밖으로 돌렸습니다',           'MEDIUM'),
+    ('HEAD_DOWN',          'PC_CAM',    '고개를 오래 숙이고 있습니다',             'LOW'),
+    ('GAZE_AWAY',          'PC_CAM',    '시선이 화면 밖을 향하고 있습니다',         'LOW'),
+    ('TORSO_SHIFT',        'PC_CAM',    '자리에서 크게 움직였습니다',              'LOW'),
+    ('TORSO_TURN',         'PC_CAM',    '몸을 돌리거나 화면에서 멀어졌습니다',       'MEDIUM'),
+    ('HAND_MISSING',       'PHONE_CAM', '손이 키보드에서 벗어났습니다',            'MEDIUM'),
+    ('HAND_MOVED',         'PHONE_CAM', '손이 평소 위치에서 크게 벗어났습니다',      'LOW'),
+    ('ARM_MOVE',           'PHONE_CAM', '팔을 크게 움직였습니다',                'LOW'),
+    ('PHONE',              'PHONE_CAM', '휴대폰이 감지되었습니다',               'HIGH'),
+    ('EXTRA_SCREEN',       'PHONE_CAM', '다른 화면(모니터·노트북)이 감지되었습니다', 'HIGH'),
+    ('BOOK',               'PHONE_CAM', '책·자료가 감지되었습니다',              'MEDIUM'),
+    ('PHONE_DISCONNECTED', 'PHONE_CAM', '휴대폰 캠 연결이 끊겼습니다',            'MEDIUM');
+
+-- 감독은 과제가 아니라 대상자 단위로 회차 내내 돈다(동의도 대상자 단위). 그래서 대상자에 붙이고,
+-- 과제 화면에서 생긴 이벤트만 그 응시를 함께 남긴다(과제 목록 화면 등에서는 응시가 없다).
 CREATE TABLE proctor_events (
     proctor_event_id     BIGSERIAL     PRIMARY KEY,
-    attempt_id           BIGINT        NOT NULL REFERENCES attempts (attempt_id),
-    type                 VARCHAR(20)   NOT NULL CHECK (type IN ('TAB_HIDDEN', 'WINDOW_BLUR', 'PASTE', 'FULLSCREEN_EXIT',
-                                                               'NO_FACE', 'MULTI_FACE', 'HEAD_TURN', 'PHONE')),
+    participant_id       BIGINT        NOT NULL REFERENCES exam_participants (participant_id),
+    attempt_id           BIGINT,
+    type                 VARCHAR(20)   NOT NULL REFERENCES proctor_event_types (code),
     started_at           TIMESTAMPTZ   NOT NULL,
     duration_ms          INT           NOT NULL DEFAULT 0 CHECK (duration_ms >= 0),
     confidence           NUMERIC(4, 3) CHECK (confidence BETWEEN 0 AND 1),
@@ -743,12 +801,15 @@ CREATE TABLE proctor_events (
     review_note          TEXT,
     reviewed_by          BIGINT        REFERENCES users (user_id),
     reviewed_at          TIMESTAMPTZ,
-    CHECK ((review IS NULL) = (reviewed_by IS NULL) AND (review IS NULL) = (reviewed_at IS NULL))
+    CHECK ((review IS NULL) = (reviewed_by IS NULL) AND (review IS NULL) = (reviewed_at IS NULL)),
+    -- 응시가 있으면 같은 대상자의 응시여야 한다(attempt_id 가 NULL 이면 검사하지 않음)
+    FOREIGN KEY (attempt_id, participant_id) REFERENCES attempts (attempt_id, participant_id)
 );
 COMMENT ON TABLE  proctor_events IS '감독 이벤트';
 COMMENT ON COLUMN proctor_events.proctor_event_id IS '감독 이벤트 ID';
-COMMENT ON COLUMN proctor_events.attempt_id IS '응시 ID';
-COMMENT ON COLUMN proctor_events.type IS '종류(TAB_HIDDEN/WINDOW_BLUR/PASTE/FULLSCREEN_EXIT/NO_FACE/MULTI_FACE/HEAD_TURN/PHONE)';
+COMMENT ON COLUMN proctor_events.participant_id IS '대상자 ID';
+COMMENT ON COLUMN proctor_events.attempt_id IS '응시 ID(과제 화면에서 생긴 이벤트만. 과제 목록 화면 등에서는 비어 있음)';
+COMMENT ON COLUMN proctor_events.type IS '종류(proctor_event_types.code)';
 COMMENT ON COLUMN proctor_events.started_at IS '시작 시각';
 COMMENT ON COLUMN proctor_events.duration_ms IS '지속 시간(ms)';
 COMMENT ON COLUMN proctor_events.confidence IS '확신도(0~1, 카메라 감지만)';
@@ -772,4 +833,5 @@ CREATE INDEX idx_judge_calls_scoring_id    ON judge_calls (scoring_id);     -- �
 CREATE INDEX idx_judge_verdicts_result_id  ON judge_verdicts (result_id);   -- 체크 결과의 모델별 판정 → 리포트
 CREATE INDEX idx_exam_sessions_company_id  ON exam_sessions (company_id);   -- 회사의 회차 목록(관리자 화면)
 CREATE INDEX idx_credit_ledger_user_id      ON credit_ledger (user_id, ledger_id); -- 회원의 최신 잔액·사용 내역
-CREATE INDEX idx_proctor_events_attempt_id ON proctor_events (attempt_id);  -- 응시의 감독 이벤트 → 리포트·관리자 화면
+CREATE INDEX idx_proctor_events_participant_id ON proctor_events (participant_id, started_at); -- 대상자의 감독 이벤트(시간순) → 감독 화면·리포트
+CREATE INDEX idx_proctor_events_attempt_id ON proctor_events (attempt_id) WHERE attempt_id IS NOT NULL; -- 과제별 리포트의 감독 주의 구간
