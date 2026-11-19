@@ -4,7 +4,6 @@ import { useRef, useState, type CSSProperties } from 'react'
 import { cx } from '../../components/cx'
 import { GlowBorder } from '../../components/fx'
 import SectionHead, { Grad } from './SectionHead'
-import { Glow } from './Points'
 import { mockFrame } from './homeStyles'
 import { MOTION_OK, ScrollTrigger, gsap, useGSAP } from './motion'
 
@@ -207,7 +206,6 @@ export default function ReplaySection() {
         </ol>
 
         <div data-visual className="relative">
-          <Glow />
           <GlowBorder className="rounded-[28px]">
             <div className={cx(mockFrame, 'p-6 md:p-8')}>
               <Visual />
