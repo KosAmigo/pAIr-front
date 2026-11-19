@@ -1,0 +1,10 @@
+// RAG 기술검증 C: PDF 텍스트 추출 비교 (PDFBox vs Tika)
+plugins { id 'application' }
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+repositories { mavenCentral() }
+dependencies {
+    implementation 'org.apache.pdfbox:pdfbox:3.0.5'
+    implementation 'org.apache.tika:tika-core:3.2.3'
+    implementation 'org.apache.tika:tika-parser-pdf-module:3.2.3'
+}
+application { mainClass = 'Extract' }

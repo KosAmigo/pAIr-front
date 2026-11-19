@@ -95,6 +95,8 @@ pair:
       model: gpt-6.1-terra
       effort: medium
       max-tokens: 16000
+    # 비개발 채점의 제공 자료: full(통째로) 또는 rag(제출물 문장으로 검색한 조각만, CSV 표는 통째로)
+    reference-docs: ${PAIR_REFERENCE_DOCS:full}
 
   # (예비) Claude 를 어시스턴트로 쓸 때의 모델. 이번 파일럿에서는 쓰지 않는다.
   claude-assistant-model: claude-haiku-5-5

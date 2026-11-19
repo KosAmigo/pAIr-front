@@ -16,6 +16,20 @@
       "autoPort": false
     },
     {
+      "name": "pair-backend-docs-full",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "backend\\gradlew.bat", "-p", "backend", "bootRun", "--console=plain", "--args=--server.port=8181 --pair.judge.reference-docs=full"],
+      "port": 8181,
+      "autoPort": false
+    },
+    {
+      "name": "pair-backend-docs-rag",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "backend\\gradlew.bat", "-p", "backend", "bootRun", "--console=plain", "--args=--server.port=8181 --pair.judge.reference-docs=rag"],
+      "port": 8181,
+      "autoPort": false
+    },
+    {
       "name": "cam-proctor",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "cam-proctor", "run", "dev"],

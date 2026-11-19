@@ -1,0 +1,39 @@
+{
+  "id" : "20261119-101818",
+  "createdAt" : "2026-11-19T01:18:18.080580900Z",
+  "finishedAt" : "2026-11-19T01:19:10.811301100Z",
+  "versionId" : "v2_기본",
+  "versionName" : "기본 (6개 역량)",
+  "attempts" : [ {
+    "source" : "mine",
+    "id" : "att-261119-rag-ideal",
+    "label" : null,
+    "taskId" : "pricing-plan",
+    "taskTitle" : "신규 저가 요금제 출시 기획안",
+    "taskType" : "biz",
+    "startedAt" : "2026-11-11T09:42:42.418973700Z",
+    "total" : null,
+    "chatTurns" : 8
+  }, {
+    "source" : "mine",
+    "id" : "att-261119-rag-copy",
+    "label" : null,
+    "taskId" : "pricing-plan",
+    "taskTitle" : "신규 저가 요금제 출시 기획안",
+    "taskType" : "biz",
+    "startedAt" : "2026-11-11T09:43:11.032003300Z",
+    "total" : null,
+    "chatTurns" : 2
+  } ],
+  "count" : 3,
+  "judgeRepeat" : 1,
+  "status" : "DONE",
+  "done" : 6,
+  "failed" : 0,
+  "total" : 6,
+  "estimateUsd" : 0.1578,
+  "actualUsd" : 0.1521,
+  "errors" : [ ],
+  "mode" : "api",
+  "phase" : null
+}
