@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pAIr 화면설계서</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  @page { size: 1700px 1010px; margin: 0 }
+  * { box-sizing: border-box }
+  body { margin: 0; background: #e9e9ec; font-family: Pretendard, 'Malgun Gothic', sans-serif; font-weight: 500; color: #1d1d22; font-size: 14px }
+  .page { width: 1700px; height: 1010px; margin: 24px auto; background: #fff; padding: 22px; display: flex; gap: 14px; page-break-after: always; break-after: page; box-shadow: 0 2px 10px rgba(0,0,0,.12) }
+  @media print { body { background: #fff } .page { margin: 0; box-shadow: none } }
+  table { border-collapse: collapse; width: 100% }
+  th, td { border: 1.5px solid #555; padding: 7px 10px; text-align: left; vertical-align: middle }
+  th { background: #e4e4e8; font-weight: 700; white-space: nowrap }
+  .main { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0 }
+  .meta td.w { min-width: 260px }
+  .frame { flex: 1; border: 1.5px solid #555; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #fafafa }
+  .url { font: 600 12px/1 ui-monospace, Consolas, monospace; color: #666; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 6px 10px }
+  .shot { position: relative; width: 100%; aspect-ratio: 1440 / 900; border: 1px solid #bbb }
+  .shot img { display: block; width: 100%; height: 100% }
+  .box { position: absolute; border: 2px dashed #e5262a; border-radius: 4px }
+  .pin { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: #e5262a; color: #fff; font-weight: 800; font-size: 15px; display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35) }
+  .side { width: 330px; display: flex; flex-direction: column; gap: 12px }
+  .desc th { text-align: center; font-size: 15px }
+  .desc td { font-size: 13.5px; line-height: 1.4; height: 44px }
+  .desc td.n { width: 30px; text-align: center; font-weight: 700 }
+  .cp { color: #c81e22; height: auto !important; padding: 10px }
+  .rel div { padding: 2px 0 } .rel span { color: #666 }
+  .cover { flex-direction: column; justify-content: center; padding: 80px 120px }
+  .cover h1 { font-size: 44px; font-weight: 800; margin: 0 0 8px } .cover p { color: #555; margin: 0 0 40px; font-size: 17px }
+  .cover th, .cover td { padding: 12px 14px; font-size: 15px } .mono { font-family: ui-monospace, Consolas, monospace; font-size: 13px }
+</style></head><body>
+<section class="page cover">
+  <h1>pAIr 화면설계서</h1>
+  <p>AI 활용 역량평가 · 자가진단 / 실전 응시 / 채점 툴 · 2026.11.19 · pAIr 팀</p>
+  <table><tr><th>Screen ID</th><th>화면</th><th>Screen Path</th><th>주소</th></tr><tr><td>UI-W-001</td><td>메인화면</td><td>HOME</td><td class="mono">/</td></tr><tr><td>UI-W-002</td><td>진단 대시보드</td><td>HOME &gt; 자가진단 &gt; 대시보드</td><td class="mono">/dashboard</td></tr><tr><td>UI-W-003</td><td>워크스페이스 (자가진단 응시)</td><td>HOME &gt; 자가진단 &gt; 과제 &gt; 워크스페이스</td><td class="mono">/exam/att-261119-1136-s9m</td></tr><tr><td>UI-W-004</td><td>진단 리포트</td><td>HOME &gt; 자가진단 &gt; 내 기록 &gt; 진단 리포트</td><td class="mono">/report/att-261111-1457-f2t</td></tr><tr><td>UI-W-005</td><td>응시 이력</td><td>HOME &gt; 자가진단 &gt; 내 기록</td><td class="mono">/history</td></tr><tr><td>UI-W-006</td><td>복기 트리</td><td>HOME &gt; 자가진단 &gt; 내 기록 &gt; 복기 트리</td><td class="mono">/replay/order-deadlock</td></tr><tr><td>UI-W-007</td><td>실전 응시화면</td><td>HOME &gt; 테스트 응시 &gt; 입장 &gt; 실전 응시</td><td class="mono">/exam/live-k7q2mx?mode=live</td></tr><tr><td>UI-W-008</td><td>채점 프롬프트</td><td>HOME &gt; 채점 툴 &gt; 프롬프트 버전</td><td class="mono">/grader</td></tr></table>
+</section>
+<section class="page">
+  <div class="main">
+    <table class="meta">
+      <tr><th>Page Title</th><td class="w">메인화면</td><th>Screen ID</th><td>UI-W-001</td><th>Author</th><td>pAIr 팀</td><th>Date</th><td>2026.11.19</td></tr>
+      <tr><th>Screen Path</th><td colspan="7">HOME</td></tr>
+    </table>
+    <div class="frame">
+      <div class="url">/</div>
+      <div class="shot"><img src="img/01-home.png" alt="메인화면 화면"><div class="box" style="left:57.607%;top:1.222%;width:6.107%;height:4.667%"></div>
+      <div class="pin" style="left:63.714%;top:1.778%">1</div><div class="box" style="left:63.853%;top:1.222%;width:7.527%;height:4.667%"></div>
+      <div class="pin" style="left:71.380%;top:1.778%">2</div><div class="box" style="left:71.519%;top:1.222%;width:8.289%;height:4.667%"></div>
+      <div class="pin" style="left:79.808%;top:1.778%">3</div><div class="box" style="left:85.496%;top:1.222%;width:6.379%;height:4.667%"></div>
+      <div class="pin" style="left:91.875%;top:1.778%">4</div><div class="box" style="left:20.394%;top:19.333%;width:59.211%;height:26.104%"></div>
+      <div class="pin" style="left:79.605%;top:19.333%">5</div><div class="box" style="left:38.967%;top:59.438%;width:12.138%;height:6.889%"></div>
+      <div class="pin" style="left:51.105%;top:59.438%">6</div><div class="box" style="left:19.583%;top:75.604%;width:9.590%;height:3.556%"></div>
+      <div class="pin" style="left:29.173%;top:75.604%">7</div><div class="box" style="left:12.236%;top:84.267%;width:9.450%;height:5.556%"></div>
+      <div class="pin" style="left:21.686%;top:84.267%">8</div></div>
+    </div>
+  </div>
+  <aside class="side">
+    <table class="desc"><tr><th colspan="2">Description</th></tr><tr><td class="n">1</td><td>콘솔 이동 (관리자·기업 담당자·감독관 전용)</td></tr><tr><td class="n">2</td><td>실전 시험 입장 (초대 링크·입장 코드)</td></tr><tr><td class="n">3</td><td>자가진단 과제 목록으로 이동 (로그인 필요)</td></tr><tr><td class="n">4</td><td>로그인 / 회원가입</td></tr><tr><td class="n">5</td><td>서비스 소개 문구 (AI 활용·통제·판단까지 평가)</td></tr><tr><td class="n">6</td><td>자가진단 시작 버튼 (상단 ③과 같은 동작)</td></tr><tr><td class="n">7</td><td>응시 화면 미리보기. 아래로 내리면 기능 소개 섹션이 이어짐</td></tr><tr><td class="n">8</td><td>풀이 기록 예시 (AI 질문, 테스트 통과가 실시간으로 쌓임)</td></tr><tr><td class="n">9</td><td></td></tr><tr><td class="n">10</td><td></td></tr></table>
+    <table class="desc"><tr><th>Check Point</th></tr><tr><td class="cp">메인화면은 로그인 없이 볼 수 있다. 자가진단 시작은 로그인이 안 되어 있으면 로그인 화면으로 보낸다.</td></tr></table>
+    <table class="desc"><tr><th>Related ID</th></tr><tr><td class="rel"><div>UI-W-002 <span>진단 대시보드</span></div><div>UI-W-007 <span>실전 응시화면</span></div></td></tr></table>
+  </aside>
+</section>
+<section class="page">
+  <div class="main">
+    <table class="meta">
+      <tr><th>Page Title</th><td class="w">진단 대시보드</td><th>Screen ID</th><td>UI-W-002</td><th>Author</th><td>pAIr 팀</td><th>Date</th><td>2026.11.19</td></tr>
+      <tr><th>Screen Path</th><td colspan="7">HOME &gt; 자가진단 &gt; 대시보드</td></tr>
+    </table>
+    <div class="frame">
+      <div class="url">/dashboard</div>
+      <div class="shot"><img src="img/02-dashboard.png" alt="진단 대시보드 화면"><div class="box" style="left:16.599%;top:0.000%;width:2.218%;height:6.778%"></div>
+      <div class="pin" style="left:18.817%;top:1.778%">1</div><div class="box" style="left:85.672%;top:1.278%;width:2.578%;height:3.556%"></div>
+      <div class="pin" style="left:88.250%;top:1.778%">2</div><div class="box" style="left:88.823%;top:7.389%;width:9.163%;height:4.667%"></div>
+      <div class="pin" style="left:97.986%;top:7.389%">3</div><div class="box" style="left:4.861%;top:36.444%;width:21.250%;height:18.444%"></div>
+      <div class="pin" style="left:26.111%;top:36.444%">4</div><div class="box" style="left:4.861%;top:56.444%;width:10.556%;height:8.222%"></div>
+      <div class="pin" style="left:15.417%;top:56.444%">5</div><div class="box" style="left:31.042%;top:19.333%;width:35.139%;height:56.222%"></div>
+      <div class="pin" style="left:66.181%;top:19.333%">6</div><div class="box" style="left:71.944%;top:26.778%;width:3.251%;height:2.667%"></div>
+      <div class="pin" style="left:75.195%;top:26.778%">7</div><div class="box" style="left:7.428%;top:82.278%;width:4.523%;height:3.111%"></div>
+      <div class="pin" style="left:11.951%;top:82.278%">8</div><div class="box" style="left:73.943%;top:82.278%;width:4.523%;height:3.111%"></div>
+      <div class="pin" style="left:78.466%;top:82.278%">9</div></div>
+    </div>
+  </div>
+  <aside class="side">
+    <table class="desc"><tr><th colspan="2">Description</th></tr><tr><td class="n">1</td><td>자가진단 메뉴 (과제 / 대시보드 / 내 기록)</td></tr><tr><td class="n">2</td><td>보유 크레딧 (새 분기에서 다시 풀 때 사용)</td></tr><tr><td class="n">3</td><td>새 과제 응시 (과제 목록으로 이동)</td></tr><tr><td class="n">4</td><td>최근 응시 점수와 지난 응시 대비 변화</td></tr><tr><td class="n">5</td><td>크레딧 잔액과 누적 응시 횟수</td></tr><tr><td class="n">6</td><td>6개 역량 레이더 차트 (점선은 지난 응시)</td></tr><tr><td class="n">7</td><td>역량별 점수와 지난 응시 대비 증감</td></tr><tr><td class="n">8</td><td>응시별 총점 추이</td></tr><tr><td class="n">9</td><td>가장 낮은 역량 기준 다음 목표 제안</td></tr><tr><td class="n">10</td><td></td></tr></table>
+    <table class="desc"><tr><th>Check Point</th></tr><tr><td class="cp">역량 점수는 가장 최근 채점 완료된 응시 기준이다. 채점 기록이 없으면 첫 과제 응시를 안내한다.</td></tr></table>
+    <table class="desc"><tr><th>Related ID</th></tr><tr><td class="rel"><div>UI-W-004 <span>진단 리포트</span></div><div>UI-W-005 <span>응시 이력</span></div></td></tr></table>
+  </aside>
+</section>
+<section class="page">
+  <div class="main">
+    <table class="meta">
+      <tr><th>Page Title</th><td class="w">워크스페이스 (자가진단 응시)</td><th>Screen ID</th><td>UI-W-003</td><th>Author</th><td>pAIr 팀</td><th>Date</th><td>2026.11.19</td></tr>
+      <tr><th>Screen Path</th><td colspan="7">HOME &gt; 자가진단 &gt; 과제 &gt; 워크스페이스</td></tr>
+    </table>
+    <div class="frame">
+      <div class="url">/exam/att-261119-1136-s9m</div>
+      <div class="shot"><img src="img/03-workspace.png" alt="워크스페이스 (자가진단 응시) 화면"><div class="box" style="left:17.939%;top:0.833%;width:6.917%;height:3.111%"></div>
+      <div class="pin" style="left:24.857%;top:1.778%">1</div><div class="box" style="left:42.907%;top:0.500%;width:14.185%;height:3.778%"></div>
+      <div class="pin" style="left:57.092%;top:1.778%">2</div><div class="box" style="left:95.611%;top:0.500%;width:3.486%;height:3.778%"></div>
+      <div class="pin" style="left:98.889%;top:1.778%">3</div><div class="box" style="left:3.125%;top:9.000%;width:19.792%;height:91.000%"></div>
+      <div class="pin" style="left:22.917%;top:9.000%">4</div><div class="box" style="left:23.403%;top:5.278%;width:10.334%;height:3.556%"></div>
+      <div class="pin" style="left:33.737%;top:5.278%">5</div><div class="box" style="left:64.942%;top:73.722%;width:7.766%;height:3.778%"></div>
+      <div class="pin" style="left:72.708%;top:73.722%">6</div><div class="box" style="left:23.681%;top:74.278%;width:3.817%;height:2.667%"></div>
+      <div class="pin" style="left:27.498%;top:74.278%">7</div><div class="box" style="left:76.389%;top:5.722%;width:7.217%;height:2.667%"></div>
+      <div class="pin" style="left:83.606%;top:5.722%">8</div><div class="box" style="left:74.375%;top:82.222%;width:24.931%;height:12.222%"></div>
+      <div class="pin" style="left:98.889%;top:82.222%">9</div></div>
+    </div>
+  </div>
+  <aside class="side">
+    <table class="desc"><tr><th colspan="2">Description</th></tr><tr><td class="n">1</td><td>과제 이름과 응시 모드 (자가진단)</td></tr><tr><td class="n">2</td><td>남은 시간</td></tr><tr><td class="n">3</td><td>제출 (제출하면 채점 후 리포트로 이동)</td></tr><tr><td class="n">4</td><td>과제 설명, 요구 사항, 유의 사항</td></tr><tr><td class="n">5</td><td>코드 편집기 (파일 탭)</td></tr><tr><td class="n">6</td><td>빌드 / 테스트 실행 (test 폴더의 JUnit)</td></tr><tr><td class="n">7</td><td>빌드·테스트 실행 결과</td></tr><tr><td class="n">8</td><td>AI 어시스턴트 대화 (붙여 넣은 내용만 볼 수 있음)</td></tr><tr><td class="n">9</td><td>질문 입력 (최대 1,000자, Ctrl+Enter 전송)</td></tr><tr><td class="n">10</td><td></td></tr></table>
+    <table class="desc"><tr><th>Check Point</th></tr><tr><td class="cp">AI 대화, 코드 수정, 실행 기록이 모두 남아 채점과 복기 트리에 쓰인다. 외부 검색은 허용되지 않는다.</td></tr></table>
+    <table class="desc"><tr><th>Related ID</th></tr><tr><td class="rel"><div>UI-W-004 <span>진단 리포트</span></div><div>UI-W-006 <span>복기 트리</span></div></td></tr></table>
+  </aside>
+</section>
+<section class="page">
+  <div class="main">
+    <table class="meta">
+      <tr><th>Page Title</th><td class="w">진단 리포트</td><th>Screen ID</th><td>UI-W-004</td><th>Author</th><td>pAIr 팀</td><th>Date</th><td>2026.11.19</td></tr>
+      <tr><th>Screen Path</th><td colspan="7">HOME &gt; 자가진단 &gt; 내 기록 &gt; 진단 리포트</td></tr>
+    </table>
+    <div class="frame">
+      <div class="url">/report/att-261111-1457-f2t</div>
+      <div class="shot"><img src="img/04-report.png" alt="진단 리포트 화면"><div class="box" style="left:92.537%;top:7.389%;width:5.449%;height:4.667%"></div>
+      <div class="pin" style="left:97.986%;top:7.389%">1</div><div class="box" style="left:4.861%;top:29.889%;width:54.833%;height:5.111%"></div>
+      <div class="pin" style="left:59.694%;top:29.889%">2</div><div class="box" style="left:4.861%;top:35.667%;width:54.833%;height:6.889%"></div>
+      <div class="pin" style="left:59.694%;top:35.667%">3</div><div class="box" style="left:62.055%;top:20.667%;width:17.083%;height:27.333%"></div>
+      <div class="pin" style="left:79.138%;top:20.667%">4</div><div class="box" style="left:81.500%;top:24.667%;width:13.639%;height:19.333%"></div>
+      <div class="pin" style="left:95.139%;top:24.667%">5</div><div class="box" style="left:7.948%;top:52.333%;width:12.762%;height:3.778%"></div>
+      <div class="pin" style="left:20.710%;top:52.333%">6</div><div class="box" style="left:34.143%;top:56.889%;width:31.713%;height:12.889%"></div>
+      <div class="pin" style="left:65.856%;top:56.889%">7</div><div class="box" style="left:9.695%;top:84.611%;width:5.845%;height:3.111%"></div>
+      <div class="pin" style="left:15.540%;top:84.611%">8</div><div class="box" style="left:65.193%;top:84.611%;width:10.155%;height:3.111%"></div>
+      <div class="pin" style="left:75.348%;top:84.611%">9</div></div>
+    </div>
+  </div>
+  <aside class="side">
+    <table class="desc"><tr><th colspan="2">Description</th></tr><tr><td class="n">1</td><td>내 기록(응시 이력)으로 이동</td></tr><tr><td class="n">2</td><td>과제 이름</td></tr><tr><td class="n">3</td><td>응시 정보 (일시, 소요 시간, AI 대화 수, 사용 모델, 채점 모델)</td></tr><tr><td class="n">4</td><td>역량별 레이더 차트</td></tr><tr><td class="n">5</td><td>총점 (감점식)</td></tr><tr><td class="n">6</td><td>항목별 점수 카드. 누르면 감점 근거가 펼쳐짐</td></tr><tr><td class="n">7</td><td>역량 카드 (점수, 감점 건수)</td></tr><tr><td class="n">8</td><td>AI 대화 기록 (턴 번호로 감점 근거와 연결)</td></tr><tr><td class="n">9</td><td>재현성 판정 (같은 질문을 다시 실행해 결과 비교)</td></tr><tr><td class="n">10</td><td></td></tr></table>
+    <table class="desc"><tr><th>Check Point</th></tr><tr><td class="cp">채점은 서로 다른 회사 모델 두 개로 이중 채점하고, 판정이 엇갈린 항목은 절반만 감점한다.</td></tr></table>
+    <table class="desc"><tr><th>Related ID</th></tr><tr><td class="rel"><div>UI-W-005 <span>응시 이력</span></div><div>UI-W-006 <span>복기 트리</span></div><div>UI-W-008 <span>채점 프롬프트</span></div></td></tr></table>
+  </aside>
+</section>
+<section class="page">
+  <div class="main">
+    <table class="meta">
+      <tr><th>Page Title</th><td class="w">응시 이력</td><th>Screen ID</th><td>UI-W-005</td><th>Author</th><td>pAIr 팀</td><th>Date</th><td>2026.11.19</td></tr>
+      <tr><th>Screen Path</th><td colspan="7">HOME &gt; 자가진단 &gt; 내 기록</td></tr>
+    </table>
+    <div class="frame">
+      <div class="url">/history</div>
+      <div class="shot"><img src="img/05-history.png" alt="응시 이력 화면"><div class="box" style="left:88.823%;top:7.389%;width:9.163%;height:4.667%"></div>
+      <div class="pin" style="left:97.986%;top:7.389%">1</div><div class="box" style="left:10.347%;top:16.556%;width:79.306%;height:4.667%"></div>
+      <div class="pin" style="left:89.653%;top:16.556%">2</div><div class="box" style="left:10.347%;top:22.778%;width:19.514%;height:11.333%"></div>
+      <div class="pin" style="left:29.861%;top:22.778%">3</div><div class="box" style="left:17.414%;top:37.889%;width:5.292%;height:3.778%"></div>
+      <div class="pin" style="left:22.706%;top:37.889%">4</div><div class="box" style="left:24.583%;top:44.778%;width:39.722%;height:3.556%"></div>
+      <div class="pin" style="left:64.306%;top:44.778%">5</div><div class="box" style="left:27.758%;top:47.889%;width:4.849%;height:3.556%"></div>
+      <div class="pin" style="left:32.607%;top:47.889%">6</div><div class="box" style="left:82.339%;top:46.000%;width:5.855%;height:4.222%"></div>
+      <div class="pin" style="left:88.194%;top:46.000%">7</div><div class="box" style="left:80.422%;top:90.444%;width:7.772%;height:4.222%"></div>
+      <div class="pin" style="left:88.194%;top:90.444%">8</div></div>
+    </div>
+  </div>
+  <aside class="side">
+    <table class="desc"><tr><th colspan="2">Description</th></tr><tr><td class="n">1</td><td>새 과제 응시</td></tr><tr><td class="n">2</td><td>총 응시 횟수 요약</td></tr><tr><td class="n">3</td><td>응시 횟수 / 최고 / 평균 / 최근 점수</td></tr><tr><td class="n">4</td><td>응시 기록 목록 (최근 순)</td></tr><tr><td class="n">5</td><td>응시 일시, 과제 이름, 과제 종류(개발/비개발)</td></tr><tr><td class="n">6</td><td>상태 (응시 중 / 채점 중 / 채점 완료)</td></tr><tr><td class="n">7</td><td>리포트 보기 (채점 완료일 때)</td></tr><tr><td class="n">8</td><td>이어서 풀기 (응시 중일 때 워크스페이스로 이동)</td></tr><tr><td class="n">9</td><td></td></tr><tr><td class="n">10</td><td></td></tr></table>
+    <table class="desc"><tr><th>Check Point</th></tr><tr><td class="cp">채점이 끝나지 않은 응시는 점수 없음으로 보인다.</td></tr></table>
+    <table class="desc"><tr><th>Related ID</th></tr><tr><td class="rel"><div>UI-W-003 <span>워크스페이스 (자가진단 응시)</span></div><div>UI-W-004 <span>진단 리포트</span></div></td></tr></table>
+  </aside>
+</section>
+<section class="page">
+  <div class="main">
+    <table class="meta">
+      <tr><th>Page Title</th><td class="w">복기 트리</td><th>Screen ID</th><td>UI-W-006</td><th>Author</th><td>pAIr 팀</td><th>Date</th><td>2026.11.19</td></tr>
+      <tr><th>Screen Path</th><td colspan="7">HOME &gt; 자가진단 &gt; 내 기록 &gt; 복기 트리</td></tr>
+    </table>
+    <div class="frame">
+      <div class="url">/replay/order-deadlock</div>
+      <div class="shot"><img src="img/06-replay.png" alt="복기 트리 화면"><div class="box" style="left:0.000%;top:13.000%;width:100.000%;height:7.333%"></div>
+      <div class="pin" style="left:98.889%;top:13.000%">1</div><div class="box" style="left:87.364%;top:15.778%;width:10.622%;height:3.556%"></div>
+      <div class="pin" style="left:97.986%;top:15.778%">2</div><div class="box" style="left:80.356%;top:7.389%;width:17.630%;height:4.667%"></div>
+      <div class="pin" style="left:97.986%;top:7.389%">3</div><div class="box" style="left:0.972%;top:24.222%;width:55.278%;height:3.556%"></div>
+      <div class="pin" style="left:56.250%;top:24.222%">4</div><div class="box" style="left:22.083%;top:48.333%;width:11.476%;height:3.556%"></div>
+      <div class="pin" style="left:33.559%;top:48.333%">5</div><div class="box" style="left:64.661%;top:22.278%;width:5.483%;height:3.556%"></div>
+      <div class="pin" style="left:70.144%;top:22.278%">6</div><div class="box" style="left:77.547%;top:29.222%;width:2.683%;height:5.556%"></div>
+      <div class="pin" style="left:80.230%;top:29.222%">7</div><div class="box" style="left:59.861%;top:86.889%;width:38.056%;height:2.667%"></div>
+      <div class="pin" style="left:97.917%;top:86.889%">8</div></div>
+    </div>
+  </div>
+  <aside class="side">
+    <table class="desc"><tr><th colspan="2">Description</th></tr><tr><td class="n">1</td><td>분기 목록 (분기 이름과 제출 점수). 두 개를 A/B로 선택</td></tr><tr><td class="n">2</td><td>비교 방법 안내</td></tr><tr><td class="n">3</td><td>선택한 체크포인트에서 새 분기로 다시 풀기 (5 크레딧)</td></tr><tr><td class="n">4</td><td>분기 그래프 범례 (체크포인트 / 분기 시작 / 제출 점수)</td></tr><tr><td class="n">5</td><td>체크포인트 (시각, 분기, 그때 한 결정)</td></tr><tr><td class="n">6</td><td>A/B 분기 역량별 점수 비교</td></tr><tr><td class="n">7</td><td>총점 차이</td></tr><tr><td class="n">8</td><td>분기 뒤 각자 내린 결정 비교</td></tr><tr><td class="n">9</td><td></td></tr><tr><td class="n">10</td><td></td></tr></table>
+    <table class="desc"><tr><th>Check Point</th></tr><tr><td class="cp">분기는 응시 기록의 체크포인트(AI 질문, 코드 적용, 실행)에서 갈라진다. 새 분기는 크레딧을 쓴다.</td></tr></table>
+    <table class="desc"><tr><th>Related ID</th></tr><tr><td class="rel"><div>UI-W-003 <span>워크스페이스 (자가진단 응시)</span></div><div>UI-W-004 <span>진단 리포트</span></div></td></tr></table>
+  </aside>
+</section>
+<section class="page">
+  <div class="main">
+    <table class="meta">
+      <tr><th>Page Title</th><td class="w">실전 응시화면</td><th>Screen ID</th><td>UI-W-007</td><th>Author</th><td>pAIr 팀</td><th>Date</th><td>2026.11.19</td></tr>
+      <tr><th>Screen Path</th><td colspan="7">HOME &gt; 테스트 응시 &gt; 입장 &gt; 실전 응시</td></tr>
+    </table>
+    <div class="frame">
+      <div class="url">/exam/live-k7q2mx?mode=live</div>
+      <div class="shot"><img src="img/07-live.png" alt="실전 응시화면 화면"><div class="box" style="left:17.775%;top:0.944%;width:6.351%;height:3.111%"></div>
+      <div class="pin" style="left:24.125%;top:1.778%">1</div><div class="box" style="left:42.907%;top:0.611%;width:14.185%;height:3.778%"></div>
+      <div class="pin" style="left:57.092%;top:1.778%">2</div><div class="box" style="left:77.155%;top:0.722%;width:14.779%;height:3.556%"></div>
+      <div class="pin" style="left:91.934%;top:1.778%">3</div><div class="box" style="left:92.628%;top:0.611%;width:6.469%;height:3.778%"></div>
+      <div class="pin" style="left:98.889%;top:1.778%">4</div><div class="box" style="left:17.595%;top:5.278%;width:9.531%;height:3.556%"></div>
+      <div class="pin" style="left:27.127%;top:5.278%">5</div><div class="box" style="left:76.697%;top:5.278%;width:22.678%;height:3.556%"></div>
+      <div class="pin" style="left:98.889%;top:5.278%">6</div><div class="box" style="left:36.445%;top:9.722%;width:12.667%;height:3.556%"></div>
+      <div class="pin" style="left:49.112%;top:9.722%">7</div><div class="box" style="left:66.331%;top:73.722%;width:7.766%;height:3.778%"></div>
+      <div class="pin" style="left:74.097%;top:73.722%">8</div><div class="box" style="left:77.778%;top:10.167%;width:7.217%;height:2.667%"></div>
+      <div class="pin" style="left:84.995%;top:10.167%">9</div></div>
+    </div>
+  </div>
+  <aside class="side">
+    <table class="desc"><tr><th colspan="2">Description</th></tr><tr><td class="n">1</td><td>과제 이름과 응시 모드 (실전 시험)</td></tr><tr><td class="n">2</td><td>회차 종료까지 남은 시간</td></tr><tr><td class="n">3</td><td>감독 상태 (녹화, 카메라, 화면 공유)</td></tr><tr><td class="n">4</td><td>지금 과제 제출</td></tr><tr><td class="n">5</td><td>과제 탭 (회차에 과제가 여러 개면 탭으로 전환)</td></tr><tr><td class="n">6</td><td>제출 안내 (종료 시각에 남은 과제는 자동 제출)</td></tr><tr><td class="n">7</td><td>코드 편집기</td></tr><tr><td class="n">8</td><td>빌드 / 테스트 실행</td></tr><tr><td class="n">9</td><td>AI 어시스턴트 대화</td></tr><tr><td class="n">10</td><td></td></tr></table>
+    <table class="desc"><tr><th>Check Point</th></tr><tr><td class="cp">실전 응시는 로그인 없이 초대 링크로 들어온다. 화면 이탈·카메라 이상은 감독 이벤트로 기록된다.</td></tr></table>
+    <table class="desc"><tr><th>Related ID</th></tr><tr><td class="rel"><div>UI-W-001 <span>메인화면</span></div><div>UI-W-003 <span>워크스페이스 (자가진단 응시)</span></div></td></tr></table>
+  </aside>
+</section>
+<section class="page">
+  <div class="main">
+    <table class="meta">
+      <tr><th>Page Title</th><td class="w">채점 프롬프트</td><th>Screen ID</th><td>UI-W-008</td><th>Author</th><td>pAIr 팀</td><th>Date</th><td>2026.11.19</td></tr>
+      <tr><th>Screen Path</th><td colspan="7">HOME &gt; 채점 툴 &gt; 프롬프트 버전</td></tr>
+    </table>
+    <div class="frame">
+      <div class="url">/grader</div>
+      <div class="shot"><img src="img/08-grader.png" alt="채점 프롬프트 화면"><div class="box" style="left:2.014%;top:25.444%;width:21.579%;height:6.667%"></div>
+      <div class="pin" style="left:23.593%;top:25.444%">1</div><div class="box" style="left:80.705%;top:12.611%;width:14.989%;height:7.222%"></div>
+      <div class="pin" style="left:95.694%;top:12.611%">2</div><div class="box" style="left:8.561%;top:34.944%;width:4.523%;height:3.556%"></div>
+      <div class="pin" style="left:13.084%;top:34.944%">3</div><div class="box" style="left:12.919%;top:83.556%;width:5.392%;height:3.556%"></div>
+      <div class="pin" style="left:18.311%;top:83.556%">4</div><div class="box" style="left:84.832%;top:34.833%;width:11.974%;height:3.778%"></div>
+      <div class="pin" style="left:96.806%;top:34.833%">5</div><div class="box" style="left:26.528%;top:48.444%;width:70.278%;height:2.667%"></div>
+      <div class="pin" style="left:96.806%;top:48.444%">6</div><div class="box" style="left:26.250%;top:85.333%;width:70.833%;height:2.000%"></div>
+      <div class="pin" style="left:97.083%;top:85.333%">7</div></div>
+    </div>
+  </div>
+  <aside class="side">
+    <table class="desc"><tr><th colspan="2">Description</th></tr><tr><td class="n">1</td><td>탭 (프롬프트 버전 / 실험 채점 / 결과)</td></tr><tr><td class="n">2</td><td>채점 기준 요약 (역량 수, 체크 수, 반복 횟수)</td></tr><tr><td class="n">3</td><td>프롬프트 버전 목록</td></tr><tr><td class="n">4</td><td>실제 응시 채점에 쓰는 버전 표시</td></tr><tr><td class="n">5</td><td>선택한 버전을 바탕으로 새 버전 만들기</td></tr><tr><td class="n">6</td><td>공통 채점 규칙 (채점 모델 시스템 프롬프트)</td></tr><tr><td class="n">7</td><td>역량별 배점과 체크 수</td></tr><tr><td class="n">8</td><td></td></tr><tr><td class="n">9</td><td></td></tr><tr><td class="n">10</td><td></td></tr></table>
+    <table class="desc"><tr><th>Check Point</th></tr><tr><td class="cp">채점 툴은 관리자만 쓴다. 버전 파일은 grader/versions/에 저장되어 git으로 팀이 공유한다.</td></tr></table>
+    <table class="desc"><tr><th>Related ID</th></tr><tr><td class="rel"><div>UI-W-004 <span>진단 리포트</span></div></td></tr></table>
+  </aside>
+</section>
+</body></html>
