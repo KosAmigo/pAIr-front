@@ -16,6 +16,5 @@ AI 활용 역량 진단 플랫폼 프런트 (React, TypeScript, Vite). 백엔드
   - `src/` 화면과 기능 (`src/proctor/` 실전 시험 카메라 감독, `src/anti-cheating/` 브라우저 이벤트 감독)
   - `server/` 개발 서버 플러그인 (휴대폰 보조 캠 WebSocket 릴레이, 개발·시연용)
   - `tests/` node --test 로 도는 테스트
-- `docs/` 아키텍처 그림
 - `screenshots/` 화면 캡처
-- 화면 규칙은 `DESIGN.md`, 기획·ERD·평가·API 문서는 pAIr-back 의 `docs/`
+- 화면 규칙은 `DESIGN.md`, 기획·설계·평가·API 문서는 [pAIr-docs](https://github.com/KosAmigo/pAIr-docs)

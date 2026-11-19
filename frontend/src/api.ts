@@ -64,7 +64,7 @@ export type RunResult = {
 
 export type BuildResult = { compiled: boolean; lines: string[]; diagnostics: CompileDiagnostic[]; millis: number }
 
-/** 감점표의 체크 항목 하나 (pAIr-back/docs/evaluation/채점_기준표.md) */
+/** 감점표의 체크 항목 하나 (pAIr-docs/평가/채점_기준표.md) */
 export type CheckResult = {
   code: string
   label: string
