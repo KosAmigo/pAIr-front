@@ -4,42 +4,42 @@
     {
       "name": "pair-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--port", "5173", "--strictPort"],
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
       "port": 5173
-    },
-    {
-      "name": "pair-backend",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "backend\\gradlew.bat", "-p", "backend", "bootRun", "--console=plain"],
-      "env": { "JAVA_TOOL_OPTIONS": "-Djdk.net.unixdomain.tmpdir=C:/dev/tmp" },
-      "port": 8180,
-      "autoPort": false
-    },
-    {
-      "name": "pair-backend-docs-full",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "backend\\gradlew.bat", "-p", "backend", "bootRun", "--console=plain", "--args=--server.port=8181 --pair.judge.reference-docs=full"],
-      "port": 8181,
-      "autoPort": false
-    },
-    {
-      "name": "pair-backend-docs-rag",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "backend\\gradlew.bat", "-p", "backend", "bootRun", "--console=plain", "--args=--server.port=8181 --pair.judge.reference-docs=rag"],
-      "port": 8181,
-      "autoPort": false
     },
     {
       "name": "cam-proctor",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "cam-proctor", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "cam-proctor",
+        "run",
+        "dev"
+      ],
       "port": 5174,
       "url": "https://localhost:5174"
     },
     {
       "name": "cam-proctor-http",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "cam-proctor", "run", "dev", "--", "--mode", "http"],
+      "runtimeArgs": [
+        "--prefix",
+        "cam-proctor",
+        "run",
+        "dev",
+        "--",
+        "--mode",
+        "http"
+      ],
       "port": 5174
     }
   ]

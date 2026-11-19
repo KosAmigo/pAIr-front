@@ -1,5 +1,0 @@
-{"at":"2026-11-11T09:41:57.059339900Z","taskId":"order-deadlock","type":"start"}
-{"at":"2026-11-11T09:42:07.194756200Z","inputTokens":458,"outputTokens":872,"turn":2,"type":"chat"}
-{"at":"2026-11-11T09:42:08.786681Z","inputTokens":963,"outputTokens":67,"turn":4,"type":"chat"}
-{"at":"2026-11-11T09:42:08.825590400Z","type":"submit"}
-{"at":"2026-11-11T09:42:08.858961700Z","count":3,"type":"followups"}

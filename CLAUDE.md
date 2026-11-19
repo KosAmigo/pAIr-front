@@ -1,13 +1,4 @@
-
 # Development Rules
-
-## Backend
-- Use Java 21 and Spring Boot.
-- Follow layered architecture.
-- Separate Controller, Service, Repository.
-- Use DTOs for API requests and responses.
-- Apply transaction boundaries appropriately.
-- Check N+1 queries and SQL performance.
 
 ## Frontend
 - Use React and TypeScript.

@@ -1,3 +1,0 @@
-session_id,company_id,title,starts_at,ends_at,proctoring,created_by,created_at,participants_csv_key,canceled_at
-1,1,2026 하반기 백엔드 신입 실전,2026-11-11T09:40:00Z,2026-11-11T10:40:00Z,true,4,2026-11-10T12:00:00Z,sessions/1/participants.csv,
-2,1,2026 하반기 백엔드 신입 실전 (일정 변경으로 취소),2026-11-20T05:00:00Z,2026-11-20T06:00:00Z,true,4,2026-11-12T00:00:00Z,,2026-11-14T00:00:00Z

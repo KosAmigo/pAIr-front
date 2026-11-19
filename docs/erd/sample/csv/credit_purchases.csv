@@ -1,5 +1,0 @@
-purchase_id,user_id,credits,amount_krw,status,pg_payment_key,created_at,paid_at
-1,2,200,9900,PAID,tpay_sample_0001,2026-11-05T10:00:00Z,2026-11-05T10:00:30Z
-2,3,200,9900,PAID,tpay_sample_0002,2026-11-05T11:00:00Z,2026-11-05T11:00:20Z
-3,2,500,19900,FAILED,,2026-11-06T09:00:00Z,
-4,3,200,9900,READY,,2026-11-17T09:00:00Z,

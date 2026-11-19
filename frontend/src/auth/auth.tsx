@@ -11,7 +11,7 @@ export const canManageSessions = (r: Role | undefined) => r === 'ADMIN' || r ===
 export const canReviewProctor = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER' || r === 'PROCTOR'
 export type AuthUser = { id: number; email: string; name: string; role: Role; companyName?: string }
 
-// 목업 계정. 비밀번호는 모두 pair1234 (개발용 테스트 값, docs/erd 샘플 회원과 같은 이메일)
+// 목업 계정. 비밀번호는 모두 pair1234 (개발용 테스트 값, pAIr-back/docs/erd 샘플 회원과 같은 이메일)
 /**
  * 백엔드 인증이 붙기 전까지는 로그인 없이 쓴다.
  * 직접 로그인한 계정이 없으면 이 목업 계정(관리자)으로 자동 접속한다. 관리자는 자가진단과 콘솔 모두 들어갈 수 있다.

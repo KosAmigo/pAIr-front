@@ -1,9 +1,0 @@
-question_id,task_id,stage,question_type,seq,content,points,answer_guide,active
-1,1,FOLLOWUP,ESSAY,1,"AI 답변 중 그대로 믿지 않고 직접 확인한 것은 무엇이고, 어떻게 확인했나요? (예: 테스트 실행, 로그 대조)",,,true
-2,1,FOLLOWUP,ESSAY,2,"AI가 제안한 내용 중 채택하지 않은 것이 있다면 무엇이고, 이유는 무엇인가요?",,,true
-3,1,FOLLOWUP,ESSAY,3,동료가 같은 결과를 얻으려면 AI에게 어떤 지시를 어떤 순서로 주면 되나요?,,,true
-4,2,FOLLOWUP,ESSAY,1,"AI 답변 중 그대로 믿지 않고 직접 확인한 것은 무엇이고, 어떻게 확인했나요? (예: 수치 검산, 자료 대조)",,,true
-5,2,FOLLOWUP,ESSAY,2,"AI가 제시한 내용 중 채택하지 않은 것이 있다면 무엇이고, 이유는 무엇인가요?",,,true
-6,2,FOLLOWUP,ESSAY,3,동료가 같은 결론을 얻으려면 AI에게 어떤 지시를 어떤 순서로 주면 되나요?,,,true
-7,2,TASK,SINGLE,1,10월 베이직 가입자 중 라이트 요금제로 실제 전환할 것으로 예상되는 인원에 가장 가까운 것은? (설문 의향을 사내 과거 사례 전환율의 중간값으로 보정),5,,true
-8,2,TASK,SHORT,2,5월 대비 10월에 월 이탈률이 가장 크게 오른 요금제는?,3,,true

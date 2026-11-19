@@ -1,4 +1,4 @@
-// 실전 시험·감독 API 어댑터. 백엔드 호출은 전부 이 파일을 거친다 (docs/api/실전시험_감독_API.md §1).
+// 실전 시험·감독 API 어댑터. 백엔드 호출은 전부 이 파일을 거친다 (pAIr-back/docs/api/실전시험_감독_API.md §1).
 // 팀원 백엔드의 주소·경로가 바뀌면 이 파일만 고친다.
 import type { CamSource, ProctorEventType } from '../core/events.ts'
 
