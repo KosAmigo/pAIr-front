@@ -258,7 +258,7 @@ export const followUps = [
 ]
 
 // ───────── 결과 리포트 ─────────
-// 항목 점수는 배점 기준(감점식, 총점 100). 하위 기준: pAIr-back/docs/evaluation/재현성_AI결과도출력.md 의 AI 결과 도출력 부분
+// 항목 점수는 배점 기준(감점식, 총점 100). 하위 기준: pAIr-docs/평가/재현성_AI결과도출력.md 의 AI 결과 도출력 부분
 export type SubScore = { code: string; name: string; weight: number; score: number; note: string }
 export const report = {
   id: 'a-1107',

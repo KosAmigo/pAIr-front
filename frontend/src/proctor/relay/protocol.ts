@@ -1,4 +1,4 @@
-// PC·휴대폰·릴레이 서버가 주고받는 WebSocket 메시지 (pAIr-back/docs/api/실전시험_감독_API.md §2).
+// PC·휴대폰·릴레이 서버가 주고받는 WebSocket 메시지 (pAIr-docs/API/실전시험_감독_API.md §2).
 // 영상은 절대 보내지 않는다. 이상이 확정된 순간의 이벤트와 사진 1장, 점검 사진만 오간다.
 import type { CheckReport } from '../check/envChecks.ts'
 import type { CamViolation } from '../core/events.ts'

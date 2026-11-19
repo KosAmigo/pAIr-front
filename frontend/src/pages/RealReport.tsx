@@ -8,7 +8,7 @@ import { ScoreHero, StageSep } from '../components/report/ScoreHero'
 import { CompetencyCards } from '../components/report/CompetencyCards'
 import { api, ApiError, type CheckResult, type Report, type ReportResponse, type Turn } from '../api'
 
-// 실제 응시 결과 리포트. 감점식 채점(pAIr-back/docs/evaluation/채점_기준표.md): 6개 항목, 총점 100점.
+// 실제 응시 결과 리포트. 감점식 채점(pAIr-docs/평가/채점_기준표.md): 6개 항목, 총점 100점.
 
 // DESIGN.md §1.4 역량 항목 색. 항목 목록과 순서는 리포트(report.items)를 따른다.
 // 재현성(reproducibility)은 2026-11-12에 빠졌지만 예전 리포트를 보여 주려고 색을 남긴다.
