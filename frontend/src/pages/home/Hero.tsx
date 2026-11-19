@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, BarChart3, Bug, ClipboardCheck, FileText, FlaskConical, MessageSquareText, Search, Wrench } from 'lucide-react'
 import DemoWindow from './DemoWindow'
 import { GlowBorder, Magnetic } from '../../components/fx'
-import { Glow } from './Points'
 import { MOTION_OK, SplitText, gsap, useGSAP } from './motion'
 
 const KINDS = [
@@ -111,7 +110,6 @@ export default function Hero() {
 
       {/* 시험 화면 데모 */}
       <div data-hero-demo className="relative mx-auto mt-20 w-full md:w-[min(1080px,calc(100%-160px))] [perspective:1600px]">
-        <Glow />
         <div data-hero-tilt className="relative origin-[50%_0%] will-change-transform">
           <GlowBorder className="rounded-[28px]">
             <DemoWindow />

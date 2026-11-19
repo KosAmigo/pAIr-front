@@ -30,8 +30,3 @@ export default function Points({ items, className }: { items: Point[]; className
   )
 }
 
-/** 화면 그림 뒤의 빛 번짐. 모든 섹션이 같은 색과 세기를 쓴다 */
-export function Glow({ className }: { className?: string }) {
-  return <div aria-hidden className={cx('absolute inset-x-[10%] top-[10%] bottom-0 rounded-full bg-brand/20 blur-[100px]', className)} />
-}
-

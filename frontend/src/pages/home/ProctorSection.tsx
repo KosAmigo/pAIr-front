@@ -4,9 +4,9 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Camera, ClipboardPaste, ShieldAlert, ShieldCheck, Users } from 'lucide-react'
 import { cx } from '../../components/cx'
 import SectionHead, { Grad } from './SectionHead'
-import Points, { Glow } from './Points'
+import Points from './Points'
 import { floatCard, mockFrame } from './homeStyles'
-import { GlowBorder, StageSection } from '../../components/fx'
+import { GlowBorder } from '../../components/fx'
 import { MOTION_OK, gsap, prefersReducedMotion, useGSAP } from './motion'
 
 type St = 'solving' | 'followup' | 'submitted' | 'lost'
@@ -82,8 +82,7 @@ export default function ProctorSection() {
   const left = 35 * 60 - step * 37
 
   return (
-    <section ref={root} id="proctor" className="relative mt-40">
-      <StageSection shape="bleed" as="div" className="pt-32 pb-24 md:pl-[160px]">
+    <section ref={root} id="proctor" className="relative pt-40 pb-12 md:pl-[160px]">
       <div data-spine="proctor" aria-hidden className="h-0" />
       <SectionHead
         label="PROCTOR"
@@ -100,7 +99,6 @@ export default function ProctorSection() {
       <div className="mt-16 grid items-start gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       {/* 콘솔 실시간 현황 축소판 */}
       <div ref={board} data-board className="relative" role="img" aria-label="감독관 콘솔: 응시자 상태 표, 남은 시간, 최신 감독 이벤트, 이벤트에 부정 의심 판단을 남기는 카드">
-        <Glow />
         <GlowBorder className="rounded-[28px]">
         <div className={mockFrame}>
           <div className="flex items-center gap-3 border-b border-line px-6 py-4">
@@ -190,7 +188,6 @@ export default function ProctorSection() {
       </div>
       <div data-spine="proctor-end" aria-hidden className="absolute bottom-12 left-0" />
       <div data-spine="finale" aria-hidden className="mt-16 h-0" />
-      </StageSection>
     </section>
   )
 }

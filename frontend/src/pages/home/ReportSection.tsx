@@ -5,7 +5,6 @@ import { Spotlight } from '../../components/fx'
 import { ListTree, Rocket, ShieldCheck, Sparkles, Split, TrendingUp } from 'lucide-react'
 import { cx } from '../../components/cx'
 import SectionHead, { Grad } from './SectionHead'
-import { Glow } from './Points'
 import { MOTION_OK, gsap, useGSAP } from './motion'
 
 const ITEMS = [
@@ -134,7 +133,6 @@ export default function ReportSection() {
       />
       <div className="mt-16 grid items-center gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div data-radar className="relative flex justify-center">
-          <Glow />
           <div className="relative flex w-full max-w-[360px] justify-center">
             <Radar hover={hover} />
           </div>
