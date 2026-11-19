@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Bot, ChevronDown, ChevronRight, FileText, Folder, Hammer, Loader2, Lock, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
@@ -10,6 +10,18 @@ import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, ty
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
 import { splitReply } from '../lib/edits'
 import { useAntiCheating, ViolationCounter, WarningModal } from '../anti-cheating'
+import { proctorApi } from '../proctor/api/proctorApi.ts'
+import { camHub } from '../proctor/camHub.ts'
+import { clearLiveExam, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
+
+// 카메라 감독은 실전 시험에서만 불러온다 (자가진단은 분석 모델을 내려받지 않는다)
+const CamMonitor = lazy(() => import('../proctor/react/CamMonitor.tsx'))
+
+/** 실전 시험이 끝나면 카메라·휴대폰 연결을 끄고 실전 맥락을 지운다 */
+async function endLiveProctoring() {
+  clearLiveExam()
+  await camHub.stop()
+}
 
 // 실제 응시 화면: 백엔드 API 에 연결된 버전. 레이아웃은 DESIGN.md §7-3 응시 화면을 따른다.
 
@@ -490,6 +502,8 @@ function DocChecks({ task, doc }: { task: Task & { requiredHeadings?: string[] }
 export default function RealExam() {
   const { sessionId = '' } = useParams()
   const navigate = useNavigate()
+  // 입장 링크로 시작한 실전 응시일 때만 값이 있다. 자가진단은 null → 감독을 전혀 켜지 않는다
+  const [live] = useState(() => readLiveExam(sessionId))
   const [view, setView] = useState<AttemptView | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [contents, setContents] = useState<Record<string, string>>({})
@@ -527,8 +541,28 @@ export default function RealExam() {
   const [refTab, setRefTab] = useState<'prompts' | 'file'>('prompts')
   const antiCheating = useAntiCheating({
     sessionId,
-    active: Boolean(view && (view.attempt.status === 'SOLVING' || view.attempt.status === 'FOLLOWUP')),
+    active: Boolean(live && view && (view.attempt.status === 'SOLVING' || view.attempt.status === 'FOLLOWUP')),
   })
+  const doneUrl = live ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`
+
+  // 실전: 종료 시각(서버 기준)이 지나면 서버가 자동 제출한다. 화면은 감독을 끄고 제출 완료로 간다
+  // 후속 질문 단계에서는 경과 타이머가 멈추므로 실전만 1초마다 다시 그려 남은 시간을 갱신한다
+  const [, setLiveTick] = useState(0)
+  useEffect(() => {
+    if (!live) return
+    const id = window.setInterval(() => setLiveTick((t) => t + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [live])
+  const liveLeft = live ? secondsLeft(live) : null
+  const liveOver = liveLeft !== null && liveLeft <= 0
+  const finishAntiCheating = antiCheating.finish
+  const ended = useRef(false)
+  useEffect(() => {
+    if (!liveOver || ended.current) return
+    ended.current = true
+    void finishAntiCheating()
+    void endLiveProctoring().finally(() => navigate(`/exam/${sessionId}/submitted`, { replace: true }))
+  }, [liveOver, sessionId, navigate, finishAntiCheating])
 
   // 처음 불러오기
   useEffect(() => {
@@ -538,7 +572,8 @@ export default function RealExam() {
       .then(async (v) => {
         if (!alive) return
         if (v.attempt.status === 'SCORING' || v.attempt.status === 'DONE' || v.attempt.status === 'ERROR') {
-          navigate(`/report/${sessionId}`, { replace: true })
+          // 실전 응시는 리포트를 보여 주지 않는다 (기획: 실전은 리포트·복기 차단)
+          navigate(readLiveExam(sessionId) ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`, { replace: true })
           return
         }
         setView(v)
@@ -618,7 +653,8 @@ export default function RealExam() {
 
   const task = view.task as Task & { requiredHeadings?: string[] }
   const dev = task.type === 'dev'
-  const left = task.minutes * 60 - elapsed
+  // 실전은 서버 기준 종료 시각까지, 자가진단은 과제 제한 시간에서 지난 시간을 뺀다
+  const left = liveLeft ?? task.minutes * 60 - elapsed
   const locked = stage === 'followup'
   const fuList = fuAnswers ?? task.followUps.map(() => '')
   const showPrompts = locked && refTab === 'prompts'
@@ -744,7 +780,12 @@ export default function RealExam() {
     try {
       await api.followUps(sessionId, answers)
       await antiCheating.finish()
-      navigate(`/report/${sessionId}`)
+      if (live) {
+        // 회차 제출 기록(직접 제출). 실패해도 종료 시각에 서버가 대신 제출하므로 화면은 넘어간다
+        await proctorApi.submit(live.invite).catch(() => undefined)
+        await endLiveProctoring()
+      }
+      navigate(doneUrl)
     } catch (e) {
       setActionError((e as ApiError).message)
       setBusy(false)
@@ -760,7 +801,7 @@ export default function RealExam() {
           <Logo />
           <span className="h-4 w-px bg-line" aria-hidden />
           <span className="truncate text-[15px] font-semibold">{task.title}</span>
-          <ModeBadge mode="self" />
+          <ModeBadge mode={live ? 'live' : 'self'} />
         </div>
         <div className="flex items-baseline gap-2 px-2" aria-label={`남은 시간 ${fmt(left)}`}>
           <span className="label">{locked ? 'FOLLOW-UP' : 'REMAINING'}</span>
@@ -770,14 +811,18 @@ export default function RealExam() {
           </span>
         </div>
         <div className="flex items-center justify-end gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void antiCheating.requestFullscreen().catch(() => setActionError('전체 화면으로 전환할 수 없습니다.'))}
-          >
-            전체 화면 시작
-          </Button>
-          <ViolationCounter count={antiCheating.count} />
+          {live && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void antiCheating.requestFullscreen().catch(() => setActionError('전체 화면으로 전환할 수 없습니다.'))}
+              >
+                전체 화면 시작
+              </Button>
+              <ViolationCounter count={antiCheating.count} />
+            </>
+          )}
           <span className="font-mono text-[12px] text-text-faint">{view.attempt.model}</span>
           {!locked && (
             <Button variant="primary" size="sm" onClick={() => setConfirm(true)}>
@@ -1071,6 +1116,11 @@ export default function RealExam() {
       </div>
 
       <WarningModal violation={antiCheating.warning} count={antiCheating.count} onClose={antiCheating.dismissWarning} />
+      {live?.proctoring && (
+        <Suspense fallback={null}>
+          <CamMonitor live={live} />
+        </Suspense>
+      )}
       {confirm && <ConfirmModal busy={busy} onCancel={() => setConfirm(false)} onConfirm={() => void doSubmit()} />}
       {viewing && viewingEdit && (
         <EditModal

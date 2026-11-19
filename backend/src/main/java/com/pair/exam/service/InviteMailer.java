@@ -93,6 +93,6 @@ public class InviteMailer {
         String base = props.entryBaseUrl().endsWith("/") ? props.entryBaseUrl().substring(0, props.entryBaseUrl().length() - 1)
                 : props.entryBaseUrl();
         // 프론트 라우트는 /entry (App.tsx). 토큰은 쿼리로 넘긴다
-        return base + "/entry?token=" + token;
+        return base + "/entry?invite=" + token;
     }
 }

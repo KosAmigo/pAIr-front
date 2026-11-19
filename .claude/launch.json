@@ -11,6 +11,7 @@
       "name": "pair-backend",
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", "backend\\gradlew.bat", "-p", "backend", "bootRun", "--console=plain"],
+      "env": { "JAVA_TOOL_OPTIONS": "-Djdk.net.unixdomain.tmpdir=C:/dev/tmp" },
       "port": 8180,
       "autoPort": false
     },
