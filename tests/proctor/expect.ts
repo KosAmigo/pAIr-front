@@ -1,5 +1,5 @@
 // cam-proctor 에서 옮겨 온 테스트가 쓰던 vitest 문법(describe·it·expect)을 node:test 로 돌리기 위한 얇은 연결.
-// frontend 는 테스트를 node --test 로 돌린다 (package.json test:anti-cheating 와 같은 방식).
+// 이 저장소는 테스트를 node --test 로 돌린다 (package.json test:anti-cheating 와 같은 방식).
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 

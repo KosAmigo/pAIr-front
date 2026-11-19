@@ -18,6 +18,9 @@ out/
 logs/
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # 예전 백엔드 응시 기록 폴더 (백엔드는 pAIr-back 으로 옮김)
 pilot-data/
@@ -30,6 +33,11 @@ pilot-data/
 Thumbs.db
 desktop.ini
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 .vscode/*
 !.vscode/extensions.json
 
