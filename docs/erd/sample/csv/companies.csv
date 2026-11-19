@@ -1,2 +1,0 @@
-company_id,name,business_no,contact,employee_list_path,created_at
-1,예시테크,123-45-67890,02-1234-5678,companies/1/employees.csv,2026-11-01T00:00:00Z

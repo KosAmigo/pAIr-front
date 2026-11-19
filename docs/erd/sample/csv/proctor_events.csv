@@ -1,7 +1,0 @@
-proctor_event_id,participant_id,attempt_id,type,started_at,duration_ms,confidence,detail,snapshot_key,snapshot_deleted_at,review,review_note,reviewed_by,reviewed_at
-1,1,9,TAB_HIDDEN,2026-11-11T09:42:10Z,12000,,,,,OK,응시자 문의: 감독 프로그램 알림을 닫다가 탭이 바뀜,6,2026-11-11T11:05:00Z
-2,1,9,PASTE,2026-11-11T09:42:12Z,0,,"{""chars"": 840, ""fromAssistant"": false}",,,SUSPECT,외부에서 840자 붙여넣기. 리포트 대화와 대조 필요,6,2026-11-11T11:07:00Z
-3,1,9,NO_FACE,2026-11-11T09:42:13Z,7000,0.93,"{""faces"": 0}",proctor/9/3.jpg,,,,,
-4,2,10,HEAD_TURN,2026-11-11T09:42:01Z,3500,0.71,"{""yawDeg"": 48}",proctor/10/4.jpg,2026-12-11T00:00:00Z,,,,
-5,2,10,WINDOW_BLUR,2026-11-11T09:42:05Z,2000,,,,,,,,
-6,2,,MOUSE_LEAVE,2026-11-11T10:25:40Z,1500,,,,,,,,

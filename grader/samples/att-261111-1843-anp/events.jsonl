@@ -1,6 +1,0 @@
-{"at":"2026-11-11T09:43:11.044001700Z","taskId":"pricing-plan","type":"start"}
-{"at":"2026-11-11T09:43:17.969917600Z","inputTokens":328,"outputTokens":591,"turn":2,"type":"chat"}
-{"at":"2026-11-11T09:43:18.040151300Z","length":775,"path":"기획안.md","type":"save"}
-{"at":"2026-11-11T09:43:18.042083500Z","type":"firstValid"}
-{"at":"2026-11-11T09:43:18.068840Z","type":"submit"}
-{"at":"2026-11-11T09:43:18.103144600Z","count":3,"type":"followups"}

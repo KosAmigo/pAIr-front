@@ -1,4 +1,0 @@
-inquiry_id,company_name,business_no,contact_name,contact_email,message,status,company_id,handled_by,handled_at,created_at
-1,예시테크,123-45-67890,예시테크 담당자,hr@example-tech.test,하반기 신입 공채에 AI 활용 평가를 넣고 싶습니다.,APPROVED,1,1,2026-11-01T00:00:00Z,2026-10-30T09:00:00Z
-2,샘플랩,222-33-44444,샘플랩 인사팀,people@samplelab.test,도입 비용이 궁금합니다.,PENDING,,,,2026-11-16T10:00:00Z
-3,테스트상사,999-99-99999,홍길동,hong@test-corp.test,,REJECTED,,1,2026-11-12T00:00:00Z,2026-11-11T00:00:00Z

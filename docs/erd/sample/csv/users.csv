@@ -1,8 +1,0 @@
-user_id,email,password_hash,name,role,company_id,created_at,member_status,deleted_at
-1,admin@pair.test,$2a$10$sampleAdminHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,관리자,ADMIN,,2026-11-01T00:00:00Z,ACTIVE,
-2,a@pair.test,$2a$10$sampleUserAHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,응시자A,USER,,2026-11-02T00:00:00Z,ACTIVE,
-3,b@pair.test,$2a$10$sampleUserBHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,응시자B,USER,,2026-11-03T00:00:00Z,ACTIVE,
-4,hr@example-tech.test,$2a$10$sampleCompanyHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,예시테크 매니저,MANAGER,1,2026-11-04T00:00:00Z,ACTIVE,
-5,deleted-5@deleted.pair.invalid,!,탈퇴 회원,USER,,2026-11-05T00:00:00Z,WITHDRAWN,2026-11-15T00:00:00Z
-7,new@pair.test,$2a$10$samplePendingHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,인증 전 회원,USER,,2026-11-17T00:00:00Z,PENDING,
-6,proctor@example-tech.test,$2a$10$sampleProctorHashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,예시테크 감독관,PROCTOR,1,2026-11-06T00:00:00Z,ACTIVE,
