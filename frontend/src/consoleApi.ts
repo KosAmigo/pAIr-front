@@ -86,6 +86,22 @@ export type ProctorEventView = {
   reviewedAt: string | null
 }
 
+/** 환경 점검 사진 (방 360도 방향별, 책상 위) */
+export type EnvScanPhotoView = {
+  id: number
+  participantId: number
+  stage: 'ROOM' | 'DESK'
+  /** 방 스캔에서 찍은 방향(도). 책상은 null */
+  angle: number | null
+  objects: string[]
+  /** 휴대폰으로 감지된 장면 */
+  phoneSuspect: boolean
+  sizeBytes: number
+  capturedAt: string
+  /** 보관 기간이 지나 파일을 지움 */
+  deleted: boolean
+}
+
 export type ResultState = 'NOT_ENTERED' | 'WAITING' | 'SOLVING' | 'SUBMITTED'
 export type ResultRow = {
   rank: number
@@ -234,6 +250,8 @@ export const consoleApi = {
   review: (id: number, eventId: number, review: EventReview | null, note?: string) =>
     call<ProctorEventView>('PUT', `${S}/${id}/events/${eventId}/review`, { review, note }),
   snapshotUrl: (id: number, eventId: number) => blobUrl(`${S}/${id}/events/${eventId}/snapshot`),
+  envScanPhotos: (id: number, participantId: number) => call<EnvScanPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-scan`),
+  envScanImageUrl: (id: number, photoId: number) => blobUrl(`${S}/${id}/env-scan/${photoId}/image`),
 
   // 결과
   results: (id: number) => call<SessionResult>('GET', `${S}/${id}/results`),

@@ -214,19 +214,91 @@ export function tileRects(w: number, h: number, overlap = 0.15): { x: number; y:
   return rects
 }
 
-/** 스캔 중 찾은 물체 → 점검 판정 */
-export function scanVerdict(found: Record<string, number>, stage: 'room' | 'desk'): Verdict {
+export interface ScanVerdictOptions {
+  /** (책상 위) 휴대폰으로 감지됐지만 응시자가 "휴대폰이 아니다"라고 확인함. 실패 대신 경고로 두고 감독관이 사진을 확인한다 */
+  phoneDismissed?: boolean
+}
+
+/**
+ * 스캔 중 찾은 물체 → 점검 판정.
+ * - 방 360도: 있으면 안 되는 물체(사람·휴대폰·책·화면)가 잡혀도 **막지 않고 경고만** 남긴다. 사진은 감독관이 나중에 확인하고
+ *   필요하면 치우도록 안내한다. 방은 넓고 오탐이 잦아서 응시를 막는 용도로 쓰지 않는다.
+ * - 책상 위: 휴대폰·책이 잡히면 실패다 (다른 사람은 보지 않는다. 응시자 본인의 손·팔이 사람으로 잡혀 오탐이 난다).
+ */
+export function scanVerdict(found: Record<string, number>, stage: 'room' | 'desk', opts: ScanVerdictOptions = {}): Verdict {
   const parts: string[] = []
-  if (found.person) parts.push(`다른 사람 ${found.person}회`)
-  if (found['cell phone']) parts.push(`휴대폰 ${found['cell phone']}회`)
+  const person = stage === 'room' ? (found.person ?? 0) : 0
+  const phone = found['cell phone'] ?? 0
+  if (person) parts.push(`다른 사람 ${person}회`)
+  if (phone) parts.push(opts.phoneDismissed ? `휴대폰 ${phone}회 (응시자가 아니라고 확인, 감독관이 사진으로 확인)` : `휴대폰 ${phone}회`)
   if (found.book) parts.push(`책 ${found.book}회`)
   const screens = (found.tv ?? 0) + (found.laptop ?? 0)
   if (stage === 'room' && screens) parts.push(`화면(모니터·노트북) ${screens}회`)
   if (parts.length === 0) return { status: 'pass', detail: '발견된 물체 없음' }
-  const fail = found.person || found['cell phone'] || (stage === 'desk' && found.book)
+  if (stage === 'room') {
+    return { status: 'warn', detail: `${parts.join(', ')} 감지. 감독관이 사진을 확인하고, 필요하면 치우도록 안내합니다.` }
+  }
+  const phoneFails = phone > 0 && !opts.phoneDismissed
+  const fail = phoneFails || !!found.book
   return {
     status: fail ? 'fail' : 'warn',
-    detail: `${parts.join(', ')} 감지. ${fail ? '치운 뒤 다시 스캔해 주세요.' : '시험용 노트북 외의 화면이면 꺼 주세요.'}`,
+    detail: `${parts.join(', ')} 감지. ${fail ? '치운 뒤 다시 스캔해 주세요.' : '확인 결과가 기록에 남습니다.'}`,
+  }
+}
+
+/**
+ * 방 360도 스캔의 각도별 확인.
+ * 방향(자이로)을 sectors 개 구간으로 나눠, 각 구간에 holdMs 이상 머물면 그 구간의 사진을 한 번 찍는다.
+ * 찍고 나면 "조금 더 돌아 주세요", 새 구간에 들어서면 "잠깐 멈춰 주세요"를 안내한다.
+ * minDone 개 구간을 채우면 완료다 (벽을 향해 못 비추는 구간 등을 감안해 전부는 요구하지 않는다).
+ */
+export const ANGLE_SCAN = { sectors: 12, holdMs: 350, minDone: 10 }
+
+export type AngleHint = 'hold' | 'turn-more' | 'complete'
+
+export class AngleScanTracker {
+  private readonly done: boolean[] = Array(ANGLE_SCAN.sectors).fill(false)
+  private current = -1
+  private enteredAt = 0
+
+  /** 구간 번호 → 구간 가운데 각도 (업로드에 기록) */
+  static angleOf(sector: number): number {
+    const step = 360 / ANGLE_SCAN.sectors
+    return sector * step + step / 2
+  }
+
+  /** 프레임마다 부른다. capture 가 null 이 아니면 그 구간의 사진을 지금 찍는다 */
+  update(headingDeg: number, now: number): { capture: number | null } {
+    const h = ((headingDeg % 360) + 360) % 360
+    const sector = Math.floor(h / (360 / ANGLE_SCAN.sectors)) % ANGLE_SCAN.sectors
+    if (sector !== this.current) {
+      this.current = sector
+      this.enteredAt = now
+      return { capture: null }
+    }
+    if (!this.done[sector] && now - this.enteredAt >= ANGLE_SCAN.holdMs) {
+      this.done[sector] = true
+      return { capture: sector }
+    }
+    return { capture: null }
+  }
+
+  get doneCount(): number {
+    return this.done.filter(Boolean).length
+  }
+
+  get complete(): boolean {
+    return this.doneCount >= ANGLE_SCAN.minDone
+  }
+
+  /** 구간별 완료 여부 (화면 표시용) */
+  get map(): boolean[] {
+    return [...this.done]
+  }
+
+  get hint(): AngleHint {
+    if (this.complete) return 'complete'
+    return this.current >= 0 && this.done[this.current] ? 'turn-more' : 'hold'
   }
 }
 

@@ -1,11 +1,15 @@
 // 휴대폰 환경 점검: 조명 → 방 360도 스캔 → 책상 위 스캔.
 // 작은·먼 물체를 놓치지 않도록 키프레임마다 고해상도 프레임을 타일로 나눠 감지한다.
-// 점검 사진은 릴레이로 PC 에 넘기기만 하고 서버에 저장하지 않는다.
+// 방 360도는 방향(자이로)을 12구간으로 나눠 구간마다 한 장씩 찍고, 한 구간이 끝나면 "조금 더 돌아 주세요"로 안내한다.
+// 방에서 있으면 안 되는 물체가 잡혀도 막지 않고 경고만 남긴다 (감독관이 사진으로 확인). 책상 위에서 휴대폰이 잡히면 응시자가 장면을 보고 확인한다.
+// 점검 사진은 릴레이로 PC 에 넘기고, 릴레이가 파일 서버(백엔드)에 올린다.
 import { useEffect, useRef, useState } from 'react'
 import type { ObjectDetector } from '@mediapipe/tasks-vision'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '../../components/ui'
 import {
+  ANGLE_SCAN,
+  AngleScanTracker,
   CoverageTracker,
   SCAN,
   frameDifference,
@@ -44,6 +48,15 @@ const INITIAL: CheckItem[] = [
 const DESK_MS = 6000
 const DESK_INTERVAL_MS = 1500
 const COVERAGE_STEP_DEG = 30
+/** 휴대폰으로 감지된 장면을 확인 창에 보여 줄 최대 장수 */
+const MAX_CONFIRM_SHOTS = 3
+
+/** 방향별 확인 안내 */
+const ANGLE_PROMPT = {
+  hold: '이 방향을 확인하는 중입니다. 잠깐 멈춰 주세요',
+  'turn-more': '이 방향은 확인했습니다. 조금 더 돌아 주세요',
+  complete: '한 바퀴 확인을 마쳤습니다',
+} as const
 
 /** 고해상도 프레임을 타일로 나눠 감지하고 결과를 합친다 */
 function detectTiled(video: HTMLVideoElement, detector: ObjectDetector): DetectedObject[] {
@@ -84,6 +97,8 @@ export function PhoneScan({ video, stream, detector, gyro, send, onDone }: Props
   const [last, setLast] = useState<string[]>([])
   const [report, setReport] = useState<CheckReport | null>(null)
   const [run, setRun] = useState(0)
+  /** 휴대폰으로 감지된 장면: 응시자가 맞는지 확인할 때까지 기다린다 */
+  const [confirm, setConfirm] = useState<{ shots: string[]; resolve: (isPhone: boolean) => void } | null>(null)
   const headingRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -116,12 +131,24 @@ export function PhoneScan({ video, stream, detector, gyro, send, onDone }: Props
         })
       })
 
-    const keyframe = (stage: ScanStage, found: Record<string, number>) => {
+    const keyframe = (stage: ScanStage, found: Record<string, number>, phoneShots: string[], angle?: number) => {
       const objs = detectTiled(video, detector)
       for (const label of new Set(objs.map((o) => o.label))) found[label] = (found[label] ?? 0) + 1
       setLast(objs.map((o) => `${o.label} ${(o.score * 100).toFixed(0)}%`))
       const image = captureSnapshot(video, 640, 0.75)
-      if (image) send({ type: 'scan-frame', stage, image, objects: objs.map((o) => o.label) })
+      if (image) {
+        if (objs.some((o) => o.label === 'cell phone')) phoneShots.push(image)
+        send({ type: 'scan-frame', stage, image, objects: objs.map((o) => o.label), ...(angle === undefined ? {} : { angle: Math.round(angle) }) })
+      }
+    }
+
+    /** 휴대폰이 감지됐으면 응시자에게 장면을 보여 주고 맞는지 확인받는다. 아니라고 하면 경고로 낮춰 기록한다 */
+    const verdictOf = async (stage: 'room' | 'desk', found: Record<string, number>, phoneShots: string[]): Promise<Verdict> => {
+      // 방 360도는 물체가 잡혀도 막지 않고 경고만 남긴다 (감독관이 사진을 보고 나중에 치우도록 안내). 묻지 않는다
+      if (stage === 'room' || !found['cell phone']) return scanVerdict(found, stage)
+      const isPhone = await new Promise<boolean>((resolve) => setConfirm({ shots: phoneShots.slice(-MAX_CONFIRM_SHOTS), resolve }))
+      setConfirm(null)
+      return scanVerdict(found, stage, { phoneDismissed: !isPhone })
     }
 
     async function main() {
@@ -152,21 +179,37 @@ export function PhoneScan({ video, stream, detector, gyro, send, onDone }: Props
       apply('lighting', lastV)
       if (cancelled) return
 
-      // 2) 방 360도: 자이로로 돈 범위를, 화면 변화로 키프레임을 잡는다
+      // 2) 방 360도: 방향을 구간으로 나눠 구간마다 한 장 (방향 센서가 없으면 화면 변화로 키프레임)
       set('room', { status: 'running' })
       setPrompt('휴대폰을 들고 제자리에서 천천히 한 바퀴 돌며 방 전체를 비춰 주세요')
+      const angles = new AngleScanTracker()
       const cov = new CoverageTracker()
       const roomFound: Record<string, number> = {}
+      const roomPhoneShots: string[] = []
       let lastGray: Uint8Array | null = null
       let lastKeyAt = Number.NEGATIVE_INFINITY
+      let lastHint: string | null = null
       let count = 0
       const begin = performance.now()
       setKeyframes(0)
       setCoverage(cov.map)
       await loop((now) => {
-        if (gyro && headingRef.current !== null) {
-          cov.add(headingRef.current)
-          setCoverage(cov.map)
+        const heading = gyro ? headingRef.current : null
+        if (heading !== null) {
+          // 방향별 확인: 구간에 잠깐 머물면 그 구간을 찍고, 끝나면 조금 더 돌라고 안내한다
+          const { capture } = angles.update(heading, now)
+          if (capture !== null) {
+            keyframe('room', roomFound, roomPhoneShots, AngleScanTracker.angleOf(capture))
+            setKeyframes(++count)
+            navigator.vibrate?.(40)
+          }
+          setCoverage(angles.map)
+          if (angles.hint !== lastHint) {
+            lastHint = angles.hint
+            setPrompt(ANGLE_PROMPT[angles.hint])
+          }
+          set('room', { detail: `${angles.doneCount}/${ANGLE_SCAN.sectors} 방향 · 사진 ${count}장` })
+          return angles.complete
         }
         const px = grabPixels(video, 32, 24)
         if (!px) return false
@@ -174,33 +217,33 @@ export function PhoneScan({ video, stream, detector, gyro, send, onDone }: Props
         if ((!lastGray || frameDifference(gray, lastGray) > SCAN.keyframeDiff) && now - lastKeyAt > SCAN.keyframeMinGapMs) {
           lastGray = gray
           lastKeyAt = now
-          keyframe('room', roomFound)
+          keyframe('room', roomFound, roomPhoneShots)
           setKeyframes(++count)
         }
-        const covered = gyro && headingRef.current !== null ? cov.covered : null
-        set('room', {
-          detail: covered !== null ? `${covered}/${cov.bins} 방향 · 사진 ${count}장` : `사진 ${count}장 · ${((now - begin) / 1000).toFixed(0)}초`,
-        })
-        return scanComplete(count, covered, now - begin)
+        set('room', { detail: `사진 ${count}장 · ${((now - begin) / 1000).toFixed(0)}초` })
+        return scanComplete(count, null, now - begin)
       })
-      apply('room', scanVerdict(roomFound, 'room'))
+      if (cancelled) return
+      apply('room', await verdictOf('room', roomFound, roomPhoneShots))
       if (cancelled) return
 
       // 3) 책상 위: 일정 간격으로 고해상도 키프레임
       set('desk', { status: 'running' })
       setPrompt('책상 위 전체가 보이도록 위에서 내려다보듯 천천히 비춰 주세요')
       const deskFound: Record<string, number> = {}
+      const deskPhoneShots: string[] = []
       const deskBegin = performance.now()
       let deskLast = Number.NEGATIVE_INFINITY
       await loop((now) => {
         if (now - deskLast > DESK_INTERVAL_MS) {
           deskLast = now
-          keyframe('desk', deskFound)
+          keyframe('desk', deskFound, deskPhoneShots)
         }
         set('desk', { detail: `${Math.max(0, (DESK_MS - (now - deskBegin)) / 1000).toFixed(0)}초 남음` })
         return now - deskBegin > DESK_MS
       })
-      apply('desk', scanVerdict(deskFound, 'desk'))
+      if (cancelled) return
+      apply('desk', await verdictOf('desk', deskFound, deskPhoneShots))
       void setTorch(stream, false)
       setPrompt('')
 
@@ -238,6 +281,25 @@ export function PhoneScan({ video, stream, detector, gyro, send, onDone }: Props
         </div>
       )}
       {last.length > 0 && !report && <p className="text-[13px] text-text-muted">방금 찾은 것: {last.join(', ')}</p>}
+      {confirm && (
+        <div role="alertdialog" aria-label="휴대폰 확인" className="flex flex-col gap-3 rounded-lg border border-caution/40 bg-caution/10 p-3">
+          <p className="text-[15px] font-semibold">휴대폰이 감지됐습니다. 실제 휴대폰이 맞나요?</p>
+          <div className="flex gap-2 overflow-x-auto">
+            {confirm.shots.map((src, i) => (
+              <img key={i} src={src} alt={`감지된 장면 ${i + 1}`} className="h-24 shrink-0 rounded-md border border-line" />
+            ))}
+          </div>
+          <p className="text-[13px] leading-5 break-keep text-text-muted">휴대폰이 맞으면 치운 뒤 다시 스캔합니다. 아니라고 답하면 경고로 기록하고, 감독관이 이 사진을 확인합니다.</p>
+          <div className="flex gap-2">
+            <Button variant="primary" onClick={() => confirm.resolve(true)}>
+              휴대폰입니다
+            </Button>
+            <Button variant="secondary" onClick={() => confirm.resolve(false)}>
+              휴대폰이 아닙니다
+            </Button>
+          </div>
+        </div>
+      )}
       <CheckList items={items} />
       {report && (
         <div className="flex flex-wrap items-center gap-2">

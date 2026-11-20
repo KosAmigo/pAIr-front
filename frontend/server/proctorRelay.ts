@@ -29,7 +29,17 @@ type Pair = {
 }
 
 /** 메시지는 클라이언트가 보낸 값이라 필요한 필드만 꺼내 쓴다 */
-type Incoming = { type?: unknown; invite?: unknown; pairCode?: unknown; violation?: Record<string, unknown>; status?: Record<string, unknown> }
+type Incoming = {
+  type?: unknown
+  invite?: unknown
+  pairCode?: unknown
+  violation?: Record<string, unknown>
+  status?: Record<string, unknown>
+  stage?: unknown
+  image?: unknown
+  objects?: unknown
+  angle?: unknown
+}
 
 const byInvite = new Map<string, Pair>()
 const byCode = new Map<string, Pair>()
@@ -87,6 +97,27 @@ async function record(pair: Pair, v: Record<string, unknown>) {
     if (!res.ok && res.status !== 400) log('폰 이벤트 저장 실패', res.status)
   } catch {
     log('폰 이벤트 저장 실패 (백엔드 연결 안 됨)')
+  }
+}
+
+/**
+ * 환경 점검 사진(방 360도 방향별, 책상 위)을 파일 서버(백엔드)에 올린다. 귀·손목 사진은 올리지 않고 PC 로만 넘긴다.
+ * 실패해도 점검은 계속된다 (사진 업로드가 응시를 막지 않게 한다).
+ */
+async function uploadScanFrame(pair: Pair, msg: Incoming) {
+  const stage = msg.stage === 'room' ? 'ROOM' : msg.stage === 'desk' ? 'DESK' : null
+  if (!stage || typeof msg.image !== 'string') return
+  const angle = typeof msg.angle === 'number' && Number.isFinite(msg.angle) ? Math.min(359, Math.max(0, Math.round(msg.angle))) : undefined
+  const objects = Array.isArray(msg.objects) ? msg.objects.filter((o): o is string => typeof o === 'string').slice(0, 12) : []
+  try {
+    const res = await fetch(`${BACKEND}/api/entry/${encodeURIComponent(pair.invite)}/env-scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage, angle: stage === 'ROOM' ? angle : undefined, objects, image: msg.image }),
+    })
+    if (!res.ok) log('점검 사진 업로드 실패', res.status)
+  } catch {
+    log('점검 사진 업로드 실패 (백엔드 연결 안 됨)')
   }
 }
 
@@ -170,6 +201,9 @@ function handle(ws: WebSocket, phoneOrigin: () => string) {
         send(pair.pc, msg)
         break
       case 'scan-frame':
+        void uploadScanFrame(pair, msg)
+        send(pair.pc, msg)
+        break
       case 'check-report':
         send(pair.pc, msg)
         break

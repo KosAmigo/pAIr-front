@@ -24,7 +24,7 @@ export type ClientMsg =
   | { type: 'hello-phone'; pairCode: string }
   | { type: 'violation'; violation: CamViolation }
   | { type: 'phone-status'; status: PhoneStatus }
-  | { type: 'scan-frame'; stage: ScanStage; image: string; objects: string[] }
+  | { type: 'scan-frame'; stage: ScanStage; image: string; objects: string[]; /** 방 스캔에서 이 사진을 찍은 방향(도). 책상·귀·손목은 없음 */ angle?: number }
   | { type: 'check-report'; report: CheckReport }
 
 export type ServerMsg =
@@ -33,6 +33,6 @@ export type ServerMsg =
   | { type: 'peer'; phone: PeerState }
   | { type: 'violation'; violation: CamViolation }
   | { type: 'phone-status'; status: PhoneStatus }
-  | { type: 'scan-frame'; stage: ScanStage; image: string; objects: string[] }
+  | { type: 'scan-frame'; stage: ScanStage; image: string; objects: string[]; /** 방 스캔에서 이 사진을 찍은 방향(도). 책상·귀·손목은 없음 */ angle?: number }
   | { type: 'check-report'; report: CheckReport }
   | { type: 'error'; message: string }

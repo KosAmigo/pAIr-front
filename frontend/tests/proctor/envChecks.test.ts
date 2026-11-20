@@ -1,5 +1,7 @@
 import { describe, expect, it } from './expect.ts'
 import {
+  ANGLE_SCAN,
+  AngleScanTracker,
   CoverageTracker,
   HEAD_TURN,
   HeadTurnTracker,
@@ -109,7 +111,7 @@ describe('360도 스캔', () => {
   })
   it('스캔 결과 판정', () => {
     expect(scanVerdict({}, 'room').status).toBe('pass')
-    expect(scanVerdict({ person: 1 }, 'room').status).toBe('fail')
+    expect(scanVerdict({ person: 1 }, 'room').status).toBe('warn') // 방 스캔은 막지 않고 경고만
     expect(scanVerdict({ tv: 2 }, 'room').status).toBe('warn')
     expect(scanVerdict({ book: 1 }, 'desk').status).toBe('fail')
     expect(scanVerdict({ laptop: 3 }, 'desk').status).toBe('pass')
@@ -169,5 +171,115 @@ describe('귀 확인: 고개 돌림', () => {
     const strong = hold(HEAD_TURN.deg + 5, 60) // 한 프레임뿐이라 아직 확정 전
     expect(feed(tracker, strong)).toBe(0)
     expect(tracker.update(undefined, 0, t0 + HEAD_TURN.lostGraceMs + 500)).toBe(0)
+  })
+})
+
+describe('스캔 판정: 책상과 휴대폰 확인', () => {
+  it('책상 위에서는 다른 사람을 보지 않는다 (방에서는 그대로 실패)', () => {
+    expect(scanVerdict({ person: 3 }, 'desk').status).toBe('pass')
+    expect(scanVerdict({ person: 3 }, 'desk').detail.includes('다른 사람')).toBe(false)
+    expect(scanVerdict({ person: 1 }, 'room').status).toBe('warn')
+  })
+
+  it('책상에서 사람이 함께 잡혀도 책·휴대폰 판정은 그대로다', () => {
+    expect(scanVerdict({ person: 2, book: 1 }, 'desk').status).toBe('fail')
+    expect(scanVerdict({ person: 2, 'cell phone': 1 }, 'desk').status).toBe('fail')
+  })
+
+  it('휴대폰 감지는 실패지만, 응시자가 아니라고 확인하면 경고로 낮추고 사진 확인을 안내한다', () => {
+    expect(scanVerdict({ 'cell phone': 2 }, 'desk').status).toBe('fail')
+    const v = scanVerdict({ 'cell phone': 2 }, 'desk', { phoneDismissed: true })
+    expect(v.status).toBe('warn')
+    expect(v.detail).toContain('휴대폰')
+    expect(v.detail).toContain('아니라고 확인')
+  })
+
+  it('휴대폰을 아니라고 해도 다른 위반(책 등)은 그대로 실패다', () => {
+    expect(scanVerdict({ 'cell phone': 1, book: 1 }, 'desk', { phoneDismissed: true }).status).toBe('fail')
+  })
+})
+
+describe('방 360도: 각도별 확인', () => {
+  const step = 360 / ANGLE_SCAN.sectors
+  const center = (i: number) => i * step + step / 2
+
+  /** 한 방향에 holdMs 만큼 머무는 프레임들을 흘려 보내고 캡처된 구간을 돌려준다 */
+  function dwell(t: AngleScanTracker, sector: number, startMs: number, ms = ANGLE_SCAN.holdMs + 100, gap = 50) {
+    let captured: number | null = null
+    for (let at = startMs; at <= startMs + ms; at += gap) {
+      const r = t.update(center(sector), at)
+      if (r.capture !== null) captured = r.capture
+    }
+    return captured
+  }
+
+  it('한 방향에 잠깐 머물면 그 방향을 한 번만 찍는다', () => {
+    const t = new AngleScanTracker()
+    expect(dwell(t, 0, 1000)).toBe(0)
+    expect(t.doneCount).toBe(1)
+    expect(dwell(t, 0, 3000)).toBeNull() // 같은 방향에서 계속 있어도 다시 찍지 않음
+    expect(t.doneCount).toBe(1)
+  })
+
+  it('스치듯 지나가면(머문 시간이 짧으면) 찍지 않는다', () => {
+    const t = new AngleScanTracker()
+    expect(dwell(t, 3, 1000, ANGLE_SCAN.holdMs - 150)).toBeNull()
+    expect(t.doneCount).toBe(0)
+  })
+
+  it('찍고 나면 "조금 더 돌아 주세요", 새 방향에 들어서면 "멈춰 주세요"를 안내한다', () => {
+    const t = new AngleScanTracker()
+    expect(t.hint).toBe('hold')
+    dwell(t, 0, 1000)
+    expect(t.hint).toBe('turn-more')
+    t.update(center(1), 2000) // 다음 구간에 막 들어섬
+    expect(t.hint).toBe('hold')
+  })
+
+  it('필요한 방향 수를 채우면 완료이고, 안내도 완료로 바뀐다', () => {
+    const t = new AngleScanTracker()
+    let at = 1000
+    for (let i = 0; i < ANGLE_SCAN.minDone; i++) {
+      dwell(t, i, at)
+      at += 1000
+    }
+    expect(t.complete).toBe(true)
+    expect(t.hint).toBe('complete')
+  })
+
+  it('방향 값이 0~360 밖이어도(음수, 360 이상) 같은 구간으로 계산한다', () => {
+    const t = new AngleScanTracker()
+    let captured: number | null = null
+    for (let at = 1000; at <= 1000 + ANGLE_SCAN.holdMs + 100; at += 50) {
+      const r = t.update(-step / 2, at) // -15도 = 345도 = 마지막 구간
+      if (r.capture !== null) captured = r.capture
+    }
+    expect(captured).toBe(ANGLE_SCAN.sectors - 1)
+  })
+
+  it('이미 찍은 방향의 각도(angleOf)는 구간 가운데 각도다', () => {
+    expect(AngleScanTracker.angleOf(0)).toBe(step / 2)
+    expect(AngleScanTracker.angleOf(3)).toBe(3 * step + step / 2)
+  })
+})
+
+describe('방 360도: 금지 물체는 막지 않고 경고만 남긴다', () => {
+  it('사람·휴대폰·책·화면이 잡혀도 통과를 막지 않고, 감독관이 확인한다는 안내를 낸다', () => {
+    for (const found of [{ person: 2 }, { 'cell phone': 3 }, { book: 1 }, { tv: 1 }, { person: 1, 'cell phone': 1, book: 1, laptop: 2 }]) {
+      const v = scanVerdict(found, 'room')
+      expect(v.status).toBe('warn')
+      expect(v.detail.includes('감독관')).toBe(true)
+    }
+  })
+
+  it('어떤 물체가 몇 번 잡혔는지는 그대로 알려 준다', () => {
+    const v = scanVerdict({ person: 2, 'cell phone': 1 }, 'room')
+    expect(v.detail.includes('다른 사람 2회')).toBe(true)
+    expect(v.detail.includes('휴대폰 1회')).toBe(true)
+  })
+
+  it('책상 위는 예전처럼 휴대폰·책이 잡히면 실패다', () => {
+    expect(scanVerdict({ 'cell phone': 1 }, 'desk').status).toBe('fail')
+    expect(scanVerdict({ book: 1 }, 'desk').status).toBe('fail')
   })
 })
