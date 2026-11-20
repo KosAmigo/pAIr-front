@@ -4,11 +4,11 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } 
 import Dashboard from './pages/Dashboard'
 import RealExam, { NewExam } from './pages/RealExam'
 import Report from './pages/Report'
-import Replay from './pages/Replay'
+import Review from './pages/Review'
+import ReplayRedirect from './pages/ReplayRedirect'
 import Entry from './pages/Entry'
 import Submitted from './pages/Submitted'
 import Tasks from './pages/Tasks'
-import History from './pages/History'
 import Grader from './pages/Grader'
 import GraderResult from './pages/GraderResult'
 import { useAuth } from './auth/auth'
@@ -88,10 +88,11 @@ export default function App() {
           <Route element={<RequireAuth />}>
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/history" element={<History />} />
+            <Route path="/review" element={<Review />} />
+            <Route path="/history" element={<Navigate to="/review" replace />} />
             <Route path="/exam/new" element={<NewExam />} />
             <Route path="/report/:attemptId" element={<Report />} />
-            <Route path="/replay/:attemptId" element={<Replay />} />
+            <Route path="/replay/:attemptId" element={<ReplayRedirect />} />
           </Route>
 
           {/* 채점 툴: 관리자 */}

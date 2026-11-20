@@ -630,3 +630,48 @@
     transition-duration: 0ms !important;
   }
 }
+
+/* DESIGN.md §7-5 복기 갈래 트리: 어두운 안쪽 무대와 선 연출 (이 화면만 §1.4 의 빛 번짐 예외) */
+.review-stage {
+  position: relative;
+  overflow: hidden;
+  color: #eceaff;
+  background:
+    radial-gradient(600px 300px at 15% 10%, rgb(108 71 255 / 0.35), transparent 60%),
+    radial-gradient(500px 300px at 90% 90%, rgb(47 91 234 / 0.3), transparent 60%),
+    #0b0a1c;
+}
+.review-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgb(255 255 255 / 0.04) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+@keyframes review-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes review-flow {
+  to { stroke-dashoffset: -40; }
+}
+@keyframes review-ring {
+  0%, 100% { r: 26px; opacity: 0.55; }
+  50% { r: 32px; opacity: 0.15; }
+}
+.review-lane {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: review-draw 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.review-flow {
+  stroke-dasharray: 6 14;
+  animation: review-flow 1s linear infinite;
+}
+.review-ring {
+  animation: review-ring 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .review-lane { animation: none; stroke-dashoffset: 0; }
+  .review-flow, .review-ring { animation: none; }
+}
