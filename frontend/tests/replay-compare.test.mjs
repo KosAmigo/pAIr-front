@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { changeKind, changedItems, sideText } from '../src/lib/replayCompare.ts'
+import { changeKind, changedItems, commonPrefixLength, shortTurns, sideText } from '../src/lib/replayCompare.ts'
 
 const side = (status, deducted = 0, reason = null) => ({ status, deducted, reason, evidence: [] })
 const check = (code, a, b, changed) => ({ code, label: code, method: 'JUDGE', points: 3, a, b, changed })
@@ -36,4 +36,20 @@ test('only items with a changed check or a different score are kept, with improv
   const out = changedItems(items)
   assert.deepEqual(out.map((i) => i.key), ['control', 'scoreOnly'])
   assert.deepEqual(out[0].checks.map((c) => c.code), ['C1', 'C2'])
+})
+
+test('turn labels are shortened inside sentences', () => {
+  assert.equal(shortTurns('#T03'), 'T3')
+  assert.equal(shortTurns('#T10 에서 #T05 로'), 'T10 에서 T5 로')
+  assert.equal(shortTurns('RUN 2회'), 'RUN 2회')
+})
+
+test('the shared start of two conversations is counted until the first difference', () => {
+  const t = (turn, role, text) => ({ turn, role, text, time: '' })
+  const a = [t(1, 'user', 'q1'), t(2, 'ai', 'a1'), t(3, 'user', '버그 고쳐줘'), t(4, 'ai', '락 순서를 바꾸세요')]
+  const b = [t(1, 'user', 'q1'), t(2, 'ai', 'a1'), t(3, 'user', '정렬해서 고치는 방법은?')]
+  assert.equal(commonPrefixLength(a, b), 2)
+  assert.equal(commonPrefixLength(a, a), 4)
+  assert.equal(commonPrefixLength(a, []), 0)
+  assert.equal(commonPrefixLength([t(1, 'user', 'x')], [t(1, 'user', 'y')]), 0)
 })

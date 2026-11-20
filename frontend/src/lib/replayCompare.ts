@@ -1,4 +1,4 @@
-import type { CheckDiff, CheckSide, ItemDiff } from '../api.ts'
+import type { CheckDiff, CheckSide, ItemDiff, Turn } from '../api.ts'
 
 /** 감점표의 체크 상태를 응시자가 읽는 말로 */
 export const STATUS_TEXT: Record<CheckSide['status'], string> = {
@@ -37,4 +37,19 @@ export function changedItems(items: ItemDiff[]): ItemDiff[] {
         .sort((x, y) => order[changeKind(x)] - order[changeKind(y)] || Math.abs((y.b?.deducted ?? 0) - (y.a?.deducted ?? 0)) - Math.abs((x.b?.deducted ?? 0) - (x.a?.deducted ?? 0))),
     }))
     .filter((it) => it.checks.length > 0 || (it.a != null && it.b != null && it.a !== it.b))
+}
+
+/** "#T03" 같은 턴 표기를 "T3" 으로 줄인다. 이유·근거 문장 안의 표기도 같이 바꾼다 */
+export function shortTurns(text: string): string {
+  return text.replace(/#T0*(\d+)/g, 'T$1')
+}
+
+/**
+ * 두 풀이의 대화에서 처음부터 똑같은 턴이 몇 개인지(번호·역할·내용이 모두 같은 앞부분).
+ * 롤백한 풀이는 갈라진 질문 앞의 대화를 그대로 복사해 가지므로, 이 뒤부터가 두 풀이가 달라진 대화다.
+ */
+export function commonPrefixLength(a: Turn[], b: Turn[]): number {
+  let i = 0
+  while (i < a.length && i < b.length && a[i].turn === b[i].turn && a[i].role === b[i].role && a[i].text === b[i].text) i++
+  return i
 }
