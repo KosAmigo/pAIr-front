@@ -47,7 +47,11 @@ export type Turn = { turn: number; role: 'user' | 'ai'; time: string; text: stri
 /** 복기: 질문 하나를 보낸 순간의 체크포인트 (질문마다 하나, 이름은 응시자가 붙인다) */
 export type Checkpoint = { checkpointId: number; turnNo: number; label: string | null; createdAt: string }
 
-/** 복기 트리의 응시 한 건. 뿌리(원래 응시)만 parentAttemptId 가 null */
+/** 채점 점수. 채점이 끝난(DONE) 응시만 있다 */
+export type ItemScore = { key: string; name: string; max: number; score: number | null }
+export type TreeScore = { total: number; max: number; items: ItemScore[] }
+
+/** 복기 트리의 응시 한 건. 뿌리(원래 응시)만 parentAttemptId 가 null. score 는 채점 전이거나 이전 형식 리포트면 null */
 export type TreeNode = {
   attemptId: string
   parentAttemptId: string | null
@@ -55,6 +59,7 @@ export type TreeNode = {
   forkedFromCheckpointId: number | null
   status: AttemptStatus
   startedAt: string
+  score: TreeScore | null
 }
 
 export type EditDecision = { status: 'APPLIED' | 'REJECTED'; path: string; content: string | null }

@@ -1,4 +1,4 @@
-import type { AttemptStatus, TreeNode } from '../api.ts'
+import type { AttemptStatus, TreeNode, TreeScore } from '../api.ts'
 
 /** 세로 git 그래프의 한 줄: 응시 하나 (DESIGN.md §6.13) */
 export type TreeRow = {
@@ -13,6 +13,8 @@ export type TreeRow = {
   forkedAtTurn: number | null
   status: AttemptStatus
   startedAt: string
+  /** 채점이 끝난 응시만 (비교 대상으로 고를 수 있다) */
+  score: TreeScore | null
   /** 뿌리에서 이 줄까지의 줄기 (자기 자신 포함). 이 줄을 지나는 레인들의 색을 정한다 */
   path: { attemptId: string; depth: number; branch: number }[]
 }
@@ -51,6 +53,7 @@ export function layoutTree(nodes: TreeNode[]): TreeRow[] {
       forkedAtTurn: node.forkedAtTurn,
       status: node.status,
       startedAt: node.startedAt,
+      score: node.score,
       path,
     })
     for (const child of byParent.get(node.attemptId) ?? []) walk(child, depth + 1, path)
@@ -65,4 +68,26 @@ export function onPathTo(rows: TreeRow[], currentId: string): Set<string> {
   const out = new Set<string>()
   for (let r = byId.get(currentId); r; r = r.parentAttemptId ? byId.get(r.parentAttemptId) : undefined) out.add(r.attemptId)
   return out
+}
+
+/** 비교 대상은 최대 2개. 이미 고른 것을 누르면 빼고, 3번째를 고르면 먼저 고른 것을 밀어낸다 */
+export function toggleCompare(selected: string[], id: string): string[] {
+  if (selected.includes(id)) return selected.filter((s) => s !== id)
+  return selected.length >= 2 ? [selected[1], id] : [...selected, id]
+}
+
+export type CompareRow = { key: string; name: string; max: number; a: number | null; b: number | null; diff: number | null }
+
+/** 두 갈래의 점수를 항목별로 맞춘다. diff 는 B 에서 A 를 뺀 값(둘 다 점수가 있을 때만) */
+export function compareScores(a: TreeScore, b: TreeScore): { items: CompareRow[]; total: { a: number; b: number; max: number; diff: number } } {
+  const byKeyB = new Map(b.items.map((i) => [i.key, i]))
+  const seen = new Set<string>()
+  const items: CompareRow[] = []
+  for (const ia of a.items) {
+    const ib = byKeyB.get(ia.key)
+    seen.add(ia.key)
+    items.push({ key: ia.key, name: ia.name, max: ia.max, a: ia.score, b: ib?.score ?? null, diff: ia.score != null && ib?.score != null ? ib.score - ia.score : null })
+  }
+  for (const ib of b.items) if (!seen.has(ib.key)) items.push({ key: ib.key, name: ib.name, max: ib.max, a: null, b: ib.score, diff: null })
+  return { items, total: { a: a.total, b: b.total, max: Math.max(a.max, b.max), diff: b.total - a.total } }
 }

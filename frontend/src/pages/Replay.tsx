@@ -9,7 +9,8 @@ import { ErrorState } from '../components/ErrorState'
 import { api, ApiError, type ReportResponse, type TreeNode, type Turn } from '../api'
 import { BranchGraph } from '../components/replay/BranchGraph'
 import { CheckpointPanel } from '../components/replay/CheckpointPanel'
-import { layoutTree } from '../lib/replayTree'
+import { ScoreCompare } from '../components/replay/ScoreCompare'
+import { layoutTree, toggleCompare, type TreeRow } from '../lib/replayTree'
 
 // DESIGN.md §7-5 복기 화면
 // 왼쪽: 복기 트리(GET /api/attempts/{id}/tree)와 체크포인트(질문마다 하나, 이름 붙이기·여기서 다시 풀기).
@@ -39,6 +40,7 @@ export default function Replay() {
   const [tree, setTree] = useState<TreeNode[] | null>(null)
   const [treeError, setTreeError] = useState<string | null>(null)
   const [treeTick, setTreeTick] = useState(0)
+  const [compare, setCompare] = useState<string[]>([])
 
   useEffect(() => {
     let alive = true
@@ -69,6 +71,9 @@ export default function Replay() {
   const report = data?.report ?? null
   const turns = report?.transcript ?? []
   const rows = tree ? layoutTree(tree) : []
+  const scored = (id: string) => rows.find((r) => r.attemptId === id && r.score) as (TreeRow & { score: NonNullable<TreeRow['score']> }) | undefined
+  const cmpA = compare[0] ? scored(compare[0]) : undefined
+  const cmpB = compare[1] ? scored(compare[1]) : undefined
 
   return (
     <SelfShell
@@ -104,7 +109,17 @@ export default function Replay() {
                     {rows.length === 1 && (
                       <p className="mb-2 text-[14px] text-stage-muted">아직 갈라진 풀이가 없습니다. 아래 체크포인트에서 &quot;여기서 다시 풀기&quot;를 누르면 갈라집니다.</p>
                     )}
-                    <BranchGraph rows={rows} currentId={attemptId} onSelect={(id) => id !== attemptId && navigate(`/replay/${encodeURIComponent(id)}`)} />
+                    <BranchGraph
+                      rows={rows}
+                      currentId={attemptId}
+                      onSelect={(id) => id !== attemptId && navigate(`/replay/${encodeURIComponent(id)}`)}
+                      compare={compare}
+                      onToggleCompare={(id) => setCompare((c) => toggleCompare(c, id))}
+                    />
+                    {rows.some((r) => r.score) && compare.length < 2 && (
+                      <p className="mt-2 text-[14px] text-stage-muted">채점이 끝난 풀이는 &quot;비교&quot;를 눌러 두 개를 고르면 점수를 나란히 볼 수 있습니다.</p>
+                    )}
+                    {cmpA && cmpB && <ScoreCompare a={cmpA} b={cmpB} onClear={() => setCompare([])} />}
                   </>
                 )}
                 <div className="mt-6 border-t border-stage-line pt-4">
