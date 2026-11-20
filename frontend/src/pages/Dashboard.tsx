@@ -6,17 +6,18 @@ import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
 import { ButtonLink, Panel } from '../components/ui'
 import { ErrorState } from '../components/ErrorState'
-import { CountUp, GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
-import { MiniHex, StatHex, type HexStat } from '../components/dashboard/StatHex'
+import { CountUp, GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, StageSection } from '../components/fx'
+import { StatHex, type HexStat } from '../components/dashboard/StatHex'
 import { loadStatHistory, STATS, total, type StatEntry, type StatScores } from '../data/dashboard'
 import { duration, easing } from '../lib/motion'
+import { topHabits } from '../lib/habits'
 import { useAuth } from '../auth/auth'
 import { useCredits } from '../data/credits'
 import type { ApiError } from '../api'
 
 // DESIGN.md §7-2 개인 대시보드 (2026-11-19 전면 개편: "역량 시트")
 // 위: 다크 무대에 역량 육각형, 총점과 등급, 6개 스탯 막대. 육각형과 막대는 마우스 강조를 함께 쓴다.
-// 아래: 성장 곡선, 다음 목표(가장 약한 항목), 최근 응시 카드(작은 육각형).
+// 아래: 성장 곡선, 다음 목표(가장 약한 항목), 자주 깎이는 습관 Top 3 (응시 하나하나는 복기 탭).
 // 점수는 백엔드의 채점된 응시(GET /api/attempts + 응시별 리포트 항목)로만 그린다. 추천 과제는 준비 중.
 const toHex = (s: StatScores): HexStat[] => STATS.map((st) => ({ key: st.key, name: st.name, score: s[st.key], max: st.max, color: st.color }))
 
@@ -192,6 +193,7 @@ function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: 
   // 가장 약한 항목 = 배점 대비 비율이 가장 낮은 항목
   const weakest = [...STATS].sort((a, b) => latest.scores[a.key] / a.max - latest.scores[b.key] / b.max)[0]
   const weakPct = Math.round((latest.scores[weakest.key] / weakest.max) * 100)
+  const habits = topHabits(history)
 
   return (
       <div className="mx-auto flex max-w-[1440px] flex-col gap-6 px-8 py-6">
@@ -317,42 +319,46 @@ function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: 
           </GlowBorder>
         </div>
 
-        {/* 최근 응시: 작은 육각형 카드 */}
-        <section aria-labelledby="recent-h">
+        {/* 자주 깎이는 습관 Top 3 (DESIGN.md §7-2). 응시 하나하나는 복기 탭에서 본다 */}
+        <section aria-labelledby="habits-h">
           <div className="mb-3 flex items-baseline gap-3">
-            <h2 id="recent-h" className="text-h2 font-semibold text-text">
-              최근 응시
+            <span className="label">HABITS</span>
+            <h2 id="habits-h" className="text-h2 font-semibold text-text">
+              자주 깎이는 습관 Top 3
             </h2>
-            <Link to="/history" className="inline-flex items-center gap-1 text-[14px] text-text-muted hover:text-brand">
-              내 기록 전체 <ArrowUpRight size={14} aria-hidden />
-            </Link>
           </div>
-          <RevealGroup className="grid grid-cols-3 gap-3 xl:grid-cols-6">
-            {[...history].reverse().map((h, i, arr) => {
-              const t = total(h.scores)
-              const before = arr[i + 1] ? total(arr[i + 1].scores) : null
-              return (
-                <RevealItem key={h.id} className="flex">
-                  <Spotlight
-                    as={Link}
-                    to={`/report/${h.id}`}
-                    className="group flex w-full flex-col items-center gap-2 rounded-xl border border-line bg-panel px-4 py-4 text-center shadow-sm transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-1 hover:border-brand/50 hover:shadow-md"
-                  >
-                    <span className="tnum self-start font-mono text-[12px] text-text-muted">{h.date}</span>
-                    <MiniHex stats={toHex(h.scores)} size={84} />
-                    <span className="tnum font-mono text-[26px] leading-8 font-semibold text-text">{t}</span>
-                    {before != null && (
-                      <span className={cx('tnum font-mono text-[12px] font-semibold', t - before >= 0 ? 'text-signal' : 'text-alert')}>
-                        {t - before >= 0 ? '+' : ''}
-                        {t - before}
+          {habits.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-line-strong bg-panel/60 px-5 py-6 text-[14px] text-text-muted">아직 반복해서 깎이는 습관이 없어요.</p>
+          ) : (
+            <RevealGroup className="flex flex-col gap-2">
+              {habits.map((h, i) => {
+                const st = STATS.find((s) => s.key === h.itemKey)
+                return (
+                  <RevealItem key={h.code}>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-panel px-5 py-3.5 shadow-sm">
+                      <span className="tnum w-5 font-mono text-[15px] font-semibold text-text-faint">{i + 1}</span>
+                      {st && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={{ color: st.color, background: `color-mix(in srgb, ${st.color} 12%, transparent)` }}>
+                          {st.name}
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 text-[15px] font-semibold text-text">{h.label}</span>
+                      <span className="tnum font-mono text-[14px] text-text-muted">
+                        {h.of}번 중 {h.hits}번
                       </span>
-                    )}
-                    <span className="line-clamp-2 text-[13px] leading-5 text-text-muted group-hover:text-text">{h.task}</span>
-                  </Spotlight>
-                </RevealItem>
-              )
-            })}
-          </RevealGroup>
+                      <span className="tnum font-mono text-[14px] font-semibold text-alert">−{h.sum}점</span>
+                      <Link
+                        to={`/review?task=${encodeURIComponent(h.latestTaskId)}&b=${encodeURIComponent(h.latestAttemptId)}`}
+                        className="inline-flex items-center gap-1 text-[14px] text-text-muted hover:text-brand"
+                      >
+                        복기에서 보기 <ArrowUpRight size={14} aria-hidden />
+                      </Link>
+                    </div>
+                  </RevealItem>
+                )
+              })}
+            </RevealGroup>
+          )}
         </section>
       </div>
   )

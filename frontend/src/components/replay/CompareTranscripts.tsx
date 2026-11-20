@@ -64,7 +64,7 @@ function Divider() {
  * 비교 중인 두 풀이의 AI 대화를 위아래로 함께 보여 준다. 롤백한 풀이는 갈라진 질문 앞의 대화를 그대로 가지고 있어서,
  * 처음부터 똑같은 턴은 그대로 두고 달라지는 곳에 선을 그어 어디서 다른 질문을 했는지 바로 보이게 한다.
  */
-export function CompareTranscripts({ a, b }: { a: TreeRow; b: TreeRow }) {
+export function CompareTranscripts({ a, b, className }: { a: TreeRow; b: TreeRow; className?: string }) {
   const [sides, setSides] = useState<{ a: Side; b: Side }>({ a: null, b: null })
   const [tick, setTick] = useState(0)
 
@@ -90,7 +90,7 @@ export function CompareTranscripts({ a, b }: { a: TreeRow; b: TreeRow }) {
     setTick((t) => t + 1)
   }
   return (
-    <div className="col-span-5 my-4 mr-4 ml-2 flex min-h-0 flex-col gap-3">
+    <div className={`flex min-h-0 flex-col gap-3 ${className ?? ''}`}>
       <Card tag="A" row={a} side={sides.a} divideAfter={shared} showDivider={differs && shared > 0} onRetry={retry} />
       <Card tag="B" row={b} side={sides.b} divideAfter={shared} showDivider={differs && shared > 0} onRetry={retry} />
     </div>

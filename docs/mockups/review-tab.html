@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>복기 화면 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+:root{--brand:#6c47ff;--blue:#2f5bea;--signal:#10b981;--alert:#f43f5e;--text:#14142b;--muted:#585e73;--faint:#8e93a6;--line:#e6e3f3;--panel:#fff;--bg:#f6f5fb;
+--b1:#109463;--b2:#2f6bff;--b3:#8b5cf6;--b4:#c27400;--b5:#e0406f;--c6:#0891ab;--c7:#5e8f12;
+--sbg:#0b0a1c;--stext:#eceaff;--smuted:#9b97c4;--sline:#26234a}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Pretendard Variable',Pretendard,sans-serif;background:var(--bg);color:var(--text);font-weight:500}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.label{font-size:11px;letter-spacing:.12em;font-weight:700;color:var(--faint)}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.side{background:#fff;border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:4px}
+.logo{font-size:22px;font-weight:800;padding:4px 10px 18px;letter-spacing:-.02em}
+.logo b{background:linear-gradient(90deg,var(--brand),var(--blue));-webkit-background-clip:text;color:transparent}
+.nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:15px;font-weight:600;color:var(--muted)}
+.nav.on{background:rgba(108,71,255,.1);color:var(--brand)}
+.nav .new{margin-left:auto;font-size:10px;padding:2px 6px;border-radius:6px;background:var(--brand);color:#fff}
+main{padding:24px 28px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.head h1{font-size:28px;font-weight:800;letter-spacing:-.02em}
+.head p{color:var(--muted);font-size:15px;margin-top:4px;font-weight:500}
+.top{display:grid;grid-template-columns:250px 1fr;gap:16px}
+.rail{display:flex;flex-direction:column;gap:8px}
+.tcard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer}
+.tcard.on{border-color:var(--brand);box-shadow:0 0 0 3px rgba(108,71,255,.15)}
+.tcard h3{font-size:15px;font-weight:700}
+.tcard .meta{display:flex;gap:10px;font-size:12px;color:var(--muted);margin-top:6px;align-items:center}
+.spark{display:flex;gap:2px;align-items:flex-end;height:20px;margin-left:auto}
+.spark i{width:5px;border-radius:2px;background:var(--brand);opacity:.7}
+.stage{position:relative;border-radius:20px;overflow:hidden;background:
+radial-gradient(600px 300px at 15% 10%,rgba(108,71,255,.35),transparent 60%),
+radial-gradient(500px 300px at 90% 90%,rgba(47,91,234,.3),transparent 60%),var(--sbg);color:var(--stext);padding:18px 20px 10px}
+.stage::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:32px 32px;pointer-events:none}
+.stage-h{position:relative;display:flex;align-items:center;gap:12px}
+.stage-h h2{font-size:18px;font-weight:700}
+.slot{display:flex;gap:6px;margin-left:auto}
+.slot button{font:inherit;font-size:13px;font-weight:700;border-radius:999px;padding:6px 12px;border:1px solid var(--sline);background:rgba(255,255,255,.04);color:var(--smuted);cursor:pointer}
+.slot button.on.a{border-color:#60a5fa;color:#bfdbfe;box-shadow:0 0 14px rgba(96,165,250,.5)}
+.slot button.on.b{border-color:#c084fc;color:#f3e8ff;box-shadow:0 0 14px rgba(192,132,252,.5)}
+.hint{position:relative;font-size:12px;color:var(--smuted);margin-top:4px}
+svg text{font-family:'Pretendard Variable',Pretendard,sans-serif}
+.node{cursor:pointer}
+.node:hover .halo{opacity:.9}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes flow{to{stroke-dashoffset:-40}}
+@keyframes pulse{0%,100%{r:24;opacity:.35}50%{r:30;opacity:.12}}
+.lane{stroke-dasharray:1400;stroke-dashoffset:1400;animation:draw 1.6s cubic-bezier(.16,1,.3,1) forwards}
+.flowline{stroke-dasharray:6 14;animation:flow 1s linear infinite}
+.ring{animation:pulse 2.2s ease-in-out infinite}
+.cmp{display:grid;grid-template-columns:1.05fr 1fr;gap:16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 20px}
+.verdict{display:flex;align-items:center;gap:18px}
+.big{font-size:56px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.up{color:var(--signal)}.down{color:var(--alert)}
+.verdict h3{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.verdict p{color:var(--muted);font-size:14px;margin-top:4px;line-height:1.5}
+.vs{display:flex;gap:10px;margin-top:16px}
+.pill{flex:1;border-radius:12px;padding:10px 12px;border:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.pill .tag{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
+.pill b{font-size:22px;font-weight:800}
+.pill span{font-size:12px;color:var(--muted)}
+.bars{margin-top:18px;display:flex;flex-direction:column;gap:9px}
+.bar{display:grid;grid-template-columns:110px 1fr 1fr 48px;align-items:center;gap:0;font-size:13px}
+.bar .n{font-weight:700;display:flex;gap:6px;align-items:center}
+.bar .n i{width:8px;height:8px;border-radius:50%}
+.bar .l,.bar .r{height:14px;position:relative}
+.bar .l{border-right:2px solid var(--line)}
+.bar .l div{position:absolute;right:0;top:0;bottom:0;border-radius:6px 0 0 6px;background:linear-gradient(270deg,var(--alert),#fb7185aa);transition:width .6s cubic-bezier(.16,1,.3,1)}
+.bar .r div{position:absolute;left:0;top:0;bottom:0;border-radius:0 6px 6px 0;background:linear-gradient(90deg,var(--signal),#34d399aa);transition:width .6s cubic-bezier(.16,1,.3,1)}
+.bar .d{text-align:right;font-weight:800}
+.why h3{font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px}
+.why h3 small{font-size:13px;color:var(--muted);font-weight:600}
+.cause{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:10px;position:relative;overflow:hidden}
+.cause::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
+.cause.good::before{background:var(--signal)}.cause.bad::before{background:var(--alert)}
+.cause .t{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700}
+.cause .pts{margin-left:auto;font-size:15px;font-weight:800;padding:2px 10px;border-radius:999px}
+.good .pts{background:#d1fae5;color:#065f46}.bad .pts{background:#ffe4e6;color:#9f1239}
+.cause .it{font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--bg);color:var(--muted)}
+.ev{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.ev div{font-size:13px;line-height:1.5;padding:8px 10px;border-radius:10px;background:var(--bg);color:var(--text);font-weight:500}
+.ev div em{display:block;font-style:normal;font-size:11px;font-weight:800;margin-bottom:3px}
+.ev .ea em{color:#2563eb}.ev .eb em{color:#9333ea}
+.ev .x{color:var(--faint)}
+.step{display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:14px;align-items:center;padding:9px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:8px}
+.step:hover{background:var(--bg)}
+.step .what{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;line-height:1.35}
+.step .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:900;color:#fff}
+.step .was{font-size:12px;color:var(--faint);margin:2px 0 0 30px;font-weight:600}
+.step .was s{text-decoration-thickness:1px}
+.track{position:relative;height:22px;background:repeating-linear-gradient(90deg,transparent 0 20.8px,var(--line) 20.8px 21.8px);border-radius:6px}
+.track .seg{position:absolute;top:3px;bottom:3px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;min-width:30px}
+.track .base{position:absolute;top:3px;bottom:3px;left:0;border-radius:5px;opacity:.25}
+.endrow{display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:14px;align-items:center;padding:10px 6px}
+.endrow .what{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800}
+.evx{grid-column:1/-1;display:none}
+.step.open .evx{display:block}
+.fork{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}
+.fork h4{font-size:15px;font-weight:800;display:flex;gap:8px;align-items:center}
+.fork h4 span{font-size:12px;padding:2px 8px;border-radius:6px;background:rgba(108,71,255,.1);color:var(--brand)}
+.bub{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.bub div{border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.55;font-weight:500}
+.bub .ba{background:#eff6ff;border:1px solid #bfdbfe}.bub .bb{background:#faf5ff;border:1px solid #e9d5ff}
+.bub em{display:block;font-style:normal;font-size:11px;font-weight:800;margin-bottom:4px}
+.bub .ba em{color:#2563eb}.bub .bb em{color:#9333ea}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo">p<b>AI</b>r</div>
+    <div class="nav">대시보드</div>
+    <div class="nav">과제</div>
+    <div class="nav on">복기 <span class="new">NEW</span></div>
+  </aside>
+  <main>
+    <div class="head">
+      <div class="label">REVIEW</div>
+      <h1>복기</h1>
+      <p>같은 과제를 다르게 풀어 본 갈래들을 나란히 놓고, 무엇이 점수를 바꿨는지 확인해요.</p>
+    </div>
+
+    <div class="top">
+      <div class="rail">
+        <div class="label" style="padding:2px 4px">과제별 트리</div>
+        <div class="tcard on"><h3>주문 처리 교착 상태 고치기</h3><div class="meta"><span>갈래 5개</span><span>최고 <b style="color:var(--signal)">94</b></span><div class="spark"><i style="height:13px"></i><i style="height:16px"></i><i style="height:12px"></i><i style="height:15px"></i><i style="height:20px"></i></div></div></div>
+        <div class="tcard"><h3>요금제 개편안 만들기</h3><div class="meta"><span>갈래 2개</span><span>최고 <b>71</b></span><div class="spark"><i style="height:11px"></i><i style="height:14px"></i></div></div></div>
+        <div class="tcard"><h3>로그 분석 대시보드</h3><div class="meta"><span>갈래 1개</span><span>최고 <b>58</b></span><div class="spark"><i style="height:11px"></i></div></div></div>
+        <div class="tcard" style="border-style:dashed;color:var(--muted);font-size:13px">채점이 끝난 응시는 여기에 트리로 쌓여요</div>
+      </div>
+
+      <section class="stage">
+        <div class="stage-h">
+          <div><div class="label" style="color:var(--smuted)">BRANCHES</div><h2>주문 처리 교착 상태 고치기</h2></div>
+          <div class="slot"><button class="a on" id="slotA">A 고르는 중</button><button class="b" id="slotB">B 고르는 중</button></div>
+        </div>
+        <p class="hint">점을 눌러 A와 B를 고르면 아래에 비교가 바로 나와요. 가지 위 숫자는 갈라지기 전 대비 점수 변화예요.</p>
+        <svg id="tree" viewBox="0 0 1000 400" style="width:100%;height:auto;position:relative;display:block"></svg>
+      </section>
+    </div>
+
+    <div class="cmp">
+      <div class="card">
+        <div class="verdict"><div class="big" id="delta">+29</div><div><h3 id="vTitle"></h3><p id="vSub"></p></div></div>
+        <div class="vs" id="vs"></div>
+        <div class="bars" id="bars"></div>
+        <div class="fork" id="fork"></div>
+      </div>
+      <div class="card why"><h3>점수가 이렇게 움직였어요 <small id="whyCount"></small></h3><div id="causes"></div></div>
+    </div>
+  </main>
+</div>
+<script>
+const ITEMS=[{k:'usage',n:'AI 활용력',max:20,c:'#2f6bff'},{k:'control',n:'AI 통제력',max:15,c:'#8b5cf6'},{k:'decomposition',n:'문제 분해력',max:10,c:'#c27400'},{k:'delegation',n:'위임 판단력',max:10,c:'#5e8f12'},{k:'delivery',n:'AI 결과 도출력',max:30,c:'#e0406f'},{k:'potential',n:'성과 잠재력',max:15,c:'#0891ab'}];
+const CHECKS={
+U1:{i:'usage',p:3,l:'맥락 없이 질문함',bad:'"이거 왜 멈춰요?" — 코드와 에러 로그 없이 질문',good:'스레드 덤프와 OrderService 코드를 붙여서 질문'},
+U2:{i:'usage',p:4,l:'같은 질문을 반복함',bad:'같은 질문을 표현만 바꿔 3번 다시 보냄',good:'답이 막히자 조건을 바꿔 새로 질문'},
+C1:{i:'control',p:4,l:'AI 코드를 실행 없이 붙여 넣음',bad:'AI가 준 락 코드를 그대로 붙여 넣고 바로 제출 단계로 이동',good:'붙여 넣기 전에 테스트를 돌려 실패를 먼저 확인'},
+C2:{i:'control',p:3,l:'AI의 틀린 원인 분석을 그대로 믿음',bad:'"DB 커넥션 부족이 원인" 이라는 답을 확인 없이 수용',good:'"정말 커넥션 문제인지 덤프로 확인해 줘" 라고 되물음'},
+D1:{i:'decomposition',p:3,l:'전체 수정을 한 번에 요청함',bad:'"교착 상태 전부 고쳐 줘" 한 번으로 요청',good:'원인 찾기 → 락 순서 정하기 → 테스트로 나눠서 요청'},
+G1:{i:'delegation',p:3,l:'핵심 결정까지 AI에 맡김',bad:'락을 잡는 순서를 AI가 정한 대로 둠',good:'락 순서는 직접 정하고 구현만 맡김'},
+V1:{i:'delivery',p:10,l:'테스트가 실패한 채로 제출',bad:'OrderConcurrencyTest 2건 실패 상태로 제출',good:'모든 테스트 통과 후 제출'},
+V2:{i:'delivery',p:6,l:'동시성 테스트를 만들지 않음',bad:'동시 주문 시나리오를 확인하는 테스트 없음',good:'스레드 50개로 동시 주문 테스트를 추가'},
+P1:{i:'potential',p:3,l:'실패 원인을 남기지 않음',bad:'무엇이 문제였는지 메모나 커밋 설명 없음',good:'"락 순서 역전이 원인" 이라고 정리해 남김'}};
+const SHORT={U1:['맥락 없이 질문함','코드와 로그를 붙여서 질문함'],U2:['같은 질문을 반복함','막히자 조건을 바꿔 새로 질문함'],C1:['AI 코드를 바로 붙여 넣음','붙이기 전에 테스트로 확인함'],C2:['AI의 틀린 원인 분석을 믿음','AI 분석을 덤프로 되물어 확인함'],D1:['한 번에 다 고쳐 달라고 함','원인 → 락 순서 → 테스트로 나눠 요청함'],G1:['락 순서까지 AI에 맡김','락 순서는 직접 정함'],V1:['테스트가 실패한 채로 제출함','테스트를 모두 통과시키고 제출함'],V2:['동시성 테스트를 안 만듦','동시 주문 테스트를 추가함'],P1:['실패 원인을 안 남김','원인을 정리해 남김']};
+const NODES={
+R:{name:'처음 풀이',parent:null,fork:null,end:9,lane:290,col:'#94a3b8',d:['U1','C1','C2','D1','G1','V1','V2','P1'],date:'11.12',
+ msg:{3:'이거 왜 멈춰요? 고쳐 주세요',4:'고쳐 준 코드 그대로 넣었어요. 다음은요?',5:'교착 상태 전부 고쳐 줘',6:'그냥 이대로 제출할게요'}},
+B1:{name:'맥락 주고 다시',parent:'R',fork:3,end:8,lane:150,col:'#2f6bff',d:['C1','C2','G1','V2','P1'],date:'11.14',
+ msg:{3:'스레드 덤프랑 OrderService 코드 붙일게요. 어디서 서로 기다리나요?',4:'원인 찾기부터 하고, 락 순서는 따로 정해 볼게요',6:'AI 코드 붙였는데 이대로 제출해도 될까요?'}},
+B3:{name:'테스트까지 확인',parent:'B1',fork:6,end:10,lane:70,col:'#10b981',d:['G1','P1'],date:'11.17',
+ msg:{6:'붙이기 전에 테스트부터 돌려 볼게요. 동시 주문 50개 테스트도 같이 만들어 줘'}},
+B4:{name:'질문 줄여 보기',parent:'B1',fork:4,end:7,lane:220,col:'#c27400',d:['C1','C2','G1','V1','P1'],date:'11.15',
+ msg:{4:'시간이 없어서 코드만 바로 주세요'}},
+B2:{name:'다른 질문으로',parent:'R',fork:5,end:8,lane:360,col:'#e0406f',d:['U1','U2','C1','C2','D1','G1','V1','V2','P1'],date:'11.13',
+ msg:{5:'아까랑 같은 거요. 왜 멈추냐고요'}}};
+const score=id=>{const s={};ITEMS.forEach(it=>s[it.k]=it.max);NODES[id].d.forEach(c=>s[CHECKS[c].i]-=CHECKS[c].p);return s};
+const total=id=>Object.values(score(id)).reduce((a,b)=>a+b,0);
+const X=t=>40+t*90;
+const ancestors=id=>{const a=[];while(id){a.push(id);id=NODES[id].parent}return a};
+const lca=(a,b)=>{const A=ancestors(a);return ancestors(b).find(x=>A.includes(x))};
+const msgAt=(id,t)=>{let n=id;while(n){const N=NODES[n];if(!N.fork||t>=N.fork){if(N.msg[t])return N.msg[t];if(N.fork&&t>=N.fork&&!N.msg[t])return null}n=N.parent}return null};
+let A='R',B='B3',slot='B';
+const ns='http://www.w3.org/2000/svg';
+const el=(t,a,p)=>{const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e};
+function lanePath(id){const N=NODES[id];if(!N.parent)return`M ${X(1)} ${N.lane} L ${X(N.end)} ${N.lane}`;const P=NODES[N.parent],x0=X(N.fork-1),x1=X(N.fork);return`M ${x0} ${P.lane} C ${x0+50} ${P.lane}, ${x1-50} ${N.lane}, ${x1} ${N.lane} L ${X(N.end)} ${N.lane}`}
+function draw(){
+ const svg=document.getElementById('tree');svg.innerHTML='';
+ const defs=el('defs',{},svg);
+ const f=el('filter',{id:'glow',x:'-50%',y:'-50%',width:'200%',height:'200%'},defs);el('feGaussianBlur',{stdDeviation:'6',result:'b'},f);const m=el('feMerge',{},f);el('feMergeNode',{in:'b'},m);el('feMergeNode',{in:'SourceGraphic'},m);
+ for(let t=1;t<=10;t++){el('line',{x1:X(t),x2:X(t),y1:30,y2:385,stroke:'rgba(255,255,255,.06)'},svg);const tx=el('text',{x:X(t),y:22,'text-anchor':'middle','font-size':11,fill:'#6f6a9c','font-weight':700},svg);tx.textContent='T'+String(t).padStart(2,'0')}
+ const L=lca(A,B),route=new Set([...ancestors(A),...ancestors(B)].filter(x=>!ancestors(L).includes(x)));
+ const order=['R','B1','B2','B4','B3'];
+ order.forEach((id,i)=>{const N=NODES[id],on=route.has(id),dim=!on&&id!==L;
+  const p=lanePath(id);
+  el('path',{d:p,fill:'none',stroke:N.col,'stroke-width':on?10:6,opacity:dim?.12:.35,filter:'url(#glow)',class:'lane',style:`animation-delay:${i*.15}s`},svg);
+  el('path',{d:p,fill:'none',stroke:N.col,'stroke-width':on?4:2.5,opacity:dim?.35:1,'stroke-linecap':'round',class:'lane',style:`animation-delay:${i*.15}s`},svg);
+  if(on)el('path',{d:p,fill:'none',stroke:'#fff','stroke-width':2,opacity:.8,class:'flowline'},svg);
+  const s=N.fork||1;for(let t=s;t<N.end;t++)el('circle',{cx:X(t),cy:N.lane,r:3.5,fill:'#0b0a1c',stroke:N.col,'stroke-width':2,opacity:dim?.4:1},svg);
+  if(N.parent){const dv=total(id)-total(N.parent),bx=X(N.fork)+38,by=N.lane-16;
+   const g=el('g',{opacity:dim?.45:1},svg);el('rect',{x:bx-22,y:by-11,width:44,height:20,rx:10,fill:dv>=0?'rgba(16,185,129,.2)':'rgba(244,63,94,.2)',stroke:dv>=0?'#10b981':'#f43f5e'},g);
+   const bt=el('text',{x:bx,y:by+4,'text-anchor':'middle','font-size':12,'font-weight':800,fill:dv>=0?'#6ee7b7':'#fda4af'},g);bt.textContent=(dv>0?'+':'')+dv;
+   const fx=X(N.fork-1);el('circle',{cx:fx,cy:NODES[N.parent].lane,r:7,fill:'#0b0a1c',stroke:'#fff','stroke-width':2,opacity:dim?.4:1},svg);}
+ });
+ order.forEach(id=>{const N=NODES[id],t=total(id),x=X(N.end),y=N.lane,sel=id===A?'A':id===B?'B':null,dim=!route.has(id)&&id!==L;
+  const g=el('g',{class:'node',opacity:dim&&!sel?.55:1},svg);g.onclick=()=>pick(id);
+  const r=12+t/8;
+  if(sel)el('circle',{cx:x,cy:y,r:24,fill:'none',stroke:sel==='A'?'#60a5fa':'#c084fc','stroke-width':3,class:'ring'},g);
+  el('circle',{class:'halo',cx:x,cy:y,r:r+6,fill:N.col,opacity:.35,filter:'url(#glow)'},g);
+  el('circle',{cx:x,cy:y,r:r,fill:N.col,stroke:sel?'#fff':'rgba(255,255,255,.5)','stroke-width':sel?3:1.5},g);
+  const tt=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':15,'font-weight':800,fill:'#fff'},g);tt.textContent=t;
+  const nm=el('text',{x:x+r+10,y:y-2,'font-size':13,'font-weight':700,fill:'#eceaff'},g);nm.textContent=N.name;
+  const dt=el('text',{x:x+r+10,y:y+14,'font-size':11,'font-weight':600,fill:'#9b97c4'},g);dt.textContent=N.date+(N.fork?` · T${String(N.fork).padStart(2,'0')}에서 갈라짐`:' · 원래 응시');
+  if(sel){const bg=el('g',{},g);el('circle',{cx:x-r-4,cy:y-r-2,r:11,fill:sel==='A'?'#3b82f6':'#a855f7',stroke:'#fff','stroke-width':2},bg);const st=el('text',{x:x-r-4,y:y-r+2,'text-anchor':'middle','font-size':12,'font-weight':800,fill:'#fff'},bg);st.textContent=sel}
+ });
+}
+function pick(id){if(slot==='A'){if(id===B)return;A=id;slot='B'}else{if(id===A)return;B=id;slot='A'}render()}
+document.getElementById('slotA').onclick=()=>{slot='A';render()};document.getElementById('slotB').onclick=()=>{slot='B';render()};
+function render(){
+ draw();
+ document.getElementById('slotA').className='a'+(slot==='A'?' on':'');document.getElementById('slotB').className='b'+(slot==='B'?' on':'');
+ document.getElementById('slotA').textContent=slot==='A'?'A 고르는 중':'A · '+NODES[A].name;document.getElementById('slotB').textContent=slot==='B'?'B 고르는 중':'B · '+NODES[B].name;
+ const sa=score(A),sb=score(B),ta=total(A),tb=total(B),d=tb-ta;
+ const dEl=document.getElementById('delta');dEl.textContent=(d>0?'+':'')+d;dEl.className='big '+(d>=0?'up':'down');
+ const diffs=ITEMS.map(it=>({...it,v:sb[it.k]-sa[it.k]})).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
+ const top=diffs[0];
+ document.getElementById('vTitle').textContent=d===0?'두 풀이 점수가 같아요':`B가 A보다 ${Math.abs(d)}점 ${d>0?'높아요':'낮아요'}`;
+ const L=lca(A,B),fk=[A,B].map(x=>{let n=x,prev=null;while(n&&n!==L){prev=n;n=NODES[n].parent}return prev?NODES[prev].fork:99});const ft=Math.min(...fk);
+ document.getElementById('vSub').innerHTML=`T${String(ft).padStart(2,'0')} 질문에서 갈라졌어요. 가장 크게 ${top.v>=0?'오른':'깎인'} 항목은 <b style="color:${top.c}">${top.n}</b> (${top.v>0?'+':''}${top.v})이에요.`;
+ const pill=(t,id,c)=>`<div class="pill"><div class="tag" style="background:${c}">${t}</div><div><span>${NODES[id].name} · ${NODES[id].date}</span><div><b>${total(id)}</b><span> / 100</span></div></div></div>`;
+ document.getElementById('vs').innerHTML=pill('A',A,'#3b82f6')+pill('B',B,'#a855f7');
+ document.getElementById('bars').innerHTML='<div class="bar" style="color:var(--faint);font-size:11px;font-weight:700"><span></span><span style="text-align:right;padding-right:8px">깎임</span><span style="padding-left:8px">오름</span><span></span></div>'+ITEMS.map(it=>{const v=sb[it.k]-sa[it.k],w=Math.abs(v)/14*100;return`<div class="bar"><span class="n"><i style="background:${it.c}"></i>${it.n}</span><span class="l"><div style="width:${v<0?w:0}%"></div></span><span class="r"><div style="width:${v>0?w:0}%"></div></span><span class="d ${v>0?'up':v<0?'down':''}" style="${v===0?'color:var(--faint)':''}">${v>0?'+':''}${v}</span></div>`}).join('');
+ const da=new Set(NODES[A].d),db=new Set(NODES[B].d);
+ const ch=Object.keys(CHECKS).filter(k=>da.has(k)!==db.has(k)).map(k=>({k,...CHECKS[k],good:da.has(k)&&!db.has(k)})).sort((a,b)=>b.p-a.p);
+ document.getElementById('whyCount').textContent=`${ta}점에서 ${tb}점이 되기까지`;
+ ch.sort((a,b)=>(b.good-a.good)||(b.p-a.p));
+ const pct=v=>v+'%';
+ let run=ta;
+ const rows=ch.map(c=>{const it=ITEMS.find(i=>i.k===c.i),from=run,to=run+(c.good?c.p:-c.p);run=to;const lo=Math.min(from,to);
+  const [bad,good]=SHORT[c.k];
+  const main=c.good?good:bad,was=c.good?bad:good;
+  const aTxt=da.has(c.k)?CHECKS[c.k].bad:CHECKS[c.k].good,bTxt=db.has(c.k)?CHECKS[c.k].bad:CHECKS[c.k].good;
+  return`<div class="step" onclick="this.classList.toggle('open')"><div><div class="what"><span class="ic" style="background:${c.good?'var(--signal)':'var(--alert)'}">${c.good?'✓':'✕'}</span>B는 ${main}</div><div class="was">A는 <s>${was}</s> · <span style="color:${it.c}">${it.n}</span></div></div>
+  <div class="track"><div class="seg" style="left:${pct(lo)};width:${pct(c.p)};background:${c.good?'var(--signal)':'var(--alert)'}">${c.good?'+':'−'}${c.p}</div></div>
+  <div class="evx"><div class="ev"><div class="ea"><em>A가 실제로 한 것</em>${aTxt}</div><div class="eb"><em>B가 실제로 한 것</em>${bTxt}</div></div></div></div>`}).join('');
+ const endRow=(t,id,v,c)=>`<div class="endrow"><div class="what"><span class="ic" style="background:${c}">${t}</span>${NODES[id].name} <span style="color:var(--muted);font-weight:600;font-size:13px">${v}점</span></div><div class="track"><div class="seg" style="left:0;width:${pct(v)};background:${c};justify-content:flex-end;padding-right:6px">${v}</div></div></div>`;
+ document.getElementById('causes').innerHTML=endRow('A',A,ta,'#3b82f6')+(rows||'<p style="color:var(--muted);margin:12px 6px">감점 판정이 같아요.</p>')+endRow('B',B,tb,'#a855f7')+'<p style="font-size:12px;color:var(--faint);margin:6px 6px 0">줄을 누르면 실제 대화에서 찾은 근거가 펼쳐져요.</p>';
+ const ma=msgAt(A,ft),mb=msgAt(B,ft);
+ document.getElementById('fork').innerHTML=`<h4>갈라진 순간 <span>T${String(ft).padStart(2,'0')}</span></h4><p style="font-size:13px;color:var(--muted);margin-top:4px">T${String(ft-1).padStart(2,'0')}까지는 같은 대화예요. 여기서 이렇게 다르게 물었어요.</p><div class="bub"><div class="ba"><em>A가 보낸 질문</em>${ma||'(이 시점 이후 대화 없음)'}</div><div class="bb"><em>B가 보낸 질문</em>${mb||'(이 시점 이후 대화 없음)'}</div></div>`;
+}
+render();
+</script>
+</body>
+</html>

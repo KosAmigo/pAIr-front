@@ -1,6 +1,7 @@
 // 대시보드 스탯 설정과 데이터 불러오기 (DESIGN.md §7-2, 2026-11-19 개편).
 // 역량은 현재 채점 기준의 6개 항목(§1.5)과 배점을 쓴다 (백엔드 Rubric 의 item key 와 같다).
 import { api, type ReportItem } from '../api'
+import type { HabitCheck } from '../lib/habits'
 
 export type StatKey = 'usage' | 'control' | 'decomposition' | 'delegation' | 'delivery' | 'potential'
 
@@ -16,7 +17,7 @@ export const STATS: { key: StatKey; name: string; short: string; max: number; co
 export type StatScores = Record<StatKey, number>
 
 /** 응시 회차 하나의 항목 점수 (배점 기준) */
-export type StatEntry = { id: string; date: string; task: string; scores: StatScores }
+export type StatEntry = { id: string; taskId: string; date: string; task: string; scores: StatScores; /** 이 응시의 모든 체크 결과 (자주 깎이는 습관 집계용) */ checks: HabitCheck[] }
 
 export const total = (s: StatScores) => STATS.reduce((n, st) => n + s[st.key], 0)
 
@@ -26,6 +27,10 @@ export function toStatScores(items: ReportItem[]): StatScores {
   for (const it of items) if (it.key in s) s[it.key as StatKey] = it.score
   return s
 }
+
+/** 리포트 항목의 체크를 평평하게 편다 */
+export const toHabitChecks = (items: ReportItem[]): HabitCheck[] =>
+  items.flatMap((it) => it.checks.map((c) => ({ itemKey: it.key, code: c.code, label: c.label, deducted: c.deducted })))
 
 /**
  * 채점이 끝난 최근 응시(최대 limit 개)의 항목 점수. 오래된 것부터, 마지막이 최근.
@@ -45,9 +50,11 @@ export async function loadStatHistory(limit = 6): Promise<{ entries: StatEntry[]
     const d = new Date(r.startedAt)
     entries.push({
       id: r.id,
+      taskId: r.taskId,
       date: `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`,
       task: r.taskTitle,
       scores: toStatScores(rep.items),
+      checks: toHabitChecks(rep.items),
     })
   })
   return { entries, attempts: rows.length }

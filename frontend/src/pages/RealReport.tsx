@@ -312,8 +312,8 @@ export default function RealReport() {
     <SelfShell
       header={
         <PageHeader label="SELF-CHECK REPORT" title="결과 리포트">
-          <ButtonLink to="/history" variant="secondary">
-            내 기록
+          <ButtonLink to={data?.report ? `/review?task=${encodeURIComponent(data.report.taskId)}&b=${encodeURIComponent(attemptId)}` : '/review'} variant="secondary">
+            복기에서 보기
           </ButtonLink>
         </PageHeader>
       }
