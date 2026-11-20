@@ -8,6 +8,7 @@
     "dev:lan": "vite --mode lan",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test:credits": "node --experimental-strip-types --test tests/credits.test.mjs",
     "test:anti-cheating": "node --experimental-strip-types --test tests/anti-cheating.test.mjs",
     "test:proctor": "node --experimental-strip-types --test tests/proctor/*.test.ts",
     "preview": "vite preview"

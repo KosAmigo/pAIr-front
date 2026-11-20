@@ -16,6 +16,8 @@ import { toBrowserViolation } from '../proctor/core/events.ts'
 import { proctorApi } from '../proctor/api/proctorApi.ts'
 import { camHub } from '../proctor/camHub.ts'
 import { clearLiveExam, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
+import { useCredits } from '../data/credits'
+import { CreditPill } from '../components/CreditPill'
 
 // 카메라 감독은 실전 시험에서만 불러온다 (자가진단은 분석 모델을 내려받지 않는다)
 const CamMonitor = lazy(() => import('../proctor/react/CamMonitor.tsx'))
@@ -42,15 +44,19 @@ export function NewExam() {
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
   const started = useRef(false)
+  const { refresh: refreshCredits } = useCredits()
   useEffect(() => {
     if (started.current) return
     started.current = true
     const track = params.get('track') === 'biz' ? 'biz' : 'dev'
     api
       .start(api.taskIdFor(track))
-      .then(({ attemptId }) => navigate(`/exam/${attemptId}`, { replace: true }))
+      .then(({ attemptId }) => {
+        void refreshCredits()
+        navigate(`/exam/${attemptId}`, { replace: true })
+      })
       .catch((e: ApiError) => setError(e.message))
-  }, [params, navigate])
+  }, [params, navigate, refreshCredits])
   return <CenterMessage error={error} text="응시를 준비하고 있습니다" />
 }
 
@@ -505,6 +511,7 @@ function DocChecks({ task, doc }: { task: Task & { requiredHeadings?: string[] }
 export default function RealExam() {
   const { sessionId = '' } = useParams()
   const navigate = useNavigate()
+  const { refresh: refreshCredits } = useCredits()
   // 입장 링크로 시작한 실전 응시일 때만 값이 있다. 자가진단은 null → 감독을 전혀 켜지 않는다
   const [live] = useState(() => readLiveExam(sessionId))
   const [view, setView] = useState<AttemptView | null>(null)
@@ -734,6 +741,7 @@ export default function RealExam() {
     setStreaming({ question: text, answer: '' })
     try {
       const added = await chatStream(sessionId, text, (d) => setStreaming((s) => (s ? { ...s, answer: s.answer + d } : s)))
+      if (!live) void refreshCredits()
       setTurns((t) => [...t, ...added])
       return true
     } catch (e) {
@@ -832,6 +840,7 @@ export default function RealExam() {
           </span>
         </div>
         <div className="flex items-center justify-end gap-3">
+          {!live && <CreditPill />}
           {live && (
             <>
               <Button

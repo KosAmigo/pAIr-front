@@ -1,5 +1,5 @@
 // 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
-import { readAuthSession } from './auth/authApi'
+import { readAuthSession } from './auth/authApi.ts'
 
 export type TaskType = 'dev' | 'biz'
 
@@ -214,7 +214,7 @@ export async function chatStream(id: string, message: string, onDelta: (t: strin
   for (;;) {
     const { value, done } = await reader.read()
     if (done) break
-    buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+    buf = (buf + decoder.decode(value, { stream: true })).replace(/\r\n/g, '\n')
     let cut: number
     while ((cut = buf.indexOf('\n\n')) >= 0) {
       const block = buf.slice(0, cut)
@@ -226,10 +226,22 @@ export async function chatStream(id: string, message: string, onDelta: (t: strin
         else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''))
       }
       if (!data.length) continue
-      const payload = JSON.parse(data.join('\n'))
+      const raw = data.join('\n')
+      if (event === 'error') {
+        let payload: unknown
+        try {
+          payload = JSON.parse(raw)
+        } catch {
+          throw new ApiError(raw || 'AI 응답 중 오류가 발생했습니다.')
+        }
+        const message = typeof payload === 'string' ? payload
+          : typeof payload === 'object' && payload !== null && 'message' in payload && typeof payload.message === 'string'
+            ? payload.message : 'AI 응답 중 오류가 발생했습니다.'
+        throw new ApiError(message)
+      }
+      const payload = JSON.parse(raw)
       if (event === 'delta') onDelta(payload.t as string)
       else if (event === 'done') return payload as Turn[]
-      else if (event === 'error') throw new ApiError(payload.message as string)
     }
   }
   throw new ApiError('AI 답변을 끝까지 받지 못했습니다. 다시 보내 주세요.')

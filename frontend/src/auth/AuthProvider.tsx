@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { setAuthHeaders } from '../api'
 import { AuthContext, type AuthApi } from './auth'
 import { authApi, readAuthSession, saveAuthSession, type AuthSession, AuthRequestError } from './authApi'
+import { CreditProvider } from '../data/CreditProvider'
 
 // 토큰을 브라우저에 보관하고 서버에서 세션을 재검증해 로그인 상태를 앱 전체에 제공한다.
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -74,5 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [session, loading, logout, set],
   )
 
-  return <AuthContext.Provider value={api}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={api}>
+      <CreditProvider token={token ?? null}>{children}</CreditProvider>
+    </AuthContext.Provider>
+  )
 }
