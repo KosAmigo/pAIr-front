@@ -1,5 +1,71 @@
-// 크레딧 설정값 (기획_결정사항 §3, 테이블 credit_ledger). 자가진단만 쓴다(실전 응시는 크레딧을 쓰지 않는다).
-// 쓰는 양: 가입 30, 응시 시작 10(채점 1회 포함), 롤백 5, AI 채팅 한 턴 1.
-// 잔액·차감 API 가 아직 백엔드에 없어 잔액은 보여 주지 않고(준비 중), 응시·채팅도 막지 않는다.
+import { call } from '../api.ts'
+import { readAuthSession } from '../auth/authApi.ts'
+import { createContext, useContext, useSyncExternalStore } from 'react'
 
-export const CREDIT_COST = { SIGNUP: 30, ATTEMPT_START: 10, ROLLBACK: 5, CHAT_TURN: 1 } as const
+export type CreditState =
+  | { status: 'loading' }
+  | { status: 'ready'; balance: number }
+  | { status: 'error' }
+
+export async function fetchCredits(): Promise<number> {
+  const data = await call<unknown>('GET', '/api/credits')
+  if (typeof data !== 'object' || data === null || !('balance' in data) ||
+      typeof data.balance !== 'number' || !Number.isFinite(data.balance) || data.balance < 0) {
+    throw new Error('크레딧 잔액 응답이 올바르지 않습니다.')
+  }
+  return data.balance
+}
+
+export function createCreditStore(
+  token: string,
+  load: () => Promise<number> = fetchCredits,
+  currentToken: () => string | undefined = () => readAuthSession()?.token,
+) {
+  let state: CreditState = { status: 'loading' }
+  let request = 0
+  const listeners = new Set<() => void>()
+  const publish = (next: CreditState) => {
+    state = next
+    listeners.forEach((listener) => listener())
+  }
+
+  return {
+    getSnapshot: () => state,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    refresh: async () => {
+      if (currentToken() !== token) return
+      const id = ++request
+      publish({ status: 'loading' })
+      try {
+        const balance = await load()
+        if (id === request && currentToken() === token) publish({ status: 'ready', balance })
+      } catch (error) {
+        if (id === request && currentToken() === token) {
+          console.error('크레딧 잔액 조회 실패:', error)
+          publish({ status: 'error' })
+        }
+      }
+    },
+    cancel: () => { request++ },
+  }
+}
+
+type CreditStore = ReturnType<typeof createCreditStore>
+export const CreditContext = createContext<CreditStore | null>(null)
+
+const emptyState: CreditState = { status: 'loading' }
+const subscribeEmpty = () => () => {}
+const getEmptySnapshot = () => emptyState
+const refreshEmpty = async () => {}
+
+export function useCredits(): { state: CreditState; refresh: () => Promise<void> } {
+  const store = useContext(CreditContext)
+  const state = useSyncExternalStore(
+    store?.subscribe ?? subscribeEmpty,
+    store?.getSnapshot ?? getEmptySnapshot,
+  )
+  return { state, refresh: store?.refresh ?? refreshEmpty }
+}

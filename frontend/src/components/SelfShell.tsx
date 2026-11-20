@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { Coins, LayoutDashboard } from 'lucide-react'
-import { CREDIT_COST } from '../data/credits'
+import { LayoutDashboard } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useAuth } from '../auth/auth'
 import { springs } from '../lib/motion'
@@ -9,6 +8,7 @@ import { cx } from './cx'
 import { Aurora, PageTransition, Reveal, ScrambleText } from './fx'
 import { Logo, ModeBadge } from './ui'
 import { UserMenu } from './UserMenu'
+import { CreditPill } from './CreditPill'
 
 // DESIGN.md §7 공통 셸: 자가진단 화면은 상단 탭(과제 / 대시보드 / 내 기록)으로 이동한다.
 // 왼쪽 아이콘 레일은 응시 화면 전용이다 (components/ActivityRail.tsx).
@@ -57,7 +57,7 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
           })}
         </nav>
         <div className="ml-auto flex items-center">
-          <CreditPill />
+          <div className="mr-3"><CreditPill /></div>
           {user && user.role !== 'USER' && (
             <Link
               to="/console"
@@ -78,7 +78,6 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
   )
 }
 
-
 export function PageHeader({ label, title, children }: { label: string; title: ReactNode; children?: ReactNode }) {
   return (
     <header className="relative z-10 flex h-16 shrink-0 items-center gap-4 border-b border-line/70 px-8">
@@ -90,19 +89,5 @@ export function PageHeader({ label, title, children }: { label: string; title: R
       </div>
       <div className="ml-auto flex items-center gap-2">{children}</div>
     </header>
-  )
-}
-
-/** 크레딧 (기획_결정사항 §3). 잔액 API 가 아직 없어 준비 중으로 보여 준다 */
-function CreditPill() {
-  return (
-    <span
-      title={`크레딧 기능은 준비 중입니다. 응시 시작 ${CREDIT_COST.ATTEMPT_START}, 롤백 ${CREDIT_COST.ROLLBACK}, AI 채팅 한 턴 ${CREDIT_COST.CHAT_TURN} 크레딧 예정`}
-      className="mr-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-panel/70 px-3 text-[14px] font-semibold text-text-muted"
-    >
-      <Coins size={15} className="text-text-faint" aria-hidden />
-      <span>크레딧</span>
-      <span className="text-[12px] font-medium text-text-faint">준비 중</span>
-    </span>
   )
 }

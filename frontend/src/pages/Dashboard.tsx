@@ -11,12 +11,13 @@ import { MiniHex, StatHex, type HexStat } from '../components/dashboard/StatHex'
 import { loadStatHistory, STATS, total, type StatEntry, type StatScores } from '../data/dashboard'
 import { duration, easing } from '../lib/motion'
 import { useAuth } from '../auth/auth'
+import { useCredits } from '../data/credits'
 import type { ApiError } from '../api'
 
 // DESIGN.md §7-2 개인 대시보드 (2026-11-19 전면 개편: "역량 시트")
 // 위: 다크 무대에 역량 육각형, 총점과 등급, 6개 스탯 막대. 육각형과 막대는 마우스 강조를 함께 쓴다.
 // 아래: 성장 곡선, 다음 목표(가장 약한 항목), 최근 응시 카드(작은 육각형).
-// 점수는 백엔드의 채점된 응시(GET /api/attempts + 응시별 리포트 항목)로만 그린다. 추천 과제·크레딧은 API 가 없어 준비 중.
+// 점수는 백엔드의 채점된 응시(GET /api/attempts + 응시별 리포트 항목)로만 그린다. 추천 과제는 준비 중.
 const toHex = (s: StatScores): HexStat[] => STATS.map((st) => ({ key: st.key, name: st.name, score: s[st.key], max: st.max, color: st.color }))
 
 /** 다크 무대 위 스탯 막대 한 줄 (게임 스탯처럼: 이름, 점수/배점, 차오르는 막대, 지난 응시 대비) */
@@ -182,6 +183,7 @@ export default function Dashboard() {
 }
 
 function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: number }) {
+  const { state: credits } = useCredits()
   const [active, setActive] = useState<string | null>(null)
   const latest = history[history.length - 1]
   const previous = history.length > 1 ? history[history.length - 2] : undefined
@@ -228,7 +230,9 @@ function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: 
                   <dt className="label text-stage-muted">CREDITS</dt>
                   <dd className="mt-0.5 flex items-center gap-1.5 text-[15px] text-stage-text">
                     <Coins size={16} className="text-stage-caution" aria-hidden />
-                    <span className="text-[14px] font-semibold text-stage-muted">준비 중</span>
+                    <span role="status" className="text-[14px] font-semibold text-stage-muted">
+                      {credits.status === 'loading' ? '조회 중' : credits.status === 'error' ? '조회 실패' : credits.balance.toLocaleString()}
+                    </span>
                   </dd>
                 </div>
                 <div className="glass-stage rounded-lg px-3 py-2.5">
