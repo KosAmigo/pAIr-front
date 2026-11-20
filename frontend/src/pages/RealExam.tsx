@@ -1,11 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bot, ChevronDown, ChevronRight, FileText, Folder, Hammer, Loader2, Lock, Play, Save, X } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, CircleHelp, FileText, Folder, Hammer, Loader2, Lock, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
 import { SendKey } from '../components/SendKey'
 import { cx } from '../components/cx'
 import { Button, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
+import { CoachTour, examGuideSteps, hasSeenTour } from '../components/CoachTour'
 import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
 import { splitReply } from '../lib/edits'
@@ -571,7 +572,13 @@ export default function RealExam() {
     document.addEventListener('fullscreenchange', sync)
     return () => document.removeEventListener('fullscreenchange', sync)
   }, [])
+  const [tourOpen, setTourOpen] = useState(false)
   const needFullscreen = watching && Boolean(live?.proctoring) && !fullscreen
+  // 처음 시험 화면에 들어오면 각 영역을 가리키는 사용 안내를 한 번 보여 준다 (전체 화면 안내가 떠 있는 동안은 기다린다)
+  const examReady = Boolean(view) && !needFullscreen
+  useEffect(() => {
+    if (examReady && !hasSeenTour('exam-guide')) setTourOpen(true)
+  }, [examReady])
 
   // 외부 붙여넣기: 시험 화면 안에서 복사한 글이 아닌 것을 붙이면 PASTE 이벤트 (글자 수·위치만, 내용은 보내지 않음)
   useEffect(() => {
@@ -844,7 +851,7 @@ export default function RealExam() {
           <span className="truncate text-[15px] font-semibold">{task.title}</span>
           <ModeBadge mode={live ? 'live' : 'self'} />
         </div>
-        <div className="flex items-baseline gap-2 px-2" aria-label={`남은 시간 ${fmt(left)}`}>
+        <div className="flex items-baseline gap-2 px-2" data-tour="timer" aria-label={`남은 시간 ${fmt(left)}`}>
           <span className="label">{locked ? 'FOLLOW-UP' : 'REMAINING'}</span>
           <span className={cx('tnum font-mono text-[21px] leading-7 font-semibold transition-colors duration-[180ms]', tone)} role="timer">
             {left < 0 && !locked ? '-' : ''}
@@ -852,6 +859,9 @@ export default function RealExam() {
           </span>
         </div>
         <div className="flex items-center justify-end gap-3">
+          <IconButton label="사용 안내" onClick={() => setTourOpen(true)}>
+            <CircleHelp size={18} aria-hidden />
+          </IconButton>
           {!live && <CreditPill />}
           {live && (
             <>
@@ -867,7 +877,7 @@ export default function RealExam() {
           )}
           <span className="font-mono text-[12px] text-text-faint">{view.attempt.model}</span>
           {!locked && (
-            <Button variant="primary" size="sm" onClick={() => setConfirm(true)}>
+            <Button variant="primary" size="sm" data-tour="submit" onClick={() => setConfirm(true)}>
               제출
             </Button>
           )}
@@ -945,7 +955,7 @@ export default function RealExam() {
         )}
 
         {/* 가운데: 에디터 + 출력 | 후속 질문 */}
-        <div className="flex min-h-0 min-w-0 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-col" data-tour="editor">
           <>
               <div className="flex h-10 shrink-0 items-stretch border-b border-line bg-panel">
                 <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto" role="tablist" aria-label="열린 파일">
@@ -1138,7 +1148,7 @@ export default function RealExam() {
 
         {/* 오른쪽: AI */}
         {showChat && (
-        <div className="relative min-h-0">
+        <div className="relative min-h-0" data-tour="chat">
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
               <ChatPanel turns={turns} streaming={streaming} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000}
@@ -1157,6 +1167,7 @@ export default function RealExam() {
         )}
       </div>
 
+      {tourOpen && <CoachTour steps={examGuideSteps({ proctoring: Boolean(live?.proctoring) })} storageKey="exam-guide" onClose={() => setTourOpen(false)} />}
       {needFullscreen && (
         <div role="dialog" aria-modal="true" aria-label="전체 화면 필요" className="fixed inset-0 z-[80] flex items-center justify-center bg-bg/90 p-4 backdrop-blur-sm">
           <section className="w-full max-w-[440px] rounded-lg border border-line bg-panel p-6 text-center shadow-modal">
