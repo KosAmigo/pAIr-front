@@ -27,7 +27,7 @@ describe('이메일 인증 API', () => {
 
   it('가입 요청에 인증 코드를 포함한다', async () => {
     let request
-    const session = { token: 'bearer-token', refreshToken: 'refresh-token', expiresIn: 1800, user: { id: 1, email: 'user@example.com', name: '사용자', role: 'USER' } }
+    const session = { token: 'bearer-token', user: { id: 1, email: 'user@example.com', name: '사용자', role: 'USER' } }
     globalThis.fetch = async (url, init) => {
       request = { url, init }
       return Response.json(session, { status: 201 })

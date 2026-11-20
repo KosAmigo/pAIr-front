@@ -1,10 +1,6 @@
 // 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
-<<<<<<< Updated upstream
 import { readAuthSession } from './auth/authApi.ts'
 import type { QuestionResults } from './data/questions.ts'
-=======
-import { authenticatedFetch, AuthRequestError, readAuthSession } from './auth/authApi.ts'
->>>>>>> Stashed changes
 
 export type TaskType = 'dev' | 'biz'
 
@@ -173,13 +169,12 @@ export function getAuthHeaders(): Record<string, string> {
 export async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response
   try {
-    res = await authenticatedFetch(url, {
+    res = await fetch(url, {
       method,
       headers: { ...getAuthHeaders(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
-  } catch (error) {
-    if (error instanceof AuthRequestError) throw error
+  } catch {
     throw new ApiError('백엔드에 연결할 수 없습니다. backend 서버(포트 8180)가 켜져 있는지 확인하세요.')
   }
   const text = await res.text()
@@ -242,13 +237,12 @@ export const api = {
 export async function chatStream(id: string, message: string, onDelta: (t: string) => void): Promise<Turn[]> {
   let res: Response
   try {
-    res = await authenticatedFetch(`/api/attempts/${enc(id)}/chat/stream`, {
+    res = await fetch(`/api/attempts/${enc(id)}/chat/stream`, {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ message }),
     })
-  } catch (error) {
-    if (error instanceof AuthRequestError) throw error
+  } catch {
     throw new ApiError('백엔드에 연결할 수 없습니다. backend 서버(포트 8180)가 켜져 있는지 확인하세요.')
   }
   if (!res.ok || !res.body) {
