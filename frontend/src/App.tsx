@@ -11,7 +11,6 @@ import Tasks from './pages/Tasks'
 import History from './pages/History'
 import Grader from './pages/Grader'
 import GraderResult from './pages/GraderResult'
-import { AntiCheatingSync } from './anti-cheating'
 import { useAuth } from './auth/auth'
 import { AuthProvider } from './auth/AuthProvider'
 import RequireAuth from './auth/RequireAuth'
@@ -75,7 +74,6 @@ export default function App() {
     <MotionConfig reducedMotion="user">
     <AuthProvider>
       <BrowserRouter>
-        <AntiCheatingSync />
         <Routes>
           {/* 로그인 없이 */}
           <Route path="/" element={home} />
