@@ -300,15 +300,30 @@ function Overview({
   )
 }
 
+const p2 = (n: number) => String(n).padStart(2, '0')
+/** ISO 시각 → datetime-local 입력값 (브라우저 시간대) */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`
+}
+
 function EditModal({ s, onClose, onSaved }: { s: SessionSummary; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(s.title)
   const [proctoring, setProctoring] = useState(s.proctoring)
+  const [start, setStart] = useState(() => toLocalInput(s.startsAt))
+  const [end, setEnd] = useState(() => toLocalInput(s.endsAt))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const startMs = new Date(start).getTime()
+  const endMs = new Date(end).getTime()
+  const timeError = isNaN(startMs) || isNaN(endMs) ? '시작·종료 일시를 입력하세요' : endMs <= startMs ? '종료가 시작보다 늦어야 합니다' : null
+  const rescheduled = !timeError && (startMs !== Date.parse(s.startsAt) || endMs !== Date.parse(s.endsAt))
   const save = () => {
     setSaving(true)
     setError(null)
-    consoleApi.updateSession(s.id, { title: title.trim(), startsAt: s.startsAt, endsAt: s.endsAt, proctoring, taskIds: s.taskIds }).then(onSaved, (e: unknown) => {
+    const startsAt = rescheduled ? new Date(startMs).toISOString() : s.startsAt
+    const endsAt = rescheduled ? new Date(endMs).toISOString() : s.endsAt
+    consoleApi.updateSession(s.id, { title: title.trim(), startsAt, endsAt, proctoring, taskIds: s.taskIds }).then(onSaved, (e: unknown) => {
       setSaving(false)
       setError(errText(e))
     })
@@ -322,7 +337,7 @@ function EditModal({ s, onClose, onSaved }: { s: SessionSummary; onClose: () => 
           <Button variant="ghost" onClick={onClose}>
             취소
           </Button>
-          <Button variant="primary" disabled={!title.trim() || saving} onClick={save}>
+          <Button variant="primary" disabled={!title.trim() || !!timeError || saving} onClick={save}>
             {saving && <Loader2 size={14} className="animate-spin" aria-hidden />} 저장
           </Button>
         </>
@@ -336,7 +351,18 @@ function EditModal({ s, onClose, onSaved }: { s: SessionSummary; onClose: () => 
         <input type="checkbox" checked={proctoring} onChange={(e) => setProctoring(e.target.checked)} className="size-4 accent-[var(--color-brand)]" />
         감독 사용
       </label>
-      <p className="mt-3 text-[13px]">일시를 바꾸려면 회차를 취소하고 새로 만드세요. 이미 보낸 초대 메일의 시각이 달라지지 않게 하기 위해서입니다.</p>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1.5 text-[14px] font-semibold text-text">
+          시작 일시
+          <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="h-10 rounded-sm border border-line-strong bg-panel px-3 text-[15px] font-normal outline-none focus:border-brand" />
+        </label>
+        <label className="flex flex-col gap-1.5 text-[14px] font-semibold text-text">
+          종료 일시
+          <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 rounded-sm border border-line-strong bg-panel px-3 text-[15px] font-normal outline-none focus:border-brand" />
+        </label>
+      </div>
+      {timeError && <p className="mt-2 text-[13px] text-alert">{timeError}</p>}
+      {rescheduled && <p className="mt-3 text-[13px] text-text-muted">일시를 바꾸면 대상자 전원에게 바뀐 일시로 초대 메일이 다시 나가고, 이전 입장 링크는 쓸 수 없게 됩니다.</p>}
       {error && (
         <p role="alert" className="mt-3 flex items-center gap-1.5 text-[13px] text-alert">
           <CircleAlert size={14} aria-hidden /> {error}
@@ -456,13 +482,31 @@ function Participants({ s, participants, reload, toast }: { s: SessionSummary; p
           />
           <div className="flex items-center gap-2">
             <Button size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-              <FileUp size={14} aria-hidden /> CSV 올리기
+              <FileUp size={14} aria-hidden /> 엑셀·CSV 올리기
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                consoleApi.templateXlsxUrl().then(
+                  (url) => {
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = '대상자_양식.xlsx'
+                    a.click()
+                    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+                  },
+                  (e: unknown) => setError(errText(e)),
+                )
+              }
+            >
+              <Download size={14} aria-hidden /> 양식 받기
             </Button>
             {busy && <Loader2 size={16} className="animate-spin text-brand" aria-label="처리 중" />}
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               hidden
               onChange={(e) => {
                 const f = e.target.files?.[0]
@@ -680,7 +724,7 @@ function Live({ d, now, paused, setPaused }: { d: SessionDetail; now: number; pa
           {ev.data && <span className="tnum font-mono text-[12px] text-text-faint">{fmtTime(ev.data.at).slice(11)} 갱신</span>}
           <Button size="sm" onClick={() => setPaused((v) => !v)} aria-pressed={paused}>
             {paused ? <Play size={14} aria-hidden /> : <Pause size={14} aria-hidden />}
-            {paused ? '자동 갱신 켜기' : '일시 정지'}
+            {paused ? '자동 갱신 다시 켜기' : '자동 갱신 멈춤'}
           </Button>
         </div>
       </section>
@@ -831,11 +875,11 @@ function Results({ s }: { s: SessionSummary }) {
   const exportCsv = () => {
     setExporting(true)
     setExportError(null)
-    consoleApi.resultsCsvUrl(s.id).then(
+    consoleApi.resultsXlsxUrl(s.id).then(
       (url) => {
         const a = document.createElement('a')
         a.href = url
-        a.download = `${s.title}_결과.csv`
+        a.download = `${s.title}_결과.xlsx`
         a.click()
         window.setTimeout(() => URL.revokeObjectURL(url), 1000)
         setExporting(false)

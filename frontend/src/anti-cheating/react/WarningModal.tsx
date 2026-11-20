@@ -6,6 +6,7 @@ const LABELS: Record<Violation['signals'][number]['type'], string> = {
   WINDOW_BLUR: '브라우저 창 포커스 상실',
   TAB_HIDDEN: '시험 탭 숨김',
   FULLSCREEN_EXIT: '전체 화면 해제',
+  KEY_SHORTCUT: '창 전환 단축키 입력 (Alt+Tab, Win 키 등)',
 }
 
 function formatTime(value: string) {

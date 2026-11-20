@@ -4,8 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 import { proctorRelay } from './server/proctorRelay.ts'
 
-// npm run dev           : PC 만 (http://localhost:5173)
-// npm run dev:lan       : 휴대폰 보조 캠까지 (같은 와이파이, 자체 서명 HTTPS. 휴대폰 카메라는 HTTPS 에서만 열린다)
+// npm run dev           : 기본. 같은 와이파이의 휴대폰 보조 캠·팀원 접속까지 (자체 서명 HTTPS. 휴대폰 카메라는 HTTPS 에서만 열린다)
+// npm run dev:local     : 이 PC 만 (http://localhost:5173)
 export default defineConfig(({ mode }) => {
   const lan = mode === 'lan'
   return {

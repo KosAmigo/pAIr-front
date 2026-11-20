@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { BrowserEventDetector } from '../src/anti-cheating/core/BrowserEventDetector.ts'
+import { BrowserEventDetector, isWindowSwitchKey } from '../src/anti-cheating/core/BrowserEventDetector.ts'
 import { ViolationManager } from '../src/anti-cheating/core/ViolationManager.ts'
 import { DEFAULT_ANTI_CHEATING_CONFIG } from '../src/anti-cheating/core/types.ts'
 import { ViolationOutbox } from '../src/anti-cheating/storage/ViolationOutbox.ts'
@@ -164,4 +164,15 @@ test('offline violations retry after reconnection without incrementing twice', a
   assert.equal(await outbox.sync(api), 1)
   assert.equal(api.saved.size, 1)
   h.detector.stop()
+})
+
+test('window switch keys are recognised, ordinary typing is not', () => {
+  const key = (k, mods = {}) => ({ key: k, altKey: false, ctrlKey: false, ...mods })
+  assert.equal(isWindowSwitchKey(key('Tab', { altKey: true })), true)
+  assert.equal(isWindowSwitchKey(key('Meta')), true)
+  assert.equal(isWindowSwitchKey(key('Tab', { ctrlKey: true })), true)
+  assert.equal(isWindowSwitchKey(key('W', { ctrlKey: true })), true)
+  assert.equal(isWindowSwitchKey(key('Tab')), false)
+  assert.equal(isWindowSwitchKey(key('a')), false)
+  assert.equal(isWindowSwitchKey(key('w')), false)
 })

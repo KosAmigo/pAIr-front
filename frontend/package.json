@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode lan",
     "dev:lan": "vite --mode lan",
+    "dev:local": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test:anti-cheating": "node --experimental-strip-types --test tests/anti-cheating.test.mjs",

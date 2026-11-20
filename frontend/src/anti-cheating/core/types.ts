@@ -1,4 +1,4 @@
-export const SIGNAL_TYPES = ['MOUSE_LEAVE', 'WINDOW_BLUR', 'TAB_HIDDEN', 'FULLSCREEN_EXIT'] as const
+export const SIGNAL_TYPES = ['MOUSE_LEAVE', 'WINDOW_BLUR', 'TAB_HIDDEN', 'FULLSCREEN_EXIT', 'KEY_SHORTCUT'] as const
 
 export type SignalType = (typeof SIGNAL_TYPES)[number]
 export type ResumeReason = 'pointer-return' | 'window-focus' | 'tab-visible' | 'fullscreen-enter' | 'user-activity'
@@ -9,7 +9,7 @@ export type AntiCheatingConfig = {
 
 export const DEFAULT_ANTI_CHEATING_CONFIG: AntiCheatingConfig = {
   enabled: true,
-  signals: { MOUSE_LEAVE: true, WINDOW_BLUR: true, TAB_HIDDEN: true, FULLSCREEN_EXIT: true },
+  signals: { MOUSE_LEAVE: true, WINDOW_BLUR: true, TAB_HIDDEN: true, FULLSCREEN_EXIT: true, KEY_SHORTCUT: true },
 }
 
 export type BrowserSignal = { signalId: string; type: SignalType; occurredAt: string }

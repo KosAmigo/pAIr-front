@@ -5,6 +5,7 @@ import { Camera, ChevronDown, ChevronUp, RefreshCw, TriangleAlert } from 'lucide
 import { cx } from '../../components/cx'
 import { Button, StatusDot } from '../../components/ui'
 import { camHub } from '../camHub.ts'
+import { checksSkipped } from '../testSkip.ts'
 import { VIDEO_BYTES_PER_SEC, formatBytes } from '../core/events.ts'
 import type { LiveExam } from '../liveExam.ts'
 import { CamPreview } from './CamPreview.tsx'
@@ -19,17 +20,22 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
   const [now, setNow] = useState(() => Date.now())
 
   // 응시 화면에 들어오면 (새로 고침 뒤에도) 카메라를 다시 켜고 보정부터 시작한다
+  const skipped = checksSkipped()
   useEffect(() => {
+    if (skipped) return
     camHub.connect(live.invite)
     if (camHub.getState().monitor !== 'monitoring') {
       camHub.startMonitoring(live.serverOffsetMs).catch(() => undefined)
     }
-  }, [live.invite, live.serverOffsetMs])
+  }, [live.invite, live.serverOffsetMs, skipped])
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
   }, [])
+
+  // 테스트용 점검 건너뛰기를 한 응시에서는 카메라 감독 패널과 오류 창을 띄우지 않는다
+  if (skipped) return null
 
   const w = hub.lastWarning
   const toast = w && now - hub.lastWarningAt < TOAST_MS ? `${w.message} (${w.source === 'PC_CAM' ? '노트북 캠' : '휴대폰 캠'})` : null

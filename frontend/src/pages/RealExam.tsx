@@ -546,13 +546,24 @@ export default function RealExam() {
   // 감독 회차면 브라우저 이탈도 회차 감독 기록(proctor_events, source=BROWSER)에 함께 남긴다
   const forwardViolation = useCallback(
     (v: Violation) => {
-      const type = v.signals[0]?.type
-      if (!live?.proctoring || !type) return
-      camHub.recordBrowser(toBrowserViolation(type, v.occurredAt, live.serverOffsetMs, { signals: v.signals.length }))
+      const first = v.signals[0]?.type
+      if (!live?.proctoring || !first) return
+      // 단축키 입력은 서버에 창 이탈로 남기고, 키 입력으로 감지됐다는 표시만 붙인다
+      const viaShortcut = first === 'KEY_SHORTCUT'
+      const type = viaShortcut ? 'WINDOW_BLUR' : first
+      camHub.recordBrowser(toBrowserViolation(type, v.occurredAt, live.serverOffsetMs, { signals: v.signals.length, ...(viaShortcut ? { via: 'shortcut' } : {}) }))
     },
     [live],
   )
   const antiCheating = useAntiCheating({ sessionId, active: watching, onViolation: forwardViolation })
+  // 실전 시험은 전체 화면에서만 푼다. 전체 화면이어야 Alt+Tab·Win 키를 브라우저가 붙잡을 수 있다 (Keyboard Lock)
+  const [fullscreen, setFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement))
+  useEffect(() => {
+    const sync = () => setFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
+  const needFullscreen = watching && Boolean(live) && !fullscreen
 
   // 외부 붙여넣기: 시험 화면 안에서 복사한 글이 아닌 것을 붙이면 PASTE 이벤트 (글자 수·위치만, 내용은 보내지 않음)
   useEffect(() => {
@@ -1136,6 +1147,21 @@ export default function RealExam() {
         )}
       </div>
 
+      {needFullscreen && (
+        <div role="dialog" aria-modal="true" aria-label="전체 화면 필요" className="fixed inset-0 z-[80] flex items-center justify-center bg-bg/90 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-[440px] rounded-lg border border-line bg-panel p-6 text-center shadow-modal">
+            <h2 className="text-h2 font-semibold">전체 화면으로 시험을 진행합니다</h2>
+            <p className="mt-2 text-[15px] leading-6 text-text-muted">시험 중에는 다른 창으로 이동할 수 없고, 이동 시도(Alt+Tab, Win 키 등)는 기록됩니다.</p>
+            <Button
+              variant="primary"
+              className="mt-5"
+              onClick={() => void antiCheating.requestFullscreen().catch(() => setActionError('전체 화면으로 전환할 수 없습니다. 브라우저 설정을 확인해 주세요.'))}
+            >
+              전체 화면 시작
+            </Button>
+          </section>
+        </div>
+      )}
       <WarningModal violation={antiCheating.warning} count={antiCheating.count} onClose={antiCheating.dismissWarning} />
       {live?.proctoring && (
         <Suspense fallback={null}>

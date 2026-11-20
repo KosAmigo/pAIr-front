@@ -196,6 +196,8 @@ export const consoleApi = {
   // 결과
   results: (id: number) => call<SessionResult>('GET', `${S}/${id}/results`),
   resultsCsvUrl: (id: number) => blobUrl(`${S}/${id}/results.csv`),
+  resultsXlsxUrl: (id: number) => blobUrl(`${S}/${id}/results.xlsx`),
+  templateXlsxUrl: () => blobUrl(`${S}/participants-template.xlsx`),
 
   // 과제 (공개 상태)
   tasks: () => call<ConsoleTaskSummary[]>('GET', '/api/console/tasks'),

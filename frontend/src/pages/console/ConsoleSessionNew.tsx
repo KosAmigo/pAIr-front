@@ -10,7 +10,7 @@ import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
 import { useAuth } from '../../auth/auth'
 import { ErrorState } from '../../components/ErrorState'
-import { companyLabel, CSV_TEMPLATE, parseParticipantsCsv, useLoad, type CsvRow } from '../../data/consoleSessions'
+import { companyLabel, parseParticipantsCsv, useLoad, type CsvRow } from '../../data/consoleSessions'
 import { consoleApi } from '../../consoleApi'
 import { useMyCompanyId } from './format'
 import { Loading } from './Loading'
@@ -38,14 +38,32 @@ export default function ConsoleSessionNew() {
     setEnd(null)
   }
   // 대상자 CSV (기획_결정사항 §1): 양식(이름,이메일)에 맞춘 파일, 올리기 전에 오류를 미리 보여 준다
-  const [csv, setCsv] = useState<{ file: File; name: string; rows: CsvRow[] } | null>(null)
+  const [csv, setCsv] = useState<{ file: File; name: string; rows: CsvRow[]; xlsx: boolean } | null>(null)
   const csvBad = csv ? csv.rows.filter((r) => r.error).length : 0
   const csvOk = csv ? csv.rows.length - csvBad : 0
   const readCsv = (f: File | undefined) => {
     if (!f) return
-    f.text().then((text) => setCsv({ file: f, name: f.name, rows: parseParticipantsCsv(text) }))
+    // 엑셀(.xlsx)은 서버가 읽는다. 미리 보기 없이 회차를 만들 때 올리고, 잘못된 행은 대상자 탭에서 알려 준다
+    if (f.name.toLowerCase().endsWith('.xlsx')) {
+      setCsv({ file: f, name: f.name, rows: [], xlsx: true })
+      return
+    }
+    f.text().then((text) => setCsv({ file: f, name: f.name, rows: parseParticipantsCsv(text), xlsx: false }))
   }
-  const templateHref = `data:text/csv;charset=utf-8,${encodeURIComponent('\uFEFF' + CSV_TEMPLATE)}`
+  const [templateError, setTemplateError] = useState<string | null>(null)
+  const downloadTemplate = () => {
+    setTemplateError(null)
+    consoleApi.templateXlsxUrl().then(
+      (url) => {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = '대상자_양식.xlsx'
+        a.click()
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      },
+      (e: unknown) => setTemplateError(e instanceof Error ? e.message : String(e)),
+    )
+  }
   // 회사 목록 API 가 아직 없어 관리자는 회사 번호를 직접 넣는다. 기업 회원은 백엔드가 로그인한 회사로 정한다
   const [company, setCompany] = useState<string>(mine != null && mine > 0 ? String(mine) : '')
   const [saving, setSaving] = useState(false)
@@ -99,7 +117,7 @@ export default function ConsoleSessionNew() {
               })
               // CSV 로 올린 대상자를 바로 등록한다 (등록 즉시 입장 링크 메일 1번). 실패해도 회차는 만들어졌으니 대상자 탭으로 간다
               let csvError: string | null = null
-              if (csv && csvOk) await consoleApi.importCsv(s.id, csv.file, false).catch((e: unknown) => (csvError = e instanceof Error ? e.message : String(e)))
+              if (csv && (csvOk || csv.xlsx)) await consoleApi.importCsv(s.id, csv.file, false).catch((e: unknown) => (csvError = e instanceof Error ? e.message : String(e)))
               nav(`/console/sessions/${s.id}?tab=participants`, { state: csvError ? { csvError } : undefined })
             }
             create().catch((e: unknown) => {
@@ -190,24 +208,26 @@ export default function ConsoleSessionNew() {
             <p className="-mt-1 text-[13px] leading-5 text-text-muted">사이트 양식(이름,이메일)에 맞춘 CSV를 올리면 사람마다 다른 입장 링크가 메일로 나갑니다. 지금 올리지 않으면 회차를 만든 뒤 대상자 탭에서 등록할 수 있습니다.</p>
             <div className="flex flex-wrap items-center gap-2">
               <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-dashed border-brand/50 bg-brand-dim px-4 text-[14px] font-semibold text-brand hover:border-brand">
-                <Upload size={16} aria-hidden /> CSV 올리기
-                <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => readCsv(e.target.files?.[0])} />
+                <Upload size={16} aria-hidden /> 엑셀·CSV 올리기
+                <input type="file" accept=".csv,.xlsx,text/csv" className="sr-only" onChange={(e) => readCsv(e.target.files?.[0])} />
               </label>
-              <a href={templateHref} download="대상자_양식.csv" className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-[14px] font-medium text-text-muted hover:bg-panel-raised hover:text-text">
-                <Download size={16} aria-hidden /> 양식 내려받기
-              </a>
+              <button type="button" onClick={downloadTemplate} className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-[14px] font-medium text-text-muted hover:bg-panel-raised hover:text-text">
+                <Download size={16} aria-hidden /> 엑셀 양식 내려받기
+              </button>
             </div>
+            {templateError && <p role="alert" className="text-[13px] text-alert">{templateError}</p>}
             {csv && (
               <div className="overflow-hidden rounded-xl border border-line">
                 <div className="flex items-center gap-2 border-b border-line bg-panel-raised px-4 py-2.5 text-[14px]">
                   <FileSpreadsheet size={16} className="text-brand" aria-hidden />
                   <span className="truncate font-mono text-[13px] text-text">{csv.name}</span>
-                  <span className="tnum ml-auto font-mono text-[13px] text-signal">정상 {csvOk}</span>
-                  <span className={cx('tnum font-mono text-[13px]', csvBad ? 'text-alert' : 'text-text-muted')}>오류 {csvBad}</span>
+                  {!csv.xlsx && <span className="tnum ml-auto font-mono text-[13px] text-signal">정상 {csvOk}</span>}
+                  {!csv.xlsx && <span className={cx('tnum font-mono text-[13px]', csvBad ? 'text-alert' : 'text-text-muted')}>오류 {csvBad}</span>}
                   <button type="button" aria-label="CSV 빼기" title="빼기" onClick={() => setCsv(null)} className="inline-flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel hover:text-text">
                     <X size={14} aria-hidden />
                   </button>
                 </div>
+                {csv.xlsx && <p className="px-4 py-4 text-[14px] text-text-muted">엑셀 파일은 회차를 만들 때 올라가고, 형식이 틀린 행은 대상자 탭에서 알려 드립니다.</p>}
                 <ul className="max-h-[200px] divide-y divide-line overflow-auto">
                   {csv.rows.map((r) => (
                     <li key={r.line} className={cx('grid grid-cols-[48px_120px_minmax(0,1fr)] items-center gap-3 px-4 py-2 text-[14px]', r.error && 'bg-alert/5')}>
@@ -223,7 +243,7 @@ export default function ConsoleSessionNew() {
                       </span>
                     </li>
                   ))}
-                  {csv.rows.length === 0 && <li className="px-4 py-6 text-center text-[14px] text-text-muted">대상자 행이 없습니다.</li>}
+                  {csv.rows.length === 0 && !csv.xlsx && <li className="px-4 py-6 text-center text-[14px] text-text-muted">대상자 행이 없습니다.</li>}
                 </ul>
               </div>
             )}
@@ -239,7 +259,7 @@ export default function ConsoleSessionNew() {
                 onClick={() => setProctoring((v) => !v)}
                 className={cx('relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors', proctoring ? 'bg-brand' : 'bg-line-strong')}
               >
-                <span className={cx('absolute top-0.5 size-5 rounded-full bg-panel shadow-sm transition-transform', proctoring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+                <span className={cx('absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-150', proctoring ? 'translate-x-5' : 'translate-x-0')} />
               </button>
               <span>
                 <span className="flex items-center gap-1.5 text-[15px] font-semibold text-text">

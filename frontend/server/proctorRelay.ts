@@ -42,8 +42,12 @@ function send(ws: WebSocket | undefined, msg: object) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
 }
 
+/** WSL·Docker·VM 가상 어댑터는 휴대폰이 닿지 못하므로 건너뛴다 */
+const VIRTUAL_ADAPTER = /vethernet|wsl|docker|vmware|virtualbox|vbox|hyper-v|loopback|tailscale|zerotier|bluetooth/i
+
 function lanIp(): string | null {
-  for (const list of Object.values(networkInterfaces())) {
+  for (const [name, list] of Object.entries(networkInterfaces())) {
+    if (VIRTUAL_ADAPTER.test(name)) continue
     for (const ni of list ?? []) {
       if (ni.family === 'IPv4' && !ni.internal && !ni.address.startsWith('169.254.')) return ni.address
     }

@@ -4,7 +4,7 @@ AI 활용 역량 진단 플랫폼 프런트 (React, TypeScript, Vite). 백엔드
 ## 실행
 - 설치: `npm --prefix frontend install`
 - 개발 서버: `npm --prefix frontend run dev` (포트 5173, `/api` 는 백엔드 8180 으로 프록시)
-- 휴대폰 보조 캠까지 시험할 때: `npm --prefix frontend run dev:lan` (같은 와이파이, 자체 서명 HTTPS. 휴대폰 카메라는 HTTPS 에서만 열린다)
+- `npm --prefix frontend run dev` 가 기본이며 같은 와이파이의 휴대폰 보조 캠·팀원 접속까지 열린다 (자체 서명 HTTPS. 휴대폰 카메라는 HTTPS 에서만 열린다). 초대 메일 링크는 백엔드가 이 PC 사내 IP 로 자동으로 만든다. 이 PC 만 쓸 때: `npm --prefix frontend run dev:local`
 - 빌드: `npm --prefix frontend run build`
 
 ## 테스트

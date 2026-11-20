@@ -1,5 +1,29 @@
 import type { AntiCheatingConfig, ResumeReason, SignalType } from './types.ts'
 
+/** 창 전환과 비슷한 키 조합인가 (Alt+Tab, Win/Cmd 키, Alt+Esc, Alt+F4, Ctrl+Tab, Ctrl+W/T/N, PrintScreen) */
+export function isWindowSwitchKey(e: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey'>): boolean {
+  if (typeof e.key !== 'string') return false
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
+  if (key === 'Meta' || key === 'OS' || key === 'PrintScreen') return true
+  if (e.altKey && (key === 'Tab' || key === 'Escape' || key === 'F4')) return true
+  if (e.ctrlKey && (key === 'Tab' || key === 'w' || key === 't' || key === 'n')) return true
+  return false
+}
+
+type KeyboardLock = { lock?: (codes: string[]) => Promise<void>; unlock?: () => void }
+const LOCKED_CODES = ['AltLeft', 'AltRight', 'Tab', 'MetaLeft', 'MetaRight', 'Escape', 'KeyW', 'KeyT', 'KeyN']
+
+/** 전체 화면일 때 크롬 계열은 이 키들을 페이지로 넘겨 준다 (Keyboard Lock). 지원하지 않거나 거절되면 감지만 한다 */
+function lockKeys() {
+  const kb = (typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard)
+  kb?.lock?.(LOCKED_CODES)?.catch(() => undefined)
+}
+
+function unlockKeys() {
+  const kb = (typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard)
+  kb?.unlock?.()
+}
+
 type EventSurfaces = { documentTarget?: Document; windowTarget?: Window }
 
 export class BrowserEventDetector {
@@ -38,13 +62,21 @@ export class BrowserEventDetector {
     const isFullscreen = Boolean(this.documentTarget?.fullscreenElement)
     if (isFullscreen) {
       this.wasFullscreen = true
+      lockKeys()
       this.onResume('fullscreen-enter')
     } else if (this.wasFullscreen) {
       this.wasFullscreen = false
+      unlockKeys()
       this.emit('FULLSCREEN_EXIT')
     }
   }
   private readonly onUserActivity = () => this.onResume('user-activity')
+  /** 창 전환·탭 조작과 비슷한 키. 브라우저가 막게 해 보고(OS 단축키는 못 막을 수 있다), 막든 못 막든 기록한다 */
+  private readonly onShortcutKey = (event: KeyboardEvent) => {
+    if (!isWindowSwitchKey(event)) return
+    event.preventDefault()
+    this.emit('KEY_SHORTCUT')
+  }
 
   start() {
     if (this.started || !this.config.enabled || !this.documentTarget || !this.windowTarget) return
@@ -55,6 +87,9 @@ export class BrowserEventDetector {
     this.documentTarget.addEventListener('visibilitychange', this.onVisibilityChange)
     this.documentTarget.addEventListener('fullscreenchange', this.onFullscreenChange)
     this.documentTarget.addEventListener('keydown', this.onUserActivity)
+    // 위 활동 감지 뒤에 등록해, 같은 키 입력에서 활동 감지가 먼저 돌고 단축키 신호가 그 뒤에 남게 한다
+    this.documentTarget.addEventListener('keydown', this.onShortcutKey, true)
+    lockKeys()
     this.documentTarget.addEventListener('pointerdown', this.onUserActivity)
     this.windowTarget.addEventListener('blur', this.onBlur)
     this.windowTarget.addEventListener('focus', this.onFocus)
@@ -68,6 +103,8 @@ export class BrowserEventDetector {
     this.documentTarget.removeEventListener('visibilitychange', this.onVisibilityChange)
     this.documentTarget.removeEventListener('fullscreenchange', this.onFullscreenChange)
     this.documentTarget.removeEventListener('keydown', this.onUserActivity)
+    this.documentTarget.removeEventListener('keydown', this.onShortcutKey, true)
+    unlockKeys()
     this.documentTarget.removeEventListener('pointerdown', this.onUserActivity)
     this.windowTarget.removeEventListener('blur', this.onBlur)
     this.windowTarget.removeEventListener('focus', this.onFocus)

@@ -29,6 +29,7 @@ import { CamPreview } from './CamPreview.tsx'
 import { CheckList } from './CheckList.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
 import { useCamHub } from './useCamHub.ts'
+import { CAN_SKIP_CHECKS, clearChecksSkipped, markChecksSkipped } from '../testSkip.ts'
 
 export type EnvCheckResult = { pc: CheckReport; phone: CheckReport | null; flagged: { stage: ScanStage; source: string; labels: string[] }[] }
 
@@ -294,6 +295,13 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
   }, [run])
 
   const passed = result?.pc.passed && (result.phone?.passed ?? true)
+  // 테스트용: 모든 점검을 통과한 것으로 보고 넘어간다. 개발 서버이거나 VITE_ALLOW_CHECK_SKIP=true 로 빌드했을 때만 보인다
+  const canSkipChecks = CAN_SKIP_CHECKS
+  const skipAllChecks = () => {
+    const skipped = items.map((i) => ({ ...i, status: 'pass' as const, detail: '테스트용으로 건너뜀' }))
+    markChecksSkipped()
+    onPassed({ pc: makeReport(skipped), phone: null, flagged: [] })
+  }
   const phoneRunning = items.find((i) => i.id === 'phone')?.status === 'running'
 
   return (
@@ -313,6 +321,14 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
           </div>
         )}
         <CheckList items={items} />
+        {canSkipChecks && (
+          <div className="flex items-center gap-3 rounded-lg border border-dashed border-line-strong px-3 py-2">
+            <span className="text-[13px] text-text-muted">테스트용: 모든 점검을 통과한 것으로 처리합니다. 감독 기록에는 건너뜀으로 남습니다.</span>
+            <Button variant="secondary" size="sm" className="ml-auto shrink-0" onClick={skipAllChecks}>
+              점검 건너뛰기
+            </Button>
+          </div>
+        )}
         {phoneRunning && !skipPhone && (
           <Button variant="ghost" size="sm" className="self-start" onClick={() => setSkipPhone(true)}>
             휴대폰 없이 진행
@@ -328,7 +344,10 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
                 <p className="text-[14px] text-text">
                   점검을 통과했습니다{[...result.pc.items, ...(result.phone?.items ?? [])].some((i) => i.status === 'warn') ? ' (주의 항목은 감독 기록에 남습니다)' : ''}.
                 </p>
-                <Button variant="primary" className="ml-auto" onClick={() => onPassed(result)}>
+                <Button variant="primary" className="ml-auto" onClick={() => {
+                    clearChecksSkipped()
+                    onPassed(result)
+                  }}>
                   점검 결과 저장
                 </Button>
               </>
