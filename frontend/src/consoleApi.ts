@@ -135,11 +135,48 @@ export type ConsoleTaskSummary = {
   status: TaskPublicationStatus
   publishedAt: string | null
   updatedAt: string | null
+  // ── 2026-11-20 목록 개편으로 백엔드에 더해지는 칸. 예전 서버에는 없을 수 있어 모두 옵셔널 ──
+  /** DEV | BIZ (없으면 type 으로 판단) */
+  track?: 'DEV' | 'BIZ' | null
+  /** 초급 | 중급 | 고급 */
+  difficulty?: string | null
+  /** 과제 형태 키 (incident, planning …) 또는 직무 이름 */
+  category?: string | null
+  /** 한 줄 소개 */
+  summary?: string | null
+  createdAt?: string | null
+  /** AI 로 만든 과제인지 */
+  generated?: boolean | null
+  /** AI 생성 자동 확인을 모두 통과했는지. AI 생성이 아니면 null */
+  checksOk?: boolean | null
 }
 /** definition 은 백엔드 TaskDef (응시 화면 Task 와 같은 필드 + 채점 설정) */
 export type ConsoleTaskDetail = {
   summary: ConsoleTaskSummary
   definition: Task & { d4Minutes: number[] | null; requiredHeadings: string[] | null }
+}
+
+/** 검수용 PDF 자료 한 개 (pAIr-docs/API/응시_자료_PDF_API.md) */
+export type TaskMaterial = { path: string; mimeType: string; sizeBytes: number; pages: number }
+export type MaterialPage = { page: number; text: string }
+
+/**
+ * (가정) 관리자 검수용 과제 파일. 백엔드에 아직 없는 API 라 404 면 화면이 "준비 중"으로 보여 준다.
+ * visibility: VISIBLE 응시자에게 보임, HIDDEN 숨은 테스트·정답 등
+ */
+export type AdminTaskFile = { path: string; visibility: 'VISIBLE' | 'HIDDEN'; readOnly?: boolean; content: string | null }
+/** (가정) 관리자 검수용 문항. 정답과 근거 쪽까지 들어 있다. 404 면 "준비 중" */
+export type AdminQuestion = {
+  id: number
+  seq: number
+  type: 'SINGLE' | 'MULTI' | 'SHORT'
+  content: string
+  points: number
+  choices: { id: number; seq: number; content: string; correct: boolean }[]
+  /** 단답형 인정 답안 */
+  answers: string[]
+  /** 근거 문서와 쪽 */
+  sources: { path: string; pages: string }[]
 }
 
 /** 파일 올리기(multipart). call() 은 JSON 만 보내서 따로 둔다 */
@@ -159,7 +196,11 @@ async function upload<T>(url: string, form: FormData): Promise<T> {
 /** 로그인 헤더가 필요한 파일(CSV, 사진)을 받아 브라우저 URL 로 바꾼다 */
 async function blobUrl(url: string): Promise<string> {
   const res = await fetch(url, { headers: getAuthHeaders() })
-  if (!res.ok) throw new ApiError(`파일을 받지 못했습니다 (${res.status})`)
+  if (!res.ok) {
+    const err = new ApiError(`파일을 받지 못했습니다 (${res.status})`)
+    err.status = res.status
+    throw err
+  }
   return URL.createObjectURL(await res.blob())
 }
 
@@ -207,4 +248,17 @@ export const consoleApi = {
   task: (taskId: string) => call<ConsoleTaskDetail>('GET', `/api/console/tasks/${enc(taskId)}`),
   publishTask: (taskId: string) => call<ConsoleTaskSummary>('POST', `/api/console/tasks/${enc(taskId)}/publish`),
   hideTask: (taskId: string) => call<ConsoleTaskSummary>('POST', `/api/console/tasks/${enc(taskId)}/hide`),
+  /** 용도 바꾸기 (검수 전 과제만. 409 = 공개한 적 있는 과제 또는 복사본) */
+  changeUsage: (taskId: string, usage: TaskUsage) => call<ConsoleTaskSummary>('PATCH', `/api/console/tasks/${enc(taskId)}/usage`, { usage }),
+
+  // 과제 검수 자료
+  materials: (taskId: string) => call<TaskMaterial[]>('GET', `/api/console/tasks/${enc(taskId)}/materials`),
+  /** PDF 는 인증 헤더가 필요해 fetch → blob URL 로 받는다. 다 쓰면 URL.revokeObjectURL */
+  materialFileUrl: (taskId: string, path: string) => blobUrl(`/api/console/tasks/${enc(taskId)}/materials/file?path=${enc(path)}`),
+  materialPages: (taskId: string, path: string, pages?: string) =>
+    call<MaterialPage[]>('GET', `/api/console/tasks/${enc(taskId)}/materials/pages?path=${enc(path)}${pages ? `&pages=${enc(pages)}` : ''}`),
+  /** (가정) 백엔드에 아직 없음 */
+  taskFiles: (taskId: string) => call<AdminTaskFile[]>('GET', `/api/console/tasks/${enc(taskId)}/files`),
+  /** (가정) 백엔드에 아직 없음 */
+  taskQuestions: (taskId: string) => call<AdminQuestion[]>('GET', `/api/console/tasks/${enc(taskId)}/questions`),
 }
