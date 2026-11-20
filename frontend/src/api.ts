@@ -1,5 +1,6 @@
 // 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
 import { readAuthSession } from './auth/authApi.ts'
+import type { QuestionResults } from './data/questions.ts'
 
 export type TaskType = 'dev' | 'biz'
 
@@ -43,6 +44,12 @@ export type EditProposal = {
 }
 
 export type Turn = { turn: number; role: 'user' | 'ai'; time: string; text: string; edits?: EditProposal[] }
+
+/** 복기 비교: 한 풀이에서 체크 하나의 결과. 그 풀이 리포트에 이 체크가 없으면 CheckDiff 의 a·b 가 null */
+export type CheckSide = { status: CheckResult['status']; deducted: number; reason: string | null; evidence: string[] }
+export type CheckDiff = { code: string; label: string; method: 'AUTO' | 'JUDGE'; points: number; a: CheckSide | null; b: CheckSide | null; changed: boolean }
+export type ItemDiff = { key: string; name: string; max: number; a: number | null; b: number | null; checks: CheckDiff[] }
+export type AttemptCompare = { a: string; b: string; items: ItemDiff[] }
 
 /** 복기: 질문 하나를 보낸 순간의 체크포인트 (질문마다 하나, 이름은 응시자가 붙인다) */
 export type Checkpoint = { checkpointId: number; turnNo: number; label: string | null; createdAt: string }
@@ -122,6 +129,8 @@ export type Report = {
   chatTurns: number
   firstValidMinutes: number | null
   items: ReportItem[]
+  /** 객관식·단답형 문항 점수. 6개 역량 100점과 따로 센다. 문항이 없는 과제나 예전 리포트는 없음/null */
+  questions?: QuestionResults | null
   notes: string[]
   hiddenTests?: { name: string; passed: boolean }[]
   r2KeyTurns?: { turn: number; adoption: number; verdicts: { replay: number; same: boolean; reason: string }[] }[]
@@ -209,6 +218,8 @@ export const api = {
   report: (id: string) => call<ReportResponse>('GET', `/api/attempts/${enc(id)}/report`),
   checkpoints: (id: string) => call<Checkpoint[]>('GET', `/api/attempts/${enc(id)}/checkpoints`),
   replayTree: (id: string) => call<TreeNode[]>('GET', `/api/attempts/${enc(id)}/tree`),
+  /** 두 풀이의 감점 근거를 항목·체크별로 나란히 받는다 (채점이 끝난 내 풀이만) */
+  compareAttempts: (a: string, b: string) => call<AttemptCompare>('GET', `/api/attempts/${enc(a)}/compare?with=${enc(b)}`),
   /** 체크포인트에서 갈라진 새 응시를 만든다 (크레딧 차감, 부족하면 402). 새 응시 ID 를 돌려준다 */
   rollback: (checkpointId: number) => call<{ attemptId: string }>('POST', `/api/checkpoints/${checkpointId}/rollback`),
   /** 체크포인트 이름 붙이기. 빈 문자열이면 이름을 지운다 */

@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { branchColor, compareScores, type TreeRow } from '../../lib/replayTree'
+import { CheckReasons } from './CheckReasons'
 
 const color = (branch: number) => `var(--color-branch-${branchColor(branch)})`
 
@@ -56,6 +57,7 @@ export function ScoreCompare({ a, b, onClear }: { a: TreeRow & { score: NonNulla
           </tr>
         </tbody>
       </table>
+      <CheckReasons aId={a.attemptId} bId={b.attemptId} aLabel={a.label} bLabel={b.label} />
     </section>
   )
 }

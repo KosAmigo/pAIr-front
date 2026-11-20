@@ -6,6 +6,7 @@ import { cx } from '../components/cx'
 import { Button, ButtonLink, Panel } from '../components/ui'
 import { ScoreHero, StageSep } from '../components/report/ScoreHero'
 import { CompetencyCards } from '../components/report/CompetencyCards'
+import { QuestionScoreCard } from '../components/report/QuestionScoreCard'
 import { api, ApiError, type CheckResult, type Report, type ReportResponse, type Turn } from '../api'
 
 // 실제 응시 결과 리포트. 감점식 채점(pAIr-docs/평가/채점_기준표.md): 6개 항목, 총점 100점.
@@ -183,6 +184,8 @@ export function ReportView({ r, bare }: { r: Report; bare?: boolean }) {
           }
         })}
       />
+
+      <QuestionScoreCard results={r.questions} />
 
       <Panel reveal label="TRANSCRIPT" title="AI 대화 기록" className="col-span-12 @5xl:col-span-7" bodyClassName="max-h-[720px] overflow-auto space-y-2">
         {r.transcript.length === 0 ? (
