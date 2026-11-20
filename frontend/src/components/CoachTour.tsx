@@ -179,11 +179,9 @@ export function examGuideSteps(opts: { proctoring: boolean }): TourStep[] {
     { target: 'chat', title: 'AI와 함께 풀기', body: '오른쪽 AI에게 질문하며 풀 수 있어요. AI와 나눈 대화는 기록돼 평가에 참고돼요.' },
     { target: 'submit', title: '제출하기', body: '다 풀면 제출을 누르세요. 제출하면 파일과 AI 대화가 잠기고, 이어서 후속 질문 3개에 답해요.' },
   ]
-  if (opts.proctoring) {
-    steps.push({
-      title: '시험 중 지켜 주세요',
-      body: '전체 화면을 유지해 주세요. 다른 창이나 탭으로 이동하거나 창 전환 키(Alt+Tab, Win 키)를 누르면 기록돼요. 외부에서 복사한 내용을 붙여 넣는 것도 기록돼요. 기록만으로 부정행위가 확정되지는 않아요.',
-    })
-  }
+  const rules = opts.proctoring
+    ? '전체 화면을 유지해 주세요. 다른 창이나 탭으로 이동하거나 창 전환 키(Alt+Tab, Win 키)를 누르면 기록돼요. 외부에서 복사한 내용을 붙여 넣는 것도 기록돼요. 기록만으로 부정행위가 확정되지는 않아요. '
+    : ''
+  steps.push({ title: '시험 중 지켜 주세요', body: `${rules}창이 닫히거나 연결이 끊겨도 5분 안에는 같은 링크로 다시 들어올 수 있어요. 5분이 지나면 링크가 만료되고, 끊긴 기록은 감독 기록에 남아요.` })
   return steps
 }

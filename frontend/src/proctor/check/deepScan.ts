@@ -58,7 +58,10 @@ let detector: Promise<Detector> | null = null
 
 export function loadDeepDetector(onProgress?: (ratio: number) => void, model = DEEP_MODEL): Promise<Detector> {
   detector ??= (async () => {
-    const { pipeline } = await import('@huggingface/transformers')
+    const { pipeline, env } = await import('@huggingface/transformers')
+    // 추론을 웹 워커에서 돌려 분석하는 동안 화면이 멈추지 않게 한다 (메인 스레드에서 돌리면 사진마다 수 초 굳는다)
+    const wasm = env.backends.onnx.wasm
+    if (wasm) wasm.proxy = true
     const files = new Map<string, { loaded: number; total: number }>()
     const p = await pipeline('zero-shot-object-detection', model.id, {
       device: 'wasm',

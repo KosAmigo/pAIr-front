@@ -40,6 +40,18 @@ export function clearLiveExam() {
   }
 }
 
+/** 이 탭에서 진행 중인 실전 시험의 입장 토큰. 탭을 닫으면 사라진다 (같은 링크로 이어서 들어올 수 있는지 판단에 쓴다) */
+export function readLiveInvite(): string | null {
+  try {
+    const raw = storage()?.getItem(KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    return isLiveExam(parsed) ? parsed.invite : null
+  } catch {
+    return null
+  }
+}
+
 function isLiveExam(v: unknown): v is LiveExam {
   if (!v || typeof v !== 'object') return false
   const o = v as Record<string, unknown>

@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   type LucideIcon,
+  WifiOff,
 } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
@@ -50,6 +51,8 @@ const ICON: Record<EventType, LucideIcon> = {
   EXTRA_SCREEN: Monitor,
   BOOK: BookOpen,
   PHONE_DISCONNECTED: Smartphone,
+  CONNECTION_LOST: WifiOff,
+  LINK_EXPIRED: WifiOff,
 }
 const LOW = 0.8
 

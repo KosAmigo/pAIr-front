@@ -25,6 +25,8 @@ export type EntryInfo = {
   attempts: Record<string, string>
   /** 과제별 진행 상태 (과제별 제출) */
   tasks: TaskStatus[]
+  /** 시험 중 연결이 끊긴 뒤 유예(5분) 안에 돌아오지 않아 입장 링크가 만료됨 */
+  linkExpired: boolean
 }
 
 export type TaskStatus = {
@@ -93,6 +95,8 @@ export const proctorApi = {
     call<EntryInfo>('POST', `/api/entry/${enc(invite)}/consent`, { consentVersion, envCheck }),
   enter: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/enter`),
   start: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/start`),
+  /** 시험 화면의 연결 신호 (10초마다). expired=true 면 유예를 넘겨 링크가 만료된 것 */
+  heartbeat: (invite: string) => call<{ expired: boolean }>('POST', `/api/entry/${enc(invite)}/heartbeat`),
   /** 과제 하나 제출. 모든 과제를 내면 submittedAt 이 채워진다 */
   submitTask: (invite: string, taskId: string) =>
     call<EntryInfo>('POST', `/api/entry/${enc(invite)}/tasks/${enc(taskId)}/submit`),

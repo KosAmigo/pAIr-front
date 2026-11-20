@@ -78,11 +78,14 @@ export async function audioProbe(ms = 2000): Promise<{ labels: string[] | null; 
 }
 
 /** 영상 프레임을 작게 줄여 RGBA 픽셀을 돌려준다 */
+let grabCanvas: HTMLCanvasElement | null = null
+
 export function grabPixels(video: HTMLVideoElement, w = 64, h = 48): ImageData | null {
   if (!video.videoWidth) return null
-  const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
+  // 프레임마다 캔버스를 새로 만들지 않고 하나를 다시 쓴다
+  const c = (grabCanvas ??= document.createElement('canvas'))
+  if (c.width !== w) c.width = w
+  if (c.height !== h) c.height = h
   const ctx = c.getContext('2d', { willReadFrequently: true })
   if (!ctx) return null
   ctx.drawImage(video, 0, 0, w, h)

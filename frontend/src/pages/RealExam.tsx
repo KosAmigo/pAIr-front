@@ -6,7 +6,7 @@ import { SendKey } from '../components/SendKey'
 import { cx } from '../components/cx'
 import { Button, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
-import { CoachTour, examGuideSteps, hasSeenTour } from '../components/CoachTour'
+import { CoachTour, examGuideSteps } from '../components/CoachTour'
 import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
 import { splitReply } from '../lib/edits'
@@ -21,6 +21,9 @@ import { useCredits } from '../data/credits'
 import { CreditPill } from '../components/CreditPill'
 
 // 카메라 감독은 실전 시험에서만 불러온다 (자가진단은 분석 모델을 내려받지 않는다)
+/** 실전 시험 중 서버에 연결 신호를 보내는 간격 (서버 유예 5분 판단용) */
+const HEARTBEAT_MS = 10_000
+
 const CamMonitor = lazy(() => import('../proctor/react/CamMonitor.tsx'))
 
 /** 실전 시험이 끝나면 카메라·휴대폰 연결을 끄고 실전 맥락을 지운다 */
@@ -573,12 +576,26 @@ export default function RealExam() {
     return () => document.removeEventListener('fullscreenchange', sync)
   }, [])
   const [tourOpen, setTourOpen] = useState(false)
-  const needFullscreen = watching && Boolean(live?.proctoring) && !fullscreen
-  // 처음 시험 화면에 들어오면 각 영역을 가리키는 사용 안내를 한 번 보여 준다 (전체 화면 안내가 떠 있는 동안은 기다린다)
-  const examReady = Boolean(view) && !needFullscreen
+  // 실전: 10초마다 서버에 연결 신호를 보낸다. 창이 닫히거나 끊겨 5분(유예)을 넘기면 서버가 링크를 만료시킨다
+  const [linkExpired, setLinkExpired] = useState(false)
+  const liveInvite = live?.invite
   useEffect(() => {
-    if (examReady && !hasSeenTour('exam-guide')) setTourOpen(true)
-  }, [examReady])
+    if (!liveInvite || !watching) return
+    let alive = true
+    const beat = () =>
+      proctorApi.heartbeat(liveInvite).then(
+        (r) => alive && r.expired && setLinkExpired(true),
+        () => undefined, // 신호가 안 가는 동안은 서버가 알아서 끊김으로 본다. 다음 신호에서 다시 보낸다
+      )
+    beat()
+    const id = window.setInterval(beat, HEARTBEAT_MS)
+    return () => {
+      alive = false
+      window.clearInterval(id)
+    }
+  }, [liveInvite, watching])
+  const needFullscreen = watching && Boolean(live?.proctoring) && !fullscreen
+  // 사용 안내는 위쪽 도움말(?) 버튼을 눌렀을 때만 보여 준다 (대기실에서는 문구가 돌아가며 안내한다)
 
   // 외부 붙여넣기: 시험 화면 안에서 복사한 글이 아닌 것을 붙이면 PASTE 이벤트 (글자 수·위치만, 내용은 보내지 않음)
   useEffect(() => {
@@ -1167,7 +1184,20 @@ export default function RealExam() {
         )}
       </div>
 
-      {tourOpen && <CoachTour steps={examGuideSteps({ proctoring: Boolean(live?.proctoring) })} storageKey="exam-guide" onClose={() => setTourOpen(false)} />}
+      {tourOpen && <CoachTour steps={examGuideSteps({ proctoring: Boolean(live?.proctoring) })} storageKey="exam-guide-v2" onClose={() => setTourOpen(false)} />}
+      {linkExpired && (
+        <div role="alertdialog" aria-modal="true" aria-label="입장 링크 만료" className="fixed inset-0 z-[95] flex items-center justify-center bg-bg/95 p-4">
+          <section className="w-full max-w-[460px] rounded-lg border border-alert/50 bg-panel p-6 text-center shadow-modal">
+            <h2 className="text-h2 font-semibold">입장 링크가 만료되었습니다</h2>
+            <p className="mt-2 text-[15px] leading-6 break-keep text-text-muted">
+              연결이 끊긴 채로 유예 시간(5분)을 넘겨 이 시험 링크가 만료되었습니다. 이 기록은 감독 기록에 남았습니다. 기업 담당자에게 문의해 주세요.
+            </p>
+            <Button variant="primary" className="mt-5" onClick={() => navigate('/')}>
+              나가기
+            </Button>
+          </section>
+        </div>
+      )}
       {needFullscreen && (
         <div role="dialog" aria-modal="true" aria-label="전체 화면 필요" className="fixed inset-0 z-[80] flex items-center justify-center bg-bg/90 p-4 backdrop-blur-sm">
           <section className="w-full max-w-[440px] rounded-lg border border-line bg-panel p-6 text-center shadow-modal">
