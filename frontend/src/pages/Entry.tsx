@@ -28,6 +28,7 @@ import { cx } from '../components/cx'
 import { Button, Logo } from '../components/ui'
 import { Aurora, Glass, GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, StageSection } from '../components/fx'
 import { duration, easing, scale, springs } from '../lib/motion'
+import { enterFullscreen, useFullscreen } from '../lib/fullscreen'
 import { proctorApi, serverOffsetFrom, type EntryInfo } from '../proctor/api/proctorApi.ts'
 import { camHub } from '../proctor/camHub.ts'
 import { saveLiveExam } from '../proctor/liveExam.ts'
@@ -418,6 +419,8 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const save = async (r: EnvCheckResult) => {
+    // 버튼을 누른 직후여야 전체 화면이 허용된다 (대기실 → 시험 화면까지 이어진다)
+    enterFullscreen()
     setSaving(true)
     setError(null)
     try {
@@ -466,12 +469,57 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
 
 // ── 4. 대기실: 다크 무대 ─────────────────────
 const START_RETRY_MS = 1000
-const WAIT_TIPS = [
-  '시험이 시작되면 응시 화면으로 자동 이동합니다.',
-  '브라우저 탭을 벗어나면 이탈로 기록됩니다.',
-  '외부 AI와 검색은 쓸 수 없고, 내장 AI만 쓸 수 있습니다.',
-  '카메라에 얼굴이 계속 보이도록 유지하세요.',
+const TIP_INTERVAL_MS = 5000
+type WaitTip = { text: string; proctoringOnly?: boolean }
+const WAIT_TIPS: WaitTip[] = [
+  { text: '시험이 시작되면 응시 화면으로 자동 이동합니다. 이 화면을 닫지 마세요.' },
+  { text: '시험 중에는 전체 화면을 유지해 주세요.', proctoringOnly: true },
+  { text: '다른 탭이나 창으로 이동하거나 창 전환 키(Alt+Tab, Win 키)를 누르면 이탈로 기록됩니다.', proctoringOnly: true },
+  { text: '외부 AI와 검색은 쓸 수 없고, 시험 화면의 내장 AI만 쓸 수 있습니다.' },
+  { text: '카메라에 얼굴이 계속 보이도록 유지하세요. 휴대폰 캠은 손과 키보드가 보이게 세워 두세요.', proctoringOnly: true },
+  { text: '외부에서 복사한 내용을 붙여 넣으면 기록됩니다.', proctoringOnly: true },
+  { text: '종료 시각이 되면 작업한 내용이 자동으로 제출됩니다.' },
+  { text: '제출하면 파일과 AI 대화가 잠기고, 이어서 후속 질문 3개에 답합니다.' },
+  { text: '시험 화면에 들어가면 각 영역을 설명하는 안내가 나옵니다. 위쪽 도움말(?) 버튼으로 다시 볼 수 있습니다.' },
 ]
+
+/** 대기실 안내 문구: 일정 간격으로 하나씩 바꿔 보여 준다 */
+function RotatingTips({ proctoring }: { proctoring: boolean }) {
+  const reduce = useReducedMotion()
+  const tips = WAIT_TIPS.filter((t) => proctoring || !t.proctoringOnly)
+  const [index, setIndex] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => setIndex((i) => (i + 1) % tips.length), TIP_INTERVAL_MS)
+    return () => window.clearInterval(id)
+  }, [tips.length])
+  const tip = tips[index % tips.length]
+  return (
+    <div className="glass-stage mt-10 flex min-h-[84px] w-[880px] items-center gap-5 rounded-xl px-6 py-4" role="status" aria-live="off">
+      <span className="tnum shrink-0 font-mono text-[13px] font-semibold text-stage-brand">
+        TIP {String(index + 1).padStart(2, '0')} / {String(tips.length).padStart(2, '0')}
+      </span>
+      <div className="relative min-h-[28px] flex-1 overflow-hidden">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p
+            key={index}
+            initial={reduce ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10 }}
+            transition={{ duration: duration.normal, ease: easing.standard }}
+            className="text-[16px] leading-7 break-keep text-stage-text"
+          >
+            {tip.text}
+          </motion.p>
+        </AnimatePresence>
+      </div>
+      <div className="flex shrink-0 gap-1.5" aria-hidden>
+        {tips.map((t, i) => (
+          <i key={t.text} className={cx('size-1.5 rounded-full transition-colors', i === index ? 'bg-stage-brand' : 'bg-stage-line')} />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function StageChip({ children }: { children: ReactNode }) {
   return <span className="glass-stage inline-flex h-8 items-center gap-2 rounded-full px-3 text-[13px] font-semibold text-stage-text">{children}</span>
@@ -482,7 +530,7 @@ function Dot({ ok }: { ok: boolean }) {
 }
 
 /** 대기실 화면: 원형 진행 고리 + 카운트다운. 시각 계산은 감싸는 쪽(데모·실전)이 한다 */
-function WaitingStage({ view, left, total, chips, footer }: { view: ExamView; left: number; total: number; chips: ReactNode; footer: ReactNode }) {
+function WaitingStage({ view, left, total, chips, footer, proctoring }: { view: ExamView; left: number; total: number; chips: ReactNode; footer: ReactNode; proctoring: boolean }) {
   const reduce = useReducedMotion()
   const mm = String(Math.floor(left / 60)).padStart(2, '0')
   const ss = String(left % 60).padStart(2, '0')
@@ -534,14 +582,7 @@ function WaitingStage({ view, left, total, chips, footer }: { view: ExamView; le
         </div>
       </div>
 
-      <RevealGroup className="mt-10 grid w-[880px] grid-cols-4 gap-3">
-        {WAIT_TIPS.map((t, i) => (
-          <RevealItem key={t} className="glass-stage rounded-xl px-4 py-4">
-            <span className="font-mono text-[13px] font-semibold text-stage-brand">{String(i + 1).padStart(2, '0')}</span>
-            <p className="mt-1 text-[14px] leading-6 text-stage-text">{t}</p>
-          </RevealItem>
-        ))}
-      </RevealGroup>
+      <RotatingTips proctoring={proctoring} />
 
       <div className="mt-10 flex items-center gap-4">{footer}</div>
     </div>
@@ -562,6 +603,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
   const [total] = useState(() => Math.max(60, secondsUntil(startsAt, offsetMs)))
   const [error, setError] = useState<string | null>(null)
   const starting = useRef(false)
+  const fullscreen = useFullscreen()
 
   useEffect(() => {
     proctorApi.enter(invite).catch((e: Error) => setError(e.message))
@@ -626,7 +668,20 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
   ) : (
     <span className="text-[14px] text-stage-muted">{left > 0 ? '시작 시각이 되면 자동으로 시작합니다. 이 화면을 닫지 마세요.' : '시험을 시작하는 중입니다'}</span>
   )
-  return <WaitingStage view={view} left={left} total={total} chips={chips} footer={footer} />
+  const extras = (
+    <>
+      {info.proctoring && !fullscreen && (
+        <Button variant="ghost" size="sm" className="border border-stage-line text-stage-text!" onClick={enterFullscreen}>
+          전체 화면 켜기
+        </Button>
+      )}
+    </>
+  )
+  return (
+    <>
+      <WaitingStage view={view} left={left} total={total} chips={chips} footer={<>{footer}{extras}</>} proctoring={info.proctoring} />
+    </>
+  )
 }
 
 // ── 실제 입장 링크: 입장 정보 불러오기 ──
