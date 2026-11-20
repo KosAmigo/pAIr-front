@@ -37,7 +37,7 @@ const home = (
 // 휴대폰 보조 캠 (실전 시험, PC 화면의 QR 로 들어온다). 분석 모델이 무거워 따로 불러온다
 const PhoneCamPage = lazy(() => import('./proctor/react/PhoneCamPage.tsx'))
 const phoneCam = (
-  <Suspense fallback={<div className="min-h-full bg-bg" />}>
+  <Suspense fallback={<div className="mobile-layout min-h-full bg-bg" />}>
     <PhoneCamPage />
   </Suspense>
 )

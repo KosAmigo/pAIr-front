@@ -1,6 +1,8 @@
 import { describe, expect, it } from './expect.ts'
 import {
   CoverageTracker,
+  HEAD_TURN,
+  HeadTurnTracker,
   audioVerdict,
   cameraVerdict,
   frameDifference,
@@ -117,4 +119,55 @@ describe('360도 스캔', () => {
 it('fail이 하나라도 있으면 리포트 실패', () => {
   expect(makeReport([{ id: 'a', label: 'a', status: 'warn', detail: '' }]).passed).toBe(true)
   expect(makeReport([{ id: 'a', label: 'a', status: 'fail', detail: '' }]).passed).toBe(false)
+})
+
+describe('귀 확인: 고개 돌림', () => {
+  const t0 = 1000
+  /** 프레임을 gapMs 간격으로 흘려 보내고, 판정이 나오면 그 값을 돌려준다 */
+  function feed(tracker: HeadTurnTracker, frames: { yaw?: number; faces: number }[], gapMs = 66, start = t0) {
+    let result = 0
+    frames.forEach((f, i) => {
+      const r = tracker.update(f.yaw, f.faces, start + i * gapMs)
+      if (r && !result) result = r
+    })
+    return result
+  }
+  const hold = (yaw: number, ms: number) => Array.from({ length: Math.ceil(ms / 66) + 1 }, () => ({ yaw, faces: 1 }))
+
+  it('기준 각도 이상을 잠깐 유지하면 돌린 방향을 돌려준다', () => {
+    expect(feed(new HeadTurnTracker(0), hold(HEAD_TURN.deg + 2, 400))).toBe(1)
+    expect(feed(new HeadTurnTracker(0), hold(-(HEAD_TURN.deg + 2), 400))).toBe(-1)
+  })
+
+  it('각도가 모자라거나 너무 짧으면 인정하지 않는다', () => {
+    expect(feed(new HeadTurnTracker(0), hold(HEAD_TURN.deg - 8, 800))).toBe(0)
+    expect(feed(new HeadTurnTracker(0), hold(HEAD_TURN.deg + 2, 100))).toBe(0)
+  })
+
+  it('이미 확인한 쪽(avoidSign)은 인정하지 않고 반대쪽만 인정한다', () => {
+    expect(feed(new HeadTurnTracker(1), hold(HEAD_TURN.deg + 5, 800))).toBe(0)
+    expect(feed(new HeadTurnTracker(1), hold(-(HEAD_TURN.deg + 5), 400))).toBe(-1)
+  })
+
+  it('끝까지 돌려서 얼굴 모델이 얼굴을 놓쳐도, 방금까지 돌리고 있었다면 인정한다', () => {
+    const frames = [...hold(HEAD_TURN.deg + 5, 200), { yaw: undefined, faces: 0 }, { yaw: undefined, faces: 0 }]
+    expect(feed(new HeadTurnTracker(0), frames)).toBe(1)
+  })
+
+  it('얼굴이 안 보여도 돌리던 중이 아니었다면 인정하지 않는다', () => {
+    const frames = Array.from({ length: 30 }, () => ({ yaw: undefined, faces: 0 }))
+    expect(feed(new HeadTurnTracker(0), frames)).toBe(0)
+  })
+
+  it('돌리다 말고 정면으로 돌아오면 처음부터 다시 센다', () => {
+    const frames = [...hold(HEAD_TURN.deg + 5, 120), ...hold(0, 300), { yaw: undefined, faces: 0 }, { yaw: undefined, faces: 0 }]
+    expect(feed(new HeadTurnTracker(0), frames)).toBe(0)
+  })
+
+  it('돌린 뒤 얼굴이 오래 안 보이면(유예 초과) 인정하지 않는다', () => {
+    const tracker = new HeadTurnTracker(0)
+    const strong = hold(HEAD_TURN.deg + 5, 60) // 한 프레임뿐이라 아직 확정 전
+    expect(feed(tracker, strong)).toBe(0)
+    expect(tracker.update(undefined, 0, t0 + HEAD_TURN.lostGraceMs + 500)).toBe(0)
+  })
 })

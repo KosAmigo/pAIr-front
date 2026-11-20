@@ -229,3 +229,47 @@ export function scanVerdict(found: Record<string, number>, stage: 'room' | 'desk
     detail: `${parts.join(', ')} 감지. ${fail ? '치운 뒤 다시 스캔해 주세요.' : '시험용 노트북 외의 화면이면 꺼 주세요.'}`,
   }
 }
+
+/**
+ * 귀 확인에서 "고개를 한쪽으로 끝까지 돌렸다"를 알아내는 기준.
+ * deg: 이 각도(절댓값) 이상이면 돌린 것, holdMs: 이만큼 유지하면 확정,
+ * minStrongMs: 얼굴을 놓친 경우에도 인정하려면 먼저 이만큼은 돌려 보여야 함, lostGraceMs: 돌리다 얼굴을 놓친 뒤 인정해 주는 시간
+ */
+export const HEAD_TURN = { deg: 35, holdMs: 300, minStrongMs: 100, lostGraceMs: 700 }
+
+/**
+ * 고개를 돌린 방향을 판정한다. 얼굴 모델은 고개를 거의 옆모습까지 돌리면 얼굴을 놓쳐서 각도가 사라진다.
+ * 그래서 "기준 각도 이상으로 돌리다가 곧바로 얼굴이 사라진" 경우도 돌린 것으로 인정한다
+ * (옆모습을 보여 준 것이고, 귀 사진은 그 순간 찍는다).
+ * 이미 확인한 쪽(avoidSign)은 인정하지 않는다. 프레임마다 update 를 부르고, 0 이 아닌 값(+1/-1)이 나오면 확정이다.
+ */
+export class HeadTurnTracker {
+  private heldSince: number | null = null
+  private lastStrongAt: number | null = null
+  private sign = 0
+  private readonly avoidSign: number
+  private readonly cfg: typeof HEAD_TURN
+
+  constructor(avoidSign: number, cfg: typeof HEAD_TURN = HEAD_TURN) {
+    this.avoidSign = avoidSign
+    this.cfg = cfg
+  }
+
+  update(yaw: number | undefined, faceCount: number, now: number): number {
+    const strong = yaw !== undefined && Math.abs(yaw) >= this.cfg.deg && Math.sign(yaw) !== this.avoidSign
+    if (strong) {
+      this.heldSince ??= now
+      this.lastStrongAt = now
+      this.sign = Math.sign(yaw)
+      return now - this.heldSince >= this.cfg.holdMs ? this.sign : 0
+    }
+    if (faceCount === 0 && this.heldSince !== null && this.lastStrongAt !== null) {
+      const turnedLongEnough = this.lastStrongAt - this.heldSince >= this.cfg.minStrongMs
+      return turnedLongEnough && now - this.lastStrongAt <= this.cfg.lostGraceMs ? this.sign : 0
+    }
+    // 얼굴은 보이는데 기준 각도에 못 미침(정면으로 돌아옴 등): 처음부터 다시
+    this.heldSince = null
+    this.lastStrongAt = null
+    return 0
+  }
+}

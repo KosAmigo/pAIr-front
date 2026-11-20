@@ -1,6 +1,6 @@
 // 휴대폰 환경 점검: 조명 → 방 360도 스캔 → 책상 위 스캔.
 // 작은·먼 물체를 놓치지 않도록 키프레임마다 고해상도 프레임을 타일로 나눠 감지한다.
-// 점검 사진은 릴레이로 PC 에 넘기기만 하고 서버에 저장하지 않는다 (PC 가 정밀 분석).
+// 점검 사진은 릴레이로 PC 에 넘기기만 하고 서버에 저장하지 않는다.
 import { useEffect, useRef, useState } from 'react'
 import type { ObjectDetector } from '@mediapipe/tasks-vision'
 import { RefreshCw } from 'lucide-react'
