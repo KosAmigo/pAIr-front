@@ -1,6 +1,7 @@
 // 콘솔 API (pAIr-back: ExamConsoleController, TaskConsoleController). 데이터는 모두 백엔드(AWS RDS)에서 온다.
 // 응답 타입은 백엔드 ExamDtos, SessionResultService, TaskConsoleService 의 record 와 같은 모양이다.
 import { ApiError, call, getAuthHeaders, type Task } from './api'
+import { authenticatedFetch, AuthRequestError } from './auth/authApi'
 
 const enc = encodeURIComponent
 
@@ -146,8 +147,9 @@ export type ConsoleTaskDetail = {
 async function upload<T>(url: string, form: FormData): Promise<T> {
   let res: Response
   try {
-    res = await fetch(url, { method: 'POST', headers: getAuthHeaders(), body: form })
-  } catch {
+    res = await authenticatedFetch(url, { method: 'POST', headers: getAuthHeaders(), body: form })
+  } catch (error) {
+    if (error instanceof AuthRequestError) throw error
     throw new ApiError('백엔드에 연결할 수 없습니다. backend 서버(포트 8180)가 켜져 있는지 확인하세요.')
   }
   const text = await res.text()
@@ -158,7 +160,7 @@ async function upload<T>(url: string, form: FormData): Promise<T> {
 
 /** 로그인 헤더가 필요한 파일(CSV, 사진)을 받아 브라우저 URL 로 바꾼다 */
 async function blobUrl(url: string): Promise<string> {
-  const res = await fetch(url, { headers: getAuthHeaders() })
+  const res = await authenticatedFetch(url, { headers: getAuthHeaders() })
   if (!res.ok) throw new ApiError(`파일을 받지 못했습니다 (${res.status})`)
   return URL.createObjectURL(await res.blob())
 }

@@ -8,8 +8,13 @@ AI 활용 역량 진단 플랫폼 프런트 (React, TypeScript, Vite). 백엔드
 - 빌드: `npm --prefix frontend run build`
 
 ## 테스트
+- 인증·토큰 재발급: `npm --prefix frontend run test:auth`
 - 브라우저 이벤트 감독: `npm --prefix frontend run test:anti-cheating`
 - 카메라 감독 규칙·환경 점검·연결부: `npm --prefix frontend run test:proctor`
+
+## 인증 저장 방식
+- 기존 로그인 유지 방식에 따라 액세스·리프레시 토큰을 `localStorage`에 보관한다. HttpOnly 쿠키가 아니므로 XSS가 발생하면 두 토큰 모두 탈취될 수 있다. 안전한 장기 운영을 위해 백엔드의 HttpOnly·Secure 쿠키 전환과 CSP 등 XSS 방어가 필요하다.
+- 동시 재발급은 한 탭에서 공유하며, Web Locks API를 지원하는 보안 컨텍스트에서는 탭 사이에서도 직렬화한다. Web Locks를 지원하지 않는 환경에서는 탭 간 동시 재발급을 보장하지 못한다.
 
 ## 폴더
 - `frontend/` 프런트 코드
