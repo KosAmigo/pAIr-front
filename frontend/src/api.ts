@@ -1,10 +1,6 @@
 // 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
-<<<<<<< Updated upstream
-import { readAuthSession } from './auth/authApi.ts'
-import type { QuestionResults } from './data/questions.ts'
-=======
 import { authenticatedFetch, AuthRequestError, readAuthSession } from './auth/authApi.ts'
->>>>>>> Stashed changes
+import type { QuestionResults } from './data/questions.ts'
 
 export type TaskType = 'dev' | 'biz'
 
