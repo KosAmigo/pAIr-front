@@ -1,14 +1,14 @@
-// 시험 전 환경 점검 (PC): 장치·모니터·조명·자세·귀·손목 → 휴대폰 방·책상 스캔 → 정밀 분석.
+// 시험 전 환경 점검 (PC): 장치·모니터·조명·자세·귀·손목 → 휴대폰 방·책상 스캔.
 // 통과하면 결과 JSON(휴대폰 결과 포함)을 onPassed 로 넘긴다. 호출하는 쪽이 동의 API 로 저장한다.
 import { useEffect, useRef, useState } from 'react'
 import type { FaceLandmarkerResult, HandLandmarkerResult, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import { RefreshCw, ScanFace } from 'lucide-react'
 import { Button } from '../../components/ui'
-import { camHub, type ScanFrame } from '../camHub.ts'
-import type { DeepFinding } from '../check/deepScan.ts'
+import { camHub } from '../camHub.ts'
 import {
   audioVerdict,
   cameraVerdict,
+  HeadTurnTracker,
   lightingVerdict,
   lumaStats,
   makeReport,
@@ -31,7 +31,7 @@ import { PhonePairCard } from './PhonePairCard.tsx'
 import { useCamHub } from './useCamHub.ts'
 import { CAN_SKIP_CHECKS, clearChecksSkipped, markChecksSkipped } from '../testSkip.ts'
 
-export type EnvCheckResult = { pc: CheckReport; phone: CheckReport | null; flagged: { stage: ScanStage; source: string; labels: string[] }[] }
+export type EnvCheckResult = { pc: CheckReport; phone: CheckReport | null }
 
 const INITIAL: CheckItem[] = [
   { id: 'browser', label: '브라우저', status: 'pending', detail: '' },
@@ -44,12 +44,10 @@ const INITIAL: CheckItem[] = [
   { id: 'ears', label: '양쪽 귀 (이어폰 착용 여부)', status: 'pending', detail: '' },
   { id: 'wrist', label: '양 손목 (스마트워치 · 손에 쓴 글씨)', status: 'pending', detail: '' },
   { id: 'phone', label: '휴대폰 캠: 방 360도 · 책상 위 스캔', status: 'pending', detail: '' },
-  { id: 'deep', label: '정밀 분석 (메모지·이어폰·스마트워치 등)', status: 'pending', detail: '' },
 ]
 
 const HOLD_MS = 1500
 const POSE_TIMEOUT_MS = 25000
-const HEAD_TURN_DEG = 45
 /** 점검 중 분석 간격(약 15fps). 얼굴·포즈·손 모델이 메인 스레드에서 동기로 돌아 매 프레임(30fps) 돌리면 화면이 버벅인다 */
 const MIN_ANALYSIS_GAP_MS = 66
 
@@ -75,7 +73,6 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
   const hub = useCamHub()
   const [items, setItems] = useState(INITIAL)
   const [prompt, setPrompt] = useState('')
-  const [findings, setFindings] = useState<{ frame: ScanFrame; found: DeepFinding[] }[]>([])
   const [result, setResult] = useState<EnvCheckResult | null>(null)
   const [run, setRun] = useState(0)
   const [skipPhone, setSkipPhone] = useState(false)
@@ -103,7 +100,6 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
 
     async function main() {
       setItems(current)
-      setFindings([])
       setResult(null)
       camHub.resetCheck()
       setPrompt('카메라와 분석 모델을 준비하는 중입니다 (처음 한 번은 조금 걸립니다)')
@@ -165,23 +161,18 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
         if (image) camHub.addPcFrame(stage, image)
       }
 
-      /** 고개를 한쪽으로 HEAD_TURN_DEG 이상 0.4초 돌린 순간. avoidSign 쪽은 제외 */
+      /** 고개를 한쪽으로 끝까지 돌린 순간 (얼굴 모델이 옆모습에서 얼굴을 놓쳐도 인정). avoidSign 쪽은 제외 */
       const waitHeadTurn = (avoidSign: number) => {
-        let held: number | null = null
-        let sign = 0
+        const tracker = new HeadTurnTracker(avoidSign)
+        let turned = 0
         return waitFrames(
           (f, now) => {
-            if (f.yaw === undefined || Math.abs(f.yaw) < HEAD_TURN_DEG || Math.sign(f.yaw) === avoidSign) {
-              held = null
-              return false
-            }
-            held ??= now
-            sign = Math.sign(f.yaw)
-            return now - held > 400
+            turned = tracker.update(f.yaw, f.faceCount, now)
+            return turned !== 0
           },
           POSE_TIMEOUT_MS,
           { face: true },
-        ).then((ok) => (ok ? sign : 0))
+        ).then((ok) => (ok ? turned : 0))
       }
 
       // 1) 브라우저·장치 (즉시)
@@ -234,7 +225,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       setPrompt('이번에는 반대쪽으로 끝까지 돌려 주세요')
       const second = first ? await waitHeadTurn(first) : 0
       if (second) snap('ear-right')
-      apply('ears', second ? { status: 'pass', detail: '양쪽 귀 사진 확보 (정밀 분석에서 이어폰 확인)' } : { status: 'warn', detail: '귀를 충분히 보여 주지 않았습니다.' })
+      apply('ears', second ? { status: 'pass', detail: '양쪽 귀 사진 확보 (감독 기록에 남습니다)' } : { status: 'warn', detail: '귀를 충분히 보여 주지 않았습니다.' })
       if (cancelled) return
 
       // 4) 손목: 두 손을 1초 보여 주기
@@ -254,7 +245,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
         { hand: true },
       )
       if (wristOk) snap('wrist')
-      apply('wrist', wristOk ? { status: 'pass', detail: '손목 사진 확보 (정밀 분석에서 확인)' } : { status: 'warn', detail: '두 손이 함께 보이지 않았습니다.' })
+      apply('wrist', wristOk ? { status: 'pass', detail: '손목 사진 확보 (감독 기록에 남습니다)' } : { status: 'warn', detail: '두 손이 함께 보이지 않았습니다.' })
       if (cancelled) return
 
       // 5) 휴대폰 스캔 결과 기다리기
@@ -276,35 +267,9 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
         apply('phone', { status: 'warn', detail: '휴대폰 점검을 건너뛰었습니다 (감독 기록에 남습니다).' })
       }
 
-      // 6) 정밀 분석: 점검 사진 전부를 글로 찾는 모델(OWL-ViT)로 다시 본다. 자동 판정이 아니라 검토 표시
       setPrompt('')
-      set('deep', { status: 'running', detail: '분석 모델 내려받는 중 (처음 한 번, 약 150MB)' })
-      const flagged: EnvCheckResult['flagged'] = []
-      try {
-        const { deepScan, loadDeepDetector } = await import('../check/deepScan.ts')
-        await loadDeepDetector((r) => set('deep', { detail: `분석 모델 내려받는 중 ${(r * 100).toFixed(0)}%` }))
-        const frames = live.current.scanFrames
-        const results: { frame: ScanFrame; found: DeepFinding[] }[] = []
-        for (let i = 0; i < frames.length && !cancelled; i++) {
-          set('deep', { detail: `사진 분석 중 ${i + 1}/${frames.length}` })
-          results.push({ frame: frames[i], found: await deepScan(frames[i].image, frames[i].stage) })
-          setFindings([...results])
-        }
-        for (const r of results) if (r.found.length) flagged.push({ stage: r.frame.stage, source: r.frame.source, labels: r.found.map((f) => f.label) })
-        const labels = [...new Set(flagged.flatMap((f) => f.labels))]
-        apply(
-          'deep',
-          frames.length === 0
-            ? { status: 'warn', detail: '분석할 점검 사진이 없습니다.' }
-            : flagged.length
-              ? { status: 'warn', detail: `사진 ${flagged.length}/${frames.length}장 검토 필요: ${labels.join(', ')}` }
-              : { status: 'pass', detail: `사진 ${frames.length}장 이상 없음` },
-        )
-      } catch (e) {
-        apply('deep', { status: 'warn', detail: `정밀 분석 실패: ${e instanceof Error ? e.message : String(e)}` })
-      }
       if (cancelled) return
-      setResult({ pc: makeReport(current), phone: live.current.phoneReport, flagged })
+      setResult({ pc: makeReport(current), phone: live.current.phoneReport })
     }
 
     void main()
@@ -320,7 +285,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
   const skipAllChecks = () => {
     const skipped = items.map((i) => ({ ...i, status: 'pass' as const, detail: '테스트용으로 건너뜀' }))
     markChecksSkipped()
-    onPassed({ pc: makeReport(skipped), phone: null, flagged: [] })
+    onPassed({ pc: makeReport(skipped), phone: null })
   }
   const phoneRunning = items.find((i) => i.id === 'phone')?.status === 'running'
 
@@ -353,9 +318,6 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
           <Button variant="ghost" size="sm" className="self-start" onClick={() => setSkipPhone(true)}>
             휴대폰 없이 진행
           </Button>
-        )}
-        {findings.some((f) => f.found.length) && (
-          <p className="text-[13px] text-text-muted">검토 필요로 표시된 사진은 자동 판정이 아니라 감독관 확인용입니다.</p>
         )}
         {result && (
           <div className="flex items-center gap-3 border-t border-line pt-3">

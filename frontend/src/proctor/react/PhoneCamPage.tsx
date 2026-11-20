@@ -31,7 +31,7 @@ import { detectedObjects, phoneFeatures } from '../vision/features.ts'
 import { createHandLandmarker, createObjectDetector, createPoseLandmarker, createScanDetector } from '../vision/models.ts'
 import { PhoneScan } from './PhoneScan.tsx'
 
-type Phase = 'connecting' | 'ready' | 'loading' | 'scan' | 'place' | 'calibrating' | 'monitoring' | 'error'
+type Phase = 'connecting' | 'ready' | 'loading' | 'scan' | 'switching' | 'place' | 'calibrating' | 'monitoring' | 'error'
 type Models = { hand: HandLandmarker; pose: PoseLandmarker; object: ObjectDetector; scan: ObjectDetector }
 
 const CALIBRATION_MS = 3000
@@ -62,6 +62,8 @@ export default function PhoneCamPage() {
   const error = pairCode ? errorState : 'PC 화면의 QR 코드로 접속해 주세요.'
   const fatal = pairCode ? fatalState : true
   const [lastWarning, setLastWarning] = useState('')
+  /** 카메라를 바꾸지 못했을 때 등 화면에 띄울 안내 */
+  const [notice, setNotice] = useState('')
   const [calibProgress, setCalibProgress] = useState(0)
   const [hud, setHud] = useState({ fps: 0, hands: 0, objects: '' })
   const [gyro, setGyro] = useState(false)
@@ -130,6 +132,32 @@ export default function PhoneCamPage() {
       setPhase('error')
       setError(e instanceof Error ? e.message : String(e))
     }
+  }
+
+  /**
+   * 방·책상 스캔은 후면 카메라로 하고, 시험 중 감독은 전면 카메라로 한다.
+   * 스캔이 끝나면 후면 카메라를 닫고 전면으로 바꾼다. 전면을 열지 못하면 후면으로 돌아가 계속한다.
+   */
+  async function switchToMonitoringCamera() {
+    const video = videoRef.current
+    if (!video) return
+    setPhase('switching')
+    setNotice('')
+    stopCamera(streamRef.current)
+    streamRef.current = null
+    try {
+      streamRef.current = await openCamera(video, 'user', { width: 1280, height: 720 })
+    } catch {
+      try {
+        streamRef.current = await openCamera(video, 'environment', { width: 1280, height: 720 })
+        setNotice('전면 카메라를 열 수 없어 후면 카메라로 계속합니다.')
+      } catch (e) {
+        setPhase('error')
+        setError(e instanceof Error ? e.message : String(e))
+        return
+      }
+    }
+    setPhase('place')
   }
 
   /** 한 프레임 분석. 무거운 물체 감지는 0.5초마다만 돌리고 결과를 재사용한다 */
@@ -241,7 +269,7 @@ export default function PhoneCamPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col bg-bg">
+    <div className="mobile-layout mx-auto flex min-h-full w-full max-w-[560px] flex-col bg-bg">
       <header className="flex h-12 items-center gap-2 border-b border-line bg-panel px-4">
         <Logo />
         <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-text-muted">
@@ -264,6 +292,7 @@ export default function PhoneCamPage() {
       <main className="flex flex-col gap-3 p-4">
         {phase === 'connecting' && <p className="text-[15px]">PC 와 연결하는 중입니다</p>}
         {phase === 'loading' && <p className="text-[15px]">카메라와 분석 모델을 준비하는 중입니다</p>}
+        {phase === 'switching' && <p className="text-[15px]">스캔을 마쳤습니다. 시험 중 감독에 쓸 전면 카메라로 바꾸는 중입니다</p>}
         {phase === 'error' && (
           <p role="alert" className="rounded-lg border border-alert/40 bg-alert/10 px-3 py-2 text-[14px] text-alert">
             {error}
@@ -288,14 +317,15 @@ export default function PhoneCamPage() {
             send={sendMsg}
             onDone={() => {
               scanDoneRef.current = true
-              setPhase('place')
+              void switchToMonitoringCamera()
             }}
           />
         )}
         {phase === 'place' && (
           <>
+            {notice && <p className="text-[13px] leading-5 break-keep text-caution">{notice}</p>}
             <p className="text-[15px] leading-6 break-keep">
-              휴대폰을 옆이나 뒤에 세워 <b>두 손, 키보드, 시험 화면</b>이 함께 보이게 놓아 주세요.
+              시험 중에는 <b>전면 카메라</b>를 씁니다. 휴대폰을 옆이나 뒤에 세워, 화면이 있는 쪽 카메라에 <b>두 손, 키보드, 시험 화면</b>이 함께 보이게 놓아 주세요.
             </p>
             <Button variant="primary" size="lg" onClick={runCalibration}>
               배치 완료
