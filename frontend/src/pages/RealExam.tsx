@@ -6,6 +6,8 @@ import { SendKey } from '../components/SendKey'
 import { cx } from '../components/cx'
 import { Button, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
+import { QuestionPanel } from '../components/questions/QuestionPanel'
+import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
 import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
@@ -553,6 +555,9 @@ export default function RealExam() {
   const [fuIndex, setFuIndex] = useState(0)
   const [fuAnswers, setFuAnswers] = useState<string[] | null>(null)
   const [refTab, setRefTab] = useState<'prompts' | 'file'>('prompts')
+  // 객관식·단답형 문항 (비개발 과제). 풀이 중이 아니면 읽기 전용
+  const qs = useQuestions(sessionId, stage !== 'solve')
+  const hasQuestions = qs.questions.length > 0 || qs.load === 'error'
   const watching = Boolean(live && view && (view.attempt.status === 'SOLVING' || view.attempt.status === 'FOLLOWUP'))
   // 감독 회차면 브라우저 이탈도 회차 감독 기록(proctor_events, source=BROWSER)에 함께 남긴다
   const forwardViolation = useCallback(
@@ -827,6 +832,7 @@ export default function RealExam() {
     setActionError(null)
     try {
       await saveFiles()
+      await qs.flush()
       await api.submit(sessionId)
       setConfirm(false)
       setStage('followup')
@@ -912,7 +918,7 @@ export default function RealExam() {
 
       <div
         className="grid min-h-0 flex-1"
-        style={{ gridTemplateColumns: `48px ${side ? '280px ' : ''}minmax(0,1fr)${showChat ? ' 380px' : ''}` }}
+        style={{ gridTemplateColumns: `48px ${side ? (side === 'questions' ? '360px ' : '280px ') : ''}minmax(0,1fr)${showChat ? ' 380px' : ''}` }}
       >
         <ActivityRail
           side={side}
@@ -922,14 +928,17 @@ export default function RealExam() {
           outputLabel={dev ? '실행 결과' : '체크리스트'}
           showChat={showChat}
           onToggleChat={() => setShowChat((v) => !v)}
+          questions={hasQuestions ? { answered: qs.answered, total: qs.questions.length } : undefined}
         />
         {/* 사이드 패널: 과제 / 파일 */}
         {side && (
         <aside className="flex min-h-0 flex-col border-r border-line bg-panel">
           <header className="flex h-10 shrink-0 items-center border-b border-line px-4">
-            <span className="label">{side === 'task' ? 'TASK' : 'EXPLORER'}</span>
+            <span className="label">{side === 'task' ? 'TASK' : side === 'questions' ? 'QUESTIONS' : 'EXPLORER'}</span>
           </header>
-          {side === 'task' ? (
+          {side === 'questions' ? (
+            <QuestionPanel qs={qs} />
+          ) : side === 'task' ? (
             <div className="fade-in min-h-0 flex-1 overflow-auto p-4">
               <span className="label">{dev ? 'DEV' : 'BIZ'} TASK</span>
               <h2 className="mt-1 text-h3 font-semibold">{task.title}</h2>
@@ -947,6 +956,18 @@ export default function RealExam() {
                   </li>
                 ))}
               </ol>
+              {hasQuestions && (
+                <button
+                  type="button"
+                  onClick={() => setSide('questions')}
+                  className="mt-6 flex w-full items-center justify-between rounded-md border border-line bg-panel-raised/40 px-3 py-2.5 text-left text-[15px] font-semibold text-text hover:border-line-strong"
+                >
+                  <span>문항 풀기</span>
+                  <span className="tnum font-mono text-[13px] font-normal text-text-muted">
+                    {qs.answered}/{qs.questions.length}
+                  </span>
+                </button>
+              )}
               <h3 className="label mt-6">NOTES</h3>
               <ul className="mt-2 space-y-2">
                 {task.notes.map((n) => (

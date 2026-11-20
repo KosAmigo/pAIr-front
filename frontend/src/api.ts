@@ -1,5 +1,6 @@
 // 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
 import { readAuthSession } from './auth/authApi.ts'
+import type { QuestionResults } from './data/questions.ts'
 
 export type TaskType = 'dev' | 'biz'
 
@@ -122,6 +123,8 @@ export type Report = {
   chatTurns: number
   firstValidMinutes: number | null
   items: ReportItem[]
+  /** 객관식·단답형 문항 점수. 6개 역량 100점과 따로 센다. 문항이 없는 과제나 예전 리포트는 없음/null */
+  questions?: QuestionResults | null
   notes: string[]
   hiddenTests?: { name: string; passed: boolean }[]
   r2KeyTurns?: { turn: number; adoption: number; verdicts: { replay: number; same: boolean; reason: string }[] }[]
