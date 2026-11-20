@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { collapse, fileChange } from '../src/lib/codeCompare.ts'
 import { changeKind, changedItems, commonPrefixLength, shortTurns, sideText } from '../src/lib/replayCompare.ts'
 
 const side = (status, deducted = 0, reason = null) => ({ status, deducted, reason, evidence: [] })
@@ -52,4 +53,32 @@ test('the shared start of two conversations is counted until the first differenc
   assert.equal(commonPrefixLength(a, a), 4)
   assert.equal(commonPrefixLength(a, []), 0)
   assert.equal(commonPrefixLength([t(1, 'user', 'x')], [t(1, 'user', 'y')]), 0)
+})
+
+test('unchanged lines far from a change are folded into a skip marker', () => {
+  const same = (t) => ({ kind: 'same', text: t })
+  const lines = [...Array.from({ length: 10 }, (_, i) => same(`a${i}`)), { kind: 'add', text: 'new' }, ...Array.from({ length: 10 }, (_, i) => same(`b${i}`))]
+  const out = collapse(lines, 2)
+  assert.deepEqual(out.map((l) => l.kind), ['skip', 'same', 'same', 'add', 'same', 'same', 'skip'])
+  assert.equal(out[0].skipped, 8)
+  assert.equal(out[6].skipped, 8)
+  assert.deepEqual(collapse([same('x'), same('y')], 3), [{ kind: 'skip', skipped: 2 }])
+})
+
+test('a file pair becomes added, removed or modified with line counts', () => {
+  const m = fileChange({ path: 'A.java', a: 'x\ny\nz', b: 'x\nY\nz\nw' })
+  assert.equal(m.status, 'modified')
+  assert.deepEqual([m.add, m.del], [2, 1])
+  assert.equal(fileChange({ path: 'N.java', a: null, b: 'class N {}\n' }).status, 'added')
+  assert.equal(fileChange({ path: 'N.java', a: null, b: 'l1\nl2' }).add, 2)
+  const r = fileChange({ path: 'O.java', a: 'old', b: null })
+  assert.deepEqual([r.status, r.add, r.del], ['removed', 0, 1])
+})
+
+test('very large files skip the line comparison', () => {
+  const big = Array.from({ length: 2500 }, (_, i) => `line ${i}`).join('\n')
+  const other = Array.from({ length: 2500 }, (_, i) => `row ${i}`).join('\n')
+  const c = fileChange({ path: 'Big.java', a: big, b: other })
+  assert.equal(c.tooLarge, true)
+  assert.deepEqual(c.lines, [])
 })

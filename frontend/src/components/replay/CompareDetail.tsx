@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { branchColor, type TreeRow } from '../../lib/replayTree'
 import { CheckReasons } from './CheckReasons'
+import { CodeCompare } from './CodeCompare'
 import { ScoreTable } from './ScoreTable'
 
 type Scored = TreeRow & { score: NonNullable<TreeRow['score']> }
@@ -10,6 +11,7 @@ const color = (branch: number) => `var(--color-branch-${branchColor(branch)})`
 /**
  * 두 풀이를 골랐을 때 복기 트리와 AI 대화 기록 아래에 열리는 상세 박스.
  * 왼쪽은 항목별 점수 비교, 오른쪽은 점수가 왜 달라졌는지(결과가 바뀐 감점 체크와 채점 이유·근거).
+ * 맨 아래는 두 풀이의 최종 코드에서 바뀐 부분.
  */
 export function CompareDetail({ a, b, onClear }: { a: Scored; b: Scored; onClear: () => void }) {
   return (
@@ -34,6 +36,7 @@ export function CompareDetail({ a, b, onClear }: { a: Scored; b: Scored; onClear
           <CheckReasons aId={a.attemptId} bId={b.attemptId} aLabel={a.label} bLabel={b.label} />
         </div>
       </div>
+      <CodeCompare aId={a.attemptId} bId={b.attemptId} />
     </section>
   )
 }
