@@ -196,6 +196,8 @@ export const consoleApi = {
 
   // 결과
   results: (id: number) => call<SessionResult>('GET', `${S}/${id}/results`),
+  /** 종료된 회차에서 채점으로 넘어가지 못한 응시를 다시 넘긴다 (pending: 멈춘 응시 수, failed: 이번에도 못 넘긴 수) */
+  rescueSession: (id: number) => call<{ pending: number; failed: number }>('POST', `${S}/${id}/rescue`),
   resultsCsvUrl: (id: number) => blobUrl(`${S}/${id}/results.csv`),
   resultsXlsxUrl: (id: number) => blobUrl(`${S}/${id}/results.xlsx`),
   templateXlsxUrl: () => blobUrl(`${S}/participants-template.xlsx`),
