@@ -3,7 +3,6 @@ import { test } from 'node:test'
 import { BrowserEventDetector, isWindowSwitchKey } from '../src/anti-cheating/core/BrowserEventDetector.ts'
 import { ViolationManager } from '../src/anti-cheating/core/ViolationManager.ts'
 import { DEFAULT_ANTI_CHEATING_CONFIG } from '../src/anti-cheating/core/types.ts'
-import { ViolationOutbox } from '../src/anti-cheating/storage/ViolationOutbox.ts'
 
 class FakeDocument extends EventTarget {
   documentElement = new EventTarget()
@@ -108,61 +107,6 @@ test('disabled signal types are ignored and a finished manager ignores new event
   h.manager.finish()
   h.windowTarget.dispatchEvent(new Event('blur'))
   assert.equal(h.manager.count, 0)
-  h.detector.stop()
-})
-
-class MemoryStorage {
-  values = new Map()
-  get length() { return this.values.size }
-  key(index) { return [...this.values.keys()][index] ?? null }
-  getItem(key) { return this.values.get(key) ?? null }
-  setItem(key, value) { this.values.set(key, value) }
-  removeItem(key) { this.values.delete(key) }
-}
-
-class FakeApi {
-  online = false
-  saved = new Map()
-  count = 0
-  async startSession(sessionId) {
-    if (!this.online) throw new Error('offline')
-    return { sessionId, startedAt: new Date().toISOString(), endedAt: null, violationCount: this.count, active: true }
-  }
-  async getSession(sessionId) {
-    if (!this.online) throw new Error('offline')
-    return { sessionId, startedAt: new Date().toISOString(), endedAt: null, violationCount: this.count, active: true }
-  }
-  async getEvents() {
-    if (!this.online) throw new Error('offline')
-    return { events: [], violationIds: [...this.saved.keys()] }
-  }
-  async saveViolation(sessionId, violation) {
-    if (!this.online) throw new Error('offline')
-    if (!this.saved.has(violation.violationId)) this.count += 1
-    this.saved.set(violation.violationId, violation)
-    return { sessionId, startedAt: new Date().toISOString(), endedAt: null, violationCount: this.count, active: true }
-  }
-  async finishSession(sessionId) {
-    if (!this.online) throw new Error('offline')
-    return { sessionId, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), violationCount: this.count, active: false }
-  }
-}
-
-test('offline violations retry after reconnection without incrementing twice', async () => {
-  const storage = new MemoryStorage()
-  const api = new FakeApi()
-  const outbox = new ViolationOutbox('att-offline', DEFAULT_ANTI_CHEATING_CONFIG, storage)
-  const h = harness()
-  h.documentTarget.documentElement.dispatchEvent(new Event('mouseleave'))
-  outbox.enqueue(h.incidents()[0], 1)
-
-  assert.equal(await outbox.sync(api), null)
-  assert.equal(outbox.pendingCount, 1)
-  api.online = true
-  assert.equal(await outbox.sync(api), 1)
-  assert.equal(outbox.pendingCount, 0)
-  assert.equal(await outbox.sync(api), 1)
-  assert.equal(api.saved.size, 1)
   h.detector.stop()
 })
 

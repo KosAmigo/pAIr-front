@@ -562,7 +562,8 @@ export default function RealExam() {
     },
     [live],
   )
-  const antiCheating = useAntiCheating({ sessionId, active: watching, onViolation: forwardViolation })
+  // 브라우저 이탈 감지는 감독을 켠 실전 회차에서만 쓴다 (자가진단은 쓰지 않는다). 기록은 감독 이벤트(DB)로 간다
+  const antiCheating = useAntiCheating({ sessionId, active: watching && Boolean(live?.proctoring), onViolation: forwardViolation })
   // 실전 시험은 전체 화면에서만 푼다. 전체 화면이어야 Alt+Tab·Win 키를 브라우저가 붙잡을 수 있다 (Keyboard Lock)
   const [fullscreen, setFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement))
   useEffect(() => {
@@ -570,7 +571,7 @@ export default function RealExam() {
     document.addEventListener('fullscreenchange', sync)
     return () => document.removeEventListener('fullscreenchange', sync)
   }, [])
-  const needFullscreen = watching && Boolean(live) && !fullscreen
+  const needFullscreen = watching && Boolean(live?.proctoring) && !fullscreen
 
   // 외부 붙여넣기: 시험 화면 안에서 복사한 글이 아닌 것을 붙이면 PASTE 이벤트 (글자 수·위치만, 내용은 보내지 않음)
   useEffect(() => {
