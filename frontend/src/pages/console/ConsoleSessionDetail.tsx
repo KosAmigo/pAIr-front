@@ -5,7 +5,7 @@ import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'r
 import { AnimatePresence, motion } from 'motion/react'
 import { duration, easing } from '../../lib/motion'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowDownUp, Camera, CircleAlert, Download, FileUp, Loader2, Pause, Play, UserPlus, X } from 'lucide-react'
+import { ArrowDownUp, Camera, CircleAlert, Download, FileUp, Loader2, Pause, Play, RotateCw, UserPlus, X } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { ErrorState } from '../../components/ErrorState'
@@ -865,6 +865,9 @@ function Results({ s }: { s: SessionSummary }) {
   const events = ev.data ?? []
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [rescueOpen, setRescueOpen] = useState(false)
+  const [rescuing, setRescuing] = useState(false)
+  const [rescueMsg, setRescueMsg] = useState<{ text: string; error: boolean } | null>(null)
 
   if (res.error) return <ErrorState message={res.error} onRetry={res.reload} />
   if (!res.data) return <Loading text="결과를 불러오는 중" />
@@ -880,6 +883,29 @@ function Results({ s }: { s: SessionSummary }) {
         ? unreviewedOf(events, b.participantId) - unreviewedOf(events, a.participantId)
         : (b.score ?? -1) - (a.score ?? -1) || a.rank - b.rank,
   )
+  // 자동 제출이 포기하고 닫은 응시를 담당자가 다시 채점으로 넘긴다. 채점에는 AI 호출 비용이 든다
+  const rescue = () => {
+    setRescuing(true)
+    consoleApi.rescueSession(s.id).then(
+      (out) => {
+        setRescuing(false)
+        setRescueOpen(false)
+        setRescueMsg(
+          out.pending === 0
+            ? { text: '채점으로 넘길 응시가 없습니다. 모두 이미 채점 단계입니다.', error: false }
+            : out.failed === 0
+              ? { text: `멈춘 응시 ${out.pending}건을 채점으로 넘겼습니다. 채점에는 1~2분 걸립니다. 잠시 뒤 결과가 갱신됩니다.`, error: false }
+              : { text: `멈춘 응시 ${out.pending}건 중 ${out.failed}건은 이번에도 넘기지 못했습니다. 서버 로그를 확인해 주세요.`, error: true },
+        )
+        res.reload()
+      },
+      (e: unknown) => {
+        setRescuing(false)
+        setRescueOpen(false)
+        setRescueMsg({ text: `넘기지 못했습니다: ${errText(e)}`, error: true })
+      },
+    )
+  }
   const exportCsv = () => {
     setExporting(true)
     setExportError(null)
@@ -923,11 +949,33 @@ function Results({ s }: { s: SessionSummary }) {
               ]}
             />
           </div>
+          {s.phase === 'ENDED' && (
+            <Button size="sm" variant="ghost" onClick={() => setRescueOpen(true)} disabled={rescuing} title="채점 단계에 가지 못하고 멈춘 응시를 다시 채점으로 넘깁니다">
+              {rescuing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCw size={14} aria-hidden />} 멈춘 응시 다시 넘기기
+            </Button>
+          )}
           <Button size="sm" onClick={exportCsv} disabled={exporting}>
             {exporting ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Download size={14} aria-hidden />} 결과 내보내기
           </Button>
         </header>
         {exportError && <ErrorState compact className="m-3" message={exportError} />}
+        {rescueMsg && (rescueMsg.error ? <ErrorState compact className="m-3" message={rescueMsg.text} /> : <p role="status" className="m-3 rounded-md bg-signal/10 px-3 py-2 text-[13px] text-signal">{rescueMsg.text}</p>)}
+        {rescueOpen && (
+          <ConfirmModal
+            title="멈춘 응시 다시 넘기기"
+            confirm="채점으로 넘기기"
+            disabled={rescuing}
+            onConfirm={rescue}
+            onClose={() => setRescueOpen(false)}
+            body={
+              <p className="text-[14px] leading-6 text-text-muted">
+                시간이 끝났는데 채점 단계로 가지 못한 응시를 다시 채점으로 넘깁니다. 후속 질문에 답하지 못한 응시는 빈 답으로 마무리됩니다.
+                <br />
+                채점에는 AI 호출 비용이 듭니다. 이미 채점 중이거나 끝난 응시는 건드리지 않습니다.
+              </p>
+            }
+          />
+        )}
         {rows.length === 0 ? (
           <p className="py-16 text-center text-[14px] text-text-muted">대상자가 없습니다.</p>
         ) : (
