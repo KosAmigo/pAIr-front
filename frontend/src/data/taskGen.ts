@@ -65,7 +65,6 @@ export const allChecksOk = (job: Pick<TaskGenJob, 'checks'>) => job.checks.every
 /** 폼 입력 검사. 오류가 없으면 빈 객체 */
 export function validateForm(f: Pick<TaskGenRequest, 'track' | 'jobRole' | 'topic' | 'trap'>): Partial<Record<'track' | 'jobRole' | 'topic' | 'trap', string>> {
   const e: Partial<Record<'track' | 'jobRole' | 'topic' | 'trap', string>> = {}
-  if (f.track === 'BIZ') e.track = '비개발 과제는 준비 중이에요. 개발을 고르세요.'
   if (!f.jobRole.trim()) e.jobRole = '직무를 입력하세요'
   if (!f.topic.trim()) e.topic = '주제를 입력하세요'
   if (!f.trap.trim()) e.trap = '함정을 입력하세요'

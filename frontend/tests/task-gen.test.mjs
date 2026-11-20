@@ -49,8 +49,8 @@ test('stepStates hides the retry step unless it happened', () => {
   assert.deepEqual(stepStates('저장 중', true).map((s) => s.state), ['done', 'done', 'done', 'active'])
 })
 
-test('validateForm blocks 비개발 and empty fields', () => {
+test('validateForm allows 비개발 and blocks empty fields', () => {
   assert.deepEqual(Object.keys(validateForm({ ...REQ })), [])
-  assert.ok(validateForm({ ...REQ, track: 'BIZ' }).track)
+  assert.deepEqual(Object.keys(validateForm({ ...REQ, track: 'BIZ' })), [])
   assert.deepEqual(Object.keys(validateForm({ ...REQ, jobRole: ' ', topic: '', trap: '' })).sort(), ['jobRole', 'topic', 'trap'])
 })

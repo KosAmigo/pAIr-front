@@ -121,7 +121,6 @@ export default function ConsoleTaskNew() {
                   <button key={t} type="button" aria-pressed={form.track === t} onClick={() => set('track', t)} className={choice(form.track === t)}>
                     <span className="flex items-center gap-2 text-[15px] font-semibold text-text">
                       {t === 'DEV' ? '개발' : '비개발'}
-                      {t === 'BIZ' && <span className="rounded-sm bg-caution/10 px-1.5 text-[12px] font-semibold text-caution">준비 중</span>}
                     </span>
                   </button>
                 ))}
