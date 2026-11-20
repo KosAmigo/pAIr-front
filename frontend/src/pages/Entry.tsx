@@ -249,6 +249,9 @@ function InfoStep({ view, onNext }: { view: ExamView; onNext: () => void }) {
       }
     >
       <p className="text-[15px] text-text-muted">입장 링크가 확인되었습니다. 아래 시험이 맞는지 확인하세요.</p>
+      <p className="mt-2 rounded-lg border border-caution/40 bg-caution/10 px-3 py-2 text-[14px] leading-6 break-keep text-text">
+        시험 중 창이 닫히거나 연결이 끊겨도 5분 안에는 같은 링크로 다시 들어올 수 있습니다. 5분이 지나면 링크가 만료되어 입장할 수 없고, 끊긴 기록은 감독 기록에 남습니다. 시작하기 전에 네트워크와 기기를 확인해 주세요.
+      </p>
       <RevealGroup as="div" className="mt-4 grid grid-cols-2 gap-3">
         {rows.map(([k, v, Icon, mono]) => (
           <RevealItem key={k} className="flex items-start gap-3 rounded-xl border border-line bg-panel px-4 py-3 shadow-sm">
@@ -473,6 +476,7 @@ const TIP_INTERVAL_MS = 5000
 type WaitTip = { text: string; proctoringOnly?: boolean }
 const WAIT_TIPS: WaitTip[] = [
   { text: '시험이 시작되면 응시 화면으로 자동 이동합니다. 이 화면을 닫지 마세요.' },
+  { text: '시험 중 창이 닫히거나 연결이 끊겨도 5분 안에는 같은 링크로 다시 들어올 수 있습니다. 5분이 지나면 링크가 만료되고, 끊긴 기록은 감독 기록에 남습니다.' },
   { text: '시험 중에는 전체 화면을 유지해 주세요.', proctoringOnly: true },
   { text: '다른 탭이나 창으로 이동하거나 창 전환 키(Alt+Tab, Win 키)를 누르면 이탈로 기록됩니다.', proctoringOnly: true },
   { text: '외부 AI와 검색은 쓸 수 없고, 시험 화면의 내장 AI만 쓸 수 있습니다.' },
@@ -606,8 +610,9 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
   const fullscreen = useFullscreen()
 
   useEffect(() => {
+    if (info.startedAt) return // 같은 탭에서 이어 들어온 경우: 이미 입장해 있다
     proctorApi.enter(invite).catch((e: Error) => setError(e.message))
-  }, [invite])
+  }, [invite, info.startedAt])
 
   useEffect(() => {
     const id = window.setInterval(() => setLeft(secondsUntil(startsAt, offsetMs)), 250)
@@ -723,6 +728,10 @@ function noticeFor(live: LiveEntry): ReactNode {
   if (live.status === 'error') return <EntryNotice title="입장할 수 없습니다" body={`${live.error ?? ''} 메일의 입장 링크를 다시 확인하거나 기업 담당자에게 문의하세요.`} />
   if (info?.submittedAt) return <EntryNotice title="이미 제출한 시험입니다" body="결과는 기업에서 직접 안내합니다. 수고하셨습니다." />
   if (info?.phase === 'ENDED') return <EntryNotice title="시험 시간이 끝났습니다" body="종료 시각이 지나 더 이상 입장할 수 없습니다." />
+  // 시험 중 연결이 끊긴 뒤 유예(5분) 안에 돌아오지 못한 경우
+  if (info?.linkExpired) {
+    return <EntryNotice title="입장 링크가 만료되었습니다" body="시험 중 연결이 끊긴 뒤 유예 시간(5분) 안에 돌아오지 못해 이 링크로는 더 이상 입장할 수 없습니다. 이 기록은 감독 기록에 남았습니다. 기업 담당자에게 문의해 주세요." />
+  }
   return null
 }
 
@@ -766,7 +775,7 @@ export default function Entry() {
   }
 
   // 이미 시작한 응시자가 링크로 다시 들어오면 바로 대기실 → 시작(중복 생성 없음) → 응시 화면
-  const resumed = !!info?.startedAt && !info.submittedAt && info.phase === 'LIVE'
+  const resumed = !!info?.startedAt && !info.submittedAt && info.phase === 'LIVE' && !info.linkExpired
   const shownStep = resumed ? 3 : step
   const notice = viaLink ? noticeFor(live) : null
   // 입장 정보(info)를 받은 뒤에만 단계를 보여 준다

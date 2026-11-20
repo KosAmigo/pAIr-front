@@ -1,7 +1,7 @@
 // 시험 전 환경 점검 (PC): 장치·모니터·조명·자세·귀·손목 → 휴대폰 방·책상 스캔 → 정밀 분석.
 // 통과하면 결과 JSON(휴대폰 결과 포함)을 onPassed 로 넘긴다. 호출하는 쪽이 동의 API 로 저장한다.
 import { useEffect, useRef, useState } from 'react'
-import type { PoseLandmarkerResult } from '@mediapipe/tasks-vision'
+import type { FaceLandmarkerResult, HandLandmarkerResult, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import { RefreshCw, ScanFace } from 'lucide-react'
 import { Button } from '../../components/ui'
 import { camHub, type ScanFrame } from '../camHub.ts'
@@ -50,7 +50,12 @@ const INITIAL: CheckItem[] = [
 const HOLD_MS = 1500
 const POSE_TIMEOUT_MS = 25000
 const HEAD_TURN_DEG = 45
+/** 점검 중 분석 간격(약 15fps). 얼굴·포즈·손 모델이 메인 스레드에서 동기로 돌아 매 프레임(30fps) 돌리면 화면이 버벅인다 */
+const MIN_ANALYSIS_GAP_MS = 66
 
+type Needs = { face?: boolean; pose?: boolean; hand?: boolean }
+const EMPTY_FACE = { faceLandmarks: [], facialTransformationMatrixes: undefined } as unknown as FaceLandmarkerResult
+const EMPTY_HANDS = { landmarks: [] } as unknown as HandLandmarkerResult
 type FrameInfo = { faceCount: number; box?: Box; yaw?: number; shouldersVisible: boolean; handCount: number }
 
 /** 카메라 미리보기 + 휴대폰 연결 (EnvCheckPanel 옆이나, 입장 화면의 왼쪽 스포트라이트에 둔다) */
@@ -88,6 +93,9 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
     let stopLoop: (() => void) | null = null
     let current = INITIAL.map((i) => ({ ...i }))
     const set = (id: string, patch: Partial<CheckItem>) => {
+      // 매 프레임 같은 문구로 다시 그리지 않는다 (화면 갱신 폭주 방지)
+      const prev = current.find((i) => i.id === id)
+      if (prev && (Object.keys(patch) as (keyof CheckItem)[]).every((k) => prev[k] === patch[k])) return
       current = updateItem(current, id, patch)
       if (!cancelled) setItems(current)
     }
@@ -111,16 +119,20 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       const models = camHub.models()!
 
       /** 매 프레임 분석하면서 check 가 true 를 돌려줄 때까지 기다린다 */
-      const waitFrames = (check: (f: FrameInfo, now: number) => boolean, timeoutMs = Infinity) =>
+      const waitFrames = (check: (f: FrameInfo, now: number) => boolean, timeoutMs = Infinity, needs: Needs = { face: true, pose: true }) =>
         new Promise<boolean>((resolve) => {
           let lastPose: PoseLandmarkerResult | undefined
           let frame = 0
+          let lastRun = -Infinity
           const begin = performance.now()
           stopLoop = frameLoop(video, (now) => {
             if (cancelled) return
-            const face = models.face.detectForVideo(video, now)
-            if (frame++ % 2 === 0) lastPose = models.pose.detectForVideo(video, now)
-            const hands = models.hand.detectForVideo(video, now)
+            if (now - lastRun < MIN_ANALYSIS_GAP_MS) return
+            lastRun = now
+            // 이 단계에 필요한 모델만 돌린다 (조명·위치: 얼굴+포즈, 귀: 얼굴, 손목: 손)
+            const face = needs.face ? models.face.detectForVideo(video, now) : EMPTY_FACE
+            if (needs.pose && frame++ % 2 === 0) lastPose = models.pose.detectForVideo(video, now)
+            const hands = needs.hand ? models.hand.detectForVideo(video, now) : EMPTY_HANDS
             const lm = face.faceLandmarks[0]
             let box: Box | undefined
             if (lm) {
@@ -157,15 +169,19 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       const waitHeadTurn = (avoidSign: number) => {
         let held: number | null = null
         let sign = 0
-        return waitFrames((f, now) => {
-          if (f.yaw === undefined || Math.abs(f.yaw) < HEAD_TURN_DEG || Math.sign(f.yaw) === avoidSign) {
-            held = null
-            return false
-          }
-          held ??= now
-          sign = Math.sign(f.yaw)
-          return now - held > 400
-        }, POSE_TIMEOUT_MS).then((ok) => (ok ? sign : 0))
+        return waitFrames(
+          (f, now) => {
+            if (f.yaw === undefined || Math.abs(f.yaw) < HEAD_TURN_DEG || Math.sign(f.yaw) === avoidSign) {
+              held = null
+              return false
+            }
+            held ??= now
+            sign = Math.sign(f.yaw)
+            return now - held > 400
+          },
+          POSE_TIMEOUT_MS,
+          { face: true },
+        ).then((ok) => (ok ? sign : 0))
       }
 
       // 1) 브라우저·장치 (즉시)
@@ -225,14 +241,18 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       set('wrist', { status: 'running' })
       setPrompt('양 손목과 손바닥을 카메라 앞에 1초간 보여 주세요 (소매를 걷어 주세요)')
       let handsSince: number | null = null
-      const wristOk = await waitFrames((f, now) => {
-        if (f.handCount < 2) {
-          handsSince = null
-          return false
-        }
-        handsSince ??= now
-        return now - handsSince > 1000
-      }, POSE_TIMEOUT_MS)
+      const wristOk = await waitFrames(
+        (f, now) => {
+          if (f.handCount < 2) {
+            handsSince = null
+            return false
+          }
+          handsSince ??= now
+          return now - handsSince > 1000
+        },
+        POSE_TIMEOUT_MS,
+        { hand: true },
+      )
       if (wristOk) snap('wrist')
       apply('wrist', wristOk ? { status: 'pass', detail: '손목 사진 확보 (정밀 분석에서 확인)' } : { status: 'warn', detail: '두 손이 함께 보이지 않았습니다.' })
       if (cancelled) return
