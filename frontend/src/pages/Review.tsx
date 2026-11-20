@@ -4,6 +4,7 @@ import { GitBranch, Loader2, Play } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ButtonLink } from '../components/ui'
 import { ErrorState } from '../components/ErrorState'
+import { CodeCompare } from '../components/replay/CodeCompare'
 import { BranchStage } from '../components/review/BranchStage'
 import { NodeDrawer } from '../components/review/NodeDrawer'
 import { ScoreStairs } from '../components/review/ScoreStairs'
@@ -136,10 +137,15 @@ export default function Review() {
 
         {layout &&
           (laneA && laneB ? (
-            <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.05fr_1fr]">
-              <Verdict a={laneA} b={laneB} state={compare} fallbackFork={divergeTurn(lanes, laneA.attemptId, laneB.attemptId)} />
-              <ScoreStairs a={laneA} b={laneB} state={compare} />
-            </div>
+            <>
+              <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.05fr_1fr]">
+                <Verdict a={laneA} b={laneB} state={compare} fallbackFork={divergeTurn(lanes, laneA.attemptId, laneB.attemptId)} />
+                <ScoreStairs a={laneA} b={laneB} state={compare} />
+              </div>
+              <div className="rounded-2xl border border-line bg-panel px-5 pb-5 shadow-sm [&>section]:mt-0 [&>section]:border-t-0">
+                <CodeCompare aId={laneA.attemptId} bId={laneB.attemptId} />
+              </div>
+            </>
           ) : (
             <p className="rounded-2xl border border-dashed border-line-strong bg-panel/60 px-6 py-8 text-center text-[14px] text-text-muted">
               {laneA ? '비교하려면 채점이 끝난 풀이가 하나 더 필요해요. 같은 과제를 다시 풀거나 체크포인트에서 갈라 보세요.' : '채점이 끝난 풀이가 아직 없어요. 채점이 끝나면 여기서 두 갈래를 비교할 수 있어요.'}
