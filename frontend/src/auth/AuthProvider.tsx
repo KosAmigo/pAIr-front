@@ -66,8 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         set(response)
         return response.user
       },
-      signup: async (name, email, password) => {
-        const response = await authApi.signup(name, email, password)
+      requestEmailVerification: (email) => authApi.requestEmailVerification(email),
+      signup: async (name, email, password, code) => {
+        const response = await authApi.signup(name, email, password, code)
         set(response)
         return response.user
       },

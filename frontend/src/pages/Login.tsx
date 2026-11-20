@@ -1,7 +1,7 @@
 // DESIGN.md §7-8 로그인, 회원가입 (2026-11-19 개편: 반반 쇼케이스)
 // 왼쪽 절반은 다크 무대: 큰 문장 + 역량 육각형 미리보기 + 떠 있는 유리 칩. 오른쪽 절반은 오로라 위 유리 폼 카드(GlowBorder).
 // 로그인과 일반 회원가입은 백엔드 인증 API(/api/auth)에 연결한다. 기업 계정은 도입 문의 → 승인 → 초대로 만든다(준비 중 안내).
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, Check, Eye, EyeOff, GitBranch, ShieldCheck, Sparkles, TriangleAlert, User } from 'lucide-react'
 import { CheckMark } from '../components/CheckMark'
@@ -11,6 +11,7 @@ import { Aurora, Glass, GlowBorder, GradientText, Reveal, StageSection } from '.
 import { StatHex } from '../components/dashboard/StatHex'
 import { STATS } from '../data/dashboard'
 import { homeFor, useAuth } from '../auth/auth'
+import { AuthRequestError } from '../auth/authApi'
 
 const inputCls =
   'h-11 w-full rounded-sm border border-line-strong bg-panel px-3 text-[16px] text-text outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-text-faint focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
@@ -27,9 +28,9 @@ const CHIPS = [
 function AuthLayout({ title, children, footer }: { title: string; children: ReactNode; footer: ReactNode }) {
   const [active, setActive] = useState<string | null>(null)
   return (
-    <div className="grid min-h-full grid-cols-2">
+    <div className="auth-layout grid min-h-full grid-cols-1 lg:grid-cols-2">
       {/* 왼쪽: 다크 무대 쇼케이스 */}
-      <StageSection shape="inset" className="rounded-none! border-0! shadow-none!" aria-label="pAIr 소개">
+      <StageSection shape="inset" className="hidden rounded-none! border-0! shadow-none! lg:block" aria-label="pAIr 소개">
         <div className="relative flex h-full min-h-[720px] flex-col px-14 py-12">
           <Logo className="text-[20px] text-stage-text!" />
           <Reveal className="mt-16">
@@ -53,12 +54,12 @@ function AuthLayout({ title, children, footer }: { title: string; children: Reac
       </StageSection>
 
       {/* 오른쪽: 폼 */}
-      <div className="relative isolate flex items-center justify-center overflow-hidden px-10 py-16">
+      <div className="relative isolate flex items-center justify-center overflow-hidden px-4 py-8 sm:px-8 lg:px-10 lg:py-16">
         <Aurora variant="full" />
         <div className="relative z-10 w-full max-w-[440px]">
           <Reveal>
             <GlowBorder className="rounded-2xl">
-              <Glass className="rounded-2xl bg-white/85! p-10 shadow-lg!">
+              <Glass className="rounded-2xl bg-white/85! p-6 shadow-lg! sm:p-10">
                 <h1 className="text-[28px] leading-9 font-bold tracking-[-0.02em] text-text">{title}</h1>
                 {children}
               </Glass>
@@ -78,7 +79,7 @@ function Field({ id, label, hint, children }: { id: string; label: string; hint?
         {label}
       </label>
       {children}
-      {hint && <p className="text-[13px] text-text-muted">{hint}</p>}
+      {hint && <p id={`${id}-hint`} className="text-[13px] text-text-muted">{hint}</p>}
     </div>
   )
 }
@@ -184,7 +185,7 @@ export default function Login() {
 type Kind = 'user' | 'company'
 
 export function Signup() {
-  const { user, signedIn, loading, signup } = useAuth()
+  const { user, signedIn, loading, signup, requestEmailVerification } = useAuth()
   const nav = useNavigate()
   const [params, setParams] = useSearchParams()
   const next = safeNext(params.get('next'))
@@ -193,9 +194,25 @@ export function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [code, setCode] = useState('')
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null)
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(null)
+  const [requestingCode, setRequestingCode] = useState(false)
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)
+  const [now, setNow] = useState(0)
   const [agree, setAgree] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (cooldownUntil === null) return
+    const interval = window.setInterval(() => {
+      const current = Date.now()
+      setNow(current)
+      if (current >= cooldownUntil) window.clearInterval(interval)
+    }, 1000)
+    return () => window.clearInterval(interval)
+  }, [cooldownUntil])
 
   if (loading) return null
   if (signedIn && user) return <Navigate to={next ?? homeFor(user.role)} replace />
@@ -207,6 +224,11 @@ export function Signup() {
     { ok: password.length > 0 && password === confirm, text: '비밀번호 확인과 같음' },
   ]
   const valid = name.trim() && email.trim() && rules.every((r) => r.ok) && agree
+  const normalizedEmail = email.trim()
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
+  const verificationRequested = verificationEmail === normalizedEmail && normalizedEmail.length > 0
+  const codeReady = verificationRequested && code.length === 6
+  const cooldownSeconds = cooldownUntil === null ? 0 : Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
 
   const pick = (k: Kind) => {
     const p = new URLSearchParams(params)
@@ -218,17 +240,55 @@ export function Signup() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!valid) return
+    if (!valid || !codeReady) return
     setError(null)
     setSubmitting(true)
     try {
-      await signup(name, email, password)
+      await signup(name, normalizedEmail, password, code)
       nav(next ?? '/tasks', { replace: true })
     } catch (e) {
       setError(e instanceof Error ? e.message : '회원가입에 실패했습니다.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const requestCode = async () => {
+    if (!validEmail || requestingCode || cooldownSeconds > 0) return
+    setError(null)
+    setVerificationEmail(null)
+    setVerificationMessage(null)
+    setCode('')
+    setRequestingCode(true)
+    try {
+      const response = await requestEmailVerification(normalizedEmail)
+      setVerificationEmail(normalizedEmail)
+      setVerificationMessage(response.message)
+      const requestedAt = Date.now()
+      setNow(requestedAt)
+      setCooldownUntil(requestedAt + 60_000)
+    } catch (e) {
+      if (e instanceof AuthRequestError && e.status === 429) {
+        const requestedAt = Date.now()
+        setNow(requestedAt)
+        setCooldownUntil(requestedAt + (e.retryAfterMs ?? 60_000))
+      }
+      setError(e instanceof Error ? e.message : '인증 코드를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setRequestingCode(false)
+    }
+  }
+
+  const changeEmail = (value: string) => {
+    if (value.trim() !== normalizedEmail) {
+      setVerificationEmail(null)
+      setVerificationMessage(null)
+      setCode('')
+      setCooldownUntil(null)
+      setNow(0)
+      setError(null)
+    }
+    setEmail(value)
   }
 
   if (isCompany) return <CompanyInquiry onBack={() => pick('user')} />
@@ -278,7 +338,30 @@ export function Signup() {
           <input id="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={50} className={inputCls} />
         </Field>
         <Field id="email" label="이메일">
-          <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className={inputCls} />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input id="email" type="email" value={email} onChange={(e) => changeEmail(e.target.value)} autoComplete="email" required disabled={requestingCode} className={cx(inputCls, 'min-w-0 flex-1 disabled:cursor-not-allowed disabled:bg-panel-raised')} />
+            <Button type="button" variant="secondary" size="md" className="w-full shrink-0 sm:w-auto" onClick={requestCode} disabled={!validEmail || requestingCode || cooldownSeconds > 0}>
+              {requestingCode ? '발송 중…' : cooldownSeconds > 0 ? `재요청 ${cooldownSeconds}초` : verificationRequested ? '인증 코드 재요청' : '인증 코드 발송'}
+            </Button>
+          </div>
+          {verificationRequested && verificationMessage && <p role="status" className="text-[13px] text-signal">{verificationMessage}</p>}
+          {!verificationRequested && cooldownSeconds > 0 && <p role="status" className="text-[13px] text-text-muted">{cooldownSeconds}초 후 인증 코드를 다시 요청할 수 있습니다.</p>}
+        </Field>
+        <Field id="code" label="인증 코드" hint={verificationRequested ? '이메일로 받은 숫자 6자리를 입력해 주세요.' : '이메일 인증 코드를 먼저 요청해 주세요.'}>
+          <input
+            id="code"
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            aria-describedby="code-hint"
+            required
+            disabled={!verificationRequested || requestingCode || submitting}
+            className={cx(inputCls, 'disabled:cursor-not-allowed disabled:bg-panel-raised disabled:text-text-faint')}
+          />
         </Field>
         <Field id="password" label="비밀번호">
           <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" />
@@ -299,7 +382,7 @@ export function Signup() {
           <CheckMark on={agree} />
           서비스 이용약관과 개인정보 처리방침에 동의합니다
         </label>
-        <Button type="submit" variant="primary" size="lg" className="mt-2 w-full" disabled={!valid || submitting}>
+        <Button type="submit" variant="primary" size="lg" className="mt-2 w-full" disabled={!valid || !codeReady || submitting || requestingCode}>
           {submitting ? '가입 중…' : '가입하기'}
         </Button>
       </form>

@@ -6,13 +6,16 @@ const KEY = 'pair.auth'
 export type AuthSession = { token: string; user: AuthUser }
 export class AuthRequestError extends Error {
   readonly status: number
+  readonly retryAfterMs?: number
 
   constructor(
     message: string,
     status: number,
+    retryAfterMs?: number,
   ) {
     super(message)
     this.status = status
+    this.retryAfterMs = retryAfterMs
   }
 }
 
@@ -49,22 +52,38 @@ async function request<T>(path: string, method: string, body?: unknown, token?: 
 
   if (!response.ok) {
     let message = `요청 실패 (${response.status})`
+    let payload: unknown
     try {
-      message = ((await response.json()) as { message?: string }).message ?? message
+      payload = await response.json()
+      if (typeof payload === 'object' && payload !== null && 'message' in payload && typeof payload.message === 'string') {
+        message = payload.message
+      }
     } catch {
       // 응답 본문이 JSON이 아닐 수 있다.
     }
-    throw new AuthRequestError(message, response.status)
+    const retryAfter = response.headers.get('Retry-After')
+    const retryAfterSeconds = retryAfter === null ? Number.NaN : Number(retryAfter)
+    const retryAfterDate = retryAfter === null ? Number.NaN : Date.parse(retryAfter)
+    const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0
+      ? retryAfterSeconds * 1000
+      : Number.isFinite(retryAfterDate)
+        ? Math.max(0, retryAfterDate - Date.now())
+        : undefined
+    throw new AuthRequestError(message, response.status, retryAfterMs)
   }
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
 export const authApi = {
+  /** 이메일로 6자리 인증 코드를 발송한다. */
+  requestEmailVerification: (email: string) =>
+    request<{ message: string }>('/api/auth/email-verifications', 'POST', { email }),
   /** 이메일과 비밀번호로 로그인해 토큰과 회원 정보를 받는다. */
   login: (email: string, password: string) => request<AuthSession>('/api/auth/login', 'POST', { email, password }),
   /** 일반 회원 계정을 만들고 즉시 로그인 토큰을 발급받는다. */
-  signup: (name: string, email: string, password: string) => request<AuthSession>('/api/auth/signup', 'POST', { name, email, password }),
+  signup: (name: string, email: string, password: string, code: string) =>
+    request<AuthSession>('/api/auth/signup', 'POST', { name, email, password, code }),
   /** 저장된 bearer 토큰의 유효성과 최신 회원 정보를 서버에서 확인한다. */
   me: (token: string) => request<AuthUser>('/api/auth/me', 'GET', undefined, token),
   /** 서버 세션을 폐기해 현재 토큰을 무효화한다. */

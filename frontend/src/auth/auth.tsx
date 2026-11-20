@@ -17,7 +17,8 @@ export type AuthApi = {
   signedIn: boolean
   loading: boolean
   login: (email: string, password: string) => Promise<AuthUser>
-  signup: (name: string, email: string, password: string) => Promise<AuthUser>
+  requestEmailVerification: (email: string) => Promise<{ message: string }>
+  signup: (name: string, email: string, password: string, code: string) => Promise<AuthUser>
   logout: () => Promise<void>
 }
 
