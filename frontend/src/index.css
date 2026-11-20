@@ -148,7 +148,9 @@
     min-width: 1280px;
     -webkit-font-smoothing: antialiased;
   }
-  body:has(.auth-layout) {
+  /* 로그인, 휴대폰 보조 캠처럼 작은 화면에서 열리는 페이지는 데스크톱 최소 폭(1280px)을 적용하지 않는다 */
+  body:has(.auth-layout),
+  body:has(.mobile-layout) {
     min-width: 320px;
   }
   :focus-visible {
