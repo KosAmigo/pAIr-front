@@ -39,7 +39,7 @@ function fmt(sec: number) {
 const readOnlyPath = (p: string) => p.startsWith('logs/') || p.startsWith('자료/')
 const fileName = (p: string) => p.split('/').pop() ?? p
 
-// ── 진입: /exam/new?track=dev|biz → 응시 생성 후 이동 ─────
+// ── 진입: /exam/new?task=과제ID (또는 ?track=dev|biz 로 직군 기본 과제) → 응시 생성 후 이동 ─────
 export function NewExam() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -51,7 +51,7 @@ export function NewExam() {
     started.current = true
     const track = params.get('track') === 'biz' ? 'biz' : 'dev'
     api
-      .start(api.taskIdFor(track))
+      .start(params.get('task') || api.taskIdFor(track))
       .then(({ attemptId }) => {
         void refreshCredits()
         navigate(`/exam/${attemptId}`, { replace: true })

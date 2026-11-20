@@ -7,27 +7,28 @@ import { ErrorState } from '../components/ErrorState'
 import { cx } from '../components/cx'
 import { GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
 import type { Track } from '../data/catalog'
-import { api, ApiError, type Task } from '../api'
+import { api, ApiError, type Task, type TaskSummary } from '../api'
 import { distance, duration, easing, springs } from '../lib/motion'
 
 // DESIGN.md §7-2a 과제 목록 — "퀘스트 보드" (2026-11-19 전면 개편)
 // 위: 직군 스위치(미끄러지는 알약) + 시간 필터 칩(기획_결정사항 §2). 그 아래 다크 무대에 지금 바로 풀 수 있는 추천 과제를 크게.
-// 아래: 과제 카드. 과제 목록 API 가 없어, 응시할 수 있는 과제(api.taskIdFor)의 정의를 GET /api/tasks/{id} 로 하나씩 받는다.
+// 아래: 과제 카드. 목록은 GET /api/tasks, 카드에 쓰는 설명은 GET /api/tasks/{id} 로 받는다. 마감(CLOSED) 과제는 보이되 시작할 수 없다.
 
 const TRACKS: { value: Track; label: string }[] = [
   { value: 'dev', label: '개발 직군' },
   { value: 'biz', label: '비개발 직군' },
 ]
 
-/** 자가진단으로 응시할 수 있는 과제 id (백엔드 과제 정의) */
-const SELF_TASK_IDS = [api.taskIdFor('dev'), api.taskIdFor('biz')]
-const startUrl = (t: Task) => `/exam/new?track=${t.type}`
-const trackName = (t: Task) => (t.type === 'biz' ? '비개발' : '개발')
-const TrackIcon = ({ t, ...rest }: { t: Task; size: number; strokeWidth?: number; className?: string }) =>
+/** 목록의 한 줄(상태)과 과제 정의(설명)를 합친 카드용 데이터 */
+type Row = Task & { status: TaskSummary['status'] }
+const isOpen = (t: Row) => t.status === 'OPEN'
+const startUrl = (t: Row) => `/exam/new?task=${encodeURIComponent(t.id)}`
+const trackName = (t: Row) => (t.type === 'biz' ? '비개발' : '개발')
+const TrackIcon = ({ t, ...rest }: { t: Row; size: number; strokeWidth?: number; className?: string }) =>
   t.type === 'biz' ? <FileText {...rest} aria-hidden /> : <Code2 {...rest} aria-hidden />
 
 /** 추천 과제: 이 화면의 다크 무대 */
-function Featured({ t }: { t: Task }) {
+function Featured({ t }: { t: Row }) {
   return (
     <StageSection aria-label="추천 과제">
       <div className="grid grid-cols-[minmax(0,1fr)_320px] items-center gap-10 px-12 py-10">
@@ -75,12 +76,16 @@ function Featured({ t }: { t: Task }) {
   )
 }
 
-function TaskCard({ t }: { t: Task }) {
+function TaskCard({ t }: { t: Row }) {
+  const open = isOpen(t)
   return (
     <Spotlight
-      as={Link}
-      to={startUrl(t)}
-      className="group flex h-full w-full flex-col rounded-xl border border-line bg-panel p-6 shadow-sm transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg"
+      as={open ? Link : 'div'}
+      {...(open ? { to: startUrl(t) } : { 'aria-disabled': true })}
+      className={cx(
+        'group flex h-full w-full flex-col rounded-xl border border-line bg-panel p-6 shadow-sm transition-[transform,box-shadow,border-color] duration-150',
+        open ? 'hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg' : 'opacity-60',
+      )}
     >
       <div className="flex items-start gap-4">
         <span className="bg-brand-gradient inline-flex size-14 shrink-0 items-center justify-center rounded-2xl text-on-accent shadow-[0_10px_24px_-8px_rgb(108_71_255/0.6)]">
@@ -96,9 +101,13 @@ function TaskCard({ t }: { t: Task }) {
         <span className="inline-flex items-center gap-1 font-mono">
           <Clock size={14} aria-hidden /> {t.minutes}m
         </span>
-        <span className="ml-auto inline-flex items-center gap-1 font-semibold text-brand">
-          도전 <ArrowRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden />
-        </span>
+        {open ? (
+          <span className="ml-auto inline-flex items-center gap-1 font-semibold text-brand">
+            도전 <ArrowRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden />
+          </span>
+        ) : (
+          <span className="ml-auto font-semibold text-text-muted">마감</span>
+        )}
       </div>
     </Spotlight>
   )
@@ -138,15 +147,20 @@ function ChipFilter<T extends string>({ id, label, options, value, onChange }: {
 export default function Tasks() {
   const [track, setTrack] = useState<Track>('dev')
   const [time, setTime] = useState<(typeof TIMES)[number]['value']>('ALL')
-  const [all, setAll] = useState<Task[] | null>(null)
+  const [all, setAll] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   useEffect(() => {
     let alive = true
-    Promise.all(SELF_TASK_IDS.map((id) => api.task(id)))
-      .then((list) => {
+    api
+      .taskList()
+      .then(async (list) => {
+        const defs = await Promise.all(list.map((s) => api.task(s.id)))
+        return defs.map((d, i): Row => ({ ...d, status: list[i].status }))
+      })
+      .then((rows) => {
         if (!alive) return
-        setAll(list)
+        setAll(rows)
         setError(null)
       })
       .catch((e: ApiError) => alive && setError(e.message))
@@ -156,12 +170,12 @@ export default function Tasks() {
   }, [tick])
   const timeOk = TIMES.find((t) => t.value === time)!.ok
   const tasks = (all ?? []).filter((t) => t.type === track && timeOk(t.minutes))
-  const featured = tasks[0]
+  const featured = tasks.find(isOpen)
   return (
     <SelfShell
       header={
         <PageHeader label="TASKS" title="과제">
-          {all && <span className="font-mono text-[13px] text-text-muted">응시 가능 {all.length}개</span>}
+          {all && <span className="font-mono text-[13px] text-text-muted">응시 가능 {all.filter(isOpen).length}개</span>}
         </PageHeader>
       }
     >

@@ -16,6 +16,9 @@ export type Task = {
   editableFile: string | null
 }
 
+/** 자가진단 과제 목록의 한 줄 (GET /api/tasks). CLOSED 는 목록에만 보이고 응시는 막힌다 */
+export type TaskSummary = { id: string; type: TaskType; title: string; minutes: number; status: 'OPEN' | 'CLOSED' }
+
 export type AttemptStatus = 'SOLVING' | 'FOLLOWUP' | 'SCORING' | 'DONE' | 'ERROR'
 
 export type Attempt = {
@@ -205,7 +208,9 @@ export const api = {
   rollback: (checkpointId: number) => call<{ attemptId: string }>('POST', `/api/checkpoints/${checkpointId}/rollback`),
   /** 체크포인트 이름 붙이기. 빈 문자열이면 이름을 지운다 */
   renameCheckpoint: (checkpointId: number, label: string) => call<Checkpoint>('PATCH', `/api/checkpoints/${checkpointId}`, { label }),
-  /** 과제 정의 (목록 API 는 없어 id 로 하나씩 받는다) */
+  /** 자가진단 과제 목록 (응시자용). 직군을 주면 그 직군만 */
+  taskList: (track?: TaskType) => call<TaskSummary[]>('GET', `/api/tasks${track ? `?track=${track}` : ''}`),
+  /** 과제 정의 (설명·요구사항 등 상세) */
   task: (taskId: string) => call<Task>('GET', `/api/tasks/${enc(taskId)}`),
 }
 
