@@ -41,6 +41,19 @@ export type EditProposal = {
 
 export type Turn = { turn: number; role: 'user' | 'ai'; time: string; text: string; edits?: EditProposal[] }
 
+/** 복기: 질문 하나를 보낸 순간의 체크포인트 (질문마다 하나, 이름은 응시자가 붙인다) */
+export type Checkpoint = { checkpointId: number; turnNo: number; label: string | null; createdAt: string }
+
+/** 복기 트리의 응시 한 건. 뿌리(원래 응시)만 parentAttemptId 가 null */
+export type TreeNode = {
+  attemptId: string
+  parentAttemptId: string | null
+  forkedAtTurn: number | null
+  forkedFromCheckpointId: number | null
+  status: AttemptStatus
+  startedAt: string
+}
+
 export type EditDecision = { status: 'APPLIED' | 'REJECTED'; path: string; content: string | null }
 
 export type AttemptView = {
@@ -179,6 +192,12 @@ export const api = {
   followUps: (id: string, answers: string[]) => call<Attempt>('POST', `/api/attempts/${enc(id)}/followups`, { answers }),
   rescore: (id: string) => call<Attempt>('POST', `/api/attempts/${enc(id)}/rescore`),
   report: (id: string) => call<ReportResponse>('GET', `/api/attempts/${enc(id)}/report`),
+  checkpoints: (id: string) => call<Checkpoint[]>('GET', `/api/attempts/${enc(id)}/checkpoints`),
+  replayTree: (id: string) => call<TreeNode[]>('GET', `/api/attempts/${enc(id)}/tree`),
+  /** 체크포인트에서 갈라진 새 응시를 만든다 (크레딧 차감, 부족하면 402). 새 응시 ID 를 돌려준다 */
+  rollback: (checkpointId: number) => call<{ attemptId: string }>('POST', `/api/checkpoints/${checkpointId}/rollback`),
+  /** 체크포인트 이름 붙이기. 빈 문자열이면 이름을 지운다 */
+  renameCheckpoint: (checkpointId: number, label: string) => call<Checkpoint>('PATCH', `/api/checkpoints/${checkpointId}`, { label }),
   /** 과제 정의 (목록 API 는 없어 id 로 하나씩 받는다) */
   task: (taskId: string) => call<Task>('GET', `/api/tasks/${enc(taskId)}`),
 }

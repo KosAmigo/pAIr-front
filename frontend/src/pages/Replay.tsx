@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Bot, FileBarChart2, GitBranch, Loader2, User } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Bot, FileBarChart2, Loader2, User } from 'lucide-react'
 import { StageSection } from '../components/fx'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
 import { ButtonLink } from '../components/ui'
 import { ErrorState } from '../components/ErrorState'
-import { api, ApiError, type ReportResponse, type Turn } from '../api'
+import { api, ApiError, type ReportResponse, type TreeNode, type Turn } from '../api'
+import { BranchGraph } from '../components/replay/BranchGraph'
+import { CheckpointPanel } from '../components/replay/CheckpointPanel'
+import { layoutTree } from '../lib/replayTree'
 
 // DESIGN.md §7-5 복기 화면
-// 분기(체크포인트에서 다시 풀기) API 가 아직 백엔드에 없어 복기 트리는 준비 중으로 두고,
-// 오른쪽에는 리포트(GET /api/attempts/{id}/report)에 담긴 실제 AI 대화 기록을 보여 준다.
+// 왼쪽: 복기 트리(GET /api/attempts/{id}/tree)와 체크포인트(질문마다 하나, 이름 붙이기·여기서 다시 풀기).
+// 오른쪽: 리포트(GET /api/attempts/{id}/report)에 담긴 실제 AI 대화 기록.
 
 function TurnItem({ t }: { t: Turn }) {
   const ai = t.role === 'ai'
@@ -32,6 +35,21 @@ export default function Replay() {
   const [data, setData] = useState<ReportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
+  const navigate = useNavigate()
+  const [tree, setTree] = useState<TreeNode[] | null>(null)
+  const [treeError, setTreeError] = useState<string | null>(null)
+  const [treeTick, setTreeTick] = useState(0)
+
+  useEffect(() => {
+    let alive = true
+    api
+      .replayTree(attemptId)
+      .then((d) => alive && (setTree(d), setTreeError(null)))
+      .catch((e: ApiError) => alive && setTreeError(e.message))
+    return () => {
+      alive = false
+    }
+  }, [attemptId, treeTick])
 
   useEffect(() => {
     let alive = true
@@ -50,6 +68,7 @@ export default function Replay() {
 
   const report = data?.report ?? null
   const turns = report?.transcript ?? []
+  const rows = tree ? layoutTree(tree) : []
 
   return (
     <SelfShell
@@ -71,10 +90,28 @@ export default function Replay() {
         <div className="grid h-full min-h-0 grid-cols-12">
           <div className="col-span-7 min-h-0 p-4 pr-2">
             <StageSection className="h-full" aria-label="분기 그래프">
-              <div className="flex h-full flex-col items-center justify-center gap-3 px-10 py-16 text-center">
-                <GitBranch size={28} className="text-stage-muted" aria-hidden />
-                <p className="text-[17px] font-semibold text-stage-text">복기 트리는 준비 중인 기능입니다</p>
-                <p className="text-[14px] text-stage-muted">체크포인트에서 다시 풀기와 분기 비교는 아직 백엔드와 연결되지 않았습니다.</p>
+              <div className="h-full overflow-auto p-5">
+                <p className="label text-stage-muted">BRANCHES</p>
+                <h2 className="mb-2 text-[17px] font-semibold text-stage-text">복기 트리</h2>
+                {treeError ? (
+                  <ErrorState compact message={treeError} onRetry={() => setTreeTick((t) => t + 1)} />
+                ) : !tree ? (
+                  <p className="flex items-center gap-2 text-[14px] text-stage-muted">
+                    <Loader2 size={16} className="animate-spin" aria-hidden /> 불러오는 중
+                  </p>
+                ) : (
+                  <>
+                    {rows.length === 1 && (
+                      <p className="mb-2 text-[14px] text-stage-muted">아직 갈라진 풀이가 없습니다. 아래 체크포인트에서 &quot;여기서 다시 풀기&quot;를 누르면 갈라집니다.</p>
+                    )}
+                    <BranchGraph rows={rows} currentId={attemptId} onSelect={(id) => id !== attemptId && navigate(`/replay/${encodeURIComponent(id)}`)} />
+                  </>
+                )}
+                <div className="mt-6 border-t border-stage-line pt-4">
+                  <p className="label text-stage-muted">CHECKPOINTS</p>
+                  <h2 className="mb-2 text-[17px] font-semibold text-stage-text">질문 시점 (체크포인트)</h2>
+                  <CheckpointPanel attemptId={attemptId} />
+                </div>
               </div>
             </StageSection>
           </div>
