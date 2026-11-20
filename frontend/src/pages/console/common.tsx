@@ -4,8 +4,8 @@ import { createPortal } from 'react-dom'
 import { MoreHorizontal } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { Button } from '../../components/ui'
-import type { TaskPublicationStatus } from '../../consoleApi'
-import { tabOf } from '../../data/consoleTasks'
+import type { ConsoleTaskSummary } from '../../consoleApi'
+import { isClosed, TAB_LABEL, tabOf } from '../../data/taskBoard'
 
 /** 메뉴 한 줄의 대략적인 높이(px). 아래 공간이 모자랄 때 위로 열지 정하는 데만 쓴다 */
 const MENU_ITEM_HEIGHT = 40
@@ -162,22 +162,25 @@ export function ConfirmModal({
 }
 
 const STATUS = {
-  draft: { text: '검수 대기', cls: 'bg-caution/10 text-caution', dot: 'bg-caution' },
-  open: { text: '공개', cls: 'bg-signal/10 text-signal', dot: 'bg-signal' },
+  draft: { cls: 'bg-caution/10 text-caution', dot: 'bg-caution' },
+  public: { cls: 'bg-brand-dim text-brand', dot: 'bg-brand' },
+  private: { cls: 'bg-text/8 text-text', dot: 'bg-text' },
 }
-// 다크 무대(ConsoleHero) 위에서 쓰는 상태 배지 색
-const STATUS_STAGE: Record<string, { cls: string; dot: string }> = {
+// 스포트라이트(ConsoleHero) 위에서 쓰는 상태 배지 색
+const STATUS_STAGE = {
   draft: { cls: 'bg-stage-caution/15 text-stage-caution', dot: 'bg-stage-caution' },
-  open: { cls: 'bg-stage-signal/15 text-stage-signal', dot: 'bg-stage-signal' },
+  public: { cls: 'bg-stage-brand/12 text-stage-brand', dot: 'bg-stage-brand' },
+  private: { cls: 'bg-stage-text/8 text-stage-text', dot: 'bg-stage-text' },
 }
-export function TaskStatusBadge({ status, stage }: { status: TaskPublicationStatus; stage?: boolean }) {
-  const tab = tabOf(status)
-  const s = stage ? { ...STATUS[tab], ...STATUS_STAGE[tab] } : STATUS[tab]
+/** 과제 상태 배지: 검수 전 / 공개 문제 / 비공개 문제 (+ 내림). 영어 상태 이름은 보이지 않는다 */
+export function TaskStatusBadge({ task, stage }: { task: Pick<ConsoleTaskSummary, 'status' | 'usage'>; stage?: boolean }) {
+  const tab = tabOf(task)
+  const s = (stage ? STATUS_STAGE : STATUS)[tab]
   return (
     <span className={cx('inline-flex h-[22px] items-center gap-1.5 rounded-sm px-2 text-[13px] font-semibold', s.cls)}>
       <span className={cx('size-1.5 rounded-full', s.dot)} aria-hidden />
-      {s.text}
+      {TAB_LABEL[tab]}
+      {isClosed(task) && <span className="font-medium opacity-80">(내림)</span>}
     </span>
   )
 }
-

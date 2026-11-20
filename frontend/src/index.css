@@ -529,6 +529,24 @@
   .step-in {
     animation: step-in 240ms var(--ease-standard);
   }
+
+  /* AI 추천을 골라 칸이 채워질 때 한 번 반짝임 (과제 만들기, 2026-11-20) */
+  .fill-flash {
+    animation: fill-flash 900ms var(--ease-expo);
+  }
+  /* AI 추천 기다리는 동안 카드 자리에 빛이 지나감 */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(100deg, transparent 20%, rgb(108 71 255 / 0.1) 45%, rgb(47 91 234 / 0.12) 55%, transparent 80%);
+    animation: shimmer 1400ms ease-in-out infinite;
+  }
 }
 
 @keyframes rec-pulse {
@@ -611,6 +629,25 @@
   }
   to {
     opacity: 1;
+  }
+}
+@keyframes fill-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgb(108 71 255 / 0);
+    background-color: var(--color-panel);
+  }
+  25% {
+    box-shadow: 0 0 0 4px rgb(108 71 255 / 0.22);
+    background-color: rgb(108 71 255 / 0.08);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(108 71 255 / 0);
+    background-color: var(--color-panel);
+  }
+}
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
   }
 }
 @keyframes step-in {

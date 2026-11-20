@@ -1,23 +1,34 @@
-// DESIGN.md §7-9-3 과제 검수 (ADMIN): 백엔드 과제 정의(/api/console/tasks/{id})를 읽기 전용으로 보여 주고 공개·공개 취소만 한다.
-// 과제 내용(설명·파일·문항) 편집은 백엔드 API 가 아직 없어 준비 중으로 둔다.
-import { useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { CircleAlert, Eye, FileText, Info, Loader2 } from 'lucide-react'
-import type { ConsoleTaskDetail } from '../../consoleApi'
+// DESIGN.md §7-9-3 과제 검수 (ADMIN). 2026-11-20 개편.
+// 위: 스포트라이트 머리(상태 배지, 제목, 수치) → 상태 흐름(검수 전 → 공개/비공개) + 용도 토글(검수 전만) + 주인공 버튼.
+// 아래: 알약 탭(개요, 파일, 자료, 문항, 자동 확인 결과) + 오른쪽 검수 체크리스트(브라우저에만 저장).
+// 내용 편집은 백엔드 API 가 없어 읽기 전용이다. 공개·숨기기·용도 바꾸기만 한다.
+import { useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, Eye, EyeOff, Loader2, Rocket } from 'lucide-react'
 import { ErrorState } from '../../components/ErrorState'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
+import { Glass, Magnetic } from '../../components/fx'
 import { Button } from '../../components/ui'
-import { ConsoleHero, HeroSep } from './ConsoleHero'
-import { setPublished, trackName, useTaskDetail } from '../../data/consoleTasks'
+import type { ConsoleTaskSummary } from '../../consoleApi'
+import { setPublished, useTaskDetail } from '../../data/consoleTasks'
+import { checkBadge, isClosed, madeAt, REVIEW_CHECKS, tabOf, trackOf, TRACK_LABEL } from '../../data/taskBoard'
 import { ConfirmModal, TaskStatusBadge } from './common'
+import { ConsoleHero, HeroSep, PillTabs } from './ConsoleHero'
 import { fmtTime, useToast } from './format'
+import { AiBadge, CheckBadge } from './task/badges'
+import { PdfViewer } from './task/PdfViewer'
+import { ReviewChecklist } from './task/ReviewChecklist'
+import { useChecklist } from './task/useChecklist'
+import { FilesTab, GenReportTab, OverviewTab, QuestionsTab } from './task/ReviewTabs'
+import { StatusFlow } from './task/StatusFlow'
+import { UsageToggle } from './task/UsageToggle'
+
+type Tab = 'overview' | 'files' | 'materials' | 'questions' | 'report'
+const TAB_NAME: Record<Tab, string> = { overview: '개요', files: '파일', materials: '자료', questions: '문항', report: '자동 확인 결과' }
 
 export default function ConsoleTaskEdit() {
   const { taskId } = useParams()
   const { detail, error, reload, setSummary } = useTaskDetail(taskId)
-  const toast = useToast()
-  const [closing, setClosing] = useState(false)
-  const [busy, setBusy] = useState(false)
   useConsoleCrumbs(detail ? [detail.summary.title] : [])
 
   if (error) {
@@ -30,49 +41,95 @@ export default function ConsoleTaskEdit() {
       </div>
     )
   }
-  if (!detail) {
+  if (!detail || !taskId) {
     return (
-      <p className="flex items-center justify-center gap-2 py-32 text-[14px] text-text-muted">
-        <Loader2 size={18} className="animate-spin text-brand" aria-hidden /> 과제를 불러오는 중
-      </p>
+      <div className="flex flex-col gap-5 px-8 pt-6" aria-busy>
+        <div className="h-[148px] animate-pulse rounded-xl border border-stage-line bg-panel" />
+        <p className="flex items-center justify-center gap-2 py-16 text-[14px] text-text-muted">
+          <Loader2 size={18} className="animate-spin text-brand" aria-hidden /> 과제를 불러오는 중
+        </p>
+      </div>
     )
   }
+  return <Review key={taskId} code={taskId} detail={detail} setSummary={setSummary} />
+}
 
+function Review({ code, detail, setSummary }: { code: string; detail: NonNullable<ReturnType<typeof useTaskDetail>['detail']>; setSummary: (s: ConsoleTaskSummary) => void }) {
   const { summary: s, definition: d } = detail
+  const toast = useToast()
+  const [params, setParams] = useSearchParams()
+  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState<'publish' | 'hide' | null>(null)
+  const checklist = useChecklist(code)
+  const track = trackOf(s)
+  const tab = tabOf(s)
+  const draft = tab === 'draft'
+  const check = checkBadge(s)
+
+  const tabs: Tab[] = track === 'BIZ' ? ['overview', 'files', 'materials', 'questions', 'report'] : ['overview', 'files', 'report']
+  const asked = params.get('tab') as Tab | null
+  const cur: Tab = asked && tabs.includes(asked) ? asked : 'overview'
+
   const change = async (open: boolean) => {
     setBusy(true)
     try {
       setSummary(await setPublished(s.id, open))
-      toast.show(open ? '공개했습니다. 자가진단과 회차 만들기에 나옵니다' : '공개를 취소했습니다. 검수 대기로 옮겼습니다')
+      toast.show(!open ? '숨겼어요. 검수 전으로 돌아갔어요' : s.usage === 'LIVE' ? '비공개 문제로 올렸어요. 실전 회차에서 고를 수 있어요' : '공개 문제로 올렸어요. 자가진단에 나와요')
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '바꾸지 못했습니다')
+      toast.show(e instanceof Error ? e.message : '바꾸지 못했어요')
     } finally {
       setBusy(false)
     }
   }
 
+  const publishLabel = s.usage === 'LIVE' ? '비공개 문제로 올리기' : '공개 문제로 올리기'
+  const nextText = draft
+    ? checklist.done < REVIEW_CHECKS.length
+      ? `내용을 읽고 체크리스트(${checklist.done}/${REVIEW_CHECKS.length})를 채운 뒤 올리세요.`
+      : '체크리스트를 모두 확인했어요. 이제 올려도 좋아요.'
+    : isClosed(s)
+      ? '내린 과제예요. 목록에는 남지만 새 응시는 막혀 있어요.'
+      : s.usage === 'LIVE'
+        ? '실전 회차를 만들 때 고를 수 있어요. 자가진단에는 보이지 않아요.'
+        : '자가진단 과제 목록에 나오고 있어요.'
+
   return (
     <>
-      <div className="flex flex-col gap-5 px-8 pt-6 pb-10">
+      <div className="flex flex-col gap-5 px-8 pt-6 pb-12">
+        <Link to="/console/tasks" className="inline-flex w-fit items-center gap-1 text-[14px] font-semibold text-text-muted hover:text-text">
+          <ArrowLeft size={15} aria-hidden /> 과제 목록
+        </Link>
         <ConsoleHero
           label="과제 요약"
-          badge={<TaskStatusBadge status={s.status} stage />}
+          badge={
+            <>
+              <TaskStatusBadge task={s} stage />
+              {s.generated && <AiBadge />}
+              {check && <CheckBadge result={check} />}
+            </>
+          }
           title={s.title}
           meta={
             <>
               <span>{s.id}</span>
               <HeroSep />
-              <span>{trackName(s.type)}</span>
+              <span>{TRACK_LABEL[track]}</span>
+              {s.difficulty && (
+                <>
+                  <HeroSep />
+                  <span>{s.difficulty}</span>
+                </>
+              )}
+              {madeAt(s) && (
+                <>
+                  <HeroSep />
+                  <span>만든 날 {fmtTime(madeAt(s)!)}</span>
+                </>
+              )}
               {s.publishedAt && (
                 <>
                   <HeroSep />
                   <span>공개 {fmtTime(s.publishedAt)}</span>
-                </>
-              )}
-              {s.updatedAt && (
-                <>
-                  <HeroSep />
-                  <span>수정 {fmtTime(s.updatedAt)}</span>
                 </>
               )}
             </>
@@ -80,152 +137,104 @@ export default function ConsoleTaskEdit() {
           stats={[
             { label: 'MINUTES', value: s.minutes, unit: '분' },
             { label: 'REQUIREMENTS', value: d.requirements.length, unit: '개' },
-            { label: 'FOLLOW-UPS', value: d.followUps.length, unit: '개' },
+            { label: 'CHECKLIST', value: checklist.done, unit: `/ ${REVIEW_CHECKS.length}`, tone: checklist.done === REVIEW_CHECKS.length ? 'signal' : undefined },
           ]}
         />
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="inline-flex items-center gap-2 rounded-md bg-info/8 px-3 py-2 text-[14px] text-text-muted">
-            <Info size={16} className="text-info" aria-hidden /> 과제 내용 편집(설명·파일·문항)은 준비 중인 기능입니다. 지금은 보기와 공개 상태만 바꿀 수 있습니다.
-          </p>
-          <div className="ml-auto flex items-center gap-2">
-            <a
-              href={`/console/tasks/${s.id}/preview`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-line-strong bg-panel px-3.5 text-[15px] font-semibold text-text hover:border-text-muted hover:bg-panel-raised"
-            >
-              <Eye size={16} aria-hidden /> 응시자로 보기
-            </a>
-            {s.status === 'OPEN' ? (
-              <Button variant="danger" disabled={busy} onClick={() => setClosing(true)}>
-                공개 취소
-              </Button>
-            ) : (
-              <Button variant="primary" disabled={busy} onClick={() => void change(true)}>
-                공개하기
-              </Button>
-            )}
-          </div>
-        </div>
 
-        <TaskDefinitionView definition={d} />
+        <Glass className="stage-scope flex flex-wrap items-center gap-x-8 gap-y-5 rounded-2xl px-6 py-5">
+          <StatusFlow tab={tab} usage={s.usage} />
+          {draft && <UsageToggle task={s} onChanged={setSummary} />}
+          <div className="ml-auto flex min-w-[260px] flex-col items-end gap-2">
+            <p className="text-right text-[14px] font-semibold break-keep text-text-muted" aria-live="polite">
+              {nextText}
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <a
+                href={`/console/tasks/${encodeURIComponent(s.id)}/preview`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-line-strong bg-panel px-5 text-[15px] font-semibold text-text transition-colors hover:border-text-muted hover:bg-panel-raised"
+              >
+                <Eye size={16} aria-hidden /> 응시자로 보기
+              </a>
+              {s.status === 'HIDDEN' ? (
+                <Magnetic>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    disabled={busy}
+                    onClick={() => (checklist.done < REVIEW_CHECKS.length || check === 'fail' ? setConfirm('publish') : void change(true))}
+                    className="h-11 rounded-full px-6"
+                  >
+                    <Rocket size={17} aria-hidden /> {publishLabel}
+                  </Button>
+                </Magnetic>
+              ) : (
+                <Button variant="danger" size="lg" disabled={busy} onClick={() => setConfirm('hide')} className="h-11 rounded-full px-5">
+                  <EyeOff size={16} aria-hidden /> 숨기기
+                </Button>
+              )}
+            </div>
+          </div>
+        </Glass>
+
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="flex min-w-0 flex-col gap-4">
+            <PillTabs
+              id="task-review-tabs"
+              label="검수 탭"
+              value={cur}
+              onChange={(t) => setParams((p) => (p.set('tab', t), p), { replace: true })}
+              tabs={tabs.map((t) => ({ value: t, label: TAB_NAME[t] }))}
+            />
+            <div key={cur} className="step-in min-w-0">
+              {cur === 'overview' && <OverviewTab definition={d} />}
+              {cur === 'files' && <FilesTab code={code} definition={d} />}
+              {cur === 'materials' && <PdfViewer code={code} />}
+              {cur === 'questions' && <QuestionsTab code={code} />}
+              {cur === 'report' && <GenReportTab code={code} />}
+            </div>
+          </div>
+          <aside className="xl:sticky xl:top-6">
+            <ReviewChecklist state={checklist} />
+          </aside>
+        </div>
       </div>
 
-      {closing && (
+      {confirm === 'hide' && (
         <ConfirmModal
-          title="공개를 취소할까요?"
+          title="이 과제를 숨길까요?"
           danger
-          confirm="공개 취소"
+          confirm="숨기기"
           disabled={busy}
-          onClose={() => setClosing(false)}
+          onClose={() => setConfirm(null)}
           onConfirm={() => {
-            setClosing(false)
+            setConfirm(null)
             void change(false)
           }}
-          body={<>「{s.title}」이 검수 대기로 돌아가 자가진단 과제 목록과 회차 만들기에서 사라집니다. 지난 응시 기록은 그대로 남습니다.</>}
+          body={<>「{s.title}」이 검수 전으로 돌아가 {s.usage === 'LIVE' ? '회차 만들기' : '자가진단 과제 목록'}에서 사라집니다. 지난 응시 기록은 그대로 남아요.</>}
+        />
+      )}
+      {confirm === 'publish' && (
+        <ConfirmModal
+          title="아직 확인하지 않은 것이 있어요"
+          confirm={publishLabel}
+          disabled={busy}
+          onClose={() => setConfirm(null)}
+          onConfirm={() => {
+            setConfirm(null)
+            void change(true)
+          }}
+          body={
+            <>
+              {check === 'fail' && <>자동 확인에서 실패한 항목이 있어요. </>}
+              {checklist.done < REVIEW_CHECKS.length && <>체크리스트를 {checklist.done}/{REVIEW_CHECKS.length}개만 확인했어요. </>}
+              그래도 {s.usage === 'LIVE' ? '비공개 문제(실전 시험 전용)' : '공개 문제(자가진단)'}로 올릴까요?
+            </>
+          }
         />
       )}
       {toast.node}
     </>
-  )
-}
-
-type Definition = ConsoleTaskDetail['definition']
-
-/** 과제 정의 읽기 전용 보기. 응시자로 보기(TaskPreview)도 같이 쓴다 */
-export function TaskDefinitionView({ definition: d, grading = true }: { definition: Definition; grading?: boolean }) {
-  return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="flex flex-col gap-5">
-        <Section title="과제 설명">
-          {d.description.length === 0 ? (
-            <Empty />
-          ) : (
-            d.description.map((p, i) => (
-              <p key={i} className="text-[15px] leading-7 break-keep text-text">
-                {p}
-              </p>
-            ))
-          )}
-        </Section>
-        <Section title="요구사항">
-          <List items={d.requirements} ordered />
-        </Section>
-        <Section title="참고 사항">
-          <List items={d.notes} />
-        </Section>
-        <Section title="후속 질문">
-          <List items={d.followUps} ordered />
-        </Section>
-      </div>
-      <div className="flex flex-col gap-5">
-        <Section title="작업 파일">
-          <ul className="flex flex-col gap-2 text-[14px]">
-            <FileRow label="처음 여는 파일" path={d.openFile} />
-            <FileRow label="고칠 수 있는 파일" path={d.editableFile} />
-          </ul>
-        </Section>
-        {grading && (
-          <Section title="채점 설정">
-            <dl className="flex flex-col gap-3 text-[14px]">
-              <div>
-                <dt className="font-semibold text-text-muted">시간 기준 (분)</dt>
-                <dd className="mt-1 font-mono text-text">{d.d4Minutes?.length ? d.d4Minutes.join(' / ') : '-'}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-text-muted">꼭 있어야 할 제목</dt>
-                <dd className="mt-1 text-text">{d.requiredHeadings?.length ? d.requiredHeadings.join(', ') : '-'}</dd>
-              </div>
-            </dl>
-          </Section>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="rounded-xl border border-line bg-panel p-6 shadow-sm">
-      <h2 className="mb-3 text-[17px] font-bold text-text">{title}</h2>
-      <div className="flex flex-col gap-2">{children}</div>
-    </section>
-  )
-}
-
-function List({ items, ordered }: { items: string[]; ordered?: boolean }) {
-  if (items.length === 0) return <Empty />
-  const Tag = ordered ? 'ol' : 'ul'
-  return (
-    <Tag className={ordered ? 'flex list-decimal flex-col gap-1.5 pl-5' : 'flex list-disc flex-col gap-1.5 pl-5'}>
-      {items.map((t, i) => (
-        <li key={i} className="text-[15px] leading-6 break-keep text-text">
-          {t}
-        </li>
-      ))}
-    </Tag>
-  )
-}
-
-function FileRow({ label, path }: { label: string; path: string | null }) {
-  return (
-    <li className="flex flex-col gap-0.5">
-      <span className="font-semibold text-text-muted">{label}</span>
-      {path ? (
-        <span className="inline-flex items-center gap-1.5 font-mono text-[13px] text-text">
-          <FileText size={14} className="text-text-faint" aria-hidden /> {path}
-        </span>
-      ) : (
-        <span className="text-text-faint">없음</span>
-      )}
-    </li>
-  )
-}
-
-function Empty() {
-  return (
-    <p className="inline-flex items-center gap-1.5 text-[14px] text-text-faint">
-      <CircleAlert size={14} aria-hidden /> 아직 데이터가 없습니다.
-    </p>
   )
 }

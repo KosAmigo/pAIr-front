@@ -1,12 +1,11 @@
 // 콘솔 과제 목록 (DESIGN.md §7-9-1 ~ 9-3). 데이터는 백엔드(/api/console/tasks)에서만 온다.
 // 목록은 과제 화면과 콘솔 메뉴(검수 대기 숫자)가 같이 쓰므로, 받아 온 결과를 여기 한 곳에 담아 둔다.
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import { consoleApi, type ConsoleTaskDetail, type ConsoleTaskSummary, type TaskPublicationStatus } from '../consoleApi'
+import { consoleApi, type ConsoleTaskDetail, type ConsoleTaskSummary, type TaskUsage } from '../consoleApi'
 import { KINDS } from './catalog'
 
-/** 목록 탭: 검수 대기 = HIDDEN, 공개 = OPEN (백엔드에는 이 두 상태만 있다) */
-export type TaskTab = 'draft' | 'open'
-export const tabOf = (status: TaskPublicationStatus): TaskTab => (status === 'OPEN' ? 'open' : 'draft')
+// 탭 나누기·거르기 같은 화면 규칙은 taskBoard.ts (테스트하기 쉽게 따로 둔다)
+export { tabOf, type TaskTab } from './taskBoard'
 
 export const kindName = (key: string) => KINDS.find((k) => k.key === key)?.name ?? key
 /** 백엔드 과제 type(dev | biz) → 직군 이름 */
@@ -46,6 +45,13 @@ export function useTaskList(enabled = true) {
 /** 공개 상태 바꾸기(관리자). 바뀐 요약으로 목록을 고친다 */
 export async function setPublished(id: string, open: boolean) {
   const next = open ? await consoleApi.publishTask(id) : await consoleApi.hideTask(id)
+  if (state.list) set({ list: state.list.map((t) => (t.id === id ? next : t)) })
+  return next
+}
+
+/** 용도 바꾸기(검수 전 과제만). 바뀐 요약으로 목록을 고친다 */
+export async function setUsage(id: string, usage: TaskUsage) {
+  const next = await consoleApi.changeUsage(id, usage)
   if (state.list) set({ list: state.list.map((t) => (t.id === id ? next : t)) })
   return next
 }
