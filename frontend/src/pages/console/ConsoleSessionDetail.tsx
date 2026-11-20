@@ -56,19 +56,26 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 type Loaded = { d: SessionDetail; skew: number }
 
+/** 초대 메일을 보내는 중인 대상자가 있을 때 다시 불러오는 간격 */
+const MAIL_POLL_MS = 2000
+
 export default function ConsoleSessionDetail() {
   const { sessionId } = useParams()
   const id = Number(sessionId)
   const [paused, setPaused] = useState(false)
   const [phaseHint, setPhaseHint] = useState<Phase | null>(null)
+  const [mailPending, setMailPending] = useState(false)
   const detail = useLoad<Loaded>(
     Number.isFinite(id) ? `session-${id}` : null,
     // 브라우저 시계와 서버 시계 차이 (남은 시간 계산에 쓴다)
     () => consoleApi.session(id).then((d) => ({ d, skew: Date.parse(d.serverNow) - Date.now() })),
-    paused ? undefined : phaseHint === 'LIVE' ? 5000 : 30_000,
+    // 초대 메일은 서버가 따로 보내고 결과를 나중에 적는다. 보내는 중인 대상자가 있는 동안은 자주 다시 불러와 새로고침 없이 결과를 보여 준다
+    paused ? undefined : mailPending ? MAIL_POLL_MS : phaseHint === 'LIVE' ? 5000 : 30_000,
   )
   const phase = detail.data?.d.session.phase ?? null
   if (phase !== phaseHint) setPhaseHint(phase)
+  const hasPendingMail = detail.data?.d.participants.some((p) => p.inviteStatus === 'PENDING') ?? false
+  if (hasPendingMail !== mailPending) setMailPending(hasPendingMail)
 
   if (!Number.isFinite(id) || (detail.error && !detail.data)) {
     return (
