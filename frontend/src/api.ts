@@ -124,7 +124,10 @@ export type Report = {
 
 export type ReportResponse = { status: AttemptStatus; error: string | null; report: Report | null }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  /** HTTP 상태 코드 (네트워크 실패 등 응답이 없으면 없음) */
+  status?: number
+}
 
 /**
  * 로그인 정보 헤더. 로그인 토큰이 있으면 Authorization: Bearer 로 보내고(백엔드 /api/auth 로그인),
@@ -159,7 +162,11 @@ export async function call<T>(method: string, url: string, body?: unknown): Prom
   }
   const text = await res.text()
   const data = text ? JSON.parse(text) : null
-  if (!res.ok) throw new ApiError(data?.message ?? `요청 실패 (${res.status})`)
+  if (!res.ok) {
+    const err = new ApiError(data?.message ?? `요청 실패 (${res.status})`)
+    err.status = res.status
+    throw err
+  }
   return data as T
 }
 
