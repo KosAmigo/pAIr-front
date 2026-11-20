@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test:credits": "node --experimental-strip-types --test tests/credits.test.mjs",
+    "test:task-gen": "node --experimental-strip-types --test tests/task-gen.test.mjs",
     "test:replay": "node --experimental-strip-types --test tests/replay-tree.test.mjs",
     "test:anti-cheating": "node --experimental-strip-types --test tests/anti-cheating.test.mjs",
     "test:proctor": "node --experimental-strip-types --test tests/proctor/*.test.ts",
