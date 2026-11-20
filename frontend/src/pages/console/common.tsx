@@ -1,60 +1,100 @@
 // 콘솔 화면들이 같이 쓰는 작은 조각: 행 메뉴, 확인 모달, 토스트, 상태 배지
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { MoreHorizontal } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { Button } from '../../components/ui'
 import type { TaskPublicationStatus } from '../../consoleApi'
 import { tabOf } from '../../data/consoleTasks'
 
+/** 메뉴 한 줄의 대략적인 높이(px). 아래 공간이 모자랄 때 위로 열지 정하는 데만 쓴다 */
+const MENU_ITEM_HEIGHT = 40
+const MENU_GAP = 4
+
+type MenuPos = { right: number; top?: number; bottom?: number }
+
 export function RowMenu({ label, items }: { label: string; items: { text: string; onClick: () => void; danger?: boolean; disabled?: boolean }[] }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<MenuPos | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const open = pos !== null
+
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    const close = () => setPos(null)
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (!buttonRef.current?.contains(target) && !menuRef.current?.contains(target)) close()
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
+    // 메뉴는 화면 기준(fixed)으로 띄우므로, 스크롤·크기 변경 때는 위치가 어긋나기 전에 닫는다
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
     return () => {
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
     }
   }, [open])
+
+  const toggle = () => {
+    if (open) return setPos(null)
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const right = window.innerWidth - rect.right
+    const needed = items.length * MENU_ITEM_HEIGHT + 8
+    // 아래 공간이 모자라면 위로 연다. 표가 컨테이너에 잘려도 body 로 띄워서 보인다
+    const opensUp = rect.bottom + MENU_GAP + needed > window.innerHeight && rect.top > needed
+    setPos(opensUp ? { right, bottom: window.innerHeight - rect.top + MENU_GAP } : { right, top: rect.bottom + MENU_GAP })
+  }
+
   return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button
+        ref={buttonRef}
         type="button"
         aria-label={label}
         title={label}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="inline-flex size-8 items-center justify-center rounded-md text-text-muted hover:bg-panel-raised hover:text-text"
       >
         <MoreHorizontal size={18} aria-hidden />
       </button>
-      {open && (
-        <div role="menu" className="fade-in absolute top-9 right-0 z-30 min-w-40 rounded-md border border-line bg-panel p-1 shadow-modal">
-          {items.map((it) => (
-            <button
-              key={it.text}
-              type="button"
-              role="menuitem"
-              disabled={it.disabled}
-              onClick={() => {
-                setOpen(false)
-                it.onClick()
-              }}
-              className={cx(
-                'flex w-full rounded-sm px-3 py-2 text-left text-[14px] hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-40',
-                it.danger ? 'text-alert' : 'text-text',
-              )}
-            >
-              {it.text}
-            </button>
-          ))}
-        </div>
-      )}
+      {pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            style={{ position: 'fixed', right: pos.right, top: pos.top, bottom: pos.bottom }}
+            className="fade-in z-50 min-w-40 rounded-md border border-line bg-panel p-1 shadow-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {items.map((it) => (
+              <button
+                key={it.text}
+                type="button"
+                role="menuitem"
+                disabled={it.disabled}
+                onClick={() => {
+                  setPos(null)
+                  it.onClick()
+                }}
+                className={cx(
+                  'flex w-full rounded-sm px-3 py-2 text-left text-[14px] hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-40',
+                  it.danger ? 'text-alert' : 'text-text',
+                )}
+              >
+                {it.text}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

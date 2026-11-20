@@ -78,7 +78,7 @@ function toView(info: EntryInfo): ExamView {
 /** 여정 띠: 단계 노드 4개(44px, 단계 아이콘)를 잇는 선이 지난 단계까지 그라데이션으로 차오른다. 지금 노드는 맥동 고리 */
 function Journey({ current, stage }: { current: number; stage?: boolean }) {
   return (
-    <nav aria-label="입장 단계" className="relative z-10 flex justify-center px-8 pt-9 pb-1">
+    <nav aria-label="입장 단계" className="relative z-10 flex justify-center px-8 pt-[clamp(12px,3.5vh,36px)] pb-1">
       <ol className="grid w-full max-w-[880px] grid-cols-4">
         {STEPS.map((s, i) => {
           const done = i < current
@@ -498,7 +498,7 @@ function RotatingTips({ proctoring }: { proctoring: boolean }) {
   }, [tips.length])
   const tip = tips[index % tips.length]
   return (
-    <div className="glass-stage mt-10 flex min-h-[84px] w-[880px] items-center gap-5 rounded-xl px-6 py-4" role="status" aria-live="off">
+    <div className="glass-stage mt-[clamp(12px,3vh,40px)] flex min-h-[84px] w-[880px] items-center gap-5 rounded-xl px-6 py-4" role="status" aria-live="off">
       <span className="tnum shrink-0 font-mono text-[13px] font-semibold text-stage-brand">
         TIP {String(index + 1).padStart(2, '0')} / {String(tips.length).padStart(2, '0')}
       </span>
@@ -546,7 +546,7 @@ function WaitingStage({ view, left, total, chips, footer, proctoring }: { view: 
       <div className="flex items-center gap-3">{chips}</div>
 
       {/* 원형 진행 고리 + 카운트다운 */}
-      <div className="relative mt-10 size-[360px]">
+      <div className="relative mt-[clamp(12px,3vh,40px)] size-[clamp(220px,40vh,360px)]">
         <svg viewBox="0 0 360 360" className="absolute inset-0 -rotate-90" aria-hidden>
           <defs>
             <linearGradient id="wait-ring" x1="0" y1="0" x2="1" y2="1">
@@ -575,7 +575,7 @@ function WaitingStage({ view, left, total, chips, footer, proctoring }: { view: 
             initial={urgent && !reduce ? { scale: scale.pop } : false}
             animate={{ scale: 1 }}
             transition={{ duration: duration.fast }}
-            className={cx('tnum font-mono text-[96px] leading-[100px] font-semibold tracking-[-0.04em]', urgent ? 'text-stage-caution' : 'text-stage-text')}
+            className={cx('tnum font-mono text-[clamp(56px,10.5vh,96px)] leading-none font-semibold tracking-[-0.04em]', urgent ? 'text-stage-caution' : 'text-stage-text')}
             style={{ textShadow: '0 0 40px color-mix(in srgb, var(--color-stage-brand) 55%, transparent)' }}
             role="timer"
             aria-live="off"
@@ -588,7 +588,7 @@ function WaitingStage({ view, left, total, chips, footer, proctoring }: { view: 
 
       <RotatingTips proctoring={proctoring} />
 
-      <div className="mt-10 flex items-center gap-4">{footer}</div>
+      <div className="mt-[clamp(12px,3vh,40px)] flex items-center gap-4">{footer}</div>
     </div>
   )
 }
@@ -833,7 +833,7 @@ export default function Entry() {
           <div className="flex min-h-full flex-col">
             {header}
             {journey}
-            <main className="flex flex-1 justify-center px-8 py-10">{body}</main>
+            <main className="flex flex-1 justify-center px-8 py-[clamp(12px,3.5vh,40px)]">{body}</main>
           </div>
         </StageSection>
       ) : (

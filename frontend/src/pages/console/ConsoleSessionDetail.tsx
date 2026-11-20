@@ -35,6 +35,7 @@ import {
   type SessionDetail,
   type SessionSummary,
 } from '../../consoleApi'
+import { Select } from '../../components/Select'
 import { ConfirmModal, Modal, RowMenu } from './common'
 import { fmtHm, fmtLeft, fmtShort, fmtTime, useNow, useToast } from './format'
 import { Loading } from './Loading'
@@ -901,15 +902,20 @@ function Results({ s }: { s: SessionSummary }) {
           <span className="text-[13px] text-text-muted">
             채점 완료 {r.scored} / {r.participants}명
           </span>
-          <label className="ml-auto flex items-center gap-1.5 text-[13px] text-text-muted">
+          <div className="ml-auto flex items-center gap-1.5 text-[13px] text-text-muted">
             <ArrowDownUp size={14} aria-hidden />
-            <span className="sr-only">정렬</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-8 rounded-md border border-line-strong bg-panel px-2 text-[13px] text-text outline-none focus:border-brand">
-              <option value="score">순위 순</option>
-              <option value="name">이름 순</option>
-              <option value="open">미확인 이벤트 많은 순</option>
-            </select>
-          </label>
+            <Select<SortKey>
+              size="sm"
+              value={sort}
+              onChange={setSort}
+              ariaLabel="정렬"
+              options={[
+                { value: 'score', label: '순위 순' },
+                { value: 'name', label: '이름 순' },
+                { value: 'open', label: '미확인 이벤트 많은 순' },
+              ]}
+            />
+          </div>
           <Button size="sm" onClick={exportCsv} disabled={exporting}>
             {exporting ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Download size={14} aria-hidden />} 결과 내보내기
           </Button>

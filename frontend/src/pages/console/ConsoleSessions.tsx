@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarCheck, CalendarClock, Camera, ChevronRight, CircleAlert, Plus, Radio, Users } from 'lucide-react'
 import { cx } from '../../components/cx'
+import { Select } from '../../components/Select'
 import { PageHeader } from '../../components/SelfShell'
 import { ButtonLink } from '../../components/ui'
 import { Reveal, RevealGroup, RevealItem, Spotlight, StageSection } from '../../components/fx'
@@ -63,21 +64,16 @@ export default function ConsoleSessions() {
             ]}
           />
           {mine == null && (
-            <label className="flex items-center gap-2 pb-1 text-[14px] text-text-muted">
+            <div className="flex items-center gap-2 pb-1 text-[14px] text-text-muted">
               회사
-              <select
+              <Select
                 value={company}
-                onChange={(e) => setCompany(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-                className="h-9 rounded-md border border-line-strong bg-panel px-2 text-[14px] text-text outline-none focus:border-brand"
-              >
-                <option value="ALL">전체</option>
-                {companyIds.map((id) => (
-                  <option key={id} value={id}>
-                    {companyLabel(id)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={setCompany}
+                ariaLabel="회사"
+                options={[{ value: 'ALL', label: '전체' }, ...companyIds.map((id) => ({ value: id, label: companyLabel(id) }))]}
+                className="min-w-32"
+              />
+            </div>
           )}
         </div>
 
