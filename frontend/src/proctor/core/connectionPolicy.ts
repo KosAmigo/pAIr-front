@@ -56,3 +56,22 @@ export function stepGate(prev: GateState, up: ChannelUp, now: number, graceMs = 
     gate: { status: blocked ? 'blocked' : 'grace', missing, graceLeftMs: Math.max(0, graceMs - (now - oldest)), newlyExpired },
   }
 }
+
+/** 휴대폰 영상 연결 상태 (peerLink 의 LinkState 와 같은 값) */
+export type PhoneVideoState = 'idle' | 'connecting' | 'live' | 'failed'
+
+/**
+ * 휴대폰 카드의 연결 표시. 릴레이(WebSocket)에 붙어 있다고 "연결됨"이 아니다.
+ * 휴대폰 페이지만 열렸고 영상이 아직 안 오면 사용자가 연결됐다고 믿고 점검에서 막히므로, 영상 상태까지 본다.
+ */
+export function phoneCardStatus(
+  phone: 'connected' | 'disconnected' | 'stale',
+  video: PhoneVideoState,
+): { status: 'ok' | 'check' | 'down'; label: string } {
+  if (phone === 'stale') return { status: 'check', label: '응답 없음' }
+  if (phone !== 'connected') return { status: 'down', label: '미연결' }
+  if (video === 'live') return { status: 'ok', label: '연결됨' }
+  if (video === 'failed') return { status: 'down', label: '영상 없음' }
+  if (video === 'connecting') return { status: 'check', label: '영상 연결 중' }
+  return { status: 'check', label: '영상 대기 중 (휴대폰에서 보조 캠 시작)' }
+}
