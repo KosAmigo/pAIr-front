@@ -1,6 +1,7 @@
 // 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
 import { readAuthSession } from './auth/authApi.ts'
 import type { QuestionResults } from './data/questions.ts'
+import type { CompletionItem, DefinitionTarget } from './lib/liveDiagnostics.ts'
 
 export type TaskType = 'dev' | 'biz'
 
@@ -225,6 +226,15 @@ export const api = {
   save: (id: string, path: string, content: string) => call<{ saved: boolean }>('PUT', `/api/attempts/${enc(id)}/file?path=${enc(path)}`, { content }),
   build: (id: string) => call<BuildResult>('POST', `/api/attempts/${enc(id)}/build`),
   run: (id: string) => call<RunResult>('POST', `/api/attempts/${enc(id)}/run`),
+  /** 입력 중인 코드의 오류. files 는 저장 전 내용, 서버에 저장된 나머지 파일과 합쳐 분석한다 */
+  diagnostics: (id: string, files: Record<string, string>) =>
+    call<{ diagnostics: CompileDiagnostic[] }>('POST', `/api/attempts/${enc(id)}/diagnostics`, { files }),
+  /** 커서(offset, path 파일 안의 글자 위치) 앞 "식." 의 멤버 자동 완성 */
+  complete: (id: string, files: Record<string, string>, path: string, offset: number) =>
+    call<{ items: CompletionItem[] }>('POST', `/api/attempts/${enc(id)}/complete`, { files, path, offset }),
+  /** 커서 위치 이름의 정의. 작업 파일 안에 없으면 definition 이 null */
+  definition: (id: string, files: Record<string, string>, path: string, offset: number) =>
+    call<{ definition: DefinitionTarget | null }>('POST', `/api/attempts/${enc(id)}/definition`, { files, path, offset }),
   chat: (id: string, message: string) => call<Turn[]>('POST', `/api/attempts/${enc(id)}/chat`, { message }),
   decideEdit: (id: string, turn: number, index: number, action: 'apply' | 'reject') =>
     call<EditDecision>('POST', `/api/attempts/${enc(id)}/edits`, { turn, index, action }),

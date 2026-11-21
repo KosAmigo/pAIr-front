@@ -9,6 +9,7 @@ import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { QuestionPanel } from '../components/questions/QuestionPanel'
 import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
+import { DIAGNOSTICS_DELAY_MS, isJavaSource, javaSources, marksFor, type DefinitionTarget } from '../lib/liveDiagnostics'
 import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Material, type Task, type Turn } from '../api'
 import { AttemptPdf } from '../components/AttemptPdf'
 import {
@@ -680,6 +681,13 @@ export default function RealExam() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [viewing, setViewing] = useState<{ turn: number; index: number } | null>(null)
   // 빌드(컴파일만) 또는 테스트 실행 결과. 마지막으로 누른 쪽을 보여 준다.
+  const [liveDiagnostics, setLiveDiagnostics] = useState<CompileDiagnostic[] | null>(null)
+  const diagnosticsSeq = useRef(0)
+  const contentsRef = useRef(contents)
+  useEffect(() => {
+    contentsRef.current = contents
+  }, [contents])
+  const [reveal, setReveal] = useState<{ path: string; line: number; column: number; nonce: number } | null>(null)
   const [run, setRun] = useState<{
     kind: 'build' | 'test'
     compiled: boolean
@@ -844,6 +852,25 @@ export default function RealExam() {
     return () => clearTimeout(id)
   }, [dirty, contents, stage, saveFiles])
 
+  // 입력이 멈추고 잠시 뒤 서버에서 오류를 분석해 밑줄을 갱신한다 (저장 여부와 상관없이 화면의 내용 기준)
+  useEffect(() => {
+    if (stage !== 'solve') return
+    const files = javaSources(contents)
+    if (!Object.keys(files).length) return
+    const seq = ++diagnosticsSeq.current
+    const id = setTimeout(() => {
+      api
+        .diagnostics(sessionId, files)
+        .then((r) => {
+          if (seq === diagnosticsSeq.current) setLiveDiagnostics(r.diagnostics)
+        })
+        .catch(() => {
+          // 분석이 바쁘거나 실패하면 이전 밑줄을 그대로 둔다. 빌드 버튼의 결과가 기준이다
+        })
+    }, DIAGNOSTICS_DELAY_MS)
+    return () => clearTimeout(id)
+  }, [contents, stage, sessionId])
+
   // Ctrl+S
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -887,6 +914,18 @@ export default function RealExam() {
     if (!open.includes(p)) setOpen([...open, p])
     setActive(p)
   }
+  /** 편집기 도우미(자동 완성·정의로 이동)가 서버에 보낼 화면의 저장 전 내용 */
+  const editorHelp = {
+    complete: async (path: string, offset: number) =>
+      isJavaSource(path) ? (await api.complete(sessionId, javaSources(contentsRef.current), path, offset)).items : [],
+    definition: async (path: string, offset: number) =>
+      isJavaSource(path) ? (await api.definition(sessionId, javaSources(contentsRef.current), path, offset)).definition : null,
+    goto: async (t: DefinitionTarget) => {
+      await openFile(t.file)
+      setRefTab('file')
+      setReveal({ path: t.file, line: t.line, column: t.column, nonce: Date.now() })
+    },
+  }
   const closeFile = (p: string) => {
     void saveFiles([p])
     const next = open.filter((f) => f !== p)
@@ -917,9 +956,7 @@ export default function RealExam() {
       setBusyTask(null)
     }
   }
-  const activeDiagnostics = (run?.diagnostics ?? [])
-    .filter((d) => d.file === active)
-    .map((d) => ({ line: d.line, column: d.column, message: d.message, severity: d.severity }))
+  const activeDiagnostics = marksFor(active, liveDiagnostics, run?.diagnostics)
 
   /** 파일 트리의 파일을 첨부로 바꾼다. PDF 자료는 기본으로 전체(최대 20쪽)를 붙인다 */
   const attachFor = (path: string): AttachRef =>
@@ -1236,6 +1273,10 @@ export default function RealExam() {
                     readOnly={locked || readOnlyPath(active)}
                     onChange={edit}
                     diagnostics={activeDiagnostics}
+                    onComplete={editorHelp.complete}
+                    onDefinition={editorHelp.definition}
+                    onGoto={(t) => void editorHelp.goto(t)}
+                    reveal={reveal && reveal.path === active ? reveal : undefined}
                   />
                 ) : active ? (
                   <textarea

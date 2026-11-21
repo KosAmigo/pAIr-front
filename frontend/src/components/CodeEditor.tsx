@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
+import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { javaLanguage } from '@codemirror/lang-java'
 import { markdown } from '@codemirror/lang-markdown'
@@ -9,6 +9,7 @@ import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { Annotation, EditorState, type Extension } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { styleTags, tags as t } from '@lezer/highlight'
+import { completionInsert, posOf, type CompletionItem, type DefinitionTarget } from '../lib/liveDiagnostics'
 
 /** 밖에서 넣은 내용 변경 표시 (사용자 입력과 구분) */
 const External = Annotation.define<boolean>()
@@ -110,21 +111,67 @@ export function CodeEditor({
   onChange,
   readOnly = false,
   diagnostics = [],
+  onComplete,
+  onDefinition,
+  onGoto,
+  reveal,
 }: {
   path: string
   value: string
   onChange?: (value: string) => void
   readOnly?: boolean
   diagnostics?: EditorDiagnostic[]
+  /** 커서(offset) 앞 "식." 의 멤버 후보를 서버에 물어본다 */
+  onComplete?: (path: string, offset: number) => Promise<CompletionItem[]>
+  /** 커서(offset) 위치 이름의 정의를 서버에 물어본다. 없으면 null */
+  onDefinition?: (path: string, offset: number) => Promise<DefinitionTarget | null>
+  /** 정의를 찾았을 때(Ctrl/⌘+클릭, F12) 그 위치로 가 달라고 알린다. 다른 파일이면 밖에서 열어 준다 */
+  onGoto?: (target: DefinitionTarget) => void
+  /** 이 줄·열로 커서를 옮기고 화면 가운데로 스크롤한다. nonce 가 바뀔 때마다 다시 옮긴다 */
+  reveal?: { line: number; column: number; nonce: number }
 }) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+  const onDefinitionRef = useRef(onDefinition)
+  onDefinitionRef.current = onDefinition
+  const onGotoRef = useRef(onGoto)
+  onGotoRef.current = onGoto
 
   // 파일(path)이나 읽기 전용 여부가 바뀔 때만 편집기를 새로 만든다
   useEffect(() => {
     if (!host.current) return
+    /** 서버 자동 완성: "식." 뒤에서만. 입력하는 동안 글자가 이어지면 다시 묻지 않고 걸러 보여 준다 */
+    const serverComplete = async (context: CompletionContext): Promise<CompletionResult | null> => {
+      const ask = onCompleteRef.current
+      const word = context.matchBefore(/\.\w*/)
+      if (!ask || !word) return null
+      const items = await ask(path, context.pos).catch(() => [])
+      if (context.aborted || !items.length) return null
+      return {
+        from: word.from + 1,
+        validFor: /^\w*$/,
+        options: items.map((item) => ({
+          label: item.name,
+          detail: item.signature,
+          type: item.kind === 'method' ? 'method' : 'property',
+          apply: (v: EditorView, _c: unknown, from: number, to: number) => {
+            const { text, cursor } = completionInsert(item)
+            v.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + cursor }, userEvent: 'input.complete' })
+          },
+        })),
+      }
+    }
+    /** 커서(또는 클릭한) 위치 이름의 정의로 간다 */
+    const goToDefinition = async (offset: number) => {
+      const ask = onDefinitionRef.current
+      if (!ask) return
+      const target = await ask(path, offset).catch(() => null)
+      if (target) onGotoRef.current?.(target)
+    }
     const state = EditorState.create({
       doc: value,
       extensions: [
@@ -135,14 +182,25 @@ export function CodeEditor({
         indentOnInput(),
         bracketMatching(),
         closeBrackets(),
-        autocompletion(),
+        autocompletion({ override: [serverComplete] }),
         highlightActiveLine(),
         highlightSelectionMatches(),
         lintGutter(),
         EditorState.tabSize.of(4),
         EditorState.readOnly.of(readOnly),
         EditorView.editable.of(!readOnly),
-        keymap.of([indentWithTab, ...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap]),
+        EditorView.domEventHandlers({
+          // Ctrl(Mac 은 ⌘)+클릭: 클릭한 이름의 정의로 이동
+          mousedown(e, v) {
+            if (!(e.ctrlKey || e.metaKey) || e.button !== 0) return false
+            const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
+            if (pos === null) return false
+            e.preventDefault()
+            void goToDefinition(pos)
+            return true
+          },
+        }),
+        keymap.of([{ key: 'F12', run: (v) => (void goToDefinition(v.state.selection.main.head), true) }, indentWithTab, ...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap]),
         languageFor(path),
         syntaxHighlighting(highlight),
         theme,
@@ -170,6 +228,17 @@ export function CodeEditor({
       ed.dispatch({ changes: { from: 0, to: ed.state.doc.length, insert: value }, annotations: External.of(true) })
     }
   }, [value])
+
+  // 정의로 이동한 자리: 커서를 옮기고 가운데로 스크롤
+  useEffect(() => {
+    const ed = view.current
+    if (!ed || !reveal) return
+    const doc = ed.state.doc
+    const starts = Array.from({ length: doc.lines }, (_, i) => doc.line(i + 1).from)
+    const pos = posOf(starts, doc.length, reveal.line, reveal.column)
+    ed.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) })
+    ed.focus()
+  }, [reveal])
 
   // 컴파일 오류 밑줄
   useEffect(() => {
