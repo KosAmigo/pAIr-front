@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss(), ...(lan ? [basicSsl()] : []), proctorRelay()],
     server: {
       host: lan ? true : undefined,
+      // 휴대폰 LTE 테스트용 임시 터널 주소 (Vite 는 모르는 호스트 요청을 막는다)
+      allowedHosts: ['.trycloudflare.com', '.ngrok-free.app', '.ngrok-free.dev', '.loca.lt'],
       // 백엔드(Spring Boot, pAIr-back)로 API 요청을 넘긴다
       proxy: {
         '/api': 'http://localhost:8180',

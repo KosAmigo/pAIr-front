@@ -7,6 +7,7 @@
     "dev": "vite --mode lan",
     "dev:lan": "vite --mode lan",
     "dev:local": "vite",
+    "dev:all": "node ../scripts/dev-all.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test:auth": "node --experimental-strip-types --test tests/auth/*.test.mjs",
@@ -18,6 +19,7 @@
     "test:chat-attach": "node --experimental-strip-types --test tests/chat-attach.test.mjs",
     "test:anti-cheating": "node --experimental-strip-types --test tests/anti-cheating.test.mjs",
     "test:proctor": "node --experimental-strip-types --test tests/proctor/*.test.ts",
+    "test:scripts": "node --test tests/dev-all.test.mjs",
     "preview": "vite preview",
     "test:questions": "node --experimental-strip-types --test tests/questions.test.mjs"
   },

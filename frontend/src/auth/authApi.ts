@@ -19,6 +19,12 @@ export class AuthRequestError extends Error {
   }
 }
 
+export class AuthSessionExpiredError extends AuthRequestError {
+  constructor() {
+    super('로그인이 만료되었습니다. 다시 로그인해 주세요.', 401)
+  }
+}
+
 export function readAuthSession(): AuthSession | null {
   try {
     const raw = localStorage.getItem(KEY)
@@ -86,6 +92,10 @@ export const authApi = {
     request<AuthSession>('/api/auth/signup', 'POST', { name, email, password, code }),
   /** 저장된 bearer 토큰의 유효성과 최신 회원 정보를 서버에서 확인한다. */
   me: (token: string) => request<AuthUser>('/api/auth/me', 'GET', undefined, token),
+  changePassword: (token: string, currentPassword: string, newPassword: string) =>
+    request<void>('/api/auth/password', 'PATCH', { currentPassword, newPassword }, token),
+  withdraw: (token: string, currentPassword: string) =>
+    request<void>('/api/auth/withdrawal', 'POST', { currentPassword }, token),
   /** 서버 세션을 폐기해 현재 토큰을 무효화한다. */
   logout: (token: string) => request<void>('/api/auth/logout', 'POST', undefined, token),
 }

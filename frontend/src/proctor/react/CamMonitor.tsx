@@ -9,10 +9,19 @@ import { checksSkipped } from '../testSkip.ts'
 import { VIDEO_BYTES_PER_SEC, formatBytes } from '../core/events.ts'
 import type { LiveExam } from '../liveExam.ts'
 import { CamPreview } from './CamPreview.tsx'
+import { ConnectionGate } from './ConnectionGate.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
 import { useCamHub } from './useCamHub.ts'
 
 const TOAST_MS = 4000
+const RECENT_WARNINGS = 5
+
+/** 경고가 어느 감지에서 나왔는지 (휴대폰 경고도 PC 에서 같이 보이게) */
+function sourceLabel(source: string): string {
+  if (source === 'PC_CAM') return '노트북 캠'
+  if (source === 'PHONE_CAM') return '휴대폰 캠'
+  return '브라우저'
+}
 
 export default function CamMonitor({ live }: { live: LiveExam }) {
   const hub = useCamHub()
@@ -29,6 +38,13 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
     }
   }, [live.invite, live.serverOffsetMs, skipped])
 
+  // 응시 중 3채널 연결 감시 (15초 넘게 끊기면 응시 화면을 막는다)
+  useEffect(() => {
+    if (skipped) return
+    camHub.startGate()
+    return () => camHub.stopGate()
+  }, [skipped])
+
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
@@ -38,7 +54,7 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
   if (skipped) return null
 
   const w = hub.lastWarning
-  const toast = w && now - hub.lastWarningAt < TOAST_MS ? `${w.message} (${w.source === 'PC_CAM' ? '노트북 캠' : '휴대폰 캠'})` : null
+  const toast = w && now - hub.lastWarningAt < TOAST_MS ? `${w.message} (${sourceLabel(w.source)})` : null
   const elapsedSec = hub.monitoringSince ? (now - hub.monitoringSince) / 1000 : 0
   const cams = hub.phone === 'connected' ? 2 : 1
   const videoEquiv = elapsedSec * VIDEO_BYTES_PER_SEC * cams
@@ -49,6 +65,7 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
 
   return (
     <>
+      <ConnectionGate />
       <section
         aria-label="카메라 감독"
         className="fixed bottom-4 left-4 z-40 w-[280px] overflow-hidden rounded-xl border border-line bg-panel shadow-modal"
@@ -99,7 +116,35 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
                 ))}
               </ul>
             )}
-            {hub.phone !== 'connected' ? <PhonePairCard /> : <p className="text-[12px] text-text-muted">휴대폰 보조 캠 연결됨{hub.phoneStatus?.calibrated ? ' · 감시 중' : ''}</p>}
+            {hub.log.length > 0 && (
+              <ul className="flex flex-col gap-1" aria-label="최근 경고">
+                {hub.log.slice(0, RECENT_WARNINGS).map((v) => (
+                  <li key={v.id} className="flex items-baseline gap-1.5 text-[12px] leading-4">
+                    <span className="tnum shrink-0 text-text-faint">{new Date(v.ts).toLocaleTimeString('ko-KR', { hour12: false })}</span>
+                    <span className="shrink-0 rounded-sm bg-panel-raised px-1 font-medium text-text-muted">{sourceLabel(v.source)}</span>
+                    <span className="min-w-0 break-keep text-text">{v.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {hub.phone !== 'connected' ? (
+              <PhonePairCard />
+            ) : (
+              <div className="flex flex-col gap-1">
+                <p className="text-[12px] text-text-muted">
+                  휴대폰 보조 캠 연결됨
+                  {hub.phoneAnalysis.status === 'monitoring' ? ' · 감시 중' : hub.phoneAnalysis.status === 'calibrating' ? ' · 기준 위치 잡는 중' : ''}
+                </p>
+                {hub.phoneAnalysis.status === 'error' && (
+                  <div role="alert" className="flex flex-col gap-2 rounded-lg border border-alert/40 bg-alert/10 p-2 text-[13px] text-alert">
+                    {hub.phoneAnalysis.error}
+                    <Button size="sm" variant="secondary" onClick={() => camHub.recalibratePhone()}>
+                      <RefreshCw size={14} aria-hidden /> 휴대폰 기준 다시 잡기
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
             {hub.monitor === 'monitoring' && (
               <p className="text-[12px] text-text-muted">
                 전송 {formatBytes(sent)} · 영상이었다면 약 {formatBytes(Math.round(videoEquiv))}

@@ -30,8 +30,12 @@ import { Aurora, Glass, GlowBorder, GradientText, Magnetic, RevealGroup, RevealI
 import { duration, easing, scale, springs } from '../lib/motion'
 import { enterFullscreen, useFullscreen } from '../lib/fullscreen'
 import { proctorApi, serverOffsetFrom, type EntryInfo } from '../proctor/api/proctorApi.ts'
-import { camHub } from '../proctor/camHub.ts'
+import { camHub, channelUp } from '../proctor/camHub.ts'
+import { CHANNEL_LABEL, allUp, missingChannels } from '../proctor/core/connectionPolicy.ts'
+import { ScreenShareCard } from '../proctor/react/ScreenShareCard.tsx'
 import { saveLiveExam } from '../proctor/liveExam.ts'
+import { entryClosed, entryClosedMessage, entryDeadlineAt, clockOf } from '../proctor/core/entryDeadline.ts'
+import { checksSkipped } from '../proctor/testSkip.ts'
 import { useCamHub } from '../proctor/react/useCamHub.ts'
 import type { EnvCheckResult } from '../proctor/react/EnvCheckPanel.tsx'
 
@@ -52,7 +56,7 @@ const STEPS: { label: string; icon: LucideIcon }[] = [
   { label: '대기실', icon: Hourglass },
 ]
 /** 화면에 보이는 시험 정보. 입장 API(proctorApi.entry)로 받은 값으로 채운다 */
-type ExamView = { company: string; title: string; start: string; duration: string; tasks: string; proctor: string; applicant: { name: string; email: string } }
+type ExamView = { company: string; title: string; start: string; duration: string; tasks: string; proctor: string; applicant: { name: string; email: string }; /** 감독 회차의 대기실 입장 마감 시각 "HH:MM" (시작 10분 전) */ entryBy?: string }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 /** 응시자 PC 의 현지 시각으로 "2026.12.01 15:00" */
@@ -72,6 +76,7 @@ function toView(info: EntryInfo): ExamView {
     tasks: `과제 ${n}개${n > 1 ? ' (자유롭게 오가며 풀기)' : ''} + 과제마다 후속 질문`,
     proctor: info.proctoring ? '카메라(노트북·휴대폰), 브라우저 이탈 감지' : '브라우저 이탈 감지',
     applicant: { name: info.name, email: info.email },
+    entryBy: info.proctoring ? clockOf(entryDeadlineAt(Date.parse(info.startsAt))) : undefined,
   }
 }
 
@@ -231,6 +236,7 @@ function InfoStep({ view, onNext }: { view: ExamView; onNext: () => void }) {
     ['COMPANY', view.company, Building2],
     ['EXAM', view.title, FileText],
     ['START', view.start, CalendarClock, true],
+    ...(view.entryBy ? ([['ENTRY', `${view.entryBy}까지 대기실 입장 (시작 10분 전 마감, 책상 사진 확인용)`, Hourglass, true]] as [string, string, LucideIcon, boolean?][]) : []),
     ['DURATION', view.duration, Timer, true],
     ['TASKS', view.tasks, ListChecks],
     ['PROCTORING', view.proctor, Eye],
@@ -424,6 +430,12 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
   const save = async (r: EnvCheckResult) => {
     // 버튼을 누른 직후여야 전체 화면이 허용된다 (대기실 → 시험 화면까지 이어진다)
     enterFullscreen()
+    // 웹캠·휴대폰·PC 화면 공유가 모두 연결돼야 다음으로 간다 (테스트용 "점검 건너뛰기"를 고른 응시는 예외)
+    const missing = checksSkipped() ? [] : missingChannels(channelUp(camHub.getState()))
+    if (missing.length) {
+      setError(`${missing.map((c) => CHANNEL_LABEL[c]).join(', ')} 연결이 필요합니다. 연결한 뒤 다시 눌러 주세요.`)
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -447,6 +459,9 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
           <Suspense fallback={loading}>
             <EnvAside />
           </Suspense>
+          <div className="mt-3">
+            <ScreenShareCard />
+          </div>
         </>
       }
       footer={
@@ -608,11 +623,16 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
   const [error, setError] = useState<string | null>(null)
   const starting = useRef(false)
   const fullscreen = useFullscreen()
+  // 감독 회차는 세 채널이 모두 연결돼야 응시를 시작한다 (대기실에서 끊기면 다시 연결할 때까지 기다린다)
+  // (테스트용 "점검 건너뛰기"를 고른 응시는 카메라 없이 시험 화면을 확인하려는 것이라 예외)
+  const channelsReady = !info.proctoring || checksSkipped() || allUp(channelUp(cam))
+  // 환경 점검을 하는 동안 마감(시작 10분 전)을 넘겼다면 대기실에 들이지 않는다. 들어올 때 한 번만 판단한다
+  const [late] = useState(() => info.proctoring && !info.startedAt && !checksSkipped() && entryClosed(startsAt, Date.now() + offsetMs))
 
   useEffect(() => {
-    if (info.startedAt) return // 같은 탭에서 이어 들어온 경우: 이미 입장해 있다
+    if (info.startedAt || late) return // 같은 탭에서 이어 들어온 경우: 이미 입장해 있다. 마감을 넘겼으면 입장을 기록하지 않는다
     proctorApi.enter(invite).catch((e: Error) => setError(e.message))
-  }, [invite, info.startedAt])
+  }, [invite, info.startedAt, late])
 
   useEffect(() => {
     const id = window.setInterval(() => setLeft(secondsUntil(startsAt, offsetMs)), 250)
@@ -620,7 +640,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
   }, [startsAt, offsetMs])
 
   useEffect(() => {
-    if (left > 0 || starting.current) return
+    if (late || left > 0 || !channelsReady || starting.current) return
     starting.current = true
     let alive = true
     const tryStart = async () => {
@@ -650,7 +670,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
     return () => {
       alive = false
     }
-  }, [left, invite, offsetMs, navigate])
+  }, [left, invite, offsetMs, navigate, channelsReady, late])
 
   const chips = info.proctoring ? (
     <>
@@ -659,6 +679,9 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
       </StageChip>
       <StageChip>
         <Dot ok={cam.phone === 'connected'} /> 휴대폰 캠 {cam.phone === 'connected' ? '연결됨' : '미연결'}
+      </StageChip>
+      <StageChip>
+        <Dot ok={cam.screen === 'sharing'} /> 화면 공유 {cam.screen === 'sharing' ? '공유 중' : '미연결'}
       </StageChip>
     </>
   ) : (
@@ -671,7 +694,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
       {error}
     </p>
   ) : (
-    <span className="text-[14px] text-stage-muted">{left > 0 ? '시작 시각이 되면 자동으로 시작합니다. 이 화면을 닫지 마세요.' : '시험을 시작하는 중입니다'}</span>
+    <span className="text-[14px] text-stage-muted">{left <= 0 && !channelsReady ? '웹캠·휴대폰·화면 공유가 모두 연결되면 시험을 시작합니다.' : left > 0 ? '시작 시각이 되면 자동으로 시작합니다. 이 화면을 닫지 마세요.' : '시험을 시작하는 중입니다'}</span>
   )
   const extras = (
     <>
@@ -680,8 +703,14 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
           전체 화면 켜기
         </Button>
       )}
+      {info.proctoring && cam.screen !== 'sharing' && (
+        <div className="w-full max-w-[420px] text-text">
+          <ScreenShareCard compact />
+        </div>
+      )}
     </>
   )
+  if (late) return <EntryNotice title="대기실 입장 시간이 지났습니다" body={entryClosedMessage(startsAt)} />
   return (
     <>
       <WaitingStage view={view} left={left} total={total} chips={chips} footer={<>{footer}{extras}</>} proctoring={info.proctoring} />
@@ -690,7 +719,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
 }
 
 // ── 실제 입장 링크: 입장 정보 불러오기 ──
-type LiveEntry = { status: 'loading' | 'ok' | 'error'; info?: EntryInfo; offsetMs: number; error?: string }
+type LiveEntry = { status: 'loading' | 'ok' | 'error'; info?: EntryInfo; offsetMs: number; error?: string; /** 감독 회차의 입장 마감(시작 10분 전)이 지난 뒤 처음 들어온 링크 */ closed?: boolean }
 
 function useLiveEntry(invite: string | null): LiveEntry {
   const [state, setState] = useState<LiveEntry>({ status: 'loading', offsetMs: 0 })
@@ -701,7 +730,10 @@ function useLiveEntry(invite: string | null): LiveEntry {
     proctorApi
       .entry(invite)
       .then((info) => {
-        if (alive) setState({ status: 'ok', info, offsetMs: serverOffsetFrom(info.serverNow, requestedAt) })
+        if (!alive) return
+        const offsetMs = serverOffsetFrom(info.serverNow, requestedAt)
+        const closed = info.proctoring && !info.startedAt && entryClosed(Date.parse(info.startsAt), Date.now() + offsetMs)
+        setState({ status: 'ok', info, offsetMs, closed })
       })
       .catch((e: Error) => {
         if (alive) setState({ status: 'error', offsetMs: 0, error: e.message })
@@ -731,6 +763,10 @@ function noticeFor(live: LiveEntry): ReactNode {
   // 시험 중 연결이 끊긴 뒤 유예(5분) 안에 돌아오지 못한 경우
   if (info?.linkExpired) {
     return <EntryNotice title="입장 링크가 만료되었습니다" body="시험 중 연결이 끊긴 뒤 유예 시간(5분) 안에 돌아오지 못해 이 링크로는 더 이상 입장할 수 없습니다. 이 기록은 감독 기록에 남았습니다. 기업 담당자에게 문의해 주세요." />
+  }
+  // 감독 회차는 시작 10분 전까지 환경 점검을 마치고 대기실에 들어와야 한다 (테스트용 "점검 건너뛰기" 환경은 예외)
+  if (info && live.closed && !checksSkipped()) {
+    return <EntryNotice title="대기실 입장 시간이 지났습니다" body={entryClosedMessage(Date.parse(info.startsAt))} />
   }
   return null
 }

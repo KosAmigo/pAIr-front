@@ -27,8 +27,10 @@ import { ErrorState } from '../../components/ErrorState'
 import { canReviewProctor, useAuth } from '../../auth/auth'
 import { consoleApi, type EnvScanPhotoView, type EventReview, type EventType, type ParticipantView, type ProctorEventView, type SessionSummary } from '../../consoleApi'
 import { EVENT_LABEL, isCameraEvent, useLoad } from '../../data/consoleSessions'
+import { countUnconfirmed, serverCheckBadge } from '../../proctor/core/serverCheck'
 import { Modal } from './common'
 import { fmtTime } from './format'
+import LiveWatch from './LiveWatch'
 import { Loading } from './Loading'
 
 const ICON: Record<EventType, LucideIcon> = {
@@ -98,6 +100,7 @@ export default function ProctorPanel({
   const loaded = useLoad(session.proctoring ? `pev-${session.id}-${p.id}` : null, () => consoleApi.participantEvents(session.id, p.id), pollMs)
   const scan = useLoad(session.proctoring ? `env-${session.id}-${p.id}` : null, () => consoleApi.envScanPhotos(session.id, p.id))
   const events = byTime(loaded.data ?? [])
+  const unconfirmed = countUnconfirmed(events)
   const shown = events.filter((e) => (filter === 'open' ? !e.review : filter === 'suspect' ? e.review === 'SUSPECT' : true))
   const span = Date.parse(session.endsAt) - Date.parse(session.startsAt)
   const pos = (iso: string) => Math.min(100, Math.max(0, ((Date.parse(iso) - Date.parse(session.startsAt)) / span) * 100))
@@ -115,6 +118,11 @@ export default function ProctorPanel({
       <header className="border-b border-line bg-[linear-gradient(120deg,var(--color-brand-dim),transparent_70%)] px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="label">PROCTORING</span>
+          {unconfirmed > 0 && (
+            <span className="rounded-sm bg-caution/15 px-1.5 py-0.5 text-[12px] font-semibold text-caution" title="서버가 사진에서 찾지 못한 이벤트입니다. 직접 확인해 주세요">
+              서버 미확인 {unconfirmed}건
+            </span>
+          )}
           <span className="tnum ml-auto font-mono text-[12px] text-text-muted">이벤트 {events.length}건</span>
         </div>
         {session.proctoring ? (
@@ -124,6 +132,8 @@ export default function ProctorPanel({
         )}
       </header>
 
+      {/* 실시간 영상: 응시 중인 응시자만. 열었을 때만 응시자 PC 가 영상을 보낸다 */}
+      {session.proctoring && session.phase === 'LIVE' && p.enteredAt && !p.submittedAt && <LiveWatch key={p.id} sessionId={session.id} participantId={p.id} />}
       {session.proctoring && scan.data && scan.data.length > 0 && <EnvScanSection sessionId={session.id} photos={scan.data} />}
       {session.proctoring && loaded.error && <ErrorState compact className="m-4" message={loaded.error} onRetry={loaded.reload} />}
       {session.proctoring && loaded.loading && <Loading text="감독 이벤트를 불러오는 중" className="py-8" />}
@@ -225,6 +235,7 @@ function EventCard({
   const low = e.confidence != null && e.confidence < LOW
   const cam = isCameraEvent(e)
   const detail = detailText(e.detail)
+  const check = serverCheckBadge(e)
   return (
     <li
       id={`ev-${e.id}`}
@@ -238,6 +249,19 @@ function EventCard({
           <div className="flex items-center gap-2">
             <p className="text-[15px] font-semibold text-text">{EVENT_LABEL[e.type] ?? e.type}</p>
             {low && <span className="rounded-sm bg-panel-raised px-1.5 text-[11px] font-semibold text-text-muted">확신도 낮음</span>}
+            {check && (
+              <span
+                title={check.hint}
+                className={cx(
+                  'rounded-sm px-1.5 text-[11px] font-semibold',
+                  check.tone === 'caution' && 'bg-caution/15 text-caution',
+                  check.tone === 'signal' && 'bg-signal/10 text-signal',
+                  check.tone === 'neutral' && 'bg-panel-raised text-text-muted',
+                )}
+              >
+                {check.label}
+              </span>
+            )}
           </div>
           <p className="tnum font-mono text-[12px] text-text-muted">
             {time}

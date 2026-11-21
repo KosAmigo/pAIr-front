@@ -1,5 +1,6 @@
 import { Smartphone } from 'lucide-react'
 import { StatusDot } from '../../components/ui'
+import { PhoneVideo } from './PhoneVideo.tsx'
 import { useCamHub } from './useCamHub.ts'
 
 /**
@@ -10,8 +11,16 @@ const SHOW_CERT_NOTICE = import.meta.env.DEV || import.meta.env.VITE_SHOW_CERT_N
 
 /** 휴대폰 보조 캠 연결: QR 과 연결 상태 */
 export function PhonePairCard() {
-  const { phone, phoneQr, phoneStatus, relayOpen } = useCamHub()
+  const { phone, phoneQr, phoneAnalysis, relayOpen } = useCamHub()
   const connected = phone === 'connected'
+  const analysisText =
+    phoneAnalysis.status === 'monitoring'
+      ? `감시 중 · ${phoneAnalysis.fps} FPS · 손 ${phoneAnalysis.handCount}개`
+      : phoneAnalysis.status === 'calibrating' || phoneAnalysis.status === 'loading'
+        ? '기준 위치 잡는 중'
+        : phoneAnalysis.status === 'error'
+          ? (phoneAnalysis.error ?? '확인 필요')
+          : '이 화면의 안내를 따라 주세요'
   return (
     <section className="rounded-xl border border-line bg-panel p-4" aria-labelledby="phone-pair-title">
       <div className="flex items-center gap-2">
@@ -24,10 +33,10 @@ export function PhonePairCard() {
         </span>
       </div>
       {connected ? (
-        <p className="mt-2 text-[13px] text-text-muted">
-          {phoneStatus?.calibrated ? '감시 중' : '휴대폰에서 점검을 진행해 주세요'}
-          {phoneStatus && ` · ${phoneStatus.fps} FPS · 손 ${phoneStatus.handCount}개`}
-        </p>
+        <>
+          <p className="mt-2 text-[13px] text-text-muted">{analysisText}</p>
+          <PhoneVideo />
+        </>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           <div className="flex items-center gap-3">
@@ -38,7 +47,7 @@ export function PhonePairCard() {
           </div>
           <div className="text-[13px] leading-5 text-text-muted">
             <p className="break-keep">휴대폰은 옆이나 뒤에 세워 두 손·키보드·시험 화면이 함께 보이게 놓습니다.</p>
-            <p className="mt-1 break-keep">영상은 전송되지 않고 휴대폰 안에서만 분석됩니다.</p>
+            <p className="mt-1 break-keep">같은 와이파이가 아니어도 연결됩니다. 영상은 서버에 저장되지 않고 PC 로만 직접 전달됩니다.</p>
           </div>
           {SHOW_CERT_NOTICE && (
             <div role="note" className="rounded-lg border border-caution/40 bg-caution/10 px-3 py-2.5 text-[13px] leading-5 text-text">

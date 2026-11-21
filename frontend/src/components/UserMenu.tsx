@@ -1,7 +1,7 @@
 // 상단 바 오른쪽 아바타 메뉴 (DESIGN.md §7-8): 이름, 이메일, 로그아웃
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { LogOut, UserRound } from 'lucide-react'
 import { useAuth } from '../auth/auth'
 
 export function UserMenu() {
@@ -46,6 +46,17 @@ export function UserMenu() {
             <p className="truncate font-mono text-[12px] text-text-muted">{user.email}</p>
           </div>
           <div className="my-1 h-px bg-line" />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              nav('/mypage')
+            }}
+            className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-[14px] text-text hover:bg-panel-raised"
+          >
+            <UserRound size={16} aria-hidden /> 마이페이지
+          </button>
           <button
             type="button"
             role="menuitem"

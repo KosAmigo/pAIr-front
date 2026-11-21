@@ -135,6 +135,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(() =>
     (location.state as { logoutError?: boolean } | null)?.logoutError ? '로그아웃 서버 연결에 실패했습니다. 이 브라우저에서는 로그아웃했습니다.' : null,
   )
+  const authMessage = (location.state as { authMessage?: string } | null)?.authMessage
   const [submitting, setSubmitting] = useState(false)
 
   if (loading) return null
@@ -167,6 +168,7 @@ export default function Login() {
       }
     >
       {error && <ErrorBanner>{error}</ErrorBanner>}
+      {authMessage && <p role="status" className="mt-6 rounded-md bg-brand-dim px-3 py-2.5 text-[14px] text-text">{authMessage}</p>}
       <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
         <Field id="email" label="이메일">
           <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required className={inputCls} />

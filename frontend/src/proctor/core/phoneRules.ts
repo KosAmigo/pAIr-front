@@ -1,6 +1,7 @@
-// 보조 캠(핸드폰): 측면·후면에서 손·팔 움직임과 주변 기기·화면을 본다.
+// 보조 캠(핸드폰): 측면·후면에서 손이 화면 밖으로 벗어나는지와 주변 기기·화면을 본다.
+// 키보드에서 잠깐 마우스를 쓰는 등 화면 안에서 손이 움직이는 것은 경고하지 않는다.
 import type { RuleSpec } from './RuleEngine.ts'
-import { median, nearestDist, type Point } from './stats.ts'
+import { median, type Point } from './stats.ts'
 
 export interface Box {
   x: number
@@ -49,15 +50,12 @@ export function dedupeObjects(objs: DetectedObject[], overlap = 0.3): DetectedOb
 export interface PhoneFeatures {
   /** 손 중심 좌표 (0~1) */
   hands: Point[]
-  /** 손목 좌표 (포즈 기준, 0~1) */
-  wrists: Point[]
   objects: DetectedObject[]
 }
 
 export interface PhoneBaseline {
-  hands: Point[]
+  /** 세팅할 때 화면 안에 보이던 손 개수 (0 이면 손 감시를 하지 않는다) */
   handCount: number
-  wrists: Point[]
   /** 시험용 노트북처럼 처음부터 보이는 화면 수 */
   screenCount: number
 }
@@ -66,16 +64,12 @@ export const SCREEN_LABELS = ['laptop', 'tv']
 export const OBJECT_LABELS = ['cell phone', 'laptop', 'tv', 'book']
 
 export const PHONE_THRESHOLDS = {
-  handMove: 0.22,
-  armMove: 0.3,
   objectScore: 0.45,
 }
 export type PhoneThresholds = typeof PHONE_THRESHOLDS
 
 export const PHONE_RULES: RuleSpec[] = [
-  { kind: 'hand_missing', message: '손이 키보드에서 벗어났습니다', durationMs: 3000, cooldownMs: 8000, graceMs: 600 },
-  { kind: 'hand_moved', message: '손이 평소 위치에서 크게 벗어났습니다', durationMs: 2000, cooldownMs: 8000 },
-  { kind: 'arm_move', message: '팔을 크게 움직였습니다', durationMs: 1500, cooldownMs: 8000 },
+  { kind: 'hand_missing', message: '손이 화면 밖으로 벗어났습니다', durationMs: 3000, cooldownMs: 8000, graceMs: 600 },
   { kind: 'phone_detected', message: '휴대폰이 감지되었습니다', durationMs: 1000, cooldownMs: 10000, graceMs: 800 },
   { kind: 'extra_screen', message: '다른 화면(모니터·노트북)이 감지되었습니다', durationMs: 1500, cooldownMs: 10000, graceMs: 800 },
   { kind: 'book_detected', message: '책·자료가 감지되었습니다', durationMs: 1500, cooldownMs: 10000, graceMs: 800 },
@@ -89,45 +83,37 @@ export function phoneConditions(
   const objs = dedupeObjects(f.objects.filter((o) => o.score >= t.objectScore))
   const screens = objs.filter((o) => SCREEN_LABELS.includes(o.label)).length
   return {
-    hand_missing: b.handCount > 0 && f.hands.length < b.handCount,
-    hand_moved: b.hands.length > 0 && f.hands.some((h) => nearestDist(h, b.hands) > t.handMove),
-    arm_move: b.wrists.length > 0 && f.wrists.some((w) => nearestDist(w, b.wrists) > t.armMove),
+    // 양손이 모두 화면 밖일 때만. 한 손이 마우스로 가거나 화면 안에서 움직이는 것은 정상으로 본다
+    hand_missing: b.handCount > 0 && f.hands.length === 0,
     phone_detected: objs.some((o) => o.label === 'cell phone'),
     extra_screen: screens > b.screenCount,
     book_detected: objs.some((o) => o.label === 'book'),
   }
 }
 
-/**
- * 손 위치 기준점: 보정 샘플 중 손 개수가 가장 흔한 값의 샘플만 모아
- * 왼쪽→오른쪽 순으로 정렬한 뒤 위치별 중앙값을 낸다.
- */
-function baselinePoints(sets: Point[][]): { count: number; points: Point[] } {
-  if (sets.length === 0) return { count: 0, points: [] }
+/** 보정 샘플 중 손 개수가 가장 흔한 값 (같으면 큰 쪽) */
+function commonHandCount(sets: Point[][]): number {
+  if (sets.length === 0) return 0
   const freq = new Map<number, number>()
   for (const s of sets) freq.set(s.length, (freq.get(s.length) ?? 0) + 1)
-  const count = [...freq.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0]
-  if (count === 0) return { count: 0, points: [] }
-  const chosen = sets.filter((s) => s.length === count).map((s) => [...s].sort((a, b) => a.x - b.x))
-  const points: Point[] = []
-  for (let i = 0; i < count; i++) {
-    points.push({ x: median(chosen.map((s) => s[i].x)), y: median(chosen.map((s) => s[i].y)) })
-  }
-  return { count, points }
+  return [...freq.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0]
+}
+
+/** 보정 샘플로 기준 위치를 정한다. 손이 한 번도 안 보였으면 손 감시를 할 수 없으므로 null */
+export function resolvePhoneBaseline(samples: PhoneFeatures[], t: PhoneThresholds = PHONE_THRESHOLDS): PhoneBaseline | null {
+  if (samples.length === 0) return null
+  const baseline = buildPhoneBaseline(samples, t)
+  return baseline.handCount > 0 ? baseline : null
 }
 
 export function buildPhoneBaseline(samples: PhoneFeatures[], t: PhoneThresholds = PHONE_THRESHOLDS): PhoneBaseline {
-  const hands = baselinePoints(samples.map((s) => s.hands))
-  const wrists = baselinePoints(samples.map((s) => s.wrists))
   const screenCounts = samples.map(
     (s) =>
       dedupeObjects(s.objects.filter((o) => o.score >= t.objectScore)).filter((o) => SCREEN_LABELS.includes(o.label))
         .length,
   )
   return {
-    hands: hands.points,
-    handCount: hands.count,
-    wrists: wrists.points,
+    handCount: commonHandCount(samples.map((s) => s.hands)),
     screenCount: Math.round(median(screenCounts.length ? screenCounts : [0])),
   }
 }

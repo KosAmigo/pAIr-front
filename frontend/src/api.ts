@@ -167,7 +167,7 @@ export class ApiError extends Error {
  * AuthProvider 가 로그인 상태가 바뀔 때마다 setAuthHeaders 를 부른다.
  */
 let authHeaders: Record<string, string> = {}
-export function setAuthHeaders(user: { id: number; role: string; companyId?: number } | null) {
+export function setAuthHeaders(user: { id: number; role: string; companyId?: number | null } | null) {
   authHeaders = user
     ? {
         'X-Pair-User-Id': String(user.id),

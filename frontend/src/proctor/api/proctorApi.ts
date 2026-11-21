@@ -36,6 +36,9 @@ export type TaskStatus = {
   submitted: boolean
 }
 
+/** 환경 점검 사진 (책상 위). 방 360도 스캔은 없어져 DESK 만 올린다 */
+export type EnvScanRequest = { stage: 'DESK'; objects: string[]; image: string }
+
 export type ProctorEventRequest = {
   type: ProctorEventType
   source: EventSource
@@ -44,6 +47,8 @@ export type ProctorEventRequest = {
   confidence?: number
   detail?: Record<string, unknown>
   snapshot?: string
+  /** 이벤트마다 브라우저가 만든 고유값. 다시 보내도 서버가 같은 이벤트로 알아보고 중복 저장하지 않는다 */
+  clientId?: string
 }
 
 /** status: HTTP 상태 (네트워크 오류면 0). 아웃박스가 다시 보낼지 정할 때 쓴다 */
@@ -102,6 +107,8 @@ export const proctorApi = {
     call<EntryInfo>('POST', `/api/entry/${enc(invite)}/tasks/${enc(taskId)}/submit`),
   /** 남은 과제 모두 제출 (시험 끝내기) */
   submit: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/submit`),
+  /** 점검 사진 업로드. 실패해도 점검은 계속되므로 호출하는 쪽에서 오류를 삼킨다 */
+  uploadEnvScan: (invite: string, photo: EnvScanRequest) => call<unknown>('POST', `/api/entry/${enc(invite)}/env-scan`, photo),
   recordEvent: (invite: string, event: ProctorEventRequest) =>
     call<{ id: number }>('POST', `/api/entry/${enc(invite)}/proctor-events`, event),
 }

@@ -15,6 +15,7 @@ import { useAuth } from './auth/auth'
 import { AuthProvider } from './auth/AuthProvider'
 import RequireAuth from './auth/RequireAuth'
 import Login, { Signup } from './pages/Login'
+import MyPage from './pages/MyPage'
 import { ConsoleShell } from './components/ConsoleShell'
 import ConsoleCompanies, { ConsoleCompanyDetail } from './pages/console/ConsoleCompanies'
 import ConsoleTasks from './pages/console/ConsoleTasks'
@@ -39,6 +40,14 @@ const PhoneCamPage = lazy(() => import('./proctor/react/PhoneCamPage.tsx'))
 const phoneCam = (
   <Suspense fallback={<div className="mobile-layout min-h-full bg-bg" />}>
     <PhoneCamPage />
+  </Suspense>
+)
+
+// 사전 테스트 (연습 모드, 서버 기록 없음). 공개 페이지
+const PracticePage = lazy(() => import('./proctor/react/PracticePage.tsx'))
+const practice = (
+  <Suspense fallback={<div className="min-h-full bg-bg" />}>
+    <PracticePage />
   </Suspense>
 )
 
@@ -81,11 +90,13 @@ export default function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/entry" element={<Entry />} />
           <Route path="/proctor/phone" element={phoneCam} />
+          <Route path="/practice" element={practice} />
           <Route path="/exam/:sessionId" element={<ExamRoute />} />
           <Route path="/exam/:sessionId/submitted" element={<Submitted />} />
 
           {/* 자가진단: 로그인한 누구나 */}
           <Route element={<RequireAuth />}>
+            <Route path="/mypage" element={<MyPage />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/review" element={<Review />} />
