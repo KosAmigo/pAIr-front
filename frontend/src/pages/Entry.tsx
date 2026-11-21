@@ -632,6 +632,14 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
     proctorApi.enter(invite).catch((e: Error) => setError(e.message))
   }, [invite, info.startedAt])
 
+  // 새로 고침하거나 링크로 다시 들어오면(이미 시작한 응시자는 바로 이 대기실로 온다) 웹캠 연결이 사라진다.
+  // 웹캠은 환경 점검 화면과 응시 화면에서만 열리므로, 여기서도 다시 열어 둔다. 그래야 "웹캠이 연결되면 시작합니다"에서 멈추지 않는다.
+  // 실패하면 허브가 오류를 갖고 있고, 아래에서 "웹캠 다시 연결"로 다시 시도할 수 있다.
+  useEffect(() => {
+    if (!info.proctoring || checksSkipped()) return
+    camHub.openCamera().catch(() => undefined)
+  }, [info.proctoring])
+
   useEffect(() => {
     const id = window.setInterval(() => setLeft(secondsUntil(startsAt, offsetMs)), 250)
     return () => window.clearInterval(id)
@@ -641,6 +649,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
     if (left > 0 || !channelsReady || starting.current) return
     starting.current = true
     let alive = true
+    let retryTimer: number | undefined
     const tryStart = async () => {
       try {
         const next = await proctorApi.start(invite)
@@ -660,13 +669,18 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
       } catch (e) {
         if (!alive) return
         const message = e instanceof Error ? e.message : String(e)
-        if (message.includes('아직 시작 시각이 아닙니다')) window.setTimeout(() => void tryStart(), START_RETRY_MS)
+        if (message.includes('아직 시작 시각이 아닙니다')) retryTimer = window.setTimeout(() => void tryStart(), START_RETRY_MS)
         else setError(message)
       }
     }
     void tryStart()
     return () => {
       alive = false
+      window.clearTimeout(retryTimer)
+      // 효과가 정리된 뒤 다시 돌면(개발 StrictMode 의 이중 실행, 연결 상태 변화) 시작을 다시 시도해야 한다.
+      // 여기서 풀지 않으면 첫 요청의 결과는 버려지고 두 번째 실행은 "이미 시작함"으로 건너뛰어 영영 멈춘다.
+      // 서버는 두 번 불러도 응시를 한 번만 만든다(대상자 행 잠금).
+      starting.current = false
     }
   }, [left, invite, offsetMs, navigate, channelsReady])
 
@@ -691,10 +705,18 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
       <Dot ok /> 입장 완료
     </StageChip>
   )
-  const footer = error ? (
-    <p role="alert" className="text-[14px] text-stage-alert">
-      {error}
-    </p>
+  const camError = info.proctoring && !checksSkipped() && cam.camera === 'error' ? (cam.error ?? '웹캠을 열지 못했습니다.') : null
+  const footer = error || camError ? (
+    <div className="flex flex-col items-center gap-2">
+      <p role="alert" className="text-[14px] text-stage-alert">
+        {error ?? camError}
+      </p>
+      {!error && camError && (
+        <Button variant="ghost" size="sm" className="border border-stage-line text-stage-text!" onClick={() => void camHub.reconnectWebcam().catch(() => undefined)}>
+          웹캠 다시 연결
+        </Button>
+      )}
+    </div>
   ) : (
     <span className="text-[14px] text-stage-muted">{left <= 0 && !channelsReady ? '웹캠이 연결되면 시험을 시작합니다.' : left > 0 ? '시작 시각이 되면 자동으로 시작합니다. 이 화면을 닫지 마세요.' : '시험을 시작하는 중입니다'}</span>
   )

@@ -35,7 +35,15 @@ export default function ConsoleSessions() {
   const visible = all.filter((s) => mine != null || company === 'ALL' || s.companyId === company)
   const count = (p: Tab) => visible.filter((s) => tabOf(s) === p).length
   const [picked, setTab] = useState<Tab | null>(null)
-  const tab: Tab = picked ?? (count('live') ? 'live' : 'upcoming')
+  // 새로 시작한 회차(진행 중 개수가 늘어남)가 생기면 "진행 중" 탭으로 옮긴다.
+  // 안 그러면 예정·종료 탭을 눌러 둔 채 카드 숫자만 늘고 아래 표에는 시작된 회차가 보이지 않는다
+  const liveCount = count('live')
+  const [prevLive, setPrevLive] = useState(liveCount)
+  if (liveCount !== prevLive) {
+    setPrevLive(liveCount)
+    if (liveCount > prevLive) setTab('live')
+  }
+  const tab: Tab = picked ?? (liveCount ? 'live' : 'upcoming')
   const rows = visible
     .filter((s) => tabOf(s) === tab)
     .sort((a, b) => (tab === 'ended' ? Date.parse(b.startsAt) - Date.parse(a.startsAt) : Date.parse(a.startsAt) - Date.parse(b.startsAt)))

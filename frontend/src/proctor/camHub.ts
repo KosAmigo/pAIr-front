@@ -1,7 +1,7 @@
 // 카메라 감독 허브 (앱 전체에서 하나).
 // 입장 화면 환경 점검 → 대기실 → 응시 화면까지 화면이 바뀌어도 카메라·분석 모델·폰 연결을 그대로 이어 쓴다.
 // React 는 useSyncExternalStore 로 이 상태를 읽는다 (react/useCamHub.ts).
-import type { FaceLandmarker, HandLandmarker, PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
+import type { FaceLandmarker, FaceLandmarkerResult, HandLandmarker, PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import QRCode from 'qrcode'
 import { CamOutbox } from './api/camOutbox.ts'
 import { proctorApi } from './api/proctorApi.ts'
@@ -19,11 +19,12 @@ import { PHONE_ANALYSIS_IDLE, PhoneAnalysis, type PhoneAnalysisState } from './p
 import { SCREEN_EVENTS_ACCEPTED, toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
 import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED } from './features.ts'
+import { PC_MIN_ANALYZE_INTERVAL_MS } from './core/frameBudget.ts'
 import { captureSnapshot, frameLoop, openCamera, stopCamera } from './vision/camera.ts'
 import { pcFeatures } from './vision/features.ts'
 
 const CALIBRATION_MS = 3000
-const UI_INTERVAL_MS = 200
+const UI_INTERVAL_MS = 500
 const MAX_LOG = 50
 const GATE_TICK_MS = 1000
 /** 이벤트 순간 사진용으로 메모리에만 두는 흐린 화면을 이 간격으로 갱신한다 (저장·전송 아님) */
@@ -380,13 +381,16 @@ export const camHub = {
     set({ monitor: 'calibrating', calibProgress: 0, active: [] })
     const samples: PcFeatures[] = []
     const lastPose: { current?: PoseLandmarkerResult } = {}
+    const lastFace: { current?: FaceLandmarkerResult } = {}
     let frame = 0
     const begin = performance.now()
     const analyze = (now: number) => {
-      const faceRes = m.face.detectForVideo(v, now)
-      // 몸통은 천천히 움직이므로 포즈는 2프레임에 한 번
-      if (frame++ % 2 === 0) lastPose.current = m.pose.detectForVideo(v, now)
-      return pcFeatures(faceRes, lastPose.current)
+      // 한 번에 모델 하나만 돌린다: 얼굴 3번에 포즈 1번. 얼굴(약 30ms)과 포즈(약 20ms)를 같은 작업에서 연달아 돌리면
+      // 한 번에 50ms 넘게 메인 스레드를 막아 입력(채팅 타이핑 등)이 끊긴다. 몸통은 천천히 움직여 포즈는 드물어도 된다.
+      // 모델을 돌리지 않은 쪽은 직전 결과를 그대로 쓴다 (프레임 사이 간격은 100ms 라 규칙의 지속 시간·끊김 이어 붙이기에 영향이 없다)
+      if (frame++ % 4 === 3 && lastFace.current) lastPose.current = m.pose.detectForVideo(v, now)
+      else lastFace.current = m.face.detectForVideo(v, now)
+      return pcFeatures(lastFace.current, lastPose.current)
     }
     stopLoop = frameLoop(v, (now) => {
       samples.push(analyze(now))
@@ -399,7 +403,7 @@ export const camHub = {
         return
       }
       runMonitoring(baseline, analyze, serverOffsetMs)
-    })
+    }, { minIntervalMs: PC_MIN_ANALYZE_INTERVAL_MS })
   },
 
   /**
@@ -467,7 +471,7 @@ function runMonitoring(baseline: PcBaseline, analyze: (now: number) => PcFeature
       lastUi = now
       set({ active: engine.active(now), bytesSent: (outbox?.bytesSent ?? 0) + (relay?.bytesSent ?? 0) })
     }
-  })
+  }, { minIntervalMs: PC_MIN_ANALYZE_INTERVAL_MS })
 }
 
 function pushLog(v: CamViolation) {
