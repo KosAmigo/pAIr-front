@@ -19,6 +19,8 @@
 
 실기기 확인은 `real-device-checklist.md` 로 진행한다.
 
+정현 커밋으로 휴대폰 캠·화면 공유는 `features.ts` 스위치(`PHONE_CAM_ENABLED`·`SCREEN_SHARE_ENABLED`)로 꺼 두었다. 위 1~3·5단계 중 휴대폰·화면 채널 관련 구현은 코드에 그대로 있고, 현재 응시 흐름은 웹캠만 쓴다.
+
 ## 1. 사용자 확정 사항
 
 | 항목 | 확정 | 계획에 미치는 영향 |
