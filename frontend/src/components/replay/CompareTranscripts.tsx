@@ -47,7 +47,7 @@ function Card({ tag, row, side, divideAfter, showDivider, onRetry }: { tag: stri
             {turns.map((t, i) => (
               <Fragment key={`${t.turn}-${t.role}`}>
                 {showDivider && i === divideAfter && <Divider />}
-                {!(foldShared && i < divideAfter && !openShared) && <TurnItem t={t} />}
+                {!(foldShared && i < divideAfter && !openShared) && <TurnItem t={t} attemptId={row.attemptId} />}
               </Fragment>
             ))}
             {showDivider && divideAfter >= turns.length && <Divider />}
