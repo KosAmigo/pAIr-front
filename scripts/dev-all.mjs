@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// 터널 + 백엔드(8180) + 프론트(5173)를 한 터미널에서 한 번에 띄운다 (Windows·macOS·Linux 공통, Node 만 있으면 된다).
+// 백엔드(8180) + 프론트(5173)를 한 터미널에서 한 번에 띄운다 (터널은 기본으로 켜지 않는다) (Windows·macOS·Linux 공통, Node 만 있으면 된다).
 //   node pAIr-front/scripts/dev-all.mjs               (pAIr-front 와 pAIr-back 이 들어 있는 상위 폴더에서)
 //   node scripts/dev-all.mjs                          (pAIr-front 폴더에서)
 //   npm --prefix frontend run dev:all                 (pAIr-front 폴더에서)
-//   옵션: --no-tunnel  같은 와이파이만 쓸 때(터널 없이)   --back-dir <경로>  pAIr-back 위치(기본: pAIr-front 옆)
+//   옵션: --tunnel  cloudflared 터널도 연다(휴대폰 캠을 다시 쓸 때만. 지금은 휴대폰 캠·화면 공유를 꺼 두어 필요 없다)   --back-dir <경로>  pAIr-back 위치(기본: pAIr-front 옆)
 // 실행 위치와 상관없이 이 파일 위치를 기준으로 경로를 찾는다. 끝낼 때는 Ctrl+C 한 번이면 세 프로세스가 모두 종료된다.
 // 이미 떠 있는 포트는 건너뛴다. 터널을 먼저 열어 주소를 알아낸 뒤 백엔드(초대 메일 링크)와 프론트(휴대폰 QR)에 넘긴다.
 import { spawn, spawnSync } from 'node:child_process'
@@ -21,7 +21,8 @@ const COLORS = { 터널: 36, 백엔드: 33, 프론트: 35 }
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontRoot = path.resolve(scriptDir, '..')
 const args = process.argv.slice(2)
-const noTunnel = args.includes('--no-tunnel')
+// 휴대폰 보조 캠을 끈 뒤로는 터널이 필요 없다(웹캠은 localhost 에서도 동작). 필요하면 --tunnel 로 켠다
+const noTunnel = !args.includes('--tunnel')
 const backIdx = args.indexOf('--back-dir')
 const backDir = path.resolve(backIdx >= 0 ? args[backIdx + 1] : path.join(frontRoot, '..', 'pAIr-back'))
 const frontDir = path.join(frontRoot, 'frontend')

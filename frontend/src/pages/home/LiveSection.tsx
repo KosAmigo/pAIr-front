@@ -11,7 +11,7 @@ import { MOTION_OK, gsap, useGSAP } from './motion'
 const TOKEN = 'inv_8f3a'
 const FEATURES = [
   { icon: Mail, title: '메일로 받는 개인별 입장 링크', body: '회원가입 없이, 응시자마다 다른 링크 하나로 정해진 시간에 함께 입장합니다.' },
-  { icon: Camera, title: '카메라와 화면 공유 감독', body: '응시 내내 카메라와 화면을 확인하고, 연결이 끊기면 바로 알려 줍니다.' },
+  { icon: Camera, title: '카메라 감독', body: '응시 내내 카메라로 자세와 시선을 확인하고, 연결이 끊기면 바로 알려 줍니다.' },
   { icon: ShieldAlert, title: '이탈 감지와 기록', body: '창 이탈, 전체 화면 해제를 감지해 경고하고 감독 기록에 남깁니다.' },
 ]
 

@@ -5,8 +5,8 @@ AI 활용 역량 진단 플랫폼 프런트 (React, TypeScript, Vite). 백엔드
 
 | 하고 싶은 것 | 명령 (실행 위치) |
 |---|---|
-| **터널 + 백엔드 + 프론트를 한 번에** (휴대폰 보조 캠을 LTE 등 다른 망에서 쓸 때) | `node pAIr-front/scripts/dev-all.mjs` (두 저장소가 들어 있는 상위 폴더) 또는 `npm --prefix frontend run dev:all` (pAIr-front) |
-| 백엔드 + 프론트를 한 번에 (같은 와이파이만, 터널 없이) | `node pAIr-front/scripts/dev-all.mjs --no-tunnel` |
+| **백엔드 + 프론트를 한 번에** (터널 없음. 휴대폰 캠·화면 공유를 꺼 두어 터널이 필요 없다) | `node pAIr-front/scripts/dev-all.mjs` (두 저장소가 들어 있는 상위 폴더) 또는 `npm --prefix frontend run dev:all` (pAIr-front) |
+| 터널까지 함께 (휴대폰 캠을 다시 켰을 때만) | `node pAIr-front/scripts/dev-all.mjs --tunnel` |
 | 프론트만 | `npm --prefix frontend run dev` (pAIr-front) |
 | 백엔드만 | `.\gradlew.bat bootRun` (pAIr-back/backend) |
 | 초대 메일 확인용 메일함(Mailpit) | `docker compose up -d` (pAIr-back) → http://localhost:8025 |
@@ -18,24 +18,24 @@ AI 활용 역량 진단 플랫폼 프런트 (React, TypeScript, Vite). 백엔드
 - **Node** (프론트·실행 스크립트), **JDK 21** (백엔드는 Gradle wrapper 가 빌드)
 - **`pAIr-back/application-secret.yml`**: DB(AWS RDS) 비밀번호와 OpenAI·Anthropic 키가 들어 있다. 저장소에 없으니 팀에서 받아 `pAIr-back` 폴더에 둔다. 없으면 백엔드가 켜지지 않는다
 - **Docker** (선택): 초대 메일을 Mailpit 으로 확인할 때만 필요하다. 개발 DB 는 RDS 라 Docker 로 띄우지 않는다
-- **cloudflared** (선택): 휴대폰을 다른 망(LTE)에서 연결할 때의 임시 터널. `winget install Cloudflare.cloudflared` (설치 뒤 터미널을 새로 연다)
+- **cloudflared** (선택, 지금은 필요 없음): 휴대폰 캠을 다시 켜고 다른 망(LTE)에서 연결할 때의 임시 터널. `winget install Cloudflare.cloudflared` (설치 뒤 터미널을 새로 연다)
 - 프론트 의존성 설치: `npm --prefix frontend install`
 
 ## 실행 방법
 
 ### A. 한 번에 켜기 (`scripts/dev-all.mjs`)
-터널·백엔드·프론트를 한 터미널에서 띄운다 (Windows·macOS·Linux 공통, Node 만 있으면 된다).
+백엔드·프론트(`--tunnel` 을 주면 터널도)를 한 터미널에서 띄운다 (Windows·macOS·Linux 공통, Node 만 있으면 된다).
 
 ```bash
 node pAIr-front/scripts/dev-all.mjs               # 두 저장소가 들어 있는 상위 폴더에서
 node scripts/dev-all.mjs                          # pAIr-front 폴더에서
 npm --prefix frontend run dev:all                 # pAIr-front 폴더에서
-node pAIr-front/scripts/dev-all.mjs --no-tunnel   # 같은 와이파이만 쓸 때 (터널 없이)
+node pAIr-front/scripts/dev-all.mjs --tunnel      # 터널도 함께 (휴대폰 캠을 다시 켰을 때만)
 node pAIr-front/scripts/dev-all.mjs --back-dir D:\work\pAIr-back   # pAIr-back 이 다른 곳에 있을 때
 ```
 
 동작 순서
-1. **터널**: `cloudflared` 로 5173 번에 공인 HTTPS 주소(`https://○○○.trycloudflare.com`, 켤 때마다 바뀜)를 붙인다. `cloudflared` 가 없으면 설치 방법을 안내하고 터널 없이 시작한다.
+1. **터널** (`--tunnel` 을 줬을 때만): `cloudflared` 로 5173 번에 공인 HTTPS 주소(`https://○○○.trycloudflare.com`, 켤 때마다 바뀜)를 붙인다. `cloudflared` 가 없으면 설치 방법을 안내하고 터널 없이 시작한다.
 2. **백엔드**: `pAIr-back/backend` 에서 `gradlew bootRun`. 터널 주소를 `PAIR_ENTRY_BASE_URL` 로 받아 **초대 메일 링크**가 그 주소로 만들어진다. Windows 에서는 사용자 이름에 한글이 있으면 Gradle 이 임시 폴더 때문에 실패할 수 있어 `C:/dev/tmp` 를 만들어 쓴다 (`PAIR_JAVA_TMP` 로 바꿈).
 3. **프론트**: 터널이 있으면 빌드 후 `vite preview`(개발 서버는 연결이 잠깐 끊기면 휴대폰 페이지를 통째로 새로고침하기 때문), 없으면 `dev:local`. 터널 주소를 `PAIR_PUBLIC_ORIGIN` 으로 받아 **휴대폰 QR 주소**가 터널 주소로 만들어진다.
 4. 각 포트가 응답할 때까지 기다렸다가 `터널 주소`와 `PC 브라우저: http://localhost:5173` 을 출력한다. 처음 켤 때는 빌드와 Gradle 때문에 몇 분 걸릴 수 있다.
