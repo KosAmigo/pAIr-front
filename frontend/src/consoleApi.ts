@@ -14,7 +14,7 @@ export type EventType =
   | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'MOUSE_LEAVE' | 'PASTE' | 'FULLSCREEN_EXIT'
   | 'NO_FACE' | 'MULTI_FACE' | 'HEAD_TURN' | 'HEAD_DOWN' | 'GAZE_AWAY' | 'TORSO_SHIFT' | 'TORSO_TURN'
   | 'HAND_MISSING' | 'HAND_MOVED' | 'ARM_MOVE' | 'PHONE' | 'EXTRA_SCREEN' | 'BOOK' | 'PHONE_DISCONNECTED'
-  | 'CONNECTION_LOST' | 'LINK_EXPIRED'
+  | 'CONNECTION_LOST' | 'LINK_EXPIRED' | 'LINK_RESTORED'
 
 export type SessionSummary = {
   id: number
@@ -46,6 +46,8 @@ export type ParticipantView = {
   submittedAt: string | null
   /** 과제 ID → 응시(attempt) ID */
   attempts: Record<string, string>
+  /** 연결 유예(5분)를 넘겨 입장 링크가 만료됨 (진행 중인 시험에서만). 콘솔의 "링크 복구" 버튼 조건 */
+  linkExpired: boolean
 }
 
 export type SessionDetail = {
@@ -82,6 +84,8 @@ export type ProctorEventView = {
   /** null 사진 없음, ok 있음, deleted 보관 기간이 지나 지움 */
   snapshot: 'ok' | 'deleted' | null
   snapshotBytes: number
+  /** 사진이 없는 카메라 이벤트의 사유. LIMIT_EXCEEDED 서버 사진 상한 초과, UPLOAD_FAILED 업로드 실패. 사진이 있거나 삭제됐거나 브라우저 이벤트면 null (옛 서버는 없음) */
+  snapshotMissing?: 'LIMIT_EXCEEDED' | 'UPLOAD_FAILED' | null
   review: EventReview | null
   reviewNote: string | null
   reviewedBy: number | null
@@ -248,6 +252,8 @@ export const consoleApi = {
   templateCsvUrl: `${S}/participants-template.csv`,
   removeParticipant: (id: number, participantId: number) => call<void>('DELETE', `${S}/${id}/participants/${participantId}`),
   resendInvite: (id: number, participantId: number) => call<void>('POST', `${S}/${id}/participants/${participantId}/invite`),
+  /** 만료된 입장 링크를 되살린다 (매니저·감독관·관리자). 시험 시간은 연장하지 않는다 */
+  restoreLink: (id: number, participantId: number) => call<ParticipantView>('POST', `${S}/${id}/participants/${participantId}/restore-link`),
 
   // 감독
   events: (id: number) => call<ProctorEventView[]>('GET', `${S}/${id}/events`),

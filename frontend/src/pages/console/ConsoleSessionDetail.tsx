@@ -187,7 +187,7 @@ function Detail({
       <div className="p-8">
         {tab === 'overview' && <Overview s={s} tasks={tasks.map} participants={d.participants.length} reload={reload} toast={toast.show} />}
         {tab === 'participants' && <Participants s={s} participants={d.participants} reload={reload} toast={toast.show} />}
-        {tab === 'live' && <Live d={d} now={now} paused={paused} setPaused={setPaused} />}
+        {tab === 'live' && <Live d={d} now={now} paused={paused} setPaused={setPaused} reload={reload} />}
         {tab === 'results' && <Results s={s} />}
       </div>
       {toast.node}
@@ -684,7 +684,19 @@ function StateDot({ state }: { state: ResultState }) {
   )
 }
 
-function Live({ d, now, paused, setPaused }: { d: SessionDetail; now: number; paused: boolean; setPaused: (f: (v: boolean) => boolean) => void }) {
+function Live({
+  d,
+  now,
+  paused,
+  setPaused,
+  reload,
+}: {
+  d: SessionDetail
+  now: number
+  paused: boolean
+  setPaused: (f: (v: boolean) => boolean) => void
+  reload: () => void
+}) {
   const s = d.session
   const ev = useLoad<{ list: ProctorEventView[]; at: string }>(
     `events-${s.id}`,
@@ -761,7 +773,10 @@ function Live({ d, now, paused, setPaused }: { d: SessionDetail; now: number; pa
                   <tr key={p.id} onClick={() => setOpen(p.id)} className="h-12 cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised">
                     <td className="px-4 font-medium text-text">{p.name}</td>
                     <td className="px-4">
-                      <StateDot state={stateOf(p)} />
+                      <span className="inline-flex items-center gap-2">
+                        <StateDot state={stateOf(p)} />
+                        {p.linkExpired && <span className="rounded-sm bg-alert/10 px-1.5 py-0.5 text-[12px] font-semibold text-alert">링크 만료</span>}
+                      </span>
                     </td>
                     <td className="tnum px-4 font-mono text-[13px] text-text-muted">{p.enteredAt ? fmtHm(p.enteredAt) : '—'}</td>
                     <td className="tnum px-4 font-mono text-[13px] text-text-muted">{p.startedAt ? fmtHm(p.startedAt) : '—'}</td>
@@ -837,7 +852,7 @@ function Live({ d, now, paused, setPaused }: { d: SessionDetail; now: number; pa
               </button>
             </div>
             <div className="p-4">
-              <ProctorPanel session={s} p={opened} pollMs={paused ? undefined : 5000} />
+              <ProctorPanel session={s} p={opened} pollMs={paused ? undefined : 5000} onRestored={reload} />
             </div>
           </aside>
         </div>

@@ -256,6 +256,9 @@ function InfoStep({ view, onNext }: { view: ExamView; onNext: () => void }) {
       <p className="mt-2 rounded-lg border border-caution/40 bg-caution/10 px-3 py-2 text-[14px] leading-6 break-keep text-text">
         시험 중 창이 닫히거나 연결이 끊겨도 5분 안에는 같은 링크로 다시 들어올 수 있습니다. 5분이 지나면 링크가 만료되어 입장할 수 없고, 끊긴 기록은 감독 기록에 남습니다. 시작하기 전에 네트워크와 기기를 확인해 주세요.
       </p>
+      <p className="mt-2 rounded-lg border border-line bg-panel-raised px-3 py-2 text-[14px] leading-6 break-keep text-text">
+        시험 종료 시각은 모든 응시자가 같습니다. 늦게 시작하면 그만큼 시험 시간이 줄어드니, 시작 시각에 맞춰 입장해 주세요.
+      </p>
       <RevealGroup as="div" className="mt-4 grid grid-cols-2 gap-3">
         {rows.map(([k, v, Icon, mono]) => (
           <RevealItem key={k} className="flex items-start gap-3 rounded-xl border border-line bg-panel px-4 py-3 shadow-sm">

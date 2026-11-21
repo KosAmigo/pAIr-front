@@ -26,6 +26,7 @@ export const EVENT_LABEL: Record<EventType, string> = {
   PHONE_DISCONNECTED: '휴대폰 카메라 끊김',
   CONNECTION_LOST: '시험 화면 연결 끊김',
   LINK_EXPIRED: '유예 시간 초과(링크 만료)',
+  LINK_RESTORED: '담당자가 링크 복구',
 }
 /** 카메라(PC·휴대폰)에서 나온 이벤트인지. 브라우저 이벤트는 사진이 없다 */
 export const isCameraEvent = (e: Pick<ProctorEventView, 'source'>) => e.source !== 'BROWSER'

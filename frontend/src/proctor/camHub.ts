@@ -7,7 +7,7 @@ import { CamOutbox } from './api/camOutbox.ts'
 import { proctorApi } from './api/proctorApi.ts'
 import { GATE_INITIAL, GRACE_MS, stepGate, type ChannelUp, type Gate, type GateState } from './core/connectionPolicy.ts'
 import { toCamViolation, type CamViolation } from './core/events.ts'
-import { PC_RULES, buildPcBaseline, pcConditions, type PcBaseline, type PcFeatures } from './core/pcRules.ts'
+import { buildPcBaseline, pcConditions, pcProfile, type PcBaseline, type PcFeatures, type PcProfileName } from './core/pcRules.ts'
 import { RuleEngine } from './core/RuleEngine.ts'
 import { angleDiff } from './core/stats.ts'
 import type { PeerState, PhoneStatus, ScanStage, ServerMsg } from './relay/protocol.ts'
@@ -118,6 +118,7 @@ let opening: Promise<void> | null = null
 /** 응시 감독이 켜져 있는 동안만 휴대폰 영상을 분석한다 (환경 점검 중에는 분석하지 않는다) */
 let monitoringWanted = false
 let serverOffset = 0
+let activeProfile: PcProfileName = 'default'
 let screenHandle: ScreenHandle | null = null
 let lastBlur: string | undefined
 let lastBlurAt = 0
@@ -370,8 +371,9 @@ export const camHub = {
   },
 
   /** 3초 보정 뒤 감시. serverOffsetMs 로 이벤트 시각을 서버 기준으로 맞춘다 */
-  async startMonitoring(serverOffsetMs: number) {
+  async startMonitoring(serverOffsetMs: number, profile: PcProfileName = activeProfile) {
     serverOffset = serverOffsetMs
+    activeProfile = profile
     monitoringWanted = true
     syncPhoneAnalysis()
     await camHub.openCamera()
@@ -402,7 +404,7 @@ export const camHub = {
         set({ monitor: 'error', error: '정면 얼굴이 충분히 잡히지 않았습니다. 화면을 정면으로 보고 혼자 앉은 상태에서 다시 시도해 주세요.' })
         return
       }
-      runMonitoring(baseline, analyze, serverOffsetMs)
+      runMonitoring(baseline, analyze, serverOffsetMs, activeProfile)
     }, { minIntervalMs: PC_MIN_ANALYZE_INTERVAL_MS })
   },
 
@@ -410,6 +412,15 @@ export const camHub = {
    * 브라우저 이벤트(탭·창 이탈, 전체 화면 해제, 외부 붙여넣기)를 회차 감독 기록으로 보낸다.
    * 카메라 이벤트와 같은 아웃박스를 써서 네트워크가 끊겨도 잃지 않는다. 연결(connect) 전이면 버린다.
    */
+  /**
+   * PC 캠 기준 자세를 다시 잡는다 (자세를 바꿨거나 의자·화면 위치가 달라졌을 때).
+   * 3초 보정을 처음부터 다시 하고, 진행 중이던 이상 구간과 경고 간격은 새 기준으로 초기화된다.
+   */
+  async recalibratePc() {
+    if (!monitoringWanted || state.monitor === 'calibrating') return
+    await camHub.startMonitoring(serverOffset, activeProfile)
+  },
+
   /** 휴대폰 기준 위치를 현재 영상으로 다시 잡는다 */
   recalibratePhone() {
     const current = state.phoneStream
@@ -454,14 +465,15 @@ export const camHub = {
   },
 }
 
-function runMonitoring(baseline: PcBaseline, analyze: (now: number) => PcFeatures, serverOffsetMs: number) {
+function runMonitoring(baseline: PcBaseline, analyze: (now: number) => PcFeatures, serverOffsetMs: number, profileName: PcProfileName) {
   const v = camHub.video()
-  const engine = new RuleEngine(PC_RULES)
+  const profile = pcProfile(profileName)
+  const engine = new RuleEngine(profile.rules)
   let lastUi = 0
   set({ monitor: 'monitoring', monitoringSince: Date.now(), error: null })
   stopLoop = frameLoop(v, (now) => {
     const f = analyze(now)
-    for (const fired of engine.evaluate(pcConditions(f, baseline), now)) {
+    for (const fired of engine.evaluate(pcConditions(f, baseline, profile.thresholds), now)) {
       const viol = toCamViolation(fired, 'PC_CAM', captureSnapshot(v), detailFor(f, baseline), serverOffsetMs)
       if (!viol) continue
       void outbox?.enqueue(viol)

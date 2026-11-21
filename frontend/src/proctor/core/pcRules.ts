@@ -57,6 +57,28 @@ export const PC_RULES: RuleSpec[] = [
   { kind: 'torso_turn', message: '몸을 돌리거나 화면에서 멀어졌습니다', durationMs: 2000, cooldownMs: 8000 },
 ]
 
+/**
+ * 회차 종류별 기준값. 'coding'(개발·코딩 과제)은 키보드를 내려다보는 일이 흔해 head_down 오탐이 많다는 문제를 풀기 위한 자리다.
+ * 숫자는 FalsePositiveLab(/proctor/lab)으로 조건별 오탐률을 잰 뒤에만 고친다. 측정 전인 지금은 기본값과 같다.
+ * 측정 방법: 아래 coding 값을 고치면 기준값 버전(thresholdsVersion)이 바뀌므로, 같은 조건으로 N분씩 앉아 전후를 비교한다.
+ */
+export type PcProfileName = 'default' | 'coding'
+
+export interface PcProfile {
+  thresholds: PcThresholds
+  rules: RuleSpec[]
+}
+
+export const PC_PROFILES: Record<PcProfileName, PcProfile> = {
+  default: { thresholds: PC_THRESHOLDS, rules: PC_RULES },
+  // TODO(측정 후): head_down durationMs·pitchDownDeg 를 FalsePositiveLab 결과로 정한다. 근거 없이 바꾸지 않는다.
+  coding: { thresholds: { ...PC_THRESHOLDS }, rules: PC_RULES.map((r) => ({ ...r })) },
+}
+
+export function pcProfile(name: PcProfileName | undefined): PcProfile {
+  return PC_PROFILES[name ?? 'default']
+}
+
 export function pcConditions(f: PcFeatures, b: PcBaseline, t: PcThresholds = PC_THRESHOLDS): Record<string, boolean> {
   const c: Record<string, boolean> = {
     no_face: f.faceCount === 0,
