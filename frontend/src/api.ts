@@ -43,7 +43,12 @@ export type EditProposal = {
   applicable: boolean
 }
 
-export type Turn = { turn: number; role: 'user' | 'ai'; time: string; text: string; edits?: EditProposal[] }
+/** 질문 턴에 붙인 첨부(서버가 읽어 보낸 글자는 빼고 글자 수만 온다) */
+export type TurnAttachment = { id: number; source: 'ATTEMPT_FILE' | 'TASK_FILE'; path: string; pages: string | null; chars: number }
+export type Turn = { turn: number; role: 'user' | 'ai'; time: string; text: string; edits?: EditProposal[]; attachments?: TurnAttachment[] }
+
+/** 이 응시 과제의 PDF 자료 (응시 파일로 복사되지 않아 파일 목록과 따로 온다) */
+export type Material = { path: string; mimeType: string; sizeBytes: number; pages: number }
 
 /** 복기 비교: 한 풀이에서 체크 하나의 결과. 그 풀이 리포트에 이 체크가 없으면 CheckDiff 의 a·b 가 null */
 export type CheckSide = { status: CheckResult['status']; deducted: number; reason: string | null; evidence: string[] }
@@ -211,6 +216,7 @@ export const api = {
   taskIdFor: (track: TaskType) => (track === 'biz' ? 'pricing-plan' : 'order-deadlock'),
   start: (taskId: string) => call<{ attemptId: string }>('POST', '/api/attempts', { taskId }),
   attempt: (id: string) => call<AttemptView>('GET', `/api/attempts/${enc(id)}`),
+  materials: (id: string) => call<Material[]>('GET', `/api/attempts/${enc(id)}/materials`),
   file: (id: string, path: string) => call<{ path: string; content: string }>('GET', `/api/attempts/${enc(id)}/file?path=${enc(path)}`),
   save: (id: string, path: string, content: string) => call<{ saved: boolean }>('PUT', `/api/attempts/${enc(id)}/file?path=${enc(path)}`, { content }),
   build: (id: string) => call<BuildResult>('POST', `/api/attempts/${enc(id)}/build`),
@@ -242,13 +248,18 @@ export const api = {
  * 채팅 스트리밍: 답변 글자가 오는 대로 onDelta 로 넘기고, 끝나면 저장된 새 턴 2개(질문, 답변)를 돌려준다.
  * 서버는 Server-Sent Events(delta, done, error)로 보낸다.
  */
-export async function chatStream(id: string, message: string, onDelta: (t: string) => void): Promise<Turn[]> {
+export async function chatStream(
+  id: string,
+  message: string,
+  onDelta: (t: string) => void,
+  attachments: { source: string; path: string; pages?: string }[] = [],
+): Promise<Turn[]> {
   let res: Response
   try {
     res = await fetch(`/api/attempts/${enc(id)}/chat/stream`, {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, attachments }),
     })
   } catch {
     throw new ApiError('백엔드에 연결할 수 없습니다. backend 서버(포트 8180)가 켜져 있는지 확인하세요.')
@@ -411,4 +422,11 @@ export const grader = {
   cancel: (id: string) => call<GraderRun>('POST', `/api/grader/runs/${enc(id)}/cancel`),
   result: (id: string, file: string) => call<Report>('GET', `/api/grader/runs/${enc(id)}/results/${enc(file)}`),
   exportUrl: (id: string) => `/api/grader/runs/${enc(id)}/export`,
+}
+
+/** 응시 PDF 자료를 로그인 헤더로 받아 브라우저 URL 로 바꾼다 (쓴 뒤 URL.revokeObjectURL) */
+export async function materialBlobUrl(id: string, path: string): Promise<string> {
+  const res = await fetch(`/api/attempts/${enc(id)}/materials/file?path=${encodeURIComponent(path)}`, { headers: getAuthHeaders() })
+  if (!res.ok) throw new ApiError(`자료 파일을 받지 못했습니다 (${res.status})`)
+  return URL.createObjectURL(await res.blob())
 }
