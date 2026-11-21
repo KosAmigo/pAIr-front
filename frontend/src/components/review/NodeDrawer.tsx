@@ -73,7 +73,7 @@ export function NodeDrawer({ lane, onClose }: { lane: TreeLane; onClose: () => v
         ) : (
           <ol className="flex flex-col gap-2">
             {cur.turns.map((t) => (
-              <TurnItem key={`${t.turn}-${t.role}`} t={t} />
+              <TurnItem key={`${t.turn}-${t.role}`} t={t} attemptId={lane.attemptId} />
             ))}
           </ol>
         )}

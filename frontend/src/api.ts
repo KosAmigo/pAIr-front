@@ -47,6 +47,9 @@ export type EditProposal = {
 export type TurnAttachment = { id: number; source: 'ATTEMPT_FILE' | 'TASK_FILE'; path: string; pages: string | null; chars: number }
 export type Turn = { turn: number; role: 'user' | 'ai'; time: string; text: string; edits?: EditProposal[]; attachments?: TurnAttachment[] }
 
+/** 질문에 붙였던 첨부의 원문: 그때 AI 에게 실제로 보낸 글자 */
+export type AttachmentDetail = { id: number; source: 'ATTEMPT_FILE' | 'TASK_FILE'; path: string; pages: string | null; chars: number; sentText: string }
+
 /** 이 응시 과제의 PDF 자료 (응시 파일로 복사되지 않아 파일 목록과 따로 온다) */
 export type Material = { path: string; mimeType: string; sizeBytes: number; pages: number }
 
@@ -217,6 +220,7 @@ export const api = {
   start: (taskId: string) => call<{ attemptId: string }>('POST', '/api/attempts', { taskId }),
   attempt: (id: string) => call<AttemptView>('GET', `/api/attempts/${enc(id)}`),
   materials: (id: string) => call<Material[]>('GET', `/api/attempts/${enc(id)}/materials`),
+  attachment: (id: string, attachmentId: number) => call<AttachmentDetail>('GET', `/api/attempts/${enc(id)}/attachments/${attachmentId}`),
   file: (id: string, path: string) => call<{ path: string; content: string }>('GET', `/api/attempts/${enc(id)}/file?path=${enc(path)}`),
   save: (id: string, path: string, content: string) => call<{ saved: boolean }>('PUT', `/api/attempts/${enc(id)}/file?path=${enc(path)}`, { content }),
   build: (id: string) => call<BuildResult>('POST', `/api/attempts/${enc(id)}/build`),
