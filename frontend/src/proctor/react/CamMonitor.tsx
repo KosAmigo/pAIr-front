@@ -35,9 +35,9 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
     if (skipped) return
     camHub.connect(live.invite)
     if (camHub.getState().monitor !== 'monitoring') {
-      camHub.startMonitoring(live.serverOffsetMs).catch(() => undefined)
+      camHub.startMonitoring(live.serverOffsetMs, live.proctorProfile ?? 'default').catch(() => undefined)
     }
-  }, [live.invite, live.serverOffsetMs, skipped])
+  }, [live.invite, live.serverOffsetMs, live.proctorProfile, skipped])
 
   // 응시 중 3채널 연결 감시 (15초 넘게 끊기면 응시 화면을 막는다)
   useEffect(() => {
@@ -107,6 +107,11 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
                   <RefreshCw size={14} aria-hidden /> 다시 시도
                 </Button>
               </div>
+            )}
+            {hub.monitor === 'monitoring' && (
+              <Button size="sm" variant="secondary" onClick={() => void camHub.recalibratePc().catch(() => undefined)}>
+                <RefreshCw size={14} aria-hidden /> PC 기준 자세 다시 잡기
+              </Button>
             )}
             {hub.monitor === 'monitoring' && hub.active.length > 0 && (
               <ul className="flex flex-wrap gap-1" aria-label="지금 이어지는 이상 상태">

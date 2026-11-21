@@ -8,6 +8,7 @@ import {
   ClipboardPaste,
   EyeOff,
   Hand,
+  Link2,
   Loader2,
   Maximize2,
   Monitor,
@@ -28,7 +29,8 @@ import { canReviewProctor, useAuth } from '../../auth/auth'
 import { consoleApi, type EnvScanPhotoView, type EventReview, type EventType, type ParticipantView, type ProctorEventView, type SessionSummary } from '../../consoleApi'
 import { EVENT_LABEL, isCameraEvent, useLoad } from '../../data/consoleSessions'
 import { countUnconfirmed, serverCheckBadge } from '../../proctor/core/serverCheck'
-import { Modal } from './common'
+import { Button } from '../../components/ui'
+import { ConfirmModal, Modal } from './common'
 import { fmtTime } from './format'
 import LiveWatch from './LiveWatch'
 import { Loading } from './Loading'
@@ -55,6 +57,7 @@ const ICON: Record<EventType, LucideIcon> = {
   PHONE_DISCONNECTED: Smartphone,
   CONNECTION_LOST: WifiOff,
   LINK_EXPIRED: WifiOff,
+  LINK_RESTORED: Link2,
 }
 const LOW = 0.8
 
@@ -86,17 +89,26 @@ export default function ProctorPanel({
   p,
   pollMs,
   className,
+  onRestored,
 }: {
   session: SessionSummary
   p: ParticipantView
   /** 주면 이 간격(ms)으로 이벤트를 다시 불러온다 (실시간 현황) */
   pollMs?: number
   className?: string
+  /** 만료된 링크를 되살린 뒤 부른다. 대상자 목록(linkExpired)을 다시 불러오는 데 쓴다 */
+  onRestored?: () => void
 }) {
+  const { user } = useAuth()
   const [filter, setFilter] = useState<Filter>('all')
   const [focus, setFocus] = useState<number | null>(null)
   const [photo, setPhoto] = useState<ProctorEventView | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [confirmRestore, setConfirmRestore] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
+  // 연결 유예를 넘겨 링크가 만료된 응시자는 매니저·감독관·관리자가 되살릴 수 있다 (시험 시간은 연장되지 않는다)
+  const canRestore = canReviewProctor(user?.role) && session.phase === 'LIVE' && p.linkExpired && !p.submittedAt
   const loaded = useLoad(session.proctoring ? `pev-${session.id}-${p.id}` : null, () => consoleApi.participantEvents(session.id, p.id), pollMs)
   const scan = useLoad(session.proctoring ? `env-${session.id}-${p.id}` : null, () => consoleApi.envScanPhotos(session.id, p.id))
   const events = byTime(loaded.data ?? [])
@@ -110,6 +122,24 @@ export default function ProctorPanel({
       // 저장하면 돌아온 이벤트로 바로 바꾼다
       (u) => loaded.setData((list) => list && list.map((x) => (x.id === u.id ? u : x))),
       (err: unknown) => setSaveError(err instanceof Error ? err.message : String(err)),
+    )
+  }
+
+  const restore = () => {
+    setRestoring(true)
+    setRestoreError(null)
+    consoleApi.restoreLink(session.id, p.id).then(
+      () => {
+        setRestoring(false)
+        setConfirmRestore(false)
+        loaded.reload()
+        onRestored?.()
+      },
+      (err: unknown) => {
+        setRestoring(false)
+        setConfirmRestore(false)
+        setRestoreError(err instanceof Error ? err.message : String(err))
+      },
     )
   }
 
@@ -130,7 +160,17 @@ export default function ProctorPanel({
         ) : (
           <p className="mt-1 text-[13px] text-text-muted">감독을 쓰지 않은 회차입니다.</p>
         )}
+        {canRestore && (
+          <div role="alert" className="mt-3 flex items-center gap-2 rounded-md border border-alert/40 bg-alert/10 px-3 py-2 text-[13px] text-alert">
+            <WifiOff size={16} className="shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1 break-keep">연결이 5분 넘게 끊겨 입장 링크가 만료되었습니다.</span>
+            <Button size="sm" variant="secondary" onClick={() => setConfirmRestore(true)}>
+              링크 복구
+            </Button>
+          </div>
+        )}
       </header>
+      {restoreError && <ErrorState compact className="mx-4 mt-3" message={`링크를 되살리지 못했습니다: ${restoreError}`} />}
 
       {/* 실시간 영상: 응시 중인 응시자만. 열었을 때만 응시자 PC 가 영상을 보낸다 */}
       {session.proctoring && session.phase === 'LIVE' && p.enteredAt && !p.submittedAt && <LiveWatch key={p.id} sessionId={session.id} participantId={p.id} />}
@@ -199,6 +239,17 @@ export default function ProctorPanel({
             ))}
           </ol>
         </>
+      )}
+
+      {confirmRestore && (
+        <ConfirmModal
+          title={`${p.name}님의 링크를 되살릴까요?`}
+          body="응시자가 같은 링크로 다시 들어와 이어서 풀 수 있습니다. 종료 시각은 그대로이고 끊긴 동안 흐른 시간은 돌려주지 않습니다. 누가 되살렸는지는 감독 기록에 남습니다."
+          confirm={restoring ? '처리 중' : '되살리기'}
+          disabled={restoring}
+          onConfirm={restore}
+          onClose={() => !restoring && setConfirmRestore(false)}
+        />
       )}
 
       {photo && (
@@ -282,7 +333,7 @@ function EventCard({
             {e.snapshot === 'deleted' ? (
               <span className="flex aspect-video flex-col items-center justify-center gap-0.5 bg-panel-raised text-[10px] leading-3 text-text-faint">
                 <ImageOff size={14} aria-hidden />
-                보관 기간 지나 삭제됨
+                사진 없음 · 보관 기간 삭제
               </span>
             ) : (
               <span className="flex aspect-video w-full items-center justify-center bg-panel-raised text-text-faint">
@@ -290,6 +341,15 @@ function EventCard({
               </span>
             )}
           </button>
+        )}
+        {!e.snapshot && e.snapshotMissing && (
+          <span
+            className="flex aspect-video w-24 shrink-0 flex-col items-center justify-center gap-0.5 rounded-sm bg-panel-raised text-center text-[10px] leading-3 text-text-faint"
+            title={MISSING_SNAPSHOT[e.snapshotMissing].hint}
+          >
+            <ImageOff size={14} aria-hidden />
+            {MISSING_SNAPSHOT[e.snapshotMissing].label}
+          </span>
         )}
       </div>
       <div className="border-t border-line bg-panel-raised/50 px-3 py-2.5">
@@ -415,6 +475,12 @@ function ScanThumb({ sessionId, photo }: { sessionId: number; photo: EnvScanPhot
     </span>
   )
 }
+
+/** 사진이 없는 이유 (보관 기간 삭제는 snapshot === 'deleted' 로 따로 보여 준다) */
+const MISSING_SNAPSHOT = {
+  LIMIT_EXCEEDED: { label: '사진 없음 · 상한 초과', hint: '한 응시자당 사진 상한(300장)을 넘어 서버가 사진을 받지 않았습니다. 이벤트 기록은 남아 있습니다' },
+  UPLOAD_FAILED: { label: '사진 없음 · 업로드 실패', hint: '사진이 서버에 올라가지 못했습니다 (네트워크 오류, 브라우저 보관 한도 초과 등). 이벤트 기록은 남아 있습니다' },
+} as const
 
 /** 스냅샷 사진: 로그인 헤더가 필요해 blob URL 로 받는다. 닫으면 URL 을 풀어 준다 */
 function Snapshot({ sessionId, eventId }: { sessionId: number; eventId: number }) {

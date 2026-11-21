@@ -8,7 +8,9 @@ type Sender = (invite: string, event: ProctorEventRequest) => Promise<unknown>
 
 const PREFIX = 'pair:cam-outbox:'
 /** 사진이 붙은 이벤트는 20KB 안팎이라 이 정도면 저장소 한도(보통 5MB) 안에 든다 */
-const MAX_ITEMS = 100
+export const MAX_PHOTO_ITEMS = 100
+/** 사진 없는 이벤트는 작아서(수백 바이트) 훨씬 많이 쌓아 둔다. 이 수도 넘으면 그때만 가장 오래된 이벤트를 버린다 */
+export const MAX_EVENT_ITEMS = 1000
 
 function defaultStorage(): StorageLike | null {
   try {
@@ -36,6 +38,28 @@ export function toRequest(v: CamViolation): ProctorEventRequest {
   }
 }
 
+/**
+ * 아웃박스가 넘칠 때의 정리. 사진이 붙은 건이 MAX_PHOTO_ITEMS 를 넘으면 가장 오래된 것부터 "사진만" 버리고 이벤트는 남긴다
+ * (이벤트가 사라지면 감독관이 이상 자체를 모르게 되지만, 사진이 없으면 사진 없음으로 표시된다).
+ * 이벤트 수가 MAX_EVENT_ITEMS 를 넘는 극단적인 경우에만 가장 오래된 이벤트를 버린다.
+ */
+export function trimOutbox(items: ProctorEventRequest[]): ProctorEventRequest[] {
+  let photos = items.filter((e) => e.snapshot).length
+  let dropped = 0
+  const trimmed = items.map((e) => {
+    if (photos > MAX_PHOTO_ITEMS && e.snapshot) {
+      photos--
+      dropped++
+      return { ...e, snapshot: undefined }
+    }
+    return e
+  })
+  if (dropped > 0) console.warn(`감독 이벤트 보관함이 가득 차 오래된 사진 ${dropped}장을 버립니다 (이벤트는 남깁니다).`)
+  if (trimmed.length <= MAX_EVENT_ITEMS) return trimmed
+  console.warn(`감독 이벤트 보관함이 가득 차 오래된 이벤트 ${trimmed.length - MAX_EVENT_ITEMS}건을 버립니다.`)
+  return trimmed.slice(trimmed.length - MAX_EVENT_ITEMS)
+}
+
 export class CamOutbox {
   private readonly key: string
   private readonly invite: string
@@ -59,9 +83,7 @@ export class CamOutbox {
   }
 
   enqueue(v: CamViolation) {
-    const next = [...this.memory, toRequest(v)]
-    // 넘치면 가장 오래된 것부터 버린다 (최근 이벤트가 더 중요)
-    this.memory = next.length > MAX_ITEMS ? next.slice(next.length - MAX_ITEMS) : next
+    this.memory = trimOutbox([...this.memory, toRequest(v)])
     this.save()
     return this.flush()
   }

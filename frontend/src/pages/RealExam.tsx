@@ -1425,7 +1425,7 @@ export default function RealExam() {
           <section className="w-full max-w-[460px] rounded-lg border border-alert/50 bg-panel p-6 text-center shadow-modal">
             <h2 className="text-h2 font-semibold">입장 링크가 만료되었습니다</h2>
             <p className="mt-2 text-[15px] leading-6 break-keep text-text-muted">
-              연결이 끊긴 채로 유예 시간(5분)을 넘겨 이 시험 링크가 만료되었습니다. 이 기록은 감독 기록에 남았습니다. 기업 담당자에게 문의해 주세요.
+              연결이 끊긴 채로 유예 시간(5분)을 넘겨 이 시험 링크가 만료되었습니다. 이 기록은 감독 기록에 남았습니다. 기업 담당자에게 문의해 주세요. 담당자가 링크를 되살리면 같은 링크로 다시 들어와 남은 시간 동안 이어서 풀 수 있습니다.
             </p>
             <Button variant="primary" className="mt-5" onClick={() => navigate('/')}>
               나가기

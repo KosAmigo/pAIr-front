@@ -105,7 +105,7 @@ export default function ConsoleAttempt() {
           </p>
         )}
       </div>
-      <ProctorPanel session={s} p={p} className="xl:sticky xl:top-4" />
+      <ProctorPanel session={s} p={p} className="xl:sticky xl:top-4" onRestored={detail.reload} />
     </div>
   )
 }
