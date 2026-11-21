@@ -1,13 +1,14 @@
 import { useMemo, type CSSProperties, type KeyboardEvent } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { cx } from '../cx'
+import type { Checkpoint } from '../../api'
 import { branchColor } from '../../lib/replayTree'
+import { dotColumn, labelEvery, laneDots, maxCheckpointTurn, stageCols, stageGap } from '../../lib/branchDots'
 import { commonAncestor, routeIds, type TreeLane } from '../../lib/reviewTree'
 import { shortDate, SLOT, turnTag } from './shared'
 
 // DESIGN.md §7-5 갈래 트리 (어두운 안쪽 무대). 가로축은 대화 턴, 갈래는 가로 선 하나.
 // 모든 갈래의 끝(점수 원)은 오른쪽 같은 열(결승선)에 세운다. 그래프는 SVG.
-const GAP_X = 72
 const X0 = 70
 const ROW = 74
 const TOP = 48
@@ -27,6 +28,8 @@ export function BranchStage({
   onSlot,
   onPick,
   onOpen,
+  checkpoints,
+  onDot,
 }: {
   title: string
   lanes: TreeLane[]
@@ -37,10 +40,16 @@ export function BranchStage({
   onSlot: (s: Slot) => void
   onPick: (id: string) => void
   onOpen: (id: string) => void
+  /** 갈래(응시)마다의 체크포인트. 선 위에 질문한 시점마다 작은 점을 찍는다 */
+  checkpoints: Record<string, Checkpoint[]>
+  /** 점을 눌렀다: 그 갈래, 체크포인트, 점 요소(팝오버 위치용) */
+  onDot: (lane: TreeLane, cp: Checkpoint, target: Element) => void
 }) {
   const reduce = useReducedMotion() ?? false
-  const cols = Math.max(6, lastFork + 2)
-  const X = (t: number) => X0 + (t - 1) * GAP_X
+  const cols = stageCols(lastFork, maxCheckpointTurn(checkpoints))
+  const gap = stageGap(cols)
+  const every = labelEvery(gap)
+  const X = (t: number) => X0 + (t - 1) * gap
   const finishX = X(cols)
   const roots = lanes.length ? Math.max(...lanes.map((l) => l.root)) + 1 : 0
   const yOf = (l: TreeLane) => TOP + l.lane * ROW + l.root * ROOT_GAP
@@ -98,10 +107,10 @@ export function BranchStage({
           })}
         </div>
       </div>
-      <p className="relative z-10 mt-1 text-[12px] text-[#9b97c4]">점을 눌러 A와 B를 고르면 아래에 비교가 바로 나와요. 가지 위 숫자는 갈라지기 전 대비 점수 변화예요. 고른 점을 한 번 더 누르면 대화를 볼 수 있어요.</p>
+      <p className="relative z-10 mt-1 text-[12px] text-[#9b97c4]">오른쪽 점수 원을 눌러 A와 B를 고르면 아래에 비교가 바로 나와요. 가지 위 숫자는 갈라지기 전 대비 점수 변화예요. 선 위의 작은 점은 질문을 보낸 시점이에요. 누르면 거기서 다시 풀 수 있어요.</p>
 
       <div className="relative z-10 overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full min-w-[820px]" role="group" aria-label="갈래 트리 그래프">
+        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" style={{ minWidth: Math.max(820, Math.round(W * 0.8)) }} role="group" aria-label="갈래 트리 그래프">
           <defs>
             <filter id="rv-glow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="6" result="b" />
@@ -116,7 +125,7 @@ export function BranchStage({
           {Array.from({ length: cols }, (_, i) => i + 1).map((t) => (
             <g key={t} aria-hidden>
               <line x1={X(t)} x2={X(t)} y1={34} y2={H - 6} stroke="rgb(255 255 255 / 0.06)" />
-              {t < cols && (
+              {t < cols && (t - 1) % every === 0 && (
                 <text x={X(t)} y={24} textAnchor="middle" fontSize={11} fontWeight={700} fill="#6f6a9c">
                   {turnTag(t)}
                 </text>
@@ -167,6 +176,45 @@ export function BranchStage({
               </g>
             )
           })}
+
+          {/* 질문을 보낸 시점마다 선 위의 작은 점: 눌러서 그 시점부터 다시 풀기 */}
+          {lanes.map((l) =>
+            laneDots(l.startTurn, checkpoints[l.attemptId] ?? []).map((cp) => {
+              const x = X(dotColumn(l.startTurn, l.parentLane != null, cp.turnNo))
+              const y = yOf(l)
+              const open = (target: Element) => onDot(l, cp, target)
+              return (
+                <g
+                  key={`d-${l.attemptId}-${cp.checkpointId}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${l.name} ${turnTag(cp.turnNo)} 질문 시점에서 다시 풀기`}
+                  onClick={(e) => open(e.currentTarget)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      open(e.currentTarget)
+                    }
+                  }}
+                  className="group cursor-pointer outline-none"
+                  opacity={dimmed(l.attemptId) ? 0.45 : 1}
+                >
+                  <title>{`${turnTag(cp.turnNo)} 질문 시점${cp.label ? ` · ${cp.label}` : ''} — 눌러서 여기서 다시 풀기`}</title>
+                  <circle cx={x} cy={y} r={15} fill="transparent" />
+                  <circle cx={x} cy={y} r={11} fill="none" stroke="#fff" strokeWidth={2} className="opacity-0 group-focus-visible:opacity-100" />
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={5.5}
+                    fill="#0b0a1c"
+                    stroke={laneColor(l)}
+                    strokeWidth={2.5}
+                    className="origin-center transition-transform [transform-box:fill-box] group-hover:scale-150 group-focus-visible:scale-150"
+                  />
+                </g>
+              )
+            }),
+          )}
 
           {/* 결승선의 점수 원 */}
           {lanes.map((l) => {

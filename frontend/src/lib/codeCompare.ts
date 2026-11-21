@@ -9,7 +9,7 @@ export type ViewLine = DiffLine | { kind: 'skip'; skipped: number }
 
 export type FileChange = {
   path: string
-  /** added: B 에만 있음, removed: A 에만 있음, modified: 둘 다 있고 내용이 다름 */
+  /** added: 앞쪽에 없고 뒤쪽에만 있음, removed: 앞쪽에만 있음, modified: 둘 다 있고 내용이 다름 */
   status: 'added' | 'removed' | 'modified'
   add: number
   del: number
@@ -42,13 +42,46 @@ export function collapse(lines: DiffLine[], context = 3): ViewLine[] {
   return out
 }
 
-/** 서버가 준 파일 한 쌍을 화면용 변경 내용으로 바꾼다 (A → B) */
-export function fileChange(f: FileDiff, context = 3): FileChange {
-  const status = f.a == null ? 'added' : f.b == null ? 'removed' : 'modified'
-  if (count(f.a) * count(f.b) > MAX_DIFF_CELLS) {
-    return { path: f.path, status, add: count(f.b), del: count(f.a), lines: [], tooLarge: true }
+/** 파일 내용 before → after 의 변경 (없는 쪽은 null) */
+export function changeOf(path: string, before: string | null, after: string | null, context = 3): FileChange {
+  const status = before == null ? 'added' : after == null ? 'removed' : 'modified'
+  if (count(before) * count(after) > MAX_DIFF_CELLS) {
+    return { path, status, add: count(after), del: count(before), lines: [], tooLarge: true }
   }
-  const lines = lineDiff(f.a ?? '', f.b ?? '')
+  const lines = lineDiff(before ?? '', after ?? '')
   const { add, del } = diffStat(lines)
-  return { path: f.path, status, add, del, lines: collapse(lines, context), tooLarge: false }
+  return { path, status, add, del, lines: collapse(lines, context), tooLarge: false }
+}
+
+/** 서버가 준 파일 한 쌍의 A → B 변경 */
+export function fileChange(f: FileDiff, context = 3): FileChange {
+  return changeOf(f.path, f.a, f.b, context)
+}
+
+/**
+ * 원본 대비 두 풀이가 이 파일을 어떻게 바꿨는지.
+ * same: 둘 다 바꿨고 내용이 같음, a: A 만 바꿈, b: B 만 바꿈, differ: 둘 다 바꿨는데 서로 다름
+ */
+export type EditKind = 'same' | 'a' | 'b' | 'differ'
+
+export function editKind(f: FileDiff): EditKind {
+  const changedA = f.a !== f.base
+  const changedB = f.b !== f.base
+  if (changedA && !changedB) return 'a'
+  if (changedB && !changedA) return 'b'
+  return f.a === f.b ? 'same' : 'differ'
+}
+
+/** 한 파일의 화면용 변경: 원본→A, 원본→B, A→B. 바꾸지 않은 쪽은 null */
+export type FileView = { path: string; kind: EditKind; baseToA: FileChange | null; baseToB: FileChange | null; aToB: FileChange }
+
+export function fileView(f: FileDiff, context = 3): FileView {
+  const kind = editKind(f)
+  return {
+    path: f.path,
+    kind,
+    baseToA: f.a !== f.base ? changeOf(f.path, f.base, f.a, context) : null,
+    baseToB: f.b !== f.base ? changeOf(f.path, f.base, f.b, context) : null,
+    aToB: changeOf(f.path, f.a, f.b, context),
+  }
 }

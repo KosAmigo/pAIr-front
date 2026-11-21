@@ -6,13 +6,14 @@ import { ButtonLink } from '../components/ui'
 import { ErrorState } from '../components/ErrorState'
 import { CodeCompare } from '../components/replay/CodeCompare'
 import { BranchStage } from '../components/review/BranchStage'
+import { DotPopover, type Anchor } from '../components/review/DotPopover'
 import { NodeDrawer } from '../components/review/NodeDrawer'
 import { ScoreStairs } from '../components/review/ScoreStairs'
 import { TaskRail } from '../components/review/TaskRail'
 import { Verdict } from '../components/review/Verdict'
 import { useCompare } from '../components/review/shared'
-import { api, type ApiError, type AttemptSummary, type TreeNode } from '../api'
-import { loadTaskTrees } from '../data/review'
+import { api, type ApiError, type AttemptSummary, type Checkpoint, type TreeNode } from '../api'
+import { loadCheckpoints, loadTaskTrees } from '../data/review'
 import { assignSlot, divergeTurn, groupByTask, layoutLanes, resolveSelection, type TreeLane } from '../lib/reviewTree'
 
 // DESIGN.md §7-5 복기 `/review?task=&a=&b=`
@@ -38,6 +39,8 @@ export default function Review() {
   const [treeTick, setTreeTick] = useState(0)
   const [slot, setSlot] = useState<Slot>('a')
   const [openId, setOpenId] = useState<string | null>(null)
+  const [dot, setDot] = useState<{ lane: TreeLane; cp: Checkpoint; anchor: Anchor } | null>(null)
+  const [cps, setCps] = useState<{ key: string; data: Record<string, Checkpoint[]> } | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -80,6 +83,22 @@ export default function Review() {
   const compare = useCompare(laneA && laneB ? laneA.attemptId : null, laneA && laneB ? laneB.attemptId : null)
   const openLane = openId ? byId.get(openId) : undefined
 
+  // 갈래마다 체크포인트(질문 시점)를 불러와 선 위의 점으로 쓴다
+  const laneKey = lanes.map((l) => l.attemptId).join(',')
+  useEffect(() => {
+    if (!laneKey) return
+    let alive = true
+    loadCheckpoints(laneKey.split(',')).then((data) => alive && setCps({ key: laneKey, data }))
+    return () => {
+      alive = false
+    }
+  }, [laneKey])
+  const checkpoints = cps && cps.key === laneKey ? cps.data : {}
+  const openDot = (lane: TreeLane, cp: Checkpoint, target: Element) => {
+    const r = target.getBoundingClientRect()
+    setDot({ lane, cp, anchor: { left: r.left, top: r.top, bottom: r.bottom, width: r.width } })
+  }
+
   const write = (next: { a: string | null; b: string | null }) => {
     const p = new URLSearchParams()
     if (taskId) p.set('task', taskId)
@@ -94,6 +113,7 @@ export default function Review() {
   }
   const selectTask = (id: string) => {
     setOpenId(null)
+    setDot(null)
     setSlot('a')
     setParams(new URLSearchParams({ task: id }), { replace: true })
   }
@@ -128,8 +148,8 @@ export default function Review() {
               </div>
             ) : (
               <>
-                <BranchStage title={group?.title ?? ''} lanes={lanes} lastFork={layout.lastFork} a={sel.a} b={sel.b} slot={slot} onSlot={setSlot} onPick={pick} onOpen={setOpenId} />
-                {lanes.length === 1 && <p className="mt-2 text-[13px] text-text-muted">점을 두 번 눌러 대화를 열고, 체크포인트에서 &quot;여기서 다시 풀기&quot;를 하면 갈래가 생겨요.</p>}
+                <BranchStage title={group?.title ?? ''} lanes={lanes} lastFork={layout.lastFork} a={sel.a} b={sel.b} slot={slot} onSlot={setSlot} onPick={pick} onOpen={setOpenId} checkpoints={checkpoints} onDot={openDot} />
+                {lanes.length === 1 && <p className="mt-2 text-[13px] text-text-muted">선 위의 작은 점(질문을 보낸 시점)을 눌러 &quot;여기서 다시 풀기&quot;를 하면 갈래가 생겨요.</p>}
               </>
             )}
           </div>
@@ -166,6 +186,7 @@ export default function Review() {
     >
       {body}
       {openLane && <NodeDrawer lane={openLane} onClose={() => setOpenId(null)} />}
+      {dot && <DotPopover laneName={dot.lane.name} cp={dot.cp} anchor={dot.anchor} onClose={() => setDot(null)} />}
     </SelfShell>
   )
 }

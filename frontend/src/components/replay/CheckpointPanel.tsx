@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { History, Loader2, Pencil, RotateCcw } from 'lucide-react'
 import { api, ApiError, type Checkpoint } from '../../api'
-import { useCredits } from '../../data/credits'
 import { Button } from '../ui'
 import { ErrorState } from '../ErrorState'
+import { useRollback } from './useRollback'
 import { shortTime, turnLabel } from './format'
 
 /** 이름 입력: Enter 로 저장, Esc 로 취소. 비우면 이름이 지워진다 */
@@ -36,15 +35,16 @@ function LabelEditor({ initial, onSave, onCancel, busy }: { initial: string; onS
  * 다시 풀기 = 원래 풀이는 그대로 두고 그 질문 시점에서 갈라진 새 응시를 만든다 (크레딧 차감, 부족하면 안내).
  */
 export function CheckpointPanel({ attemptId }: { attemptId: string }) {
-  const navigate = useNavigate()
-  const { refresh: refreshCredits } = useCredits()
+  const rb = useRollback()
   const [items, setItems] = useState<Checkpoint[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   const [editing, setEditing] = useState<number | null>(null)
   const [confirming, setConfirming] = useState<number | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
+  const [renameError, setRenameError] = useState<string | null>(null)
+  const busy = renaming || rb.busy
+  const actionError = renameError ?? rb.error
 
   useEffect(() => {
     let alive = true
@@ -58,29 +58,17 @@ export function CheckpointPanel({ attemptId }: { attemptId: string }) {
   }, [attemptId, tick])
 
   const rename = async (c: Checkpoint, label: string) => {
-    setBusy(true)
-    setActionError(null)
+    setRenaming(true)
+    setRenameError(null)
+    rb.clearError()
     try {
       const saved = await api.renameCheckpoint(c.checkpointId, label)
       setItems((list) => list?.map((x) => (x.checkpointId === saved.checkpointId ? saved : x)) ?? null)
       setEditing(null)
     } catch (e) {
-      setActionError((e as ApiError).message)
+      setRenameError((e as ApiError).message)
     } finally {
-      setBusy(false)
-    }
-  }
-
-  const rollback = async (c: Checkpoint) => {
-    setBusy(true)
-    setActionError(null)
-    try {
-      const { attemptId: next } = await api.rollback(c.checkpointId)
-      void refreshCredits()
-      navigate(`/exam/${encodeURIComponent(next)}`)
-    } catch (e) {
-      setActionError((e as ApiError).message)
-      setBusy(false)
+      setRenaming(false)
     }
   }
 
@@ -111,7 +99,7 @@ export function CheckpointPanel({ attemptId }: { attemptId: string }) {
                   onClick={() => (setEditing(c.checkpointId), setConfirming(null))}>
                   <Pencil size={14} aria-hidden />
                 </Button>
-                <Button size="sm" variant="secondary" disabled={busy} onClick={() => (setConfirming(c.checkpointId), setEditing(null), setActionError(null))}>
+                <Button size="sm" variant="secondary" disabled={busy} onClick={() => (setConfirming(c.checkpointId), setEditing(null), setRenameError(null), rb.clearError())}>
                   <RotateCcw size={14} aria-hidden /> 여기서 다시 풀기
                 </Button>
               </div>
@@ -130,7 +118,7 @@ export function CheckpointPanel({ attemptId }: { attemptId: string }) {
                 </p>
                 <div className="mt-2 flex justify-end gap-2">
                   <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(null)}>취소</Button>
-                  <Button size="sm" variant="primary" disabled={busy} onClick={() => void rollback(c)}>
+                  <Button size="sm" variant="primary" disabled={busy} onClick={() => void rb.run(c.checkpointId)}>
                     {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCcw size={14} aria-hidden />} 다시 풀기
                   </Button>
                 </div>

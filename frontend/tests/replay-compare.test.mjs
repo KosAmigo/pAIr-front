@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { collapse, fileChange } from '../src/lib/codeCompare.ts'
+import { collapse, editKind, fileChange, fileView } from '../src/lib/codeCompare.ts'
 import { changeKind, changedItems, commonPrefixLength, shortTurns, sideText } from '../src/lib/replayCompare.ts'
 
 const side = (status, deducted = 0, reason = null) => ({ status, deducted, reason, evidence: [] })
@@ -66,19 +66,46 @@ test('unchanged lines far from a change are folded into a skip marker', () => {
 })
 
 test('a file pair becomes added, removed or modified with line counts', () => {
-  const m = fileChange({ path: 'A.java', a: 'x\ny\nz', b: 'x\nY\nz\nw' })
+  const m = fileChange({ path: 'A.java', base: 'x\ny\nz', a: 'x\ny\nz', b: 'x\nY\nz\nw' })
   assert.equal(m.status, 'modified')
   assert.deepEqual([m.add, m.del], [2, 1])
-  assert.equal(fileChange({ path: 'N.java', a: null, b: 'class N {}\n' }).status, 'added')
-  assert.equal(fileChange({ path: 'N.java', a: null, b: 'l1\nl2' }).add, 2)
-  const r = fileChange({ path: 'O.java', a: 'old', b: null })
+  assert.equal(fileChange({ path: 'N.java', base: null, a: null, b: 'class N {}\n' }).status, 'added')
+  assert.equal(fileChange({ path: 'N.java', base: null, a: null, b: 'l1\nl2' }).add, 2)
+  const r = fileChange({ path: 'O.java', base: 'old', a: 'old', b: null })
   assert.deepEqual([r.status, r.add, r.del], ['removed', 0, 1])
 })
 
 test('very large files skip the line comparison', () => {
   const big = Array.from({ length: 2500 }, (_, i) => `line ${i}`).join('\n')
   const other = Array.from({ length: 2500 }, (_, i) => `row ${i}`).join('\n')
-  const c = fileChange({ path: 'Big.java', a: big, b: other })
+  const c = fileChange({ path: 'Big.java', base: big, a: big, b: other })
   assert.equal(c.tooLarge, true)
   assert.deepEqual(c.lines, [])
+})
+
+test('what each attempt changed from the original decides the file kind', () => {
+  const f = (base, a, b) => ({ path: 'F.java', base, a, b })
+  assert.equal(editKind(f('x', 'y', 'y')), 'same')
+  assert.equal(editKind(f('x', 'y', 'x')), 'a')
+  assert.equal(editKind(f('x', 'x', 'y')), 'b')
+  assert.equal(editKind(f('x', 'y', 'z')), 'differ')
+  // 풀이에서 새로 만든 파일: 둘 다 같으면 same, 한쪽에만 있으면 그쪽만 바꾼 것
+  assert.equal(editKind(f(null, 'n', 'n')), 'same')
+  assert.equal(editKind(f(null, null, 'n')), 'b')
+})
+
+test('two attempts that made the same edit both show it against the original', () => {
+  const v = fileView({ path: 'F.java', base: 'a\nb\nc', a: 'a\nB\nc', b: 'a\nB\nc' })
+  assert.equal(v.kind, 'same')
+  assert.deepEqual([v.baseToA.add, v.baseToA.del], [1, 1])
+  assert.deepEqual([v.baseToB.add, v.baseToB.del], [1, 1])
+  // 두 풀이 사이의 차이는 없다
+  assert.deepEqual([v.aToB.add, v.aToB.del], [0, 0])
+})
+
+test('an attempt that left the file untouched has no change from the original', () => {
+  const v = fileView({ path: 'F.java', base: 'a', a: 'a', b: 'a\nb' })
+  assert.equal(v.kind, 'b')
+  assert.equal(v.baseToA, null)
+  assert.equal(v.baseToB.add, 1)
 })

@@ -119,7 +119,7 @@ export function Verdict({ a, b, state, fallbackFork }: { a: TreeLane & { score: 
             <Button size="sm" variant="secondary" className="mt-3" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
               <Rows2 size={15} aria-hidden /> {open ? '대화 접기' : '전체 대화 나란히 보기'}
             </Button>
-            {open && <CompareTranscripts key={`${a.attemptId}-${b.attemptId}`} a={a} b={b} className="mt-3 h-[520px]" />}
+            {open && <CompareTranscripts key={`${a.attemptId}-${b.attemptId}`} a={a} b={b} className="mt-3" />}
           </div>
         </>
       )}

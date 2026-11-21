@@ -51,8 +51,11 @@ export type CheckDiff = { code: string; label: string; method: 'AUTO' | 'JUDGE';
 export type ItemDiff = { key: string; name: string; max: number; a: number | null; b: number | null; checks: CheckDiff[] }
 export type AttemptCompare = { a: string; b: string; items: ItemDiff[] }
 
-/** 복기 비교: 두 풀이에서 내용이 다른 파일 하나. 한쪽에만 있는 파일이면 없는 쪽이 null */
-export type FileDiff = { path: string; a: string | null; b: string | null }
+/**
+ * 복기 비교의 파일 하나: base 는 과제 원본, a·b 는 두 풀이의 최종 내용. 그 파일이 없으면 null
+ * (base 가 null 이면 풀이에서 새로 만든 파일). 원본·A·B 가 모두 같은 파일은 오지 않는다.
+ */
+export type FileDiff = { path: string; base: string | null; a: string | null; b: string | null }
 
 /** 복기: 질문 하나를 보낸 순간의 체크포인트 (질문마다 하나, 이름은 응시자가 붙인다) */
 export type Checkpoint = { checkpointId: number; turnNo: number; label: string | null; createdAt: string }
@@ -221,7 +224,7 @@ export const api = {
   report: (id: string) => call<ReportResponse>('GET', `/api/attempts/${enc(id)}/report`),
   checkpoints: (id: string) => call<Checkpoint[]>('GET', `/api/attempts/${enc(id)}/checkpoints`),
   replayTree: (id: string) => call<TreeNode[]>('GET', `/api/attempts/${enc(id)}/tree`),
-  /** 두 풀이에서 내용이 다른 파일만 받는다 (코드 변경 비교용, 내 풀이만) */
+  /** 과제 원본과 두 풀이의 최종 코드를 받는다. 원본·A·B 가 모두 같은 파일은 빠진다 (코드 변경 비교용, 내 풀이만) */
   compareFiles: (a: string, b: string) => call<FileDiff[]>('GET', `/api/attempts/${enc(a)}/compare/files?with=${enc(b)}`),
   /** 두 풀이의 감점 근거를 항목·체크별로 나란히 받는다 (채점이 끝난 내 풀이만) */
   compareAttempts: (a: string, b: string) => call<AttemptCompare>('GET', `/api/attempts/${enc(a)}/compare?with=${enc(b)}`),
