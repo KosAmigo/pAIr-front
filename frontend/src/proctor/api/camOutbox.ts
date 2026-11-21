@@ -18,6 +18,12 @@ function defaultStorage(): StorageLike | null {
   }
 }
 
+function newClientId(): string {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+}
+
 export function toRequest(v: CamViolation): ProctorEventRequest {
   return {
     type: v.type,
@@ -26,6 +32,7 @@ export function toRequest(v: CamViolation): ProctorEventRequest {
     durationMs: Math.max(0, v.durationMs),
     detail: v.detail,
     snapshot: v.snapshot,
+    clientId: newClientId(),
   }
 }
 
