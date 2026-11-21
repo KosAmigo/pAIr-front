@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { completionInsert, completionType, inCommentOrString, isJavaSource, JAVA_KEYWORDS, javaSources, marksFor, posOf, shouldAskCompletion } from '../src/lib/liveDiagnostics.ts'
+import { completionInsert, completionType, importEdit, inCommentOrString, isJavaSource, JAVA_KEYWORDS, javaSources, marksFor, posOf, shouldAskCompletion } from '../src/lib/liveDiagnostics.ts'
 
 const d = (file, line, severity = 'error') => ({ file, line, column: 3, severity, message: `m${line}` })
 
@@ -64,4 +64,35 @@ test('keywords cover the basics once each, and are not offered inside comments o
   assert.ok(JAVA_KEYWORDS.every((k) => /^[a-z]+$/.test(k)))
   for (const n of ['LineComment', 'BlockComment', 'StringLiteral', 'TextBlock', 'CharacterLiteral']) assert.equal(inCommentOrString(n), true, n)
   for (const n of ['Block', 'MethodDeclaration', 'Identifier', 'Program']) assert.equal(inCommentOrString(n), false, n)
+})
+
+test('an import line goes below the last import, else below the package line, else on top', () => {
+  const apply = (doc, q) => {
+    const e = importEdit(doc, q)
+    return e && doc.slice(0, e.from) + e.insert + doc.slice(e.from)
+  }
+  // 기존 import 아래
+  assert.equal(
+    apply('package a;\n\nimport java.util.List;\n\npublic class A {}\n', 'java.util.ArrayList'),
+    'package a;\n\nimport java.util.List;\nimport java.util.ArrayList;\n\npublic class A {}\n',
+  )
+  // package 줄 아래 (빈 줄이 이미 있음)
+  assert.equal(apply('package a;\n\npublic class A {}\n', 'java.util.List'), 'package a;\n\nimport java.util.List;\n\npublic class A {}\n')
+  // package 줄 아래 (빈 줄 없음)
+  assert.equal(apply('package a;\npublic class A {}\n', 'java.util.List'), 'package a;\n\nimport java.util.List;\n\npublic class A {}\n')
+  // package 도 import 도 없음
+  assert.equal(apply('public class A {}\n', 'java.util.List'), 'import java.util.List;\n\npublic class A {}\n')
+  // static import 만 있어도 그 아래에 넣는다
+  assert.equal(
+    apply('package a;\nimport static java.lang.Math.max;\npublic class A {}\n', 'java.util.List'),
+    'package a;\nimport static java.lang.Math.max;\nimport java.util.List;\npublic class A {}\n',
+  )
+})
+
+test('an import that is already there, or covered by a package import, is not added twice', () => {
+  const doc = 'package a;\nimport java.util.List;\nimport java.io.*;\nimport static java.util.Map.of;\npublic class A {}\n'
+  assert.equal(importEdit(doc, 'java.util.List'), null)
+  assert.equal(importEdit(doc, 'java.io.File'), null) // java.io.* 가 이미 있다
+  assert.notEqual(importEdit(doc, 'java.util.Map'), null) // static import 는 클래스 import 가 아니다
+  assert.notEqual(importEdit(doc, 'java.util.Set'), null)
 })

@@ -9,7 +9,7 @@ import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { Annotation, EditorState, type Extension } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { styleTags, tags as t } from '@lezer/highlight'
-import { completionInsert, completionType, inCommentOrString, JAVA_KEYWORDS, posOf, shouldAskCompletion, type CompletionItem, type DefinitionTarget } from '../lib/liveDiagnostics'
+import { completionInsert, completionType, importEdit, inCommentOrString, JAVA_KEYWORDS, posOf, shouldAskCompletion, type CompletionItem, type DefinitionTarget } from '../lib/liveDiagnostics'
 
 /** 밖에서 넣은 내용 변경 표시 (사용자 입력과 구분) */
 const External = Annotation.define<boolean>()
@@ -62,10 +62,11 @@ const theme = EditorView.theme(
     '&.cm-focused': { outline: 'none' },
     '.cm-gutters': { backgroundColor: v('panel-sunken'), color: v('text-faint'), border: 'none' },
     '.cm-lineNumbers .cm-gutterElement': { padding: '0 16px 0 12px', minWidth: '48px', fontVariantNumeric: 'tabular-nums' },
-    '.cm-activeLine': { backgroundColor: v('panel-raised') },
+    // 현재 줄 강조가 불투명하면 콘텐츠 뒤쪽에 그려지는 선택 영역을 덮어 같은 줄에서 드래그한 부분이 안 보인다. 반투명으로 둔다
+    '.cm-activeLine': { backgroundColor: `color-mix(in srgb, ${v('panel-raised')} 55%, transparent)` },
     '.cm-activeLineGutter': { backgroundColor: v('panel-raised'), color: v('text-muted') },
     '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, ::selection': {
-      backgroundColor: 'color-mix(in srgb, var(--color-brand) 16%, transparent)',
+      backgroundColor: 'color-mix(in srgb, var(--color-brand) 32%, transparent)',
     },
     '.cm-matchingBracket': { backgroundColor: 'color-mix(in srgb, var(--color-brand) 16%, transparent)', outline: 'none' },
     '.cm-selectionMatch': { backgroundColor: 'color-mix(in srgb, var(--color-text-muted) 20%, transparent)' },
@@ -160,9 +161,18 @@ export function CodeEditor({
           label: item.name,
           detail: item.signature,
           type: completionType(item.kind),
+          // import 안 한 라이브러리 클래스는 목록에서 뒤로 보낸다
+          boost: item.importName ? -5 : 0,
           apply: (v: EditorView, _c: unknown, from: number, to: number) => {
             const { text, cursor } = completionInsert(item)
-            v.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + cursor }, userEvent: 'input.complete' })
+            // import 가 필요한 클래스면 이름과 함께 import 문 한 줄도 넣는다 (한 번에 되돌릴 수 있게 한 번의 변경으로)
+            const imp = item.importName ? importEdit(v.state.doc.toString(), item.importName) : null
+            const shift = imp && imp.from <= from ? imp.insert.length : 0
+            v.dispatch({
+              changes: imp ? [{ from: imp.from, insert: imp.insert }, { from, to, insert: text }] : { from, to, insert: text },
+              selection: { anchor: from + cursor + shift },
+              userEvent: 'input.complete',
+            })
           },
         })),
       }

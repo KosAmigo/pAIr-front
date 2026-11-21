@@ -22,7 +22,14 @@ export function marksFor(file: string | null, live: CompileDiagnostic[] | null, 
 }
 
 /** 서버가 돌려주는 자동 완성 후보 (POST /attempts/{id}/complete) */
-export type CompletionItem = { name: string; kind: 'method' | 'field' | 'variable' | 'class'; signature: string; hasParams: boolean }
+export type CompletionItem = {
+  name: string
+  kind: 'method' | 'field' | 'variable' | 'class'
+  signature: string
+  hasParams: boolean
+  /** 이 클래스를 쓰려고 파일에 넣어야 할 import 의 정식 이름. 이미 쓸 수 있으면 없음 */
+  importName?: string | null
+}
 
 /** CodeMirror 목록의 아이콘 종류 */
 export const completionType = (kind: CompletionItem['kind']) => (kind === 'field' ? 'property' : kind)
@@ -63,3 +70,22 @@ export const JAVA_KEYWORDS = [
 
 /** 문법 트리의 이 노드 안(주석, 문자열, 글자)에서는 완성 목록을 열지 않는다 */
 export const inCommentOrString = (nodeName: string) => /Comment|String|Text|Char/.test(nodeName)
+
+/**
+ * 파일에 `import 정식이름;` 한 줄을 넣을 위치와 글자. 이미 같은 import(또는 그 패키지 전체 import)가 있으면 null.
+ * 기존 import 가 있으면 그 맨 아래에, 없으면 package 줄 아래에, 그것도 없으면 맨 위에 넣는다.
+ */
+export function importEdit(doc: string, qualified: string): { from: number; insert: string } | null {
+  const pkg = qualified.slice(0, qualified.lastIndexOf('.'))
+  const imports = [...doc.matchAll(/^[ \t]*import[ \t]+(static[ \t]+)?([\w.*]+)[ \t]*;[ \t]*$/gm)]
+  if (imports.some((m) => !m[1] && (m[2] === qualified || m[2] === `${pkg}.*`))) return null
+  const last = imports[imports.length - 1]
+  if (last) return { from: (last.index ?? 0) + last[0].length, insert: `\nimport ${qualified};` }
+  const pk = /^[ \t]*package[ \t]+[\w.]+[ \t]*;[ \t]*$/m.exec(doc)
+  if (pk) {
+    const end = pk.index + pk[0].length
+    // 뒤에 빈 줄이 이미 있으면 그대로 쓰고, 없으면 import 아래에 빈 줄을 만든다
+    return { from: end, insert: doc.startsWith('\n\n', end) ? `\n\nimport ${qualified};` : `\n\nimport ${qualified};\n` }
+  }
+  return { from: 0, insert: `import ${qualified};\n\n` }
+}
