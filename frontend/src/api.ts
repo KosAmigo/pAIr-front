@@ -1,5 +1,5 @@
 // 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
-import { readAuthSession } from './auth/authApi.ts'
+import { authenticatedFetch, AuthRequestError, readAuthSession } from './auth/authApi.ts'
 import type { QuestionResults } from './data/questions.ts'
 import type { CompletionItem, DefinitionTarget } from './lib/liveDiagnostics.ts'
 
@@ -184,12 +184,13 @@ export function getAuthHeaders(): Record<string, string> {
 export async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response
   try {
-    res = await fetch(url, {
+    res = await authenticatedFetch(url, {
       method,
       headers: { ...getAuthHeaders(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof AuthRequestError) throw error
     throw new ApiError('백엔드에 연결할 수 없습니다. backend 서버(포트 8180)가 켜져 있는지 확인하세요.')
   }
   const text = await res.text()
@@ -270,12 +271,13 @@ export async function chatStream(
 ): Promise<Turn[]> {
   let res: Response
   try {
-    res = await fetch(`/api/attempts/${enc(id)}/chat/stream`, {
+    res = await authenticatedFetch(`/api/attempts/${enc(id)}/chat/stream`, {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ message, attachments }),
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof AuthRequestError) throw error
     throw new ApiError('백엔드에 연결할 수 없습니다. backend 서버(포트 8180)가 켜져 있는지 확인하세요.')
   }
   if (!res.ok || !res.body) {
@@ -440,7 +442,7 @@ export const grader = {
 
 /** 응시 PDF 자료를 로그인 헤더로 받아 브라우저 URL 로 바꾼다 (쓴 뒤 URL.revokeObjectURL) */
 export async function materialBlobUrl(id: string, path: string): Promise<string> {
-  const res = await fetch(`/api/attempts/${enc(id)}/materials/file?path=${encodeURIComponent(path)}`, { headers: getAuthHeaders() })
+  const res = await authenticatedFetch(`/api/attempts/${enc(id)}/materials/file?path=${encodeURIComponent(path)}`, { headers: getAuthHeaders() })
   if (!res.ok) throw new ApiError(`자료 파일을 받지 못했습니다 (${res.status})`)
   return URL.createObjectURL(await res.blob())
 }

@@ -11,6 +11,7 @@ import type { LiveExam } from '../liveExam.ts'
 import { CamPreview } from './CamPreview.tsx'
 import { ConnectionGate } from './ConnectionGate.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
+import { PHONE_CAM_ENABLED } from '../features.ts'
 import { useCamHub } from './useCamHub.ts'
 
 const TOAST_MS = 4000
@@ -127,7 +128,7 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
                 ))}
               </ul>
             )}
-            {hub.phone !== 'connected' ? (
+            {!PHONE_CAM_ENABLED ? null : hub.phone !== 'connected' ? (
               <PhonePairCard />
             ) : (
               <div className="flex flex-col gap-1">

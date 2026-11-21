@@ -28,13 +28,14 @@ import { headPoseFromMatrix, shouldersFromPose } from '../vision/features.ts'
 import { CamPreview } from './CamPreview.tsx'
 import { CheckList } from './CheckList.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
+import { PHONE_CAM_ENABLED } from '../features.ts'
 import { useCamHub } from './useCamHub.ts'
-import { runDeskScan, waitForScanResolution } from '../check/deskScan.ts'
+import { SCAN_MAX_RESUMES, runDeskScan, waitForNewStream, waitForScanResolution } from '../check/deskScan.ts'
 import { CAN_SKIP_CHECKS, clearChecksSkipped, markChecksSkipped } from '../testSkip.ts'
 
 export type EnvCheckResult = { pc: CheckReport; phone: CheckReport | null }
 
-const INITIAL: CheckItem[] = [
+const ALL_ITEMS: CheckItem[] = [
   { id: 'browser', label: '브라우저', status: 'pending', detail: '' },
   { id: 'graphics', label: '원격 접속·가상 머신', status: 'pending', detail: '' },
   { id: 'screens', label: '모니터', status: 'pending', detail: '' },
@@ -46,6 +47,8 @@ const INITIAL: CheckItem[] = [
   { id: 'wrist', label: '양 손목 (스마트워치 · 손에 쓴 글씨)', status: 'pending', detail: '' },
   { id: 'phone', label: '휴대폰 캠: 조명·책상 위 스캔', status: 'pending', detail: '' },
 ]
+// 휴대폰 캠을 쓰지 않으면 휴대폰 점검 항목은 목록에서 뺀다
+const INITIAL = PHONE_CAM_ENABLED ? ALL_ITEMS : ALL_ITEMS.filter((i) => i.id !== 'phone')
 
 const HOLD_MS = 1500
 const POSE_TIMEOUT_MS = 25000
@@ -64,7 +67,7 @@ export function EnvAside() {
       <div className="aspect-[4/3] overflow-hidden rounded-xl border border-line bg-panel-raised">
         <CamPreview />
       </div>
-      <PhonePairCard />
+      {PHONE_CAM_ENABLED && <PhonePairCard />}
     </div>
   )
 }
@@ -117,7 +120,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       const redoStages: ScanStage[] = []
       if (todo('ears')) redoStages.push('ear-left', 'ear-right')
       if (todo('wrist')) redoStages.push('wrist')
-      if (todo('phone')) redoStages.push('desk')
+      if (PHONE_CAM_ENABLED && todo('phone')) redoStages.push('desk')
       camHub.resetCheck(redoStages)
       setPrompt('카메라와 분석 모델을 준비하는 중입니다 (처음 한 번은 조금 걸립니다)')
       try {
@@ -199,7 +202,24 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
         if (live.current.phoneStream !== phoneStream) phoneLost = true
         return cancelled || skipPhoneRef.current || phoneLost
       }
-      const scanDeskWithPhone = async (phoneStream: MediaStream): Promise<CheckReport | null> => {
+      /** 영상이 끊기면 새 영상이 오기를 기다렸다가 스캔을 처음부터 다시 한다 (순간 끊김·재연결로 곧바로 실패하지 않게) */
+      const scanDeskWithPhone = async (first: MediaStream): Promise<CheckReport | null> => {
+        let stream = first
+        for (let resume = 0; ; resume++) {
+          phoneLost = false
+          const report = await scanOnce(stream)
+          if (report || !phoneLost || cancelled || skipPhoneRef.current || resume >= SCAN_MAX_RESUMES) return report
+          set('phone', { status: 'running', detail: '휴대폰 영상이 끊겨 다시 연결되기를 기다리는 중 (최대 60초)' })
+          setPrompt('휴대폰 영상이 끊겼습니다. 휴대폰 화면을 켜고 "보조 캠 시작"을 다시 눌러 주세요. 영상이 오면 스캔을 이어서 합니다')
+          const next = await waitForNewStream(() => live.current.phoneStream, stream, () => cancelled || skipPhoneRef.current)
+          if (!next) {
+            phoneLost = true
+            return null
+          }
+          stream = next
+        }
+      }
+      const scanOnce = async (phoneStream: MediaStream): Promise<CheckReport | null> => {
         setPrompt('휴대폰 영상을 고화질로 바꾸는 중입니다')
         set('phone', { detail: '스캔 모델을 준비하는 중 (처음 한 번은 조금 걸립니다)' })
         const { video: phoneVideo, release } = await attachHiddenVideo(phoneStream)
@@ -318,7 +338,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       if (cancelled) return
 
       // 5) 휴대폰 영상으로 조명·책상 스캔 (휴대폰이 연결돼 영상이 올 때까지 기다린다)
-      if (todo('phone')) {
+      if (PHONE_CAM_ENABLED && todo('phone')) {
         setPrompt('휴대폰을 연결해 주세요. 연결되면 이 화면의 안내에 따라 책상을 스캔합니다')
         set('phone', { status: 'running', detail: '휴대폰 연결을 기다리는 중' })
         while (!cancelled && !live.current.phoneStream && !skipPhoneRef.current) {
@@ -338,7 +358,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
             detail: bad.length ? bad.map((i) => `${i.label}: ${i.detail}`).join(' / ') : '이상 없음',
           })
         } else if (phoneLost) {
-          apply('phone', { status: 'fail', detail: '스캔 도중 휴대폰 영상이 끊겼습니다. 연결을 확인하고 다시 점검해 주세요.' })
+          apply('phone', { status: 'fail', detail: '스캔 도중 휴대폰 영상이 끊겼고 60초 안에 다시 연결되지 않았습니다. 휴대폰에서 "보조 캠 시작"이 "영상 송신 중"인지 확인한 뒤 "통과하지 못한 항목만 다시"를 눌러 주세요.' })
         } else {
           apply('phone', { status: 'warn', detail: '휴대폰 점검을 건너뛰었습니다 (감독 기록에 남습니다).' })
         }
@@ -399,7 +419,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
             </Button>
           </div>
         )}
-        {phoneRunning && !skipPhone && (
+        {PHONE_CAM_ENABLED && phoneRunning && !skipPhone && (
           <Button variant="ghost" size="sm" className="self-start" onClick={() => setSkipPhone(true)}>
             휴대폰 없이 진행
           </Button>

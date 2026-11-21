@@ -1,4 +1,4 @@
-import { authApi, AuthRequestError, AuthSessionExpiredError } from './authApi.ts'
+import { authApi, ensureAuthSessionKey, readAuthSession, AuthRequestError, AuthSessionExpiredError } from './authApi.ts'
 
 export function validateNewPassword(password: string, confirmation: string): string | null {
   if (password.length < 8 || password.length > 72 || new TextEncoder().encode(password).length > 72) {
@@ -21,9 +21,10 @@ export function accountErrorMessage(error: unknown): string {
 }
 
 // 401은 현재 비밀번호 오류일 수도 있으므로 별도 인증 조회로만 세션 만료를 판별한다.
-export async function accountMutation(token: string, operation: () => Promise<void>, clearSession: () => void): Promise<void> {
+export async function accountMutation(token: string, operation: (token: string) => Promise<void>, clearSession: () => void): Promise<void> {
+  const original = await ensureAuthSessionKey()
   try {
-    await operation()
+    await operation(token)
   } catch (error) {
     if (!(error instanceof AuthRequestError) || error.status !== 401) throw error
     try {
@@ -35,6 +36,12 @@ export async function accountMutation(token: string, operation: () => Promise<vo
       }
       const detail = verificationError instanceof Error ? verificationError.message : '알 수 없는 오류'
       throw new AuthRequestError(`${error.message} 로그인 상태를 확인하지 못했습니다: ${detail}`, error.status)
+    }
+    const current = readAuthSession()
+    if (original?.sessionKey && current?.sessionKey === original.sessionKey && current.token !== token) {
+      await operation(current.token)
+      clearSession()
+      return
     }
     throw error
   }

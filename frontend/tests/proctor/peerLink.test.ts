@@ -1,5 +1,18 @@
 import { describe, expect, it } from './expect.ts'
-import { PHONE_VIDEO_MAX_BITRATE, SCAN_VIDEO_MAX_BITRATE, iceServersFrom, videoEncoding } from '../../src/proctor/relay/peerLink.ts'
+import { PHONE_VIDEO_MAX_BITRATE, SCAN_VIDEO_MAX_BITRATE, iceServersFrom, mediaFlowing, videoEncoding } from '../../src/proctor/relay/peerLink.ts'
+
+describe('mediaFlowing (영상이 실제로 오는지)', () => {
+  it('연결(connected)됐을 때만 영상이 오는 것으로 본다. 협상 중이거나 실패면 아니다', () => {
+    expect(mediaFlowing('connected')).toBe(true)
+    expect(mediaFlowing('new')).toBe(false)
+    expect(mediaFlowing('connecting')).toBe(false)
+    expect(mediaFlowing('disconnected')).toBe(false)
+    expect(mediaFlowing('failed')).toBe(false)
+  })
+  it('연결 상태를 알려 주지 않는 브라우저는 막지 않는다', () => {
+    expect(mediaFlowing(undefined)).toBe(true)
+  })
+})
 import { parseRtcSignal } from '../../src/proctor/relay/rtcSignal.ts'
 
 describe('parseRtcSignal', () => {

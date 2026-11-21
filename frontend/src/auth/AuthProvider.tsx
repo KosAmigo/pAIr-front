@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { setAuthHeaders } from '../api'
 import { AuthContext, type AuthApi } from './auth'
-import { authApi, readAuthSession, saveAuthSession, type AuthSession, AuthRequestError, AuthSessionExpiredError } from './authApi'
+import { authApi, ensureAuthSessionKey, logoutSession, newAuthSession, readAuthSession, saveAuthSession, subscribeAuthSession, type AuthSession, AuthRequestError, AuthSessionExpiredError } from './authApi'
 import { accountMutation } from './account'
 import { CreditProvider } from '../data/CreditProvider'
 
@@ -23,6 +23,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearToken = useCallback((token: string) => {
     if (sessionRef.current?.token === token) set(null)
   }, [set])
+
+  useEffect(() => {
+    const sync = () => {
+      const current = readAuthSession()
+      sessionRef.current = current
+      setSession(current)
+    }
+    const unsubscribe = subscribeAuthSession(sync)
+    sync()
+    return unsubscribe
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -49,10 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token, set, clearToken])
 
   const logout = useCallback(async () => {
-    const token = session?.token
-    set(null)
-    if (token) await authApi.logout(token)
-  }, [session, set])
+    await logoutSession()
+  }, [])
 
   const getProfile = useCallback(async () => {
     if (!token) throw new AuthSessionExpiredError()
@@ -67,6 +76,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [token, clearToken])
 
+  const clearAccountSession = useCallback((expected: AuthSession) => {
+    const current = sessionRef.current
+    if (current &&
+        (expected.sessionKey ? current.sessionKey === expected.sessionKey : current.token === expected.token)) {
+      set(null)
+    }
+  }, [set])
+
   const api = useMemo<AuthApi>(
     () => ({
       user: session?.user ?? null,
@@ -76,25 +93,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       getProfile,
       changePassword: async (currentPassword, newPassword) => {
         if (!token) throw new AuthSessionExpiredError()
-        await accountMutation(token, () => authApi.changePassword(token, currentPassword, newPassword), () => clearToken(token))
+        const expected = await ensureAuthSessionKey()
+        if (!expected || (session?.sessionKey ? expected.sessionKey !== session.sessionKey : expected.token !== token)) throw new AuthSessionExpiredError()
+        await accountMutation(expected.token, (accessToken) => authApi.changePassword(accessToken, currentPassword, newPassword), () => clearAccountSession(expected))
       },
       withdraw: async (currentPassword) => {
         if (!token) throw new AuthSessionExpiredError()
-        await accountMutation(token, () => authApi.withdraw(token, currentPassword), () => clearToken(token))
+        const expected = await ensureAuthSessionKey()
+        if (!expected || (session?.sessionKey ? expected.sessionKey !== session.sessionKey : expected.token !== token)) throw new AuthSessionExpiredError()
+        await accountMutation(expected.token, (accessToken) => authApi.withdraw(accessToken, currentPassword), () => clearAccountSession(expected))
       },
       login: async (email, password) => {
         const response = await authApi.login(email, password)
-        set(response)
+        set(newAuthSession(response))
         return response.user
       },
       requestEmailVerification: (email) => authApi.requestEmailVerification(email),
       signup: async (name, email, password, code) => {
         const response = await authApi.signup(name, email, password, code)
-        set(response)
+        set(newAuthSession(response))
         return response.user
       },
     }),
-    [session, loading, logout, set, token, clearToken, getProfile],
+    [session, loading, logout, set, token, clearAccountSession, getProfile],
   )
 
   return (

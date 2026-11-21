@@ -18,6 +18,7 @@ import { ViewerSender, type ViewSources } from './relay/viewerSender.ts'
 import { PHONE_ANALYSIS_IDLE, PhoneAnalysis, type PhoneAnalysisState } from './phoneAnalysis.ts'
 import { SCREEN_EVENTS_ACCEPTED, toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
+import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED } from './features.ts'
 import { captureSnapshot, frameLoop, openCamera, stopCamera } from './vision/camera.ts'
 import { pcFeatures } from './vision/features.ts'
 
@@ -146,8 +147,9 @@ export function channelUp(st: CamState): ChannelUp {
   return {
     // 모델 로딩 시간과 무관하게 웹캠 트랙이 살아 있는지만 본다
     webcam: st.webcamLive,
-    phone: st.phone === 'connected',
-    screen: st.screen === 'sharing' && st.screenKind !== 'partial',
+    // 휴대폰 캠을 쓰지 않으면 이 채널은 항상 연결된 것으로 본다 (입장·시험 중 차단 조건에서 빠진다)
+    phone: !PHONE_CAM_ENABLED || st.phone === 'connected',
+    screen: !SCREEN_SHARE_ENABLED || (st.screen === 'sharing' && st.screenKind !== 'partial'),
   }
 }
 
