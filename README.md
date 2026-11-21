@@ -77,6 +77,7 @@ PC 화면의 QR 을 휴대폰으로 찍으면 연결된다. 휴대폰은 영상�
 | 터널 주소에서 `Blocked request` | 개발 서버가 `vite.config.ts` 변경 전에 켜졌다. 껐다 다시 켠다 |
 | QR 주소가 `192.168...` 로 나옴 | `PAIR_PUBLIC_ORIGIN` 없이 PC 를 `localhost` 로 열었다. 터널 주소로 접속하거나 `dev-all.mjs` 로 켠다 |
 | `cloudflared` 를 찾을 수 없음 | 설치 전에 연 터미널이다. 터미널을 닫고 새로 연다 |
+| 휴대폰 보조 캠이 연결 1~2분 뒤 갑자기 끊기고(릴레이 로그 `code 1001`/`1006`) 스캔이 "영상이 끊겼습니다"로 끝남 | **개발 서버(`dev`, `dev:local`)는 코드가 바뀌면 휴대폰 페이지를 통째로 새로고침한다.** 새로고침되면 휴대폰에서 "보조 캠 시작"을 다시 눌러야 한다. 휴대폰 시험 중에는 코드를 고치지 말거나, 빌드본으로 띄우는 `dev-all.mjs`(터널 모드)를 쓴다. 그래도 반복되면 `%TEMP%\pair-relay.log` 의 닫힘 시각·코드를 확인한다 |
 | "입장 링크가 올바르지 않습니다" | 백엔드(8180)가 꺼져 있다 |
 | 초대 메일 링크가 이전 터널 주소임 | 이미 떠 있던 백엔드가 새 터널 주소를 모른다. 백엔드를 껐다가 `dev-all.mjs` 로 다시 켠다 |
 | 와이파이에선 되는데 LTE 에선 영상이 안 나옴 | 망이 직접 연결을 막는 경우다. TURN 서버가 필요하다 (아래 환경변수) |
@@ -86,7 +87,22 @@ PC 화면의 QR 을 휴대폰으로 찍으면 연결된다. 휴대폰은 영상�
 - `PAIR_BACKEND_URL`: 백엔드 주소 (기본 `http://localhost:8180`)
 - `PAIR_JAVA_TMP`: `dev-all.mjs` 가 Gradle 에 쓰게 할 임시 폴더 (Windows 기본 `C:/dev/tmp`)
 - `VITE_TURN_URL`(쉼표로 여러 개), `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`: TURN 서버. 학교·회사 망까지 지원하려면 필요하다. 기본은 공개 STUN 만 쓴다
+- TURN 설정 방법은 아래 "TURN 서버 설정"을 본다.
 - `VITE_ALLOW_CHECK_SKIP=true`: 개발 서버가 아니어도 환경 점검 "건너뛰기"를 보이게 하는 빌드 옵션 (테스트용)
+
+### TURN 서버 설정 (휴대폰이 LTE 일 때 필요)
+터널(cloudflared)은 HTTPS·WebSocket(연결 정보)만 넘기고 **영상(WebRTC)은 지나가지 못한다.** 휴대폰이 PC 와 같은 와이파이면 영상이 직접 가지만, LTE 처럼 서로 직접 연결이 안 되는 망에서는 TURN(중계) 서버가 있어야 영상이 온다. 없으면 휴대폰 카드가 "영상 연결 중"에서 멈추고 10초 뒤 안내가 뜬다.
+
+1. TURN 서비스에 가입해 주소·계정·비밀번호를 받는다. 예: [Metered](https://www.metered.ca/tools/openrelay/) (무료 월 20GB, 가입 필요), [Cloudflare TURN](https://developers.cloudflare.com/realtime/turn/) (단독 사용 시 유료 $0.05/GB), 직접 설치하는 coturn
+2. `pAIr-front/frontend/.env.local` 파일을 만들어 값을 넣는다 (`.env.*` 는 git 에 올라가지 않는다):
+   ```
+   VITE_TURN_URL=turn:주소:3478,turns:주소:443
+   VITE_TURN_USERNAME=계정
+   VITE_TURN_CREDENTIAL=비밀번호
+   ```
+3. 프론트를 다시 빌드·실행한다 (`dev-all.mjs` 는 터널 모드에서 매번 빌드한다). 값은 빌드에 포함되어 브라우저에서 보이므로 개발용 계정만 쓴다. 영상은 DTLS-SRTP 로 암호화되어 TURN 서버는 내용을 볼 수 없다.
+
+TURN 없이 시험하려면 **휴대폰을 PC 와 같은 와이파이에 붙이면** 된다. 터널 주소는 그대로 써도 된다.
 
 ## 테스트
 - 브라우저 이벤트 감독: `npm --prefix frontend run test:anti-cheating`

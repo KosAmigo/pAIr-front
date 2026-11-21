@@ -47,6 +47,14 @@ function rtcConfig(): RTCConfiguration {
   return { iceServers: iceServersFrom(import.meta.env ?? {}) }
 }
 
+/**
+ * 영상이 실제로 흐르는지. 트랙(ontrack)은 협상 메시지만 받아도 생기므로 그것만으로 "연결됨"이라 하면
+ * 영상 경로(ICE)가 안 만들어져도 검은 화면이 연결됨으로 보인다. connectionState 가 connected 일 때만 본다.
+ */
+export function mediaFlowing(connectionState: string | undefined): boolean {
+  return connectionState === undefined || connectionState === 'connected'
+}
+
 /** 원격 설명이 정해지기 전에 도착한 ICE 후보를 모아 뒀다가 넣는다 */
 export class CandidateQueue {
   private queue: IceCandidate[] = []
@@ -215,13 +223,19 @@ export class PcLink {
     pc.onicecandidate = (e) => {
       if (e.candidate && this.pc === pc) this.send({ kind: 'candidate', candidate: toIceCandidate(e.candidate) })
     }
+    let track: MediaStream | null = null
     pc.ontrack = (e) => {
       if (this.pc !== pc) return
-      this.onChange('live', e.streams[0] ?? new MediaStream([e.track]))
+      track = e.streams[0] ?? new MediaStream([e.track])
+      // 협상만 끝났고 영상 경로가 아직이면 live 로 알리지 않는다 (연결 상태가 connected 가 될 때 알린다)
+      if (mediaFlowing(pc.connectionState)) this.onChange('live', track)
     }
     pc.onconnectionstatechange = () => {
       if (this.pc !== pc) return
-      if (pc.connectionState === 'connected') this.retries = 0
+      if (pc.connectionState === 'connected') {
+        this.retries = 0
+        if (track) this.onChange('live', track)
+      }
       if (pc.connectionState === 'failed') this.fail()
     }
     await pc.setRemoteDescription({ type: 'offer', sdp })

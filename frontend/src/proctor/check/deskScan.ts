@@ -101,6 +101,33 @@ export async function waitForScanResolution(video: HTMLVideoElement, isCancelled
   return video.videoWidth
 }
 
+/**
+ * 스캔 도중 휴대폰 영상이 끊겼을 때 다시 연결되기를 기다리는 최대 시간과 다시 시도하는 횟수.
+ * 휴대폰 페이지가 새로고침되면 응시자가 휴대폰에서 "보조 캠 시작"을 다시 눌러야 해서 몇 초로는 모자란다.
+ */
+export const SCAN_RESUME_WAIT_MS = 60000
+export const SCAN_MAX_RESUMES = 2
+
+/**
+ * 끊긴 영상(prev) 대신 새 영상이 오기를 기다린다. 영상이 잠깐 null 이 됐다 새 객체로 돌아오는 것은
+ * 재연결이므로 바로 실패로 보지 않는다. 시간이 지나거나 취소되면 null.
+ */
+export async function waitForNewStream<T>(
+  get: () => T | null,
+  prev: T | null,
+  isCancelled: () => boolean,
+  timeoutMs = SCAN_RESUME_WAIT_MS,
+  intervalMs = 300,
+): Promise<T | null> {
+  const begin = performance.now()
+  while (!isCancelled() && performance.now() - begin < timeoutMs) {
+    const now = get()
+    if (now && now !== prev) return now
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  return null
+}
+
 /** 조명 → 책상 위 순서로 점검하고 결과를 돌려준다. 취소되면 null */
 export async function runDeskScan(io: DeskScanIO): Promise<CheckReport | null> {
   const { video } = io
