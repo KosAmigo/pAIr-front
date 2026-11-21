@@ -1,6 +1,5 @@
 import { Smartphone } from 'lucide-react'
 import { StatusDot } from '../../components/ui'
-import { phoneCardStatus } from '../core/connectionPolicy.ts'
 import { PhoneVideo } from './PhoneVideo.tsx'
 import { useCamHub } from './useCamHub.ts'
 
@@ -12,9 +11,8 @@ const SHOW_CERT_NOTICE = import.meta.env.DEV || import.meta.env.VITE_SHOW_CERT_N
 
 /** 휴대폰 보조 캠 연결: QR 과 연결 상태 */
 export function PhonePairCard() {
-  const { phone, phoneQr, phoneAnalysis, relayOpen, phoneVideo } = useCamHub()
+  const { phone, phoneQr, phoneAnalysis, relayOpen } = useCamHub()
   const connected = phone === 'connected'
-  const card = phoneCardStatus(phone, phoneVideo)
   const analysisText =
     phoneAnalysis.status === 'monitoring'
       ? `감시 중 · ${phoneAnalysis.fps} FPS · 손 ${phoneAnalysis.handCount}개`
@@ -31,7 +29,7 @@ export function PhonePairCard() {
           휴대폰 보조 카메라
         </h3>
         <span className="ml-auto">
-          <StatusDot status={card.status} label={card.label} />
+          <StatusDot status={connected ? 'ok' : phone === 'stale' ? 'check' : 'down'} label={connected ? '연결됨' : phone === 'stale' ? '응답 없음' : '미연결'} />
         </span>
       </div>
       {connected ? (

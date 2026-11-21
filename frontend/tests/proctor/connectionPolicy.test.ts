@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import { expect } from './expect.ts'
-import { GATE_INITIAL, GRACE_MS, allUp, missingChannels, phoneCardStatus, stepGate, type ChannelUp, type GateState } from '../../src/proctor/core/connectionPolicy.ts'
+import { GATE_INITIAL, GRACE_MS, allUp, missingChannels, stepGate, type ChannelUp, type GateState } from '../../src/proctor/core/connectionPolicy.ts'
 
 const UP: ChannelUp = { webcam: true, phone: true, screen: true }
 const run = (state: GateState, up: ChannelUp, now: number) => stepGate(state, up, now)
@@ -64,13 +64,4 @@ test('막힌 상태에서 다른 채널이 새로 끊겨도 차단은 유지된�
   s = run(s.state, { ...UP, phone: false }, GRACE_MS)
   s = run(s.state, { webcam: false, phone: true, screen: true }, GRACE_MS + 50)
   expect(s.gate.status).toBe('blocked')
-})
-
-test('휴대폰 카드는 소켓 연결이 아니라 영상이 실제로 오는지까지 보고 연결됨을 표시한다', () => {
-  expect(phoneCardStatus('connected', 'live')).toEqual({ status: 'ok', label: '연결됨' })
-  expect(phoneCardStatus('connected', 'connecting').status).toBe('check')
-  expect(phoneCardStatus('connected', 'idle').label).toContain('영상 대기')
-  expect(phoneCardStatus('connected', 'failed').status).toBe('down')
-  expect(phoneCardStatus('stale', 'live')).toEqual({ status: 'check', label: '응답 없음' })
-  expect(phoneCardStatus('disconnected', 'idle')).toEqual({ status: 'down', label: '미연결' })
 })

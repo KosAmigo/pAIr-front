@@ -30,7 +30,7 @@ import { CheckList } from './CheckList.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
 import { PHONE_CAM_ENABLED } from '../features.ts'
 import { useCamHub } from './useCamHub.ts'
-import { SCAN_MAX_RESUMES, runDeskScan, waitForNewStream, waitForScanResolution } from '../check/deskScan.ts'
+import { runDeskScan, waitForScanResolution } from '../check/deskScan.ts'
 import { CAN_SKIP_CHECKS, clearChecksSkipped, markChecksSkipped } from '../testSkip.ts'
 
 export type EnvCheckResult = { pc: CheckReport; phone: CheckReport | null }
@@ -202,24 +202,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
         if (live.current.phoneStream !== phoneStream) phoneLost = true
         return cancelled || skipPhoneRef.current || phoneLost
       }
-      /** 영상이 끊기면 새 영상이 오기를 기다렸다가 스캔을 처음부터 다시 한다 (순간 끊김·재연결로 곧바로 실패하지 않게) */
-      const scanDeskWithPhone = async (first: MediaStream): Promise<CheckReport | null> => {
-        let stream = first
-        for (let resume = 0; ; resume++) {
-          phoneLost = false
-          const report = await scanOnce(stream)
-          if (report || !phoneLost || cancelled || skipPhoneRef.current || resume >= SCAN_MAX_RESUMES) return report
-          set('phone', { status: 'running', detail: '휴대폰 영상이 끊겨 다시 연결되기를 기다리는 중 (최대 60초)' })
-          setPrompt('휴대폰 영상이 끊겼습니다. 휴대폰 화면을 켜고 "보조 캠 시작"을 다시 눌러 주세요. 영상이 오면 스캔을 이어서 합니다')
-          const next = await waitForNewStream(() => live.current.phoneStream, stream, () => cancelled || skipPhoneRef.current)
-          if (!next) {
-            phoneLost = true
-            return null
-          }
-          stream = next
-        }
-      }
-      const scanOnce = async (phoneStream: MediaStream): Promise<CheckReport | null> => {
+      const scanDeskWithPhone = async (phoneStream: MediaStream): Promise<CheckReport | null> => {
         setPrompt('휴대폰 영상을 고화질로 바꾸는 중입니다')
         set('phone', { detail: '스캔 모델을 준비하는 중 (처음 한 번은 조금 걸립니다)' })
         const { video: phoneVideo, release } = await attachHiddenVideo(phoneStream)
@@ -358,7 +341,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
             detail: bad.length ? bad.map((i) => `${i.label}: ${i.detail}`).join(' / ') : '이상 없음',
           })
         } else if (phoneLost) {
-          apply('phone', { status: 'fail', detail: '스캔 도중 휴대폰 영상이 끊겼고 60초 안에 다시 연결되지 않았습니다. 휴대폰에서 "보조 캠 시작"이 "영상 송신 중"인지 확인한 뒤 "통과하지 못한 항목만 다시"를 눌러 주세요.' })
+          apply('phone', { status: 'fail', detail: '스캔 도중 휴대폰 영상이 끊겼습니다. 연결을 확인하고 다시 점검해 주세요.' })
         } else {
           apply('phone', { status: 'warn', detail: '휴대폰 점검을 건너뛰었습니다 (감독 기록에 남습니다).' })
         }
