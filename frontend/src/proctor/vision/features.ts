@@ -52,8 +52,6 @@ function visible(l: NormalizedLandmark | undefined): l is NormalizedLandmark {
 // 포즈 랜드마크 번호
 const L_SHOULDER = 11
 const R_SHOULDER = 12
-const L_WRIST = 15
-const R_WRIST = 16
 
 export function shouldersFromPose(pose: PoseLandmarkerResult | undefined): Shoulders | null {
   const lm = pose?.landmarks?.[0]
@@ -81,12 +79,6 @@ export function handCenters(hands: HandLandmarkerResult | undefined): Point[] {
     const y = lm.reduce((a, p) => a + p.y, 0) / lm.length
     return { x, y }
   })
-}
-
-export function wristsFromPose(pose: PoseLandmarkerResult | undefined): Point[] {
-  const lm = pose?.landmarks?.[0]
-  if (!lm) return []
-  return [lm[L_WRIST], lm[R_WRIST]].filter(visible).map((p) => ({ x: p.x, y: p.y }))
 }
 
 /**
@@ -136,10 +128,6 @@ export function detectedObjects(
   return out
 }
 
-export function phoneFeatures(
-  hands: HandLandmarkerResult | undefined,
-  pose: PoseLandmarkerResult | undefined,
-  objects: DetectedObject[],
-): PhoneFeatures {
-  return { hands: handCenters(hands), wrists: wristsFromPose(pose), objects }
+export function phoneFeatures(hands: HandLandmarkerResult | undefined, objects: DetectedObject[]): PhoneFeatures {
+  return { hands: handCenters(hands), objects }
 }

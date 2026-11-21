@@ -155,32 +155,7 @@ export function placementVerdict(f: FacePlacementInput): Verdict {
   return { status: 'pass', detail: '정상' }
 }
 
-// ── 360도 스캔 ───────────────────────────────────────────
-
-/** 나침반 방향을 구간으로 나눠 실제로 한 바퀴를 다 비췄는지 확인한다 */
-export class CoverageTracker {
-  private readonly seen: boolean[]
-  readonly bins: number
-
-  constructor(bins = 12) {
-    this.bins = bins
-    this.seen = Array(bins).fill(false)
-  }
-  add(headingDeg: number) {
-    const h = ((headingDeg % 360) + 360) % 360
-    this.seen[Math.floor(h / (360 / this.bins)) % this.bins] = true
-  }
-  get covered() {
-    return this.seen.filter(Boolean).length
-  }
-  get ratio() {
-    return this.covered / this.bins
-  }
-  /** 아직 못 비춘 구간 (UI 표시용) */
-  get map() {
-    return [...this.seen]
-  }
-}
+// ── 책상 스캔 ────────────────────────────────────────────
 
 /** 축소한 흑백 프레임 두 장의 평균 차이 (0~1). 새 장면인지 판단해 키프레임을 고른다 */
 export function frameDifference(a: Uint8Array, b: Uint8Array): number {
@@ -188,21 +163,6 @@ export function frameDifference(a: Uint8Array, b: Uint8Array): number {
   let sum = 0
   for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i])
   return sum / a.length / 255
-}
-
-export const SCAN = {
-  keyframeDiff: 0.12,
-  keyframeMinGapMs: 600,
-  minKeyframes: 8,
-  minCoverage: 10,
-  /** 자이로가 없을 때 최소 스캔 시간 */
-  noGyroMinMs: 15000,
-  noGyroMinKeyframes: 10,
-}
-
-export function scanComplete(keyframes: number, coverage: number | null, elapsedMs: number): boolean {
-  if (coverage !== null) return keyframes >= SCAN.minKeyframes && coverage >= SCAN.minCoverage
-  return keyframes >= SCAN.noGyroMinKeyframes && elapsedMs >= SCAN.noGyroMinMs
 }
 
 /** 작은 물체를 놓치지 않도록: 전체 프레임 + 겹치는 2x2 타일 (원본 픽셀 좌표) */
@@ -214,92 +174,20 @@ export function tileRects(w: number, h: number, overlap = 0.15): { x: number; y:
   return rects
 }
 
-export interface ScanVerdictOptions {
-  /** (책상 위) 휴대폰으로 감지됐지만 응시자가 "휴대폰이 아니다"라고 확인함. 실패 대신 경고로 두고 감독관이 사진을 확인한다 */
-  phoneDismissed?: boolean
-}
+/** 책상 스캔에서 알려 줄 물체 (모델 라벨 → 표시 이름) */
+const DESK_LABELS: Record<string, string> = { 'cell phone': '휴대폰', book: '책', laptop: '화면(노트북)', tv: '화면(모니터)' }
 
 /**
- * 스캔 중 찾은 물체 → 점검 판정.
- * - 방 360도: 있으면 안 되는 물체(사람·휴대폰·책·화면)가 잡혀도 **막지 않고 경고만** 남긴다. 사진은 감독관이 나중에 확인하고
- *   필요하면 치우도록 안내한다. 방은 넓고 오탐이 잦아서 응시를 막는 용도로 쓰지 않는다.
- * - 책상 위: 휴대폰·책이 잡히면 실패다 (다른 사람은 보지 않는다. 응시자 본인의 손·팔이 사람으로 잡혀 오탐이 난다).
+ * 책상 스캔 결과 요약. **불통과로 막지 않는다** (감지돼도 경고(warn)만 하고 응시는 계속된다).
+ * 무엇이 몇 번 잡혔는지 응시자에게 경고로 알리고, 사진과 함께 감독관에게 전달한다. 판단은 감독관이 한다.
+ * 책상에서는 응시자 본인의 손·팔이 사람으로 잡혀 오탐이 나므로 사람은 세지 않는다.
  */
-export function scanVerdict(found: Record<string, number>, stage: 'room' | 'desk', opts: ScanVerdictOptions = {}): Verdict {
-  const parts: string[] = []
-  const person = stage === 'room' ? (found.person ?? 0) : 0
-  const phone = found['cell phone'] ?? 0
-  if (person) parts.push(`다른 사람 ${person}회`)
-  if (phone) parts.push(opts.phoneDismissed ? `휴대폰 ${phone}회 (응시자가 아니라고 확인, 감독관이 사진으로 확인)` : `휴대폰 ${phone}회`)
-  if (found.book) parts.push(`책 ${found.book}회`)
-  const screens = (found.tv ?? 0) + (found.laptop ?? 0)
-  if (stage === 'room' && screens) parts.push(`화면(모니터·노트북) ${screens}회`)
-  if (parts.length === 0) return { status: 'pass', detail: '발견된 물체 없음' }
-  if (stage === 'room') {
-    return { status: 'warn', detail: `${parts.join(', ')} 감지. 감독관이 사진을 확인하고, 필요하면 치우도록 안내합니다.` }
-  }
-  const phoneFails = phone > 0 && !opts.phoneDismissed
-  const fail = phoneFails || !!found.book
-  return {
-    status: fail ? 'fail' : 'warn',
-    detail: `${parts.join(', ')} 감지. ${fail ? '치운 뒤 다시 스캔해 주세요.' : '확인 결과가 기록에 남습니다.'}`,
-  }
-}
-
-/**
- * 방 360도 스캔의 각도별 확인.
- * 방향(자이로)을 sectors 개 구간으로 나눠, 각 구간에 holdMs 이상 머물면 그 구간의 사진을 한 번 찍는다.
- * 찍고 나면 "조금 더 돌아 주세요", 새 구간에 들어서면 "잠깐 멈춰 주세요"를 안내한다.
- * minDone 개 구간을 채우면 완료다 (벽을 향해 못 비추는 구간 등을 감안해 전부는 요구하지 않는다).
- */
-export const ANGLE_SCAN = { sectors: 12, holdMs: 350, minDone: 10 }
-
-export type AngleHint = 'hold' | 'turn-more' | 'complete'
-
-export class AngleScanTracker {
-  private readonly done: boolean[] = Array(ANGLE_SCAN.sectors).fill(false)
-  private current = -1
-  private enteredAt = 0
-
-  /** 구간 번호 → 구간 가운데 각도 (업로드에 기록) */
-  static angleOf(sector: number): number {
-    const step = 360 / ANGLE_SCAN.sectors
-    return sector * step + step / 2
-  }
-
-  /** 프레임마다 부른다. capture 가 null 이 아니면 그 구간의 사진을 지금 찍는다 */
-  update(headingDeg: number, now: number): { capture: number | null } {
-    const h = ((headingDeg % 360) + 360) % 360
-    const sector = Math.floor(h / (360 / ANGLE_SCAN.sectors)) % ANGLE_SCAN.sectors
-    if (sector !== this.current) {
-      this.current = sector
-      this.enteredAt = now
-      return { capture: null }
-    }
-    if (!this.done[sector] && now - this.enteredAt >= ANGLE_SCAN.holdMs) {
-      this.done[sector] = true
-      return { capture: sector }
-    }
-    return { capture: null }
-  }
-
-  get doneCount(): number {
-    return this.done.filter(Boolean).length
-  }
-
-  get complete(): boolean {
-    return this.doneCount >= ANGLE_SCAN.minDone
-  }
-
-  /** 구간별 완료 여부 (화면 표시용) */
-  get map(): boolean[] {
-    return [...this.done]
-  }
-
-  get hint(): AngleHint {
-    if (this.complete) return 'complete'
-    return this.current >= 0 && this.done[this.current] ? 'turn-more' : 'hold'
-  }
+export function deskDetection(found: Record<string, number>): Verdict {
+  const parts = Object.entries(DESK_LABELS)
+    .filter(([label]) => (found[label] ?? 0) > 0)
+    .map(([label, name]) => `${name} ${found[label]}회`)
+  if (parts.length === 0) return { status: 'pass', detail: '감지된 물체 없음. 사진은 감독관에게 전달됩니다.' }
+  return { status: 'warn', detail: `책상 위에서 ${parts.join(', ')}이(가) 감지되었습니다. 시험에 필요 없는 물건은 치워 주세요. 사진과 함께 감독관에게 전달됩니다 (판단은 감독관이 합니다).` }
 }
 
 /**

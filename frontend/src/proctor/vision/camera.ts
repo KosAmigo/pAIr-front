@@ -1,3 +1,5 @@
+import { nextAllowedAt } from '../core/frameBudget.ts'
+
 export async function openCamera(
   video: HTMLVideoElement,
   facingMode: 'user' | 'environment',
@@ -26,16 +28,42 @@ export async function openCamera(
   return stream
 }
 
+/** 화면에 보이지 않아도 프레임이 돌도록 문서에 붙인 숨은 video (display:none 은 멈출 수 있음). 다 쓰면 release 를 부른다 */
+export async function attachHiddenVideo(stream: MediaStream): Promise<{ video: HTMLVideoElement; release: () => void }> {
+  const video = document.createElement('video')
+  video.setAttribute('aria-hidden', 'true')
+  Object.assign(video.style, { position: 'fixed', width: '2px', height: '2px', opacity: '0', pointerEvents: 'none', left: '0', top: '0' })
+  video.muted = true
+  video.playsInline = true
+  video.srcObject = stream
+  document.body.appendChild(video)
+  const release = () => {
+    video.srcObject = null
+    video.remove()
+  }
+  try {
+    await video.play()
+  } catch (e) {
+    release()
+    throw e
+  }
+  return { video, release }
+}
+
 export function stopCamera(stream: MediaStream | null) {
   stream?.getTracks().forEach((t) => t.stop())
 }
 
+/** 사진 캔버스는 한 번 만들어 계속 쓴다 (아이폰 사파리는 새로 만든 캔버스 메모리를 제때 돌려주지 않는다) */
+let snapshotCanvas: HTMLCanvasElement | null = null
+
 /** 경고 순간의 사진 1장 (작게 줄여 JPEG) */
 export function captureSnapshot(video: HTMLVideoElement, width = 320, quality = 0.6): string | undefined {
   if (!video.videoWidth) return undefined
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = Math.round((video.videoHeight / video.videoWidth) * width)
+  const canvas = (snapshotCanvas ??= document.createElement('canvas'))
+  const height = Math.round((video.videoHeight / video.videoWidth) * width)
+  if (canvas.width !== width) canvas.width = width
+  if (canvas.height !== height) canvas.height = height
   const ctx = canvas.getContext('2d')
   if (!ctx) return undefined
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
@@ -47,9 +75,11 @@ export function captureSnapshot(video: HTMLVideoElement, width = 320, quality = 
  * requestAnimationFrame은 탭이 가려지면 멈추므로(= 다른 탭으로 가면 감독도 멈춤),
  * 가려진 동안에는 타이머로 계속 돈다 (브라우저가 느리게 줄여도 분석은 이어진다).
  */
-export function frameLoop(video: HTMLVideoElement, onFrame: (now: number) => void): () => void {
+export function frameLoop(video: HTMLVideoElement, onFrame: (now: number) => void, opts: { minIntervalMs?: number } = {}): () => void {
   let stopped = false
   let lastTime = -1
+  let allowedAt = 0
+  const minIntervalMs = opts.minIntervalMs ?? 0
   // rAF와 타이머 중 먼저 오는 쪽이 한 번만 실행 (rAF를 걸어 둔 채 탭이 가려져도 타이머가 이어 받는다)
   let pending = false
   const run = () => {
@@ -69,9 +99,11 @@ export function frameLoop(video: HTMLVideoElement, onFrame: (now: number) => voi
   }
   const tick = () => {
     if (stopped) return
-    if (video.readyState >= 2 && video.currentTime !== lastTime) {
+    const started = performance.now()
+    if (video.readyState >= 2 && video.currentTime !== lastTime && started >= allowedAt) {
       lastTime = video.currentTime
-      onFrame(performance.now())
+      onFrame(started)
+      if (minIntervalMs > 0) allowedAt = nextAllowedAt(started, performance.now() - started, minIntervalMs)
     }
     schedule()
   }

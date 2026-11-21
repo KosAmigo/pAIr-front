@@ -24,8 +24,24 @@ function getFileset() {
   return fileset
 }
 
+/**
+ * 아이폰 사파리는 GPU delegate 로 모델을 여러 번 돌리면 WebGL 메모리가 쌓여 탭이 메모리 부족으로 죽는다
+ * ("이 페이지에 문제가 반복적으로 발생했습니다"). 아이폰은 CPU 로 시작한다.
+ * 주소 끝에 &delegate=gpu 또는 &delegate=cpu 를 붙이면 기기와 상관없이 그 쪽으로 고정한다 (비교 시험용).
+ */
+function forcedDelegate(): 'GPU' | 'CPU' | null {
+  const choice = new URLSearchParams(location.search).get('delegate')
+  if (choice === 'gpu') return 'GPU'
+  if (choice === 'cpu') return 'CPU'
+  const ua = navigator.userAgent
+  const isIos = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+  return isIos ? 'CPU' : null
+}
+
 /** GPU로 먼저 시도하고, 안 되는 기기(일부 폰)는 CPU로 */
 async function withDelegate<T>(create: (delegate: 'GPU' | 'CPU') => Promise<T>): Promise<T> {
+  const forced = forcedDelegate()
+  if (forced) return create(forced)
   try {
     return await create('GPU')
   } catch (e) {
@@ -82,16 +98,29 @@ export async function createObjectDetector() {
   )
 }
 
-/** 환경 점검 스캔용: 사람까지 찾고, 타일로 잘라 정지 이미지 단위로 돌린다 */
-export async function createScanDetector() {
-  const fs = await getFileset()
-  return withDelegate((delegate) =>
-    ObjectDetector.createFromOptions(fs, {
-      baseOptions: { modelAssetPath: URLS.object, delegate },
-      runningMode: 'IMAGE',
-      scoreThreshold: 0.4,
-      maxResults: 10,
-      categoryAllowlist: ['person', ...OBJECT_LABELS],
-    }),
-  )
+let scanDetector: Promise<ObjectDetector> | null = null
+
+/**
+ * 환경 점검 스캔용: 사람까지 찾고, 타일로 잘라 정지 이미지 단위로 돌린다.
+ * 다시 점검할 때마다 모델을 새로 받지 않도록 한 번 만든 감지기를 재사용한다 (닫지 않는다).
+ * 만들기에 실패하면 다음 호출에서 다시 시도할 수 있게 비워 둔다.
+ */
+export function createScanDetector(): Promise<ObjectDetector> {
+  scanDetector ??= getFileset()
+    .then((fs) =>
+      withDelegate((delegate) =>
+        ObjectDetector.createFromOptions(fs, {
+          baseOptions: { modelAssetPath: URLS.object, delegate },
+          runningMode: 'IMAGE',
+          scoreThreshold: 0.4,
+          maxResults: 10,
+          categoryAllowlist: ['person', ...OBJECT_LABELS],
+        }),
+      ),
+    )
+    .catch((e) => {
+      scanDetector = null
+      throw e
+    })
+  return scanDetector
 }

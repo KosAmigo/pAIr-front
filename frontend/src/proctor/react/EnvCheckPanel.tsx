@@ -1,4 +1,4 @@
-// 시험 전 환경 점검 (PC): 장치·모니터·조명·자세·귀·손목 → 휴대폰 방·책상 스캔.
+// 시험 전 환경 점검 (PC): 장치·모니터·조명·자세·귀·손목 → 휴대폰 영상으로 조명·책상 스캔 (분석은 PC 가 한다).
 // 통과하면 결과 JSON(휴대폰 결과 포함)을 onPassed 로 넘긴다. 호출하는 쪽이 동의 API 로 저장한다.
 import { useEffect, useRef, useState } from 'react'
 import type { FaceLandmarkerResult, HandLandmarkerResult, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
@@ -23,12 +23,13 @@ import {
 import { audioProbe, grabPixels, isAutomated, isChromium, screenInfo, webglRenderer } from '../check/probes.ts'
 import type { Box } from '../core/phoneRules.ts'
 import type { ScanStage } from '../relay/protocol.ts'
-import { captureSnapshot, frameLoop } from '../vision/camera.ts'
+import { attachHiddenVideo, captureSnapshot, frameLoop } from '../vision/camera.ts'
 import { headPoseFromMatrix, shouldersFromPose } from '../vision/features.ts'
 import { CamPreview } from './CamPreview.tsx'
 import { CheckList } from './CheckList.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
 import { useCamHub } from './useCamHub.ts'
+import { runDeskScan, waitForScanResolution } from '../check/deskScan.ts'
 import { CAN_SKIP_CHECKS, clearChecksSkipped, markChecksSkipped } from '../testSkip.ts'
 
 export type EnvCheckResult = { pc: CheckReport; phone: CheckReport | null }
@@ -43,7 +44,7 @@ const INITIAL: CheckItem[] = [
   { id: 'placement', label: '얼굴 위치 · 혼자 있는지', status: 'pending', detail: '' },
   { id: 'ears', label: '양쪽 귀 (이어폰 착용 여부)', status: 'pending', detail: '' },
   { id: 'wrist', label: '양 손목 (스마트워치 · 손에 쓴 글씨)', status: 'pending', detail: '' },
-  { id: 'phone', label: '휴대폰 캠: 방 360도 · 책상 위 스캔', status: 'pending', detail: '' },
+  { id: 'phone', label: '휴대폰 캠: 조명·책상 위 스캔', status: 'pending', detail: '' },
 ]
 
 const HOLD_MS = 1500
@@ -76,19 +77,31 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
   const [result, setResult] = useState<EnvCheckResult | null>(null)
   const [run, setRun] = useState(0)
   const [skipPhone, setSkipPhone] = useState(false)
+  /** 휴대폰으로 감지된 장면: 응시자가 맞는지 확인할 때까지 스캔이 기다린다 */
+  const [found, setFound] = useState<string[]>([])
 
   // 진행 중인 비동기 작업이 최신 허브 상태(폰 결과·사진)를 읽기 위한 ref
   const live = useRef(hub)
   const skipPhoneRef = useRef(skipPhone)
+  // 다시 점검할 때 통과한 항목을 건너뛰기 위해 직전 점검 상태를 들고 있는다
+  const itemsRef = useRef(items)
+  const phoneReportRef = useRef<CheckReport | null>(null)
+  const fullRerunRef = useRef(false)
   useEffect(() => {
     live.current = hub
     skipPhoneRef.current = skipPhone
+    itemsRef.current = items
   })
 
   useEffect(() => {
     let cancelled = false
     let stopLoop: (() => void) | null = null
-    let current = INITIAL.map((i) => ({ ...i }))
+    // 통과한 항목은 그대로 두고 나머지(실패·주의·미완료)만 다시 한다. 처음이거나 "처음부터"를 눌렀으면 전부 한다
+    const keep = new Set(fullRerunRef.current ? [] : itemsRef.current.filter((i) => i.status === 'pass').map((i) => i.id))
+    fullRerunRef.current = false
+    if (keep.size === 0) phoneReportRef.current = null
+    const todo = (id: string) => !keep.has(id)
+    let current = INITIAL.map((i) => (keep.has(i.id) ? { ...(itemsRef.current.find((p) => p.id === i.id) ?? i) } : { ...i }))
     const set = (id: string, patch: Partial<CheckItem>) => {
       // 매 프레임 같은 문구로 다시 그리지 않는다 (화면 갱신 폭주 방지)
       const prev = current.find((i) => i.id === id)
@@ -101,7 +114,11 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
     async function main() {
       setItems(current)
       setResult(null)
-      camHub.resetCheck()
+      const redoStages: ScanStage[] = []
+      if (todo('ears')) redoStages.push('ear-left', 'ear-right')
+      if (todo('wrist')) redoStages.push('wrist')
+      if (todo('phone')) redoStages.push('desk')
+      camHub.resetCheck(redoStages)
       setPrompt('카메라와 분석 모델을 준비하는 중입니다 (처음 한 번은 조금 걸립니다)')
       try {
         await camHub.openCamera()
@@ -175,101 +192,161 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
         ).then((ok) => (ok ? turned : 0))
       }
 
+      /** 휴대폰 영상을 고화질로 바꿔 받아 조명·책상을 스캔한다. 끝나면 화질을 되돌리고 스캔 모델을 닫는다. 건너뛰기를 누르면 null */
+      let phoneLost = false
+      const scanStopped = (phoneStream: MediaStream) => {
+        // 스캔 도중 휴대폰 영상이 끊기거나 다른 영상으로 바뀌면 프레임이 멈춰 스캔이 끝나지 않는다
+        if (live.current.phoneStream !== phoneStream) phoneLost = true
+        return cancelled || skipPhoneRef.current || phoneLost
+      }
+      const scanDeskWithPhone = async (phoneStream: MediaStream): Promise<CheckReport | null> => {
+        setPrompt('휴대폰 영상을 고화질로 바꾸는 중입니다')
+        set('phone', { detail: '스캔 모델을 준비하는 중 (처음 한 번은 조금 걸립니다)' })
+        const { video: phoneVideo, release } = await attachHiddenVideo(phoneStream)
+        try {
+          camHub.setPhoneQuality('scan')
+          const models = await import('../vision/models.ts')
+          const detector = await models.createScanDetector()
+          await waitForScanResolution(phoneVideo, () => scanStopped(phoneStream))
+          if (scanStopped(phoneStream)) return null
+          const report = await runDeskScan({
+            video: phoneVideo,
+            detector,
+            onItems: (items) => {
+              const worst = items.find((i) => i.status === 'running') ?? items[items.length - 1]
+              set('phone', { status: 'running', detail: `${worst.label}: ${worst.detail || '확인 중'}` })
+            },
+            onPrompt: setPrompt,
+            onFound: setFound,
+            onFrame: (_stage, image, objects) => camHub.recordDeskPhoto(image, objects),
+            onTorch: (on) => camHub.setPhoneTorch(on),
+            isCancelled: () => scanStopped(phoneStream),
+          })
+          return scanStopped(phoneStream) ? null : report
+        } finally {
+          camHub.setPhoneQuality('watch')
+          release()
+          setFound([])
+        }
+      }
+
       // 1) 브라우저·장치 (즉시)
       setPrompt('')
-      if (isAutomated()) apply('browser', { status: 'fail', detail: '자동화 도구로 제어되는 브라우저입니다.' })
-      else apply('browser', isChromium() ? { status: 'pass', detail: 'Chromium 계열' } : { status: 'warn', detail: 'Chrome·Edge 를 권장합니다 (모니터 확인 기능).' })
-      apply('graphics', rendererVerdict(webglRenderer()))
-      set('screens', { status: 'running', detail: '확인 중 (권한 창이 뜨면 허용해 주세요)' })
-      const sc = await screenInfo()
-      apply('screens', screensVerdict(sc.count, sc.isExtended))
-      apply('camera', cameraVerdict(stream.getVideoTracks()[0]?.label ?? ''))
-      set('audio', { status: 'running', detail: '마이크로 2초간 확인 중 (조용히 해 주세요)' })
-      const audio = await audioProbe()
-      const av = audioVerdict(audio.labels)
-      const noisy = audio.noiseDb !== null && audio.noiseDb > -35
-      const noise = audio.noiseDb === null ? '' : ` · 소음 ${audio.noiseDb.toFixed(0)} dBFS${noisy ? ' (시끄러움)' : ''}`
-      apply('audio', { status: av.status === 'pass' && noisy ? 'warn' : av.status, detail: av.detail + noise })
+      if (todo('browser')) {
+        if (isAutomated()) apply('browser', { status: 'fail', detail: '자동화 도구로 제어되는 브라우저입니다.' })
+        else apply('browser', isChromium() ? { status: 'pass', detail: 'Chromium 계열' } : { status: 'warn', detail: 'Chrome·Edge 를 권장합니다 (모니터 확인 기능).' })
+      }
+      if (todo('graphics')) apply('graphics', rendererVerdict(webglRenderer()))
+      if (todo('screens')) {
+        set('screens', { status: 'running', detail: '확인 중 (권한 창이 뜨면 허용해 주세요)' })
+        const sc = await screenInfo()
+        apply('screens', screensVerdict(sc.count, sc.isExtended))
+      }
+      if (todo('camera')) apply('camera', cameraVerdict(stream.getVideoTracks()[0]?.label ?? ''))
+      if (todo('audio')) {
+        set('audio', { status: 'running', detail: '마이크로 2초간 확인 중 (조용히 해 주세요)' })
+        const audio = await audioProbe()
+        const av = audioVerdict(audio.labels)
+        const noisy = audio.noiseDb !== null && audio.noiseDb > -35
+        const noise = audio.noiseDb === null ? '' : ` · 소음 ${audio.noiseDb.toFixed(0)} dBFS${noisy ? ' (시끄러움)' : ''}`
+        apply('audio', { status: av.status === 'pass' && noisy ? 'warn' : av.status, detail: av.detail + noise })
+      }
       if (cancelled) return
 
-      // 2) 조명·자세: 좋은 상태가 1.5초 이어지면 통과
-      set('lighting', { status: 'running' })
-      set('placement', { status: 'running' })
-      setPrompt('화면을 정면으로 보고 바르게 앉아 주세요')
-      let goodSince: number | null = null
-      let lastLight: Verdict = { status: 'fail', detail: '' }
-      let lastPlace: Verdict = { status: 'fail', detail: '' }
-      await waitFrames((f, now) => {
-        const px = grabPixels(video)
-        if (!px) return false
-        lastLight = lightingVerdict(lumaStats(px.data, px.width, px.height), f.box ? lumaStats(px.data, px.width, px.height, f.box) : undefined)
-        lastPlace = placementVerdict({ faceCount: f.faceCount, box: f.box, shouldersVisible: f.shouldersVisible })
-        set('lighting', { detail: lastLight.detail })
-        set('placement', { detail: lastPlace.detail })
-        if (lastLight.status === 'fail' || lastPlace.status === 'fail') {
-          goodSince = null
-          return false
-        }
-        goodSince ??= now
-        return now - goodSince >= HOLD_MS
-      })
-      apply('lighting', lastLight)
-      apply('placement', lastPlace)
+      // 2) 조명·자세: 좋은 상태가 1.5초 이어지면 통과 (둘 중 통과하지 못한 것만 다시 본다)
+      const needLight = todo('lighting')
+      const needPlace = todo('placement')
+      if (needLight || needPlace) {
+        if (needLight) set('lighting', { status: 'running' })
+        if (needPlace) set('placement', { status: 'running' })
+        setPrompt('화면을 정면으로 보고 바르게 앉아 주세요')
+        let goodSince: number | null = null
+        let lastLight: Verdict = { status: 'fail', detail: '' }
+        let lastPlace: Verdict = { status: 'fail', detail: '' }
+        await waitFrames((f, now) => {
+          const px = grabPixels(video)
+          if (!px) return false
+          lastLight = lightingVerdict(lumaStats(px.data, px.width, px.height), f.box ? lumaStats(px.data, px.width, px.height, f.box) : undefined)
+          lastPlace = placementVerdict({ faceCount: f.faceCount, box: f.box, shouldersVisible: f.shouldersVisible })
+          if (needLight) set('lighting', { detail: lastLight.detail })
+          if (needPlace) set('placement', { detail: lastPlace.detail })
+          if ((needLight && lastLight.status === 'fail') || (needPlace && lastPlace.status === 'fail')) {
+            goodSince = null
+            return false
+          }
+          goodSince ??= now
+          return now - goodSince >= HOLD_MS
+        })
+        if (needLight) apply('lighting', lastLight)
+        if (needPlace) apply('placement', lastPlace)
+      }
       if (cancelled) return
 
       // 3) 귀: 한쪽 → 반대쪽으로 고개를 돌린 순간을 찍는다
-      set('ears', { status: 'running' })
-      setPrompt('고개를 천천히 왼쪽(또는 오른쪽)으로 끝까지 돌려 귀를 보여 주세요')
-      const first = await waitHeadTurn(0)
-      if (first) snap('ear-left')
-      setPrompt('이번에는 반대쪽으로 끝까지 돌려 주세요')
-      const second = first ? await waitHeadTurn(first) : 0
-      if (second) snap('ear-right')
-      apply('ears', second ? { status: 'pass', detail: '양쪽 귀 사진 확보 (감독 기록에 남습니다)' } : { status: 'warn', detail: '귀를 충분히 보여 주지 않았습니다.' })
+      if (todo('ears')) {
+        set('ears', { status: 'running' })
+        setPrompt('고개를 천천히 왼쪽(또는 오른쪽)으로 끝까지 돌려 귀를 보여 주세요')
+        const first = await waitHeadTurn(0)
+        if (first) snap('ear-left')
+        setPrompt('이번에는 반대쪽으로 끝까지 돌려 주세요')
+        const second = first ? await waitHeadTurn(first) : 0
+        if (second) snap('ear-right')
+        apply('ears', second ? { status: 'pass', detail: '양쪽 귀 사진 확보 (감독 기록에 남습니다)' } : { status: 'warn', detail: '귀를 충분히 보여 주지 않았습니다.' })
+      }
       if (cancelled) return
 
       // 4) 손목: 두 손을 1초 보여 주기
-      set('wrist', { status: 'running' })
-      setPrompt('양 손목과 손바닥을 카메라 앞에 1초간 보여 주세요 (소매를 걷어 주세요)')
-      let handsSince: number | null = null
-      const wristOk = await waitFrames(
-        (f, now) => {
-          if (f.handCount < 2) {
-            handsSince = null
-            return false
-          }
-          handsSince ??= now
-          return now - handsSince > 1000
-        },
-        POSE_TIMEOUT_MS,
-        { hand: true },
-      )
-      if (wristOk) snap('wrist')
-      apply('wrist', wristOk ? { status: 'pass', detail: '손목 사진 확보 (감독 기록에 남습니다)' } : { status: 'warn', detail: '두 손이 함께 보이지 않았습니다.' })
-      if (cancelled) return
-
-      // 5) 휴대폰 스캔 결과 기다리기
-      setPrompt('휴대폰 화면의 안내에 따라 방과 책상을 스캔해 주세요')
-      set('phone', { status: 'running', detail: '휴대폰에서 점검을 진행해 주세요' })
-      while (!cancelled && !live.current.phoneReport && !skipPhoneRef.current) {
-        set('phone', { detail: live.current.phone === 'connected' ? '휴대폰에서 스캔 진행 중' : '휴대폰이 연결되지 않았습니다. 오른쪽 QR 로 연결해 주세요.' })
-        await new Promise((r) => setTimeout(r, 300))
+      if (todo('wrist')) {
+        set('wrist', { status: 'running' })
+        setPrompt('양 손목과 손바닥을 카메라 앞에 1초간 보여 주세요 (소매를 걷어 주세요)')
+        let handsSince: number | null = null
+        const wristOk = await waitFrames(
+          (f, now) => {
+            if (f.handCount < 2) {
+              handsSince = null
+              return false
+            }
+            handsSince ??= now
+            return now - handsSince > 1000
+          },
+          POSE_TIMEOUT_MS,
+          { hand: true },
+        )
+        if (wristOk) snap('wrist')
+        apply('wrist', wristOk ? { status: 'pass', detail: '손목 사진 확보 (감독 기록에 남습니다)' } : { status: 'warn', detail: '두 손이 함께 보이지 않았습니다.' })
       }
       if (cancelled) return
-      const pr = live.current.phoneReport
-      if (pr) {
-        const bad = pr.items.filter((i) => i.status === 'fail' || i.status === 'warn')
-        set('phone', {
-          status: pr.passed ? (bad.length ? 'warn' : 'pass') : 'fail',
-          detail: bad.length ? bad.map((i) => `${i.label}: ${i.detail}`).join(' / ') : '이상 없음',
-        })
-      } else {
-        apply('phone', { status: 'warn', detail: '휴대폰 점검을 건너뛰었습니다 (감독 기록에 남습니다).' })
+
+      // 5) 휴대폰 영상으로 조명·책상 스캔 (휴대폰이 연결돼 영상이 올 때까지 기다린다)
+      if (todo('phone')) {
+        setPrompt('휴대폰을 연결해 주세요. 연결되면 이 화면의 안내에 따라 책상을 스캔합니다')
+        set('phone', { status: 'running', detail: '휴대폰 연결을 기다리는 중' })
+        while (!cancelled && !live.current.phoneStream && !skipPhoneRef.current) {
+          set('phone', { detail: live.current.phone === 'connected' ? '휴대폰 영상을 받는 중' : '휴대폰이 연결되지 않았습니다. 오른쪽 QR 로 연결해 주세요.' })
+          await new Promise((r) => setTimeout(r, 300))
+        }
+        if (cancelled) return
+        const phoneStream = live.current.phoneStream
+        let phoneReport: CheckReport | null = null
+        if (phoneStream && !skipPhoneRef.current) phoneReport = await scanDeskWithPhone(phoneStream)
+        if (cancelled) return
+        phoneReportRef.current = phoneReport
+        if (phoneReport) {
+          const bad = phoneReport.items.filter((i) => i.status === 'fail' || i.status === 'warn')
+          set('phone', {
+            status: phoneReport.passed ? (bad.length ? 'warn' : 'pass') : 'fail',
+            detail: bad.length ? bad.map((i) => `${i.label}: ${i.detail}`).join(' / ') : '이상 없음',
+          })
+        } else if (phoneLost) {
+          apply('phone', { status: 'fail', detail: '스캔 도중 휴대폰 영상이 끊겼습니다. 연결을 확인하고 다시 점검해 주세요.' })
+        } else {
+          apply('phone', { status: 'warn', detail: '휴대폰 점검을 건너뛰었습니다 (감독 기록에 남습니다).' })
+        }
       }
 
       setPrompt('')
       if (cancelled) return
-      setResult({ pc: makeReport(current), phone: live.current.phoneReport })
+      setResult({ pc: makeReport(current), phone: phoneReportRef.current })
     }
 
     void main()
@@ -286,6 +363,13 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
     const skipped = items.map((i) => ({ ...i, status: 'pass' as const, detail: '테스트용으로 건너뜀' }))
     markChecksSkipped()
     onPassed({ pc: makeReport(skipped), phone: null })
+  }
+  /** 통과(pass)가 아닌 항목 수. 실패·주의·미완료 모두 다시 본다 */
+  const redoCount = items.filter((i) => i.status !== 'pass').length
+  const rerun = (all: boolean) => {
+    fullRerunRef.current = all
+    setSkipPhone(false)
+    setRun((n) => n + 1)
   }
   const phoneRunning = items.find((i) => i.id === 'phone')?.status === 'running'
 
@@ -305,6 +389,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
             </Button>
           </div>
         )}
+        {found.length > 0 && !result && <p className="text-[13px] text-text-muted">방금 찾은 것: {found.join(', ')}</p>}
         <CheckList items={items} />
         {canSkipChecks && (
           <div className="flex items-center gap-3 rounded-lg border border-dashed border-line-strong px-3 py-2">
@@ -338,16 +423,13 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
                 통과하지 못한 항목이 있습니다. 조치한 뒤 다시 점검해 주세요.
               </p>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className={passed ? undefined : 'ml-auto'}
-              onClick={() => {
-                setSkipPhone(false)
-                setRun((n) => n + 1)
-              }}
-            >
-              <RefreshCw size={16} aria-hidden /> 다시 점검
+            {redoCount > 0 && (
+              <Button variant="ghost" size="sm" className={passed ? undefined : 'ml-auto'} onClick={() => rerun(false)}>
+                <RefreshCw size={16} aria-hidden /> 통과하지 못한 항목만 다시 ({redoCount})
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" className={passed || redoCount > 0 ? undefined : 'ml-auto'} onClick={() => rerun(true)}>
+              <RefreshCw size={16} aria-hidden /> 처음부터 다시
             </Button>
           </div>
         )}
