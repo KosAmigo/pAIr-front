@@ -23,7 +23,7 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
   const { pathname } = useLocation()
   const { user } = useAuth()
   return (
-    <div className="relative isolate flex h-full flex-col">
+    <div className="relative isolate flex h-full flex-col overflow-hidden">
       <Aurora variant="band" className="h-[360px]" />
       <header className="glass relative z-20 flex h-14 shrink-0 items-stretch rounded-none border-0 border-b border-line/70 px-8 shadow-none">
         <div className="flex items-center gap-3">

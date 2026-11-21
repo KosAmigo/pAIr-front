@@ -4,6 +4,7 @@ import { GitBranch, Loader2, Play } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ButtonLink } from '../components/ui'
 import { ErrorState } from '../components/ErrorState'
+import { CompareTranscripts } from '../components/replay/CompareTranscripts'
 import { CodeCompare } from '../components/replay/CodeCompare'
 import { BranchStage } from '../components/review/BranchStage'
 import { DotPopover, type Anchor } from '../components/review/DotPopover'
@@ -38,6 +39,7 @@ export default function Review() {
   const [trees, setTrees] = useState<{ key: string; nodes: TreeNode[] | null; error: string | null } | null>(null)
   const [treeTick, setTreeTick] = useState(0)
   const [slot, setSlot] = useState<Slot>('a')
+  const [transcriptOpen, setTranscriptOpen] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const [dot, setDot] = useState<{ lane: TreeLane; cp: Checkpoint; anchor: Anchor } | null>(null)
   const [cps, setCps] = useState<{ key: string; data: Record<string, Checkpoint[]> } | null>(null)
@@ -159,9 +161,10 @@ export default function Review() {
           (laneA && laneB ? (
             <>
               <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.05fr_1fr]">
-                <Verdict a={laneA} b={laneB} state={compare} fallbackFork={divergeTurn(lanes, laneA.attemptId, laneB.attemptId)} />
+                <Verdict a={laneA} b={laneB} state={compare} fallbackFork={divergeTurn(lanes, laneA.attemptId, laneB.attemptId)} transcriptOpen={transcriptOpen} onToggleTranscript={() => setTranscriptOpen((o) => !o)} />
                 <ScoreStairs a={laneA} b={laneB} state={compare} />
               </div>
+              {transcriptOpen && <CompareTranscripts key={`${laneA.attemptId}-${laneB.attemptId}`} a={laneA} b={laneB} />}
               <div className="rounded-2xl border border-line bg-panel px-5 pb-5 shadow-sm [&>section]:mt-0 [&>section]:border-t-0">
                 <CodeCompare aId={laneA.attemptId} bId={laneB.attemptId} />
               </div>

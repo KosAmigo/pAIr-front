@@ -1,10 +1,8 @@
-import { useState } from 'react'
 import { Loader2, Rows2 } from 'lucide-react'
 import { CountUp } from '../fx'
 import { Button } from '../ui'
 import { ErrorState } from '../ErrorState'
 import { cx } from '../cx'
-import { CompareTranscripts } from '../replay/CompareTranscripts'
 import { STATS } from '../../data/dashboard'
 import { biggestMover, itemChanges } from '../../lib/scoreSteps'
 import type { TreeLane } from '../../lib/reviewTree'
@@ -32,8 +30,7 @@ function Pill({ slot, lane }: { slot: 'a' | 'b'; lane: TreeLane }) {
 }
 
 /** 결론 카드 (DESIGN.md §7-5): 큰 차이 숫자, 한 줄 결론, A·B 알약, 항목별 차이 막대, 갈라진 순간 */
-export function Verdict({ a, b, state, fallbackFork }: { a: TreeLane & { score: NonNullable<TreeLane['score']> }; b: TreeLane & { score: NonNullable<TreeLane['score']> }; state: CompareState; fallbackFork: number | null }) {
-  const [open, setOpen] = useState(false)
+export function Verdict({ a, b, state, fallbackFork, transcriptOpen, onToggleTranscript }: { a: TreeLane & { score: NonNullable<TreeLane['score']> }; b: TreeLane & { score: NonNullable<TreeLane['score']> }; state: CompareState; fallbackFork: number | null; transcriptOpen: boolean; onToggleTranscript: () => void }) {
   const delta = Math.round((b.score.total - a.score.total) * 10) / 10
   const changes = state.status === 'ready' ? itemChanges(state.compare.items) : []
   const mover = state.status === 'ready' ? biggestMover(changes, delta) : null
@@ -116,10 +113,9 @@ export function Verdict({ a, b, state, fallbackFork }: { a: TreeLane & { score: 
                 )
               })}
             </div>
-            <Button size="sm" variant="secondary" className="mt-3" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-              <Rows2 size={15} aria-hidden /> {open ? '대화 접기' : '전체 대화 나란히 보기'}
+            <Button size="sm" variant="secondary" className="mt-3" aria-expanded={transcriptOpen} onClick={onToggleTranscript}>
+              <Rows2 size={15} aria-hidden /> {transcriptOpen ? '대화 접기' : '전체 대화 나란히 보기'}
             </Button>
-            {open && <CompareTranscripts key={`${a.attemptId}-${b.attemptId}`} a={a} b={b} className="mt-3" />}
           </div>
         </>
       )}
