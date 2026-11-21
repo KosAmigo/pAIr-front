@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bot, ChevronDown, ChevronRight, CircleHelp, FileText, Folder, Hammer, Loader2, Lock, Play, Save, X } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, CircleHelp, FileText, Folder, Hammer, Loader2, Lock, Paperclip, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
 import { SendKey } from '../components/SendKey'
 import { cx } from '../components/cx'
@@ -9,7 +9,12 @@ import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { QuestionPanel } from '../components/questions/QuestionPanel'
 import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
-import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
+import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Material, type Task, type Turn } from '../api'
+import { AttemptPdf } from '../components/AttemptPdf'
+import {
+  ATTACH_CREDIT, ATTACH_MIME, MAX_ATTACH, addAttachment, attachCost, attachLabel, decodeDrop, defaultPages, encodeDrag, removeAttachment,
+  sendable, setPages, validPages, type AttachRef,
+} from '../lib/chatAttach'
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
 import { splitReply } from '../lib/edits'
 import { useAntiCheating, ViolationCounter, WarningModal } from '../anti-cheating'
@@ -108,7 +113,25 @@ function buildTree(paths: string[]): TreeNode[] {
   return sort(root.children!)
 }
 
-function PathTree({ nodes, depth = 0, active, onOpen }: { nodes: TreeNode[]; depth?: number; active: string; onOpen: (p: string) => void }) {
+/** 파일 트리의 파일 하나를 채팅 첨부로 바꾼다. PDF 자료는 기본으로 전체(최대 20쪽)를 붙인다 */
+type AttachFor = (path: string) => AttachRef
+
+function PathTree({
+  nodes,
+  depth = 0,
+  active,
+  onOpen,
+  attachFor,
+  onAttach,
+}: {
+  nodes: TreeNode[]
+  depth?: number
+  active: string
+  onOpen: (p: string) => void
+  /** 있으면 파일 행을 채팅창으로 끌어 첨부할 수 있다(끌기를 못 쓰는 사용자를 위해 행마다 첨부 버튼도 둔다) */
+  attachFor?: AttachFor
+  onAttach?: (r: AttachRef) => void
+}) {
   const [closed, setClosed] = useState<Record<string, boolean>>({})
   return (
     <ul>
@@ -126,15 +149,21 @@ function PathTree({ nodes, depth = 0, active, onOpen }: { nodes: TreeNode[]; dep
               <Folder size={16} strokeWidth={1.75} aria-hidden />
               <span className="font-mono">{n.name}</span>
             </button>
-            {!closed[n.path] && <PathTree nodes={n.children} depth={depth + 1} active={active} onOpen={onOpen} />}
+            {!closed[n.path] && <PathTree nodes={n.children} depth={depth + 1} active={active} onOpen={onOpen} attachFor={attachFor} onAttach={onAttach} />}
           </li>
         ) : (
-          <li key={n.path}>
+          <li key={n.path} className="group relative">
             <button
               type="button"
               onClick={() => onOpen(n.path)}
+              draggable={Boolean(attachFor)}
+              onDragStart={(e) => {
+                if (!attachFor) return
+                e.dataTransfer.setData(ATTACH_MIME, encodeDrag(attachFor(n.path)))
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
               className={cx(
-                'relative flex h-7 w-full items-center gap-1.5 pr-2 text-[14px]',
+                'relative flex h-7 w-full items-center gap-1.5 pr-8 text-[14px]',
                 active === n.path ? 'bg-panel-raised text-text' : 'text-text-muted hover:bg-panel-raised hover:text-text',
               )}
               style={{ paddingLeft: 22 + depth * 14 }}
@@ -143,6 +172,17 @@ function PathTree({ nodes, depth = 0, active, onOpen }: { nodes: TreeNode[]; dep
               <FileText size={16} strokeWidth={1.75} aria-hidden />
               <span className="truncate font-mono">{n.name}</span>
             </button>
+            {attachFor && onAttach && (
+              <button
+                type="button"
+                aria-label={`${n.name} 채팅에 첨부`}
+                title="채팅에 첨부 (또는 채팅창으로 끌어 놓기)"
+                onClick={() => onAttach(attachFor(n.path))}
+                className="absolute top-1/2 right-1 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-text-faint opacity-0 hover:bg-panel hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
+              >
+                <Paperclip size={14} aria-hidden />
+              </button>
+            )}
           </li>
         ),
       )}
@@ -163,6 +203,12 @@ function ChatPanel({
   editBusy,
   onEdit,
   onViewEdit,
+  attachments,
+  materialPages,
+  showCost,
+  onAttach,
+  onDetach,
+  onPages,
 }: {
   turns: Turn[]
   /** 보내는 중인 질문과 지금까지 받은 답변 글자 */
@@ -176,8 +222,19 @@ function ChatPanel({
   editBusy: boolean
   onEdit: (turn: number, e: EditProposal, a: EditAction) => void
   onViewEdit: (turn: number, e: EditProposal) => void
+  /** 이번 질문에 붙이려고 끌어다 놓은 파일 */
+  attachments: AttachRef[]
+  /** PDF 자료의 전체 쪽 수(칩에 "/N쪽"으로 보여 준다) */
+  materialPages: Record<string, number>
+  /** 첨부가 크레딧을 더 쓰는지(자가진단만) */
+  showCost: boolean
+  /** 첨부를 더한다. 못 붙이는 이유가 있으면 안내 문구를 돌려준다 */
+  onAttach: (r: AttachRef) => string | null
+  onDetach: (r: AttachRef) => void
+  onPages: (path: string, pages: string) => void
 }) {
   const [draft, setDraft] = useState('')
+  const [dragging, setDragging] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const count = draft.length
   const over = count > maxChars
@@ -202,14 +259,38 @@ function ChatPanel({
   }, [turns.length, busy, streaming?.answer.length])
   const send = async () => {
     const text = draft.trim()
-    if (!text || busy || disabled || over) return
+    if (!text || busy || disabled || over || !sendable(attachments)) return
     stick.current = true
     setDraft('') // 보낸 질문은 대화창으로 옮기고, 실패하면 입력창에 되돌린다
     if (!(await onSend(text))) setDraft(text)
   }
   const nextTurn = turns.length + 1
   return (
-    <section className={cx('flex h-full min-h-0 flex-col border-l border-line bg-panel', disabled && 'opacity-50')}>
+    <section
+      className={cx('relative flex h-full min-h-0 flex-col border-l border-line bg-panel', disabled && 'opacity-50')}
+      onDragOver={(e) => {
+        // 파일 트리에서 끌어온 것만 받는다(외부 파일은 무시)
+        if (disabled || !e.dataTransfer.types.includes(ATTACH_MIME)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+        setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+      }}
+      onDrop={(e) => {
+        if (disabled || !e.dataTransfer.types.includes(ATTACH_MIME)) return
+        e.preventDefault()
+        setDragging(false)
+        const ref = decodeDrop(e.dataTransfer.getData(ATTACH_MIME))
+        if (ref) setNotice(onAttach(ref))
+      }}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-brand bg-brand-dim text-[15px] font-semibold text-text">
+          <Paperclip size={18} className="mr-2" aria-hidden /> 여기에 놓으면 질문에 첨부됩니다 ({attachments.length}/{MAX_ATTACH})
+        </div>
+      )}
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-4">
         <Bot size={18} strokeWidth={1.75} className="text-info" aria-hidden />
         <span className="label">AI ASSISTANT</span>
@@ -225,7 +306,7 @@ function ChatPanel({
         aria-live="polite"
       >
         {turns.length === 0 && !busy && (
-          <li className="text-[14px] leading-6 text-text-muted">AI는 이 대화창에 붙여 넣은 내용만 볼 수 있습니다. 필요한 코드, 로그, 자료를 함께 전달하세요.</li>
+          <li className="text-[14px] leading-6 text-text-muted">AI는 이 대화창에 붙여 넣거나, 파일 탐색기에서 끌어다 놓은 파일의 내용만 볼 수 있습니다. 필요한 코드, 로그, 자료를 함께 전달하세요.</li>
         )}
         {turns.map((m) =>
           m.role === 'user' ? (
@@ -235,6 +316,16 @@ function ChatPanel({
                 <span>{m.time}</span>
               </span>
               <p className="rounded-md bg-panel-raised px-3 py-2 text-[15px] leading-6 whitespace-pre-wrap">{m.text}</p>
+              {m.attachments && m.attachments.length > 0 && (
+                <ul className="flex flex-wrap justify-end gap-1" aria-label="이 질문에 붙인 파일">
+                  {m.attachments.map((a) => (
+                    <li key={a.id} className="inline-flex max-w-full items-center gap-1 rounded-sm border border-line px-1.5 py-0.5 font-mono text-[12px] text-text-muted" title={`${a.path}${a.pages ? ` ${a.pages}쪽` : ''} · ${a.chars.toLocaleString()}자`}>
+                      <Paperclip size={12} aria-hidden />
+                      <span className="truncate">{attachLabel({ source: a.source, path: a.path, pages: a.pages ?? undefined })}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ) : (
             <li key={m.turn} className="mr-4 flex flex-col gap-1 border-l-2 border-info pl-3">
@@ -309,6 +400,48 @@ function ChatPanel({
               {notice}
             </p>
           )}
+          {attachments.length > 0 && (
+            <div className="px-2 pt-2">
+              <ul className="flex flex-wrap gap-1.5" aria-label="붙일 파일">
+                {attachments.map((a) => (
+                  <li key={`${a.source}|${a.path}`} className="inline-flex max-w-full items-center gap-1 rounded-sm border border-line bg-panel px-1.5 py-1 font-mono text-[12px]">
+                    <Paperclip size={12} className="shrink-0 text-text-faint" aria-hidden />
+                    <span className="truncate" title={a.path}>
+                      {a.path.split('/').pop()}
+                    </span>
+                    {a.source === 'TASK_FILE' && (
+                      <>
+                        <input
+                          aria-label={`${a.path.split('/').pop()} 쪽 범위`}
+                          value={a.pages ?? ''}
+                          onChange={(e) => onPages(a.path, e.target.value.replace(/\s/g, ''))}
+                          aria-invalid={!validPages(a.pages)}
+                          className={cx(
+                            'w-14 rounded-sm border bg-panel-raised px-1 text-center outline-none focus:border-brand',
+                            validPages(a.pages) ? 'border-line' : 'border-alert',
+                          )}
+                        />
+                        <span className="shrink-0 text-text-faint">/{materialPages[a.path] ?? '?'}쪽</span>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`${a.path.split('/').pop()} 첨부 빼기`}
+                      onClick={() => onDetach(a)}
+                      className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-text-faint hover:bg-panel-raised hover:text-text"
+                    >
+                      <X size={12} aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="tnum mt-1 font-mono text-[11px] text-text-faint">
+                첨부 {attachments.length}/{MAX_ATTACH}
+                {showCost && ` · 크레딧 +${attachCost(attachments)} (파일당 ${ATTACH_CREDIT})`}
+                {!sendable(attachments) && <span className="ml-1 text-alert">PDF 쪽 범위를 확인하세요 (예: 1-2)</span>}
+              </p>
+            </div>
+          )}
           <textarea
             ref={inputRef}
             id="chat-input"
@@ -339,7 +472,7 @@ function ChatPanel({
                 void send()
               }
             }}
-            placeholder="맥락을 충분히 담아 질문하세요"
+            placeholder="맥락을 충분히 담아 질문하세요. 파일 탐색기의 파일을 이 창으로 끌어 놓으면 AI에게 함께 보여 줍니다"
             aria-describedby="chat-limit"
             className="block w-full resize-none bg-transparent px-3 pt-2 font-sans text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
           />
@@ -362,7 +495,7 @@ function ChatPanel({
               {over && '초과 '}
               {count.toLocaleString()}/{maxChars.toLocaleString()}
             </span>
-            <SendKey ready={draft.trim().length > 0} disabled={disabled || busy || over} onClick={() => void send()} />
+            <SendKey ready={draft.trim().length > 0 && sendable(attachments)} disabled={disabled || busy || over || !sendable(attachments)} onClick={() => void send()} />
           </div>
         </div>
       </div>
@@ -536,6 +669,15 @@ export default function RealExam() {
   const [streaming, setStreaming] = useState<{ question: string; answer: string } | null>(null)
   const [chatError, setChatError] = useState<string | null>(null)
   const [editBusy, setEditBusy] = useState(false)
+  // 이번 질문에 붙이려고 끌어 놓은 파일과, 이 과제의 PDF 자료(응시 파일로 복사되지 않아 따로 온다)
+  const [attached, setAttached] = useState<AttachRef[]>([])
+  // 같은 렌더 안에서 파일을 연달아 놓아도 앞의 것이 사라지지 않게 최신 목록을 ref 로도 쥔다
+  const attachedRef = useRef<AttachRef[]>([])
+  const updateAttached = (fn: (l: AttachRef[]) => AttachRef[]) => {
+    attachedRef.current = fn(attachedRef.current)
+    setAttached(attachedRef.current)
+  }
+  const [materials, setMaterials] = useState<Material[]>([])
   const [viewing, setViewing] = useState<{ turn: number; index: number } | null>(null)
   // 빌드(컴파일만) 또는 테스트 실행 결과. 마지막으로 누른 쪽을 보여 준다.
   const [run, setRun] = useState<{
@@ -645,6 +787,8 @@ export default function RealExam() {
           return
         }
         setView(v)
+        // 자료 목록은 없어도 풀이는 된다(개발 과제는 PDF 가 없다)
+        api.materials(sessionId).then((m) => alive && setMaterials(m)).catch(() => undefined)
         setTurns(v.turns)
         setElapsed(v.elapsedSeconds)
         setStage(v.attempt.status === 'FOLLOWUP' ? 'followup' : 'solve')
@@ -714,7 +858,8 @@ export default function RealExam() {
     return () => window.removeEventListener('keydown', onKey)
   }, [saveFiles])
 
-  const tree = useMemo(() => buildTree(view?.files ?? []), [view])
+  const pdfInfo = useMemo(() => Object.fromEntries(materials.map((m) => [m.path, m])), [materials])
+  const tree = useMemo(() => buildTree([...(view?.files ?? []), ...materials.map((m) => m.path)]), [view, materials])
 
   if (loadError) return <CenterMessage text="" error={loadError} />
   if (!view) return <CenterMessage text="응시 화면을 불러오고 있습니다" />
@@ -730,7 +875,7 @@ export default function RealExam() {
   const isDoc = !dev && active === task.editableFile
 
   const openFile = async (p: string) => {
-    if (!(p in contents)) {
+    if (!(p in contents) && !pdfInfo[p]) {
       try {
         const c = await api.file(sessionId, p)
         setContents((m) => ({ ...m, [p]: c.content }))
@@ -776,14 +921,29 @@ export default function RealExam() {
     .filter((d) => d.file === active)
     .map((d) => ({ line: d.line, column: d.column, message: d.message, severity: d.severity }))
 
+  /** 파일 트리의 파일을 첨부로 바꾼다. PDF 자료는 기본으로 전체(최대 20쪽)를 붙인다 */
+  const attachFor = (path: string): AttachRef =>
+    pdfInfo[path] ? { source: 'TASK_FILE', path, pages: defaultPages(pdfInfo[path].pages) } : { source: 'ATTEMPT_FILE', path }
+  /** 끌어다 놓거나 첨부 버튼을 누르면 호출된다. 못 붙이는 이유가 있으면 안내 문구를 돌려준다 */
+  const attach = (ref: AttachRef): string | null => {
+    const r = addAttachment(attachedRef.current, ref)
+    if (!r.ok) return r.message
+    updateAttached(() => r.list)
+    return null
+  }
+
   const sendChat = async (text: string) => {
     setChatBusy(true)
     setChatError(null)
     setStreaming({ question: text, answer: '' })
     try {
-      const added = await chatStream(sessionId, text, (d) => setStreaming((s) => (s ? { ...s, answer: s.answer + d } : s)))
+      // 서버는 저장된 파일 내용을 읽으므로, 고치던 첨부 파일은 먼저 저장한다
+      const dirtyAttached = attached.filter((a) => a.source === 'ATTEMPT_FILE' && dirty.has(a.path)).map((a) => a.path)
+      if (dirtyAttached.length) await saveFiles(dirtyAttached)
+      const added = await chatStream(sessionId, text, (d) => setStreaming((s) => (s ? { ...s, answer: s.answer + d } : s)), attached)
       if (!live) void refreshCredits()
       setTurns((t) => [...t, ...added])
+      updateAttached(() => [])
       return true
     } catch (e) {
       setChatError((e as ApiError).message)
@@ -986,6 +1146,11 @@ export default function RealExam() {
                   void openFile(p)
                   if (locked) setRefTab('file')
                 }}
+                attachFor={locked ? undefined : attachFor}
+                onAttach={(r) => {
+                  const why = attach(r)
+                  if (why) flash(why)
+                }}
               />
             </nav>
           )}
@@ -1062,6 +1227,8 @@ export default function RealExam() {
                       setFuAnswers(fuList.map((a, j) => (j === fuIndex ? (a && !/\s$/.test(a) ? a + ' ' : a) + ref : a)))
                     }
                   />
+                ) : active && pdfInfo[active] ? (
+                  <AttemptPdf key={active} attemptId={sessionId} path={active} />
                 ) : active && !isDoc ? (
                   <CodeEditor
                     path={active}
@@ -1193,6 +1360,12 @@ export default function RealExam() {
                 editBusy={editBusy}
                 onEdit={(t, e, a) => void decideEdit(t, e, a)}
                 onViewEdit={(t, e) => setViewing({ turn: t, index: e.index })}
+                attachments={attached}
+                materialPages={Object.fromEntries(materials.map((m) => [m.path, m.pages]))}
+                showCost={!live}
+                onAttach={attach}
+                onDetach={(r) => updateAttached((l) => removeAttachment(l, r))}
+                onPages={(path, pages) => updateAttached((l) => setPages(l, path, pages))}
               />
             </div>
           </div>
