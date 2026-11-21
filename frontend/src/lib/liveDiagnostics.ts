@@ -22,7 +22,19 @@ export function marksFor(file: string | null, live: CompileDiagnostic[] | null, 
 }
 
 /** 서버가 돌려주는 자동 완성 후보 (POST /attempts/{id}/complete) */
-export type CompletionItem = { name: string; kind: 'method' | 'field'; signature: string; hasParams: boolean }
+export type CompletionItem = { name: string; kind: 'method' | 'field' | 'variable' | 'class'; signature: string; hasParams: boolean }
+
+/** CodeMirror 목록의 아이콘 종류 */
+export const completionType = (kind: CompletionItem['kind']) => (kind === 'field' ? 'property' : kind)
+
+/**
+ * 자동 완성을 서버에 물어볼 자리인지. 점 뒤이거나(글자가 없어도), 이름 글자를 한 글자 이상 쳤을 때.
+ * 숫자로 시작하는 글자(리터럴)나, 글자를 안 쳤는데 점도 없으면(Ctrl+Space 로 직접 연 경우만) 묻지 않는다.
+ */
+export function shouldAskCompletion(word: string, charBefore: string, explicit: boolean): boolean {
+  if (word && /^[0-9]/.test(word)) return false
+  return charBefore === '.' || word.length > 0 || explicit
+}
 
 /** 후보를 고르면 넣을 글자와, 넣은 뒤 커서 위치(넣기 시작한 자리 기준). 인자가 있는 메서드는 괄호 안에 커서를 둔다 */
 export function completionInsert(item: CompletionItem): { text: string; cursor: number } {
@@ -40,3 +52,14 @@ export function posOf(lineStarts: number[], docLength: number, line: number, col
   const end = index + 1 < lineStarts.length ? lineStarts[index + 1] - 1 : docLength
   return Math.min(start + Math.max(column, 1) - 1, end)
 }
+
+/** 자바 키워드·리터럴. 서버 호출 없이 편집기에서 바로 완성 목록에 낸다 */
+export const JAVA_KEYWORDS = [
+  'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'continue', 'default', 'do', 'double',
+  'else', 'enum', 'extends', 'false', 'final', 'finally', 'float', 'for', 'if', 'implements', 'import', 'instanceof', 'int',
+  'interface', 'long', 'new', 'null', 'package', 'private', 'protected', 'public', 'record', 'return', 'short', 'static',
+  'super', 'switch', 'synchronized', 'this', 'throw', 'throws', 'true', 'try', 'var', 'void', 'volatile', 'while',
+]
+
+/** 문법 트리의 이 노드 안(주석, 문자열, 글자)에서는 완성 목록을 열지 않는다 */
+export const inCommentOrString = (nodeName: string) => /Comment|String|Text|Char/.test(nodeName)

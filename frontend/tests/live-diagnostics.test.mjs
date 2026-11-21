@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { completionInsert, isJavaSource, javaSources, marksFor, posOf } from '../src/lib/liveDiagnostics.ts'
+import { completionInsert, completionType, inCommentOrString, isJavaSource, JAVA_KEYWORDS, javaSources, marksFor, posOf, shouldAskCompletion } from '../src/lib/liveDiagnostics.ts'
 
 const d = (file, line, severity = 'error') => ({ file, line, column: 3, severity, message: `m${line}` })
 
@@ -38,4 +38,30 @@ test('a line and column from the server map to a document position, clamped to t
   assert.equal(posOf(starts, 9, 2, 99), 6) // 줄 끝을 넘으면 줄 끝
   assert.equal(posOf(starts, 9, 99, 1), 8) // 마지막 줄로
   assert.equal(posOf(starts, 9, 0, 0), 0)
+})
+
+test('completion is asked after a dot or once a name letter is typed, never for number literals', () => {
+  assert.equal(shouldAskCompletion('', '.', false), true) // "inventory."
+  assert.equal(shouldAskCompletion('lo', '.', false), true) // "inventory.lo"
+  assert.equal(shouldAskCompletion('to', ' ', false), true) // 이름 글자를 친 자리
+  assert.equal(shouldAskCompletion('', ' ', false), false) // 글자도 점도 없으면 묻지 않는다
+  assert.equal(shouldAskCompletion('', ' ', true), true) // Ctrl+Space 로 직접 연 경우
+  assert.equal(shouldAskCompletion('12', ' ', false), false)
+  assert.equal(shouldAskCompletion('1a', '.', true), false)
+})
+
+test('variables and classes are inserted by name, and fields get a property icon', () => {
+  assert.deepEqual(completionInsert({ name: 'total', kind: 'variable', signature: ': int', hasParams: false }), { text: 'total', cursor: 5 })
+  assert.deepEqual(completionInsert({ name: 'Basket', kind: 'class', signature: ': app.Basket', hasParams: false }), { text: 'Basket', cursor: 6 })
+  assert.equal(completionType('field'), 'property')
+  assert.equal(completionType('method'), 'method')
+  assert.equal(completionType('variable'), 'variable')
+})
+
+test('keywords cover the basics once each, and are not offered inside comments or strings', () => {
+  for (const k of ['for', 'if', 'return', 'public', 'static', 'class', 'new', 'null', 'true', 'try', 'catch']) assert.ok(JAVA_KEYWORDS.includes(k), k)
+  assert.equal(new Set(JAVA_KEYWORDS).size, JAVA_KEYWORDS.length)
+  assert.ok(JAVA_KEYWORDS.every((k) => /^[a-z]+$/.test(k)))
+  for (const n of ['LineComment', 'BlockComment', 'StringLiteral', 'TextBlock', 'CharacterLiteral']) assert.equal(inCommentOrString(n), true, n)
+  for (const n of ['Block', 'MethodDeclaration', 'Identifier', 'Program']) assert.equal(inCommentOrString(n), false, n)
 })

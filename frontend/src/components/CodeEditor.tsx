@@ -3,13 +3,13 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap, t
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { javaLanguage } from '@codemirror/lang-java'
 import { markdown } from '@codemirror/lang-markdown'
-import { bracketMatching, HighlightStyle, indentOnInput, LanguageSupport, syntaxHighlighting } from '@codemirror/language'
+import { bracketMatching, HighlightStyle, indentOnInput, LanguageSupport, syntaxHighlighting, syntaxTree } from '@codemirror/language'
 import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { Annotation, EditorState, type Extension } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { styleTags, tags as t } from '@lezer/highlight'
-import { completionInsert, posOf, type CompletionItem, type DefinitionTarget } from '../lib/liveDiagnostics'
+import { completionInsert, completionType, inCommentOrString, JAVA_KEYWORDS, posOf, shouldAskCompletion, type CompletionItem, type DefinitionTarget } from '../lib/liveDiagnostics'
 
 /** 밖에서 넣은 내용 변경 표시 (사용자 입력과 구분) */
 const External = Annotation.define<boolean>()
@@ -144,26 +144,36 @@ export function CodeEditor({
   // 파일(path)이나 읽기 전용 여부가 바뀔 때만 편집기를 새로 만든다
   useEffect(() => {
     if (!host.current) return
-    /** 서버 자동 완성: "식." 뒤에서만. 입력하는 동안 글자가 이어지면 다시 묻지 않고 걸러 보여 준다 */
+    /** 서버 자동 완성: "식." 뒤의 멤버, 또는 이름 글자를 친 자리의 쓸 수 있는 이름. 글자가 이어지면 다시 묻지 않고 걸러 보여 준다 */
     const serverComplete = async (context: CompletionContext): Promise<CompletionResult | null> => {
       const ask = onCompleteRef.current
-      const word = context.matchBefore(/\.\w*/)
+      const word = context.matchBefore(/\w*/)
       if (!ask || !word) return null
+      const before = context.state.sliceDoc(Math.max(0, word.from - 1), word.from)
+      if (!shouldAskCompletion(word.text, before, context.explicit)) return null
       const items = await ask(path, context.pos).catch(() => [])
       if (context.aborted || !items.length) return null
       return {
-        from: word.from + 1,
+        from: word.from,
         validFor: /^\w*$/,
         options: items.map((item) => ({
           label: item.name,
           detail: item.signature,
-          type: item.kind === 'method' ? 'method' : 'property',
+          type: completionType(item.kind),
           apply: (v: EditorView, _c: unknown, from: number, to: number) => {
             const { text, cursor } = completionInsert(item)
             v.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + cursor }, userEvent: 'input.complete' })
           },
         })),
       }
+    }
+    /** 자바 키워드: 이름 글자를 친 자리(점 뒤·주석·문자열 안은 제외)에서 서버 없이 바로 낸다 */
+    const keywordComplete = (context: CompletionContext): CompletionResult | null => {
+      const word = context.matchBefore(/\w+/)
+      if (!word || /^[0-9]/.test(word.text)) return null
+      if (context.state.sliceDoc(Math.max(0, word.from - 1), word.from) === '.') return null
+      if (inCommentOrString(syntaxTree(context.state).resolveInner(context.pos, -1).name)) return null
+      return { from: word.from, validFor: /^\w*$/, options: JAVA_KEYWORDS.map((label) => ({ label, type: 'keyword' })) }
     }
     /** 커서(또는 클릭한) 위치 이름의 정의로 간다 */
     const goToDefinition = async (offset: number) => {
@@ -182,7 +192,7 @@ export function CodeEditor({
         indentOnInput(),
         bracketMatching(),
         closeBrackets(),
-        autocompletion({ override: [serverComplete] }),
+        autocompletion({ override: path.endsWith('.java') ? [serverComplete, keywordComplete] : [serverComplete] }),
         highlightActiveLine(),
         highlightSelectionMatches(),
         lintGutter(),
