@@ -6,7 +6,7 @@ export type CompanyRole = 'MANAGER' | 'PROCTOR'
 export const isCompanyRole = (r: Role | undefined): r is CompanyRole => r === 'MANAGER' || r === 'PROCTOR'
 export const canManageSessions = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER'
 export const canReviewProctor = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER' || r === 'PROCTOR'
-export type AuthUser = { id: number; email: string; name: string; role: Role; companyName?: string; companyId?: number }
+export type AuthUser = { id: number; email: string; name: string; role: Role; companyName?: string; companyId?: number | null }
 
 export function homeFor(role: Role) {
   return role === 'USER' ? '/tasks' : isCompanyRole(role) ? '/console/sessions' : '/console/tasks'
@@ -20,6 +20,9 @@ export type AuthApi = {
   requestEmailVerification: (email: string) => Promise<{ message: string }>
   signup: (name: string, email: string, password: string, code: string) => Promise<AuthUser>
   logout: () => Promise<void>
+  getProfile: () => Promise<AuthUser>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
+  withdraw: (currentPassword: string) => Promise<void>
 }
 
 export const AuthContext = createContext<AuthApi | null>(null)

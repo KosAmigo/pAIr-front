@@ -15,6 +15,7 @@ import { useAuth } from './auth/auth'
 import { AuthProvider } from './auth/AuthProvider'
 import RequireAuth from './auth/RequireAuth'
 import Login, { Signup } from './pages/Login'
+import MyPage from './pages/MyPage'
 import { ConsoleShell } from './components/ConsoleShell'
 import ConsoleCompanies, { ConsoleCompanyDetail } from './pages/console/ConsoleCompanies'
 import ConsoleTasks from './pages/console/ConsoleTasks'
@@ -86,6 +87,7 @@ export default function App() {
 
           {/* 자가진단: 로그인한 누구나 */}
           <Route element={<RequireAuth />}>
+            <Route path="/mypage" element={<MyPage />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/review" element={<Review />} />

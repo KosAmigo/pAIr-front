@@ -1,4 +1,4 @@
-import { useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useId, type ButtonHTMLAttributes, type ReactNode, type RefAttributes } from 'react'
 import { Link, type LinkProps } from 'react-router-dom'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { motion } from 'motion/react'
@@ -39,7 +39,7 @@ export function Button({
   size,
   className,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & RefAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size }) {
   return <button type="button" className={buttonCls(variant, size, className)} {...rest} />
 }
 export function ButtonLink({
