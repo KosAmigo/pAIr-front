@@ -36,6 +36,7 @@ import { ScreenShareCard } from '../proctor/react/ScreenShareCard.tsx'
 import { saveLiveExam } from '../proctor/liveExam.ts'
 import { entryClosed, entryClosedMessage, entryDeadlineAt, clockOf } from '../proctor/core/entryDeadline.ts'
 import { checksSkipped } from '../proctor/testSkip.ts'
+import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED } from '../proctor/features.ts'
 import { useCamHub } from '../proctor/react/useCamHub.ts'
 import type { EnvCheckResult } from '../proctor/react/EnvCheckPanel.tsx'
 
@@ -74,7 +75,7 @@ function toView(info: EntryInfo): ExamView {
     start: fmtStart(info.startsAt),
     duration: `${minutes}분`,
     tasks: `과제 ${n}개${n > 1 ? ' (자유롭게 오가며 풀기)' : ''} + 과제마다 후속 질문`,
-    proctor: info.proctoring ? '카메라(노트북·휴대폰), 브라우저 이탈 감지' : '브라우저 이탈 감지',
+    proctor: info.proctoring ? '카메라(노트북), 브라우저 이탈 감지' : '브라우저 이탈 감지',
     applicant: { name: info.name, email: info.email },
     entryBy: info.proctoring ? clockOf(entryDeadlineAt(Date.parse(info.startsAt))) : undefined,
   }
@@ -281,7 +282,7 @@ function InfoStep({ view, onNext }: { view: ExamView; onNext: () => void }) {
 // ── 2. 응시자 정보·동의: 왼쪽 응시자 카드 + 동의 고리 ──────────
 const CONSENTS: { title: string; body: string; icon: LucideIcon }[] = [
   { title: '[필수] 개인정보 수집 및 이용 동의', body: '이름과 이메일을 응시자 확인과 결과 전달 목적으로 수집하며, 시험 종료 후 1년간 보관합니다.', icon: Lock },
-  { title: '[필수] 카메라 감독 동의', body: '시험 중 노트북·휴대폰 카메라 영상은 이 브라우저 안에서만 분석하고 저장하거나 전송하지 않습니다. 이상이 감지된 순간의 사진 1장과 기록만 부정행위 검토 목적으로 기업 담당자에게 제공하며, 사진은 7일 뒤 삭제합니다. 얼굴로 신원을 식별하지 않습니다.', icon: Video },
+  { title: '[필수] 카메라 감독 동의', body: '시험 중 노트북 카메라 영상은 이 브라우저 안에서만 분석하고 저장하거나 전송하지 않습니다. 이상이 감지된 순간의 사진 1장과 기록만 부정행위 검토 목적으로 기업 담당자에게 제공하며, 사진은 7일 뒤 삭제합니다. 얼굴로 신원을 식별하지 않습니다.', icon: Video },
   { title: '[필수] AI 대화 기록 평가 활용 동의', body: '내장 AI와의 대화 전체가 AI 활용 역량 평가 근거로 사용됩니다.', icon: Bot },
 ]
 
@@ -423,14 +424,14 @@ function ConsentStep({ view, busy, error, onNext, onBack }: { view: ExamView; bu
   )
 }
 
-// ── 3. 환경 점검 (실제 입장 링크): 왼쪽 카메라·휴대폰 QR, 오른쪽 실제 점검 목록 ──
+// ── 3. 환경 점검 (실제 입장 링크): 왼쪽 카메라, 오른쪽 실제 점검 목록 ──
 function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () => void; onBack: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const save = async (r: EnvCheckResult) => {
     // 버튼을 누른 직후여야 전체 화면이 허용된다 (대기실 → 시험 화면까지 이어진다)
     enterFullscreen()
-    // 웹캠·휴대폰·PC 화면 공유가 모두 연결돼야 다음으로 간다 (테스트용 "점검 건너뛰기"를 고른 응시는 예외)
+    // 웹캠이 연결돼야 다음으로 간다 (휴대폰 캠·화면 공유는 꺼져 있어 요구하지 않는다) (테스트용 "점검 건너뛰기"를 고른 응시는 예외)
     const missing = checksSkipped() ? [] : missingChannels(channelUp(camHub.getState()))
     if (missing.length) {
       setError(`${missing.map((c) => CHANNEL_LABEL[c]).join(', ')} 연결이 필요합니다. 연결한 뒤 다시 눌러 주세요.`)
@@ -455,13 +456,15 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
       title="응시 환경을 점검합니다"
       aside={
         <>
-          <p className="label mb-3 text-stage-brand">CAMERA · PHONE</p>
+          <p className="label mb-3 text-stage-brand">CAMERA</p>
           <Suspense fallback={loading}>
             <EnvAside />
           </Suspense>
-          <div className="mt-3">
-            <ScreenShareCard />
-          </div>
+          {SCREEN_SHARE_ENABLED && (
+            <div className="mt-3">
+              <ScreenShareCard />
+            </div>
+          )}
         </>
       }
       footer={
@@ -495,7 +498,7 @@ const WAIT_TIPS: WaitTip[] = [
   { text: '시험 중에는 전체 화면을 유지해 주세요.', proctoringOnly: true },
   { text: '다른 탭이나 창으로 이동하거나 창 전환 키(Alt+Tab, Win 키)를 누르면 이탈로 기록됩니다.', proctoringOnly: true },
   { text: '외부 AI와 검색은 쓸 수 없고, 시험 화면의 내장 AI만 쓸 수 있습니다.' },
-  { text: '카메라에 얼굴이 계속 보이도록 유지하세요. 휴대폰 캠은 손과 키보드가 보이게 세워 두세요.', proctoringOnly: true },
+  { text: '카메라에 얼굴이 계속 보이도록 유지하세요.', proctoringOnly: true },
   { text: '외부에서 복사한 내용을 붙여 넣으면 기록됩니다.', proctoringOnly: true },
   { text: '종료 시각이 되면 작업한 내용이 자동으로 제출됩니다.' },
   { text: '제출하면 파일과 AI 대화가 잠기고, 이어서 후속 질문 3개에 답합니다.' },
@@ -677,12 +680,16 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
       <StageChip>
         <Dot ok={cam.camera === 'ready'} /> 카메라 {cam.camera === 'ready' ? '정상' : '확인 필요'}
       </StageChip>
-      <StageChip>
-        <Dot ok={cam.phone === 'connected'} /> 휴대폰 캠 {cam.phone === 'connected' ? '연결됨' : '미연결'}
-      </StageChip>
-      <StageChip>
-        <Dot ok={cam.screen === 'sharing'} /> 화면 공유 {cam.screen === 'sharing' ? '공유 중' : '미연결'}
-      </StageChip>
+      {PHONE_CAM_ENABLED && (
+        <StageChip>
+          <Dot ok={cam.phone === 'connected'} /> 휴대폰 캠 {cam.phone === 'connected' ? '연결됨' : '미연결'}
+        </StageChip>
+      )}
+      {SCREEN_SHARE_ENABLED && (
+        <StageChip>
+          <Dot ok={cam.screen === 'sharing'} /> 화면 공유 {cam.screen === 'sharing' ? '공유 중' : '미연결'}
+        </StageChip>
+      )}
     </>
   ) : (
     <StageChip>
@@ -694,7 +701,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
       {error}
     </p>
   ) : (
-    <span className="text-[14px] text-stage-muted">{left <= 0 && !channelsReady ? '웹캠·휴대폰·화면 공유가 모두 연결되면 시험을 시작합니다.' : left > 0 ? '시작 시각이 되면 자동으로 시작합니다. 이 화면을 닫지 마세요.' : '시험을 시작하는 중입니다'}</span>
+    <span className="text-[14px] text-stage-muted">{left <= 0 && !channelsReady ? '웹캠이 연결되면 시험을 시작합니다.' : left > 0 ? '시작 시각이 되면 자동으로 시작합니다. 이 화면을 닫지 마세요.' : '시험을 시작하는 중입니다'}</span>
   )
   const extras = (
     <>
@@ -703,7 +710,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
           전체 화면 켜기
         </Button>
       )}
-      {info.proctoring && cam.screen !== 'sharing' && (
+      {SCREEN_SHARE_ENABLED && info.proctoring && cam.screen !== 'sharing' && (
         <div className="w-full max-w-[420px] text-text">
           <ScreenShareCard compact />
         </div>

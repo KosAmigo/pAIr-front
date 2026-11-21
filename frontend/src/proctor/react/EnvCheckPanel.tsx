@@ -28,13 +28,14 @@ import { headPoseFromMatrix, shouldersFromPose } from '../vision/features.ts'
 import { CamPreview } from './CamPreview.tsx'
 import { CheckList } from './CheckList.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
+import { PHONE_CAM_ENABLED } from '../features.ts'
 import { useCamHub } from './useCamHub.ts'
 import { runDeskScan, waitForScanResolution } from '../check/deskScan.ts'
 import { CAN_SKIP_CHECKS, clearChecksSkipped, markChecksSkipped } from '../testSkip.ts'
 
 export type EnvCheckResult = { pc: CheckReport; phone: CheckReport | null }
 
-const INITIAL: CheckItem[] = [
+const ALL_ITEMS: CheckItem[] = [
   { id: 'browser', label: '브라우저', status: 'pending', detail: '' },
   { id: 'graphics', label: '원격 접속·가상 머신', status: 'pending', detail: '' },
   { id: 'screens', label: '모니터', status: 'pending', detail: '' },
@@ -46,6 +47,8 @@ const INITIAL: CheckItem[] = [
   { id: 'wrist', label: '양 손목 (스마트워치 · 손에 쓴 글씨)', status: 'pending', detail: '' },
   { id: 'phone', label: '휴대폰 캠: 조명·책상 위 스캔', status: 'pending', detail: '' },
 ]
+// 휴대폰 캠을 쓰지 않으면 휴대폰 점검 항목은 목록에서 뺀다
+const INITIAL = PHONE_CAM_ENABLED ? ALL_ITEMS : ALL_ITEMS.filter((i) => i.id !== 'phone')
 
 const HOLD_MS = 1500
 const POSE_TIMEOUT_MS = 25000
@@ -64,7 +67,7 @@ export function EnvAside() {
       <div className="aspect-[4/3] overflow-hidden rounded-xl border border-line bg-panel-raised">
         <CamPreview />
       </div>
-      <PhonePairCard />
+      {PHONE_CAM_ENABLED && <PhonePairCard />}
     </div>
   )
 }
@@ -117,7 +120,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       const redoStages: ScanStage[] = []
       if (todo('ears')) redoStages.push('ear-left', 'ear-right')
       if (todo('wrist')) redoStages.push('wrist')
-      if (todo('phone')) redoStages.push('desk')
+      if (PHONE_CAM_ENABLED && todo('phone')) redoStages.push('desk')
       camHub.resetCheck(redoStages)
       setPrompt('카메라와 분석 모델을 준비하는 중입니다 (처음 한 번은 조금 걸립니다)')
       try {
@@ -318,7 +321,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       if (cancelled) return
 
       // 5) 휴대폰 영상으로 조명·책상 스캔 (휴대폰이 연결돼 영상이 올 때까지 기다린다)
-      if (todo('phone')) {
+      if (PHONE_CAM_ENABLED && todo('phone')) {
         setPrompt('휴대폰을 연결해 주세요. 연결되면 이 화면의 안내에 따라 책상을 스캔합니다')
         set('phone', { status: 'running', detail: '휴대폰 연결을 기다리는 중' })
         while (!cancelled && !live.current.phoneStream && !skipPhoneRef.current) {
@@ -399,7 +402,7 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
             </Button>
           </div>
         )}
-        {phoneRunning && !skipPhone && (
+        {PHONE_CAM_ENABLED && phoneRunning && !skipPhone && (
           <Button variant="ghost" size="sm" className="self-start" onClick={() => setSkipPhone(true)}>
             휴대폰 없이 진행
           </Button>
