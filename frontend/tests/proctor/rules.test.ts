@@ -1,7 +1,8 @@
 import { describe, expect, it } from './expect.ts'
 import { RuleEngine, SustainedRule } from '../../src/proctor/core/RuleEngine.ts'
 import { PC_RULES, buildPcBaseline, pcConditions, type PcBaseline, type PcFeatures } from '../../src/proctor/core/pcRules.ts'
-import { buildPhoneBaseline, dedupeObjects, phoneConditions, type PhoneFeatures } from '../../src/proctor/core/phoneRules.ts'
+import { PHONE_RULES, buildPhoneBaseline, dedupeObjects, phoneConditions, resolvePhoneBaseline, type PhoneFeatures } from '../../src/proctor/core/phoneRules.ts'
+import { toCamViolation } from '../../src/proctor/core/events.ts'
 import { gazeFromBlendshapes, headPoseFromMatrix } from '../../src/proctor/vision/features.ts'
 
 const rule = (durationMs = 1000, cooldownMs = 5000) =>
@@ -98,22 +99,49 @@ describe('buildPcBaseline', () => {
 describe('phone rules', () => {
   const calib: PhoneFeatures[] = Array.from({ length: 20 }, () => ({
     hands: [{ x: 0.6, y: 0.7 }, { x: 0.3, y: 0.7 }],
-    wrists: [{ x: 0.3, y: 0.75 }, { x: 0.6, y: 0.75 }],
     objects: [{ label: 'laptop', score: 0.8, bright: true }],
   }))
   const b = buildPhoneBaseline(calib)
 
-  it('기준: 손 2개(왼쪽부터 정렬), 화면 1개', () => {
+  it('기준: 손 2개, 화면 1개', () => {
     expect(b.handCount).toBe(2)
-    expect(b.hands[0].x).toBe(0.3)
     expect(b.screenCount).toBe(1)
   })
   it('평소 상태는 정상', () => {
     expect(Object.values(phoneConditions(calib[0], b)).some(Boolean)).toBe(false)
   })
-  it('손 하나가 사라지거나 크게 움직이면 경고 조건', () => {
-    expect(phoneConditions({ ...calib[0], hands: [{ x: 0.3, y: 0.7 }] }, b).hand_missing).toBe(true)
-    expect(phoneConditions({ ...calib[0], hands: [{ x: 0.3, y: 0.7 }, { x: 0.6, y: 0.2 }] }, b).hand_moved).toBe(true)
+  it('양손이 모두 화면 밖으로 나가면 경고 조건', () => {
+    expect(phoneConditions({ ...calib[0], hands: [] }, b).hand_missing).toBe(true)
+  })
+  it('한 손이 화면 밖이거나(마우스) 화면 안에서 크게 움직여도 경고하지 않는다', () => {
+    expect(phoneConditions({ ...calib[0], hands: [{ x: 0.3, y: 0.7 }] }, b).hand_missing).toBe(false)
+    const moved = phoneConditions({ ...calib[0], hands: [{ x: 0.3, y: 0.7 }, { x: 0.9, y: 0.1 }] }, b)
+    expect(Object.values(moved).some(Boolean)).toBe(false)
+  })
+  it('세팅할 때 손이 안 보였으면 손 감시를 하지 않는다', () => {
+    const none = buildPhoneBaseline(calib.map((c) => ({ ...c, hands: [] })))
+    expect(none.handCount).toBe(0)
+    expect(phoneConditions({ ...calib[0], hands: [] }, none).hand_missing).toBe(false)
+  })
+  it('PC 보정: 샘플이 없거나 손이 한 번도 안 보이면 기준을 못 잡는다', () => {
+    expect(resolvePhoneBaseline([])).toBeNull()
+    expect(resolvePhoneBaseline(calib.map((c) => ({ ...c, hands: [] })))).toBeNull()
+  })
+  it('PC 보정: 손이 보이면 기준을 잡고, 순간 튀는 프레임이 있어도 흔한 값을 쓴다', () => {
+    const noisy = [...calib, { ...calib[0], hands: [] }, { ...calib[0], hands: [] }]
+    expect(resolvePhoneBaseline(noisy)).toEqual({ handCount: 2, screenCount: 1 })
+  })
+  it('PC 보정 뒤 양손이 3초 이상 벗어나면 hand_missing 경고가 PHONE_CAM 이벤트가 된다', () => {
+    const base = resolvePhoneBaseline(calib)!
+    const engine = new RuleEngine(PHONE_RULES)
+    let fired: ReturnType<RuleEngine['evaluate']> = []
+    for (let t = 0; t <= 3200 && fired.length === 0; t += 200) {
+      fired = engine.evaluate(phoneConditions({ ...calib[0], hands: [] }, base), t)
+    }
+    expect(fired.map((f) => f.kind)).toEqual(['hand_missing'])
+    const v = toCamViolation(fired[0], 'PHONE_CAM', undefined)
+    expect(v?.source).toBe('PHONE_CAM')
+    expect(v?.type).toBe('HAND_MISSING')
   })
   it('휴대폰·추가 화면·책', () => {
     const extra = { ...calib[0], objects: [...calib[0].objects, { label: 'tv', score: 0.7, bright: true }] }

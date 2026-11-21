@@ -62,6 +62,24 @@ describe('이벤트 유형 변환', () => {
     assert.equal(r.type, 'NO_FACE')
     assert.ok(r.snapshot?.startsWith('data:image/jpeg'))
   })
+
+  it('이벤트마다 고유값(clientId)을 붙이고, 같은 이벤트를 다시 보내도 값이 같다 (서버 중복 방지)', async () => {
+    assert.notEqual(toRequest(violation()).clientId, toRequest(violation()).clientId)
+
+    const seen: Array<string | undefined> = []
+    let fail = true
+    const send = async (_i: string, e: ProctorEventRequest) => {
+      seen.push(e.clientId)
+      if (fail) throw new ProctorApiError('down', 0)
+    }
+    const box = new CamOutbox('inv', send, new MemoryStorage())
+    await box.enqueue(violation())
+    fail = false
+    await box.flush()
+    assert.equal(seen.length, 2)
+    assert.ok(seen[0])
+    assert.equal(seen[0], seen[1])
+  })
 })
 
 describe('카메라 이벤트 아웃박스', () => {

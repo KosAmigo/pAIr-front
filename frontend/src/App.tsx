@@ -43,6 +43,14 @@ const phoneCam = (
   </Suspense>
 )
 
+// 사전 테스트 (연습 모드, 서버 기록 없음). 공개 페이지
+const PracticePage = lazy(() => import('./proctor/react/PracticePage.tsx'))
+const practice = (
+  <Suspense fallback={<div className="min-h-full bg-bg" />}>
+    <PracticePage />
+  </Suspense>
+)
+
 // 감독 오탐률 측정 (관리자). 분석 모델이 무거워 따로 불러온다
 const FalsePositiveLab = lazy(() => import('./proctor/react/FalsePositiveLab.tsx'))
 const proctorLab = (
@@ -82,6 +90,7 @@ export default function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/entry" element={<Entry />} />
           <Route path="/proctor/phone" element={phoneCam} />
+          <Route path="/practice" element={practice} />
           <Route path="/exam/:sessionId" element={<ExamRoute />} />
           <Route path="/exam/:sessionId/submitted" element={<Submitted />} />
 

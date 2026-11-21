@@ -113,24 +113,3 @@ export async function setTorch(stream: MediaStream, on: boolean): Promise<boolea
     return false
   }
 }
-
-/** 아이폰은 자이로 사용 전에 사용자 탭 안에서 권한을 받아야 한다 */
-export async function requestOrientationPermission(): Promise<boolean> {
-  const DOE = window.DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> } | undefined
-  if (!DOE) return false
-  if (typeof DOE.requestPermission === 'function') {
-    try {
-      return (await DOE.requestPermission()) === 'granted'
-    } catch {
-      return false
-    }
-  }
-  return true
-}
-
-/** 휴대폰 방향(도). iOS는 webkitCompassHeading, 그 외는 alpha */
-export function headingOf(e: DeviceOrientationEvent): number | null {
-  const ios = (e as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading
-  if (typeof ios === 'number') return ios
-  return typeof e.alpha === 'number' ? 360 - e.alpha : null
-}

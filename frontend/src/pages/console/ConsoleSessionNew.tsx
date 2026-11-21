@@ -151,7 +151,8 @@ export default function ConsoleSessionNew() {
             </label>
             {taskList.error && <ErrorState compact message={taskList.error} onRetry={taskList.reload} />}
             {taskList.loading && <Loading text="과제를 불러오는 중" className="py-6" />}
-            <ul aria-label="과제" className="flex max-h-[260px] flex-col gap-2 overflow-auto">
+            {/* p-1 -m-1: 포커스 선(outline 2px + offset 2px)이 스크롤 상자에 잘려 모서리가 깨지지 않게 안쪽에 자리를 둔다 */}
+            <ul aria-label="과제" className="-m-1 flex max-h-[260px] flex-col gap-2 overflow-auto p-1">
               {list.map((t) => (
                 <li key={t.id}>
                   <button

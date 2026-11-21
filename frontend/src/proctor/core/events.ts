@@ -1,5 +1,6 @@
 // 규칙 엔진 경고 → 서버로 보내는 감독 이벤트.
 // cam-proctor 규칙 이름(kind)을 백엔드 이벤트 유형(type)으로 바꾸는 표가 여기 하나에만 있다.
+import type { ScreenEventType } from '../screen/screenContract.ts'
 import type { Fired } from './RuleEngine.ts'
 
 /** 백엔드 proctor_events.type (명세 §1-7) */
@@ -7,13 +8,14 @@ export type ProctorEventType =
   | 'NO_FACE' | 'MULTI_FACE' | 'HEAD_TURN' | 'HEAD_DOWN' | 'GAZE_AWAY' | 'TORSO_SHIFT' | 'TORSO_TURN'
   | 'HAND_MISSING' | 'HAND_MOVED' | 'ARM_MOVE' | 'PHONE' | 'EXTRA_SCREEN' | 'BOOK' | 'PHONE_DISCONNECTED'
   | BrowserEventType
+  | ScreenEventType
 
 /** 브라우저 이벤트 (anti-cheating 이탈 신호 + 외부 붙여넣기) */
 export type BrowserEventType = 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'MOUSE_LEAVE' | 'FULLSCREEN_EXIT' | 'PASTE'
 
 export type CamSource = 'PC_CAM' | 'PHONE_CAM'
 /** 서버로 보내는 감지 위치. 브라우저 이벤트는 사진을 붙이지 않는다 */
-export type EventSource = CamSource | 'BROWSER'
+export type EventSource = CamSource | 'BROWSER' | 'SCREEN'
 
 const KIND_TO_TYPE: Record<string, ProctorEventType> = {
   no_face: 'NO_FACE',

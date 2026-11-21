@@ -1,6 +1,7 @@
 // 콘솔 API (pAIr-back: ExamConsoleController, TaskConsoleController). 데이터는 모두 백엔드(AWS RDS)에서 온다.
 // 응답 타입은 백엔드 ExamDtos, SessionResultService, TaskConsoleService 의 record 와 같은 모양이다.
 import { ApiError, call, getAuthHeaders, type Task } from './api'
+import type { ServerCheck } from './proctor/core/serverCheck'
 
 const enc = encodeURIComponent
 
@@ -84,9 +85,12 @@ export type ProctorEventView = {
   reviewNote: string | null
   reviewedBy: number | null
   reviewedAt: string | null
+  /** 서버 재확인 상태. 영상 이벤트(PC_CAM·PHONE_CAM)에만 오고, 백엔드가 구현하기 전에는 없다 */
+  serverCheck?: ServerCheck | null
+  serverCheckedAt?: string | null
 }
 
-/** 환경 점검 사진 (방 360도 방향별, 책상 위) */
+/** 환경 점검 사진 (책상 위. ROOM 은 예전 기록용) */
 export type EnvScanPhotoView = {
   id: number
   participantId: number
