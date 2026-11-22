@@ -410,28 +410,31 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
         {result && (
           <div className="flex items-center gap-3 border-t border-line pt-3">
             {passed ? (
-              <>
-                <p className="text-[14px] text-text">
-                  점검을 통과했습니다{[...result.pc.items, ...(result.phone?.items ?? [])].some((i) => i.status === 'warn') ? ' (주의 항목은 감독 기록에 남습니다)' : ''}.
-                </p>
-                <Button variant="primary" className="ml-auto" onClick={() => {
-                    clearChecksSkipped()
-                    onPassed(result)
-                  }}>
-                  점검 결과 저장
-                </Button>
-              </>
+              <p className="text-[14px] text-text">
+                점검을 통과했습니다{[...result.pc.items, ...(result.phone?.items ?? [])].some((i) => i.status === 'warn') ? ' (주의 항목은 감독 기록에 남습니다)' : ''}.
+              </p>
             ) : (
+              // 설정을 제대로 했어도 분석 모델이 실패·경고를 낼 수 있어, 실패여도 저장하고 입장할 수 있다 (검토 필요로 기록된다)
               <p role="alert" className="text-[14px] text-alert">
-                통과하지 못한 항목이 있습니다. 조치한 뒤 다시 점검해 주세요.
+                통과하지 못한 항목이 있습니다. 조치 후 다시 점검하거나, 이대로 저장하고 입장할 수 있습니다 (감독 기록에 남습니다).
               </p>
             )}
+            <Button
+              variant={passed ? 'primary' : 'secondary'}
+              className="ml-auto"
+              onClick={() => {
+                clearChecksSkipped()
+                onPassed(result)
+              }}
+            >
+              점검 결과 저장
+            </Button>
             {redoCount > 0 && (
-              <Button variant="ghost" size="sm" className={passed ? undefined : 'ml-auto'} onClick={() => rerun(false)}>
+              <Button variant="ghost" size="sm" onClick={() => rerun(false)}>
                 <RefreshCw size={16} aria-hidden /> 통과하지 못한 항목만 다시 ({redoCount})
               </Button>
             )}
-            <Button variant="ghost" size="sm" className={passed || redoCount > 0 ? undefined : 'ml-auto'} onClick={() => rerun(true)}>
+            <Button variant="ghost" size="sm" onClick={() => rerun(true)}>
               <RefreshCw size={16} aria-hidden /> 처음부터 다시
             </Button>
           </div>

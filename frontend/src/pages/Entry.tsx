@@ -472,7 +472,7 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
           <Button variant="ghost" onClick={onBack}>
             <ArrowLeft size={18} aria-hidden /> 이전
           </Button>
-          <span className="ml-auto text-[14px] text-text-muted">{saving ? '점검 결과를 저장하는 중' : '모든 항목을 통과하면 대기실로 갑니다'}</span>
+          <span className="ml-auto text-[14px] text-text-muted">{saving ? '점검 결과를 저장하는 중' : '응시 환경은 AI 모델이 판단하므로 오류가 표시될 수 있습니다. 환경이 올바르게 갖춰졌다면 "점검 결과 저장"을 눌러 대기실로 입장하고 시험에 응시해 주세요.'}</span>
         </>
       }
     >
