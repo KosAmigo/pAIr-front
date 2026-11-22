@@ -36,6 +36,9 @@ export type TaskStatus = {
   submitted: boolean
 }
 
+/** 콘솔이 응시자에게 보낸 안내 메시지. readAt 이 null 이면 아직 확인하지 않음 */
+export type InviteNotice = { id: number; message: string; sentAt: string; readAt: string | null }
+
 /** 환경 점검 사진 (책상 위). 방 360도 스캔은 없어져 DESK 만 올린다 */
 export type EnvScanRequest = { stage: 'DESK'; objects: string[]; image: string }
 
@@ -109,6 +112,11 @@ export const proctorApi = {
   submit: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/submit`),
   /** 점검 사진 업로드. 실패해도 점검은 계속되므로 호출하는 쪽에서 오류를 삼킨다 */
   uploadEnvScan: (invite: string, photo: EnvScanRequest) => call<unknown>('POST', `/api/entry/${enc(invite)}/env-scan`, photo),
+  /** 점검 진행 상태 (콘솔이 실시간으로 본다). 실패해도 점검은 계속되므로 호출하는 쪽에서 오류를 삼킨다 */
+  sendEnvProgress: (invite: string, result: unknown) => call<null>('POST', `/api/entry/${enc(invite)}/env-progress`, { result }),
+  /** 콘솔이 보낸 안내 메시지 (읽음 여부 포함) */
+  notices: (invite: string) => call<InviteNotice[]>('GET', `/api/entry/${enc(invite)}/notices`),
+  readNotice: (invite: string, noticeId: number) => call<null>('POST', `/api/entry/${enc(invite)}/notices/${noticeId}/read`),
   recordEvent: (invite: string, event: ProctorEventRequest) =>
     call<{ id: number }>('POST', `/api/entry/${enc(invite)}/proctor-events`, event),
 }

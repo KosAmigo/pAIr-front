@@ -50,6 +50,12 @@ export type ParticipantView = {
   linkExpired: boolean
 }
 
+/** 환경 점검 결과의 출처: LIVE 입장 대기 중 진행 상태, SAVED 동의와 함께 저장된 결과 */
+export type EnvCheckSourceKind = 'LIVE' | 'SAVED'
+export type EnvCheckView = { source: EnvCheckSourceKind; updatedAt: string; result: unknown }
+/** 응시자에게 보낸 안내 메시지. readAt 이 null 이면 아직 확인하지 않음 */
+export type NoticeView = { id: number; message: string; sentAt: string; readAt: string | null }
+
 export type SessionDetail = {
   session: SessionSummary
   serverNow: string
@@ -263,6 +269,11 @@ export const consoleApi = {
     call<ProctorEventView>('PUT', `${S}/${id}/events/${eventId}/review`, { review, note }),
   snapshotUrl: (id: number, eventId: number) => blobUrl(`${S}/${id}/events/${eventId}/snapshot`),
   envScanPhotos: (id: number, participantId: number) => call<EnvScanPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-scan`),
+  /** 점검 결과: 진행 중이면 LIVE(실시간), 저장됐으면 SAVED. 아직 없으면 null */
+  envCheck: (id: number, participantId: number) => call<EnvCheckView | null>('GET', `${S}/${id}/participants/${participantId}/env-check`),
+  sendNotice: (id: number, participantId: number, message: string) =>
+    call<NoticeView>('POST', `${S}/${id}/participants/${participantId}/notices`, { message }),
+  notices: (id: number, participantId: number) => call<NoticeView[]>('GET', `${S}/${id}/participants/${participantId}/notices`),
   envScanImageUrl: (id: number, photoId: number) => blobUrl(`${S}/${id}/env-scan/${photoId}/image`),
 
   // 결과

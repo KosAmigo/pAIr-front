@@ -73,7 +73,16 @@ export function EnvAside() {
 }
 
 /** withAside=false 면 점검 목록만 그린다 (미리보기·QR 은 EnvAside 로 따로 둔다) */
-export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed: (r: EnvCheckResult) => void; withAside?: boolean }) {
+export default function EnvCheckPanel({
+  onPassed,
+  onProgress,
+  withAside = true,
+}: {
+  onPassed: (r: EnvCheckResult) => void
+  /** 점검 상태가 바뀔 때마다 (콘솔이 실시간으로 보게 서버로 올리는 용도. 호출하는 쪽이 간격을 조절한다) */
+  onProgress?: (r: EnvCheckResult) => void
+  withAside?: boolean
+}) {
   const hub = useCamHub()
   const [items, setItems] = useState(INITIAL)
   const [prompt, setPrompt] = useState('')
@@ -358,6 +367,14 @@ export default function EnvCheckPanel({ onPassed, withAside = true }: { onPassed
       stopLoop?.()
     }
   }, [run])
+
+  const onProgressRef = useRef(onProgress)
+  useEffect(() => {
+    onProgressRef.current = onProgress
+  })
+  useEffect(() => {
+    onProgressRef.current?.(result ?? { pc: makeReport(items), phone: null })
+  }, [items, result])
 
   const passed = result?.pc.passed && (result.phone?.passed ?? true)
   // 테스트용: 모든 점검을 통과한 것으로 보고 넘어간다. 개발 서버이거나 VITE_ALLOW_CHECK_SKIP=true 로 빌드했을 때만 보인다
