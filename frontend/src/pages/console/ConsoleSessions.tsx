@@ -4,13 +4,12 @@
 // 예정·종료는 표 그대로(표 안쪽은 깨끗하게). 회차는 백엔드에서 불러오고 30초마다 다시 부른다(단계는 백엔드 phase).
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarCheck, CalendarClock, Camera, ChevronRight, CircleAlert, Plus, Radio, Users } from 'lucide-react'
+import { CalendarCheck, CalendarClock, Camera, ChevronRight, CircleAlert, Plus, Radio, Users, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { Select } from '../../components/Select'
-import { PageHeader } from '../../components/SelfShell'
 import { ButtonLink } from '../../components/ui'
-import { Reveal, RevealGroup, RevealItem, Spotlight, StageSection } from '../../components/fx'
-import { StatTabs } from './StatTabs'
+import { CountUp, GradientText, Magnetic, Reveal, RevealGroup, RevealItem, Spotlight, StageSection } from '../../components/fx'
+import { PillTabs } from './ConsoleHero'
 import { companyLabel, taskTitlesOf, useLoad, useTaskMap } from '../../data/consoleSessions'
 import { consoleApi, type ConsoleTaskSummary, type SessionSummary } from '../../consoleApi'
 import { ErrorState } from '../../components/ErrorState'
@@ -48,31 +47,94 @@ export default function ConsoleSessions() {
     .filter((s) => tabOf(s) === tab)
     .sort((a, b) => (tab === 'ended' ? Date.parse(b.startsAt) - Date.parse(a.startsAt) : Date.parse(a.startsAt) - Date.parse(b.startsAt)))
 
+  const ph: { value: Tab; label: string; hint: string; icon: LucideIcon; tone: { num: string; icon: string }; sub: string }[] = [
+    { value: 'live', label: '진행 중', hint: '지금 응시가 열려 있는 회차', icon: Radio, tone: { num: 'text-stage-alert', icon: 'bg-stage-alert/12 text-stage-alert' }, sub: '지금 응시 중' },
+    { value: 'upcoming', label: '예정', hint: '시작 전 회차', icon: CalendarClock, tone: { num: 'text-stage-brand', icon: 'bg-stage-brand/12 text-stage-brand' }, sub: '시작 전' },
+    { value: 'ended', label: '종료', hint: '결과를 볼 수 있는 회차', icon: CalendarCheck, tone: { num: 'text-stage-text', icon: 'bg-stage-text/8 text-stage-text' }, sub: '결과 확인' },
+  ]
+  const loading = list.data == null && !list.error
+  const next = loading
+    ? '회차를 불러오는 중이에요.'
+    : liveCount > 0
+      ? `지금 ${liveCount}개 회차가 진행 중이에요. 응시 현황을 확인하세요.`
+      : canCreate
+        ? '진행 중인 회차가 없어요. 새 회차를 만들어 대상자에게 입장 링크를 보내세요.'
+        : '진행 중인 회차가 없어요.'
+
   return (
     <>
-      <PageHeader label="SESSIONS" title="시험 회차">
-        {canCreate && (
-          <ButtonLink to="/console/sessions/new" variant="primary">
-            <Plus size={16} aria-hidden /> 회차 만들기
-          </ButtonLink>
-        )}
-      </PageHeader>
-      <div className="flex flex-col gap-6 p-8">
-        {/* 단계 카드 3장 = 탭 */}
-        <div className="flex items-end gap-4">
-          <StatTabs
-            id="session-phase"
+      <div className="flex flex-col gap-6 px-8 pt-6 pb-12">
+        <StageSection aria-label="회차 요약" className="px-8 py-7">
+          <div className="flex flex-wrap items-center gap-x-10 gap-y-6">
+            <div className="min-w-[260px] flex-1">
+              <p className="label text-stage-brand">SESSIONS</p>
+              <h1 className="mt-1 text-[30px] leading-10 font-extrabold tracking-[-0.03em] break-keep text-stage-text">
+                시험 <GradientText>회차</GradientText>를 관리해요
+              </h1>
+              <p className="mt-2 text-[15px] font-medium break-keep text-stage-muted" aria-live="polite">
+                {next}
+              </p>
+              {canCreate && (
+                <Magnetic className="mt-5 inline-block">
+                  <ButtonLink to="/console/sessions/new" variant="primary" size="lg" className="h-12 rounded-full px-6 text-[16px] shadow-[0_12px_32px_-12px_rgb(108_71_255/0.7)]">
+                    <Plus size={18} aria-hidden /> 회차 만들기
+                  </ButtonLink>
+                </Magnetic>
+              )}
+            </div>
+            <div role="group" aria-label="단계별 회차 수" className="grid w-full grid-cols-3 gap-3 lg:w-auto">
+              {ph.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setTab(t.value)}
+                  aria-pressed={tab === t.value}
+                  title={t.hint}
+                  className={cx(
+                    'glass-stage flex min-w-[150px] flex-col gap-2 rounded-2xl border px-5 py-4 text-left transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:shadow-md',
+                    tab === t.value ? 'border-stage-line-strong shadow-md ring-2 ring-stage-brand/40' : 'border-stage-line',
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={cx('inline-flex size-8 items-center justify-center rounded-lg', t.tone.icon)}>
+                      <t.icon size={17} aria-hidden className={t.value === 'live' && count('live') > 0 ? 'rec-pulse' : undefined} />
+                    </span>
+                    <span className="text-[14px] font-bold text-stage-text">{t.label}</span>
+                  </span>
+                  <span className="flex items-baseline gap-1">
+                    {loading ? (
+                      <span className="font-mono text-[40px] leading-[48px] font-semibold text-stage-faint">-</span>
+                    ) : (
+                      <CountUp value={count(t.value)} className={cx('font-mono text-[40px] leading-[48px] font-semibold', count(t.value) > 0 ? t.tone.num : 'text-stage-faint')} />
+                    )}
+                    <span className="text-[13px] font-medium text-stage-muted">개</span>
+                  </span>
+                  <span className="text-[12px] leading-4 break-keep text-stage-muted">{t.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </StageSection>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <PillTabs
+            id="session-tabs"
             label="회차 단계"
             value={tab}
             onChange={setTab}
-            tabs={[
-              { value: 'live', label: '진행 중', hint: '지금 응시가 열려 있는 회차', icon: Radio, n: count('live'), tone: 'alert' },
-              { value: 'upcoming', label: '예정', hint: '시작 전 회차', icon: CalendarClock, n: count('upcoming') },
-              { value: 'ended', label: '종료', hint: '결과를 볼 수 있는 회차', icon: CalendarCheck, n: count('ended') },
-            ]}
+            tabs={ph.map((t) => ({
+              value: t.value,
+              hint: t.hint,
+              label: (
+                <>
+                  {t.label}
+                  <span className="tnum font-mono text-[13px] opacity-80">{count(t.value)}</span>
+                </>
+              ),
+            }))}
           />
           {mine == null && (
-            <div className="flex items-center gap-2 pb-1 text-[14px] text-text-muted">
+            <div className="ml-auto flex items-center gap-2 text-[14px] text-text-muted">
               회사
               <Select
                 value={company}
@@ -92,7 +154,7 @@ export default function ConsoleSessions() {
         {tab === 'live' && rows.length > 0 && <LiveBoard rows={rows} now={now} tasks={tasks.map} showCompany={mine == null} onOpen={(id) => nav(`/console/sessions/${id}`)} />}
 
         {list.data && !(tab === 'live' && rows.length > 0) && (
-        <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
+        <Reveal className="overflow-hidden rounded-2xl border border-line bg-panel shadow-sm">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
               <CalendarClock size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
