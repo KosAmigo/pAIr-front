@@ -21,6 +21,8 @@
     "test:proctor": "node --experimental-strip-types --test tests/proctor/*.test.ts",
     "test:scripts": "node --test tests/dev-all.test.mjs",
     "preview": "vite preview",
+    "e2e": "playwright test",
+    "shots": "playwright test --grep @shot",
     "test:questions": "node --experimental-strip-types --test tests/questions.test.mjs"
   },
   "dependencies": {
