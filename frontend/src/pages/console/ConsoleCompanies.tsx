@@ -1,29 +1,17 @@
 // DESIGN.md §7-9-5 회사 (ADMIN): 목록, 상세(회사 정보, 담당자 계정, 회차)
-// 회사·담당자·도입 문의 API 가 아직 백엔드에 없어 그 칸은 "준비 중"으로 비워 둔다.
-// 회사 상세의 회차 목록만 백엔드(consoleApi.sessions(companyId))에서 불러온다.
+// 회사 상세의 회차 목록은 기존 콘솔 API에서 불러온다.
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Building2, ChevronRight, CircleAlert, Inbox, Users } from 'lucide-react'
+import { Building2, ChevronRight, CircleAlert } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { ErrorState } from '../../components/ErrorState'
 import { PageHeader } from '../../components/SelfShell'
-import { Reveal } from '../../components/fx'
+import { CompanyAccounts, CompanyList, InquiryList } from './CompanyAdministration'
 import { ConsoleHero } from './ConsoleHero'
 import { consoleApi } from '../../consoleApi'
 import { companyLabel, PHASE_LABEL, taskTitlesOf, useLoad, useTaskMap } from '../../data/consoleSessions'
 import { fmtHm, fmtShort } from './format'
 import { Loading } from './Loading'
-
-/** 백엔드 API 가 없는 칸 */
-function Preparing({ icon: Icon, title, text }: { icon: typeof Building2; title: string; text: string }) {
-  return (
-    <div className="flex flex-col items-center gap-3 py-16 text-center">
-      <Icon size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
-      <p className="text-[15px] font-semibold text-text">{title}</p>
-      <p className="max-w-[420px] text-[14px] leading-6 break-keep text-text-muted">{text}</p>
-    </div>
-  )
-}
 
 // ── 목록 ──
 export default function ConsoleCompanies() {
@@ -31,24 +19,8 @@ export default function ConsoleCompanies() {
     <>
       <PageHeader label="COMPANIES" title="회사" />
       <div className="flex flex-col gap-6 p-8">
-        <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
-          <header className="flex h-12 items-center gap-2 border-b border-line px-4">
-            <span className="label">INQUIRIES</span>
-            <h2 className="text-[16px] font-semibold text-text">도입 문의</h2>
-          </header>
-          <Preparing icon={Inbox} title="준비 중인 기능입니다" text="기업 도입 문의를 받고 승인하는 기능은 아직 백엔드에 없습니다. 준비되면 여기에 문의가 보입니다." />
-        </Reveal>
-        <Reveal className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
-          <header className="flex h-12 items-center gap-2 border-b border-line px-4">
-            <span className="label">COMPANIES</span>
-            <h2 className="text-[16px] font-semibold text-text">회사 목록</h2>
-          </header>
-          <Preparing
-            icon={Building2}
-            title="준비 중인 기능입니다"
-            text="회사 등록과 목록 기능은 아직 백엔드에 없습니다. 회사별 회차는 회차 목록에서 회사로 걸러 볼 수 있습니다."
-          />
-        </Reveal>
+        <InquiryList />
+        <CompanyList />
       </div>
     </>
   )
@@ -91,18 +63,12 @@ function CompanyDetail({ id }: { id: number }) {
             </span>
           }
           title={companyLabel(id)}
-          meta={<span className="font-sans">회사 정보 기능은 준비 중입니다</span>}
+          meta={<span className="font-sans">회사 회원 및 회차 관리</span>}
           stats={list.data ? [{ label: 'SESSIONS', value: sessions.length, unit: '회' }] : []}
         />
       </div>
       <div className="grid gap-6 p-8 xl:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
-        <section className="h-fit overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
-          <header className="flex h-12 items-center gap-2 border-b border-line px-4">
-            <span className="label">MANAGERS</span>
-            <h2 className="text-[16px] font-semibold text-text">회사 정보 · 담당자 계정</h2>
-          </header>
-          <Preparing icon={Users} title="준비 중인 기능입니다" text="회사 정보 수정과 담당자 계정 관리는 아직 백엔드에 없습니다." />
-        </section>
+        <CompanyAccounts id={id} />
 
         <section className="min-w-0 overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
           <header className="flex h-12 items-center gap-2 border-b border-line px-4">
