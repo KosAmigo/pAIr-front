@@ -12,6 +12,7 @@ import { prefersReduced } from '../../lib/motion'
 import {
   applySuggestion,
   buildGenRequest,
+  pickedCompetencies,
   FILL_FIELDS,
   FILL_LABEL,
   GEN_MINUTES,
@@ -169,7 +170,7 @@ export default function ConsoleTaskNew() {
     const ac = new AbortController()
     abort.current = ac
     try {
-      const { jobId } = await taskGenApi.start(buildGenRequest({ ...form, track: form.track }))
+      const { jobId } = await taskGenApi.start(buildGenRequest({ ...form, track: form.track }, pickedCompetencies(form, sug.store[form.track])))
       if (ac.signal.aborted) return
       const done = await pollJob(
         jobId,

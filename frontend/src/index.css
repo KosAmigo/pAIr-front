@@ -714,3 +714,73 @@
   .review-lane { animation: none; stroke-dashoffset: 0; }
   .review-flow, .review-ring { animation: none; }
 }
+
+/* 추천 카드 효과 (SuggestPanel): 도는 그라데이션 테두리, 윗부분 색 번짐, 호버 빛줄기. 움직임은 reduced-motion 에서 위 전역 규칙이 끈다 */
+.sg-card {
+  position: relative;
+  isolation: isolate;
+}
+.sg-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(from var(--fx-angle), rgb(var(--sg-a) / 0.9), rgb(47 91 234 / 0.35) 25%, rgb(139 92 246 / 0.9) 50%, rgb(47 91 234 / 0.35) 75%, rgb(var(--sg-a) / 0.9));
+  opacity: 0.4;
+  transition: opacity 0.3s ease-out;
+  animation: fx-spin 8s linear infinite;
+}
+.sg-card:hover::before,
+.sg-card[data-on='true']::before {
+  opacity: 1;
+}
+.sg-card[data-on='true'] {
+  box-shadow:
+    0 0 0 1px rgb(108 71 255 / 0.4),
+    0 0 26px -2px rgb(108 71 255 / 0.5),
+    0 16px 34px -14px rgb(108 71 255 / 0.6);
+}
+.sg-card:not([data-on='true']):hover {
+  box-shadow: 0 18px 34px -16px rgb(var(--sg-a) / 0.6);
+}
+.sg-aurora {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 120px;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 90% at 15% 0%, rgb(var(--sg-a) / 0.2), transparent 70%),
+    radial-gradient(60% 80% at 90% 0%, rgb(var(--sg-b) / 0.16), transparent 70%);
+  transition: opacity 0.3s ease-out;
+}
+.sg-card:hover .sg-aurora {
+  opacity: 1;
+}
+.sg-shine {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.sg-shine::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 40%;
+  transform: translateX(-120%) skewX(-18deg);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent);
+}
+.sg-card:hover .sg-shine::after {
+  animation: sg-shine 0.9s ease-out;
+}
+@keyframes sg-shine {
+  to {
+    transform: translateX(380%) skewX(-18deg);
+  }
+}

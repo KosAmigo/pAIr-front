@@ -15,21 +15,39 @@ test.describe('목록', () => {
     await expect(page.locator('ul h3').first()).toBeVisible()
   })
 
-  test('탭 순서는 자가진단 → 실전 → 검수 전이고 처음엔 자가진단', async ({ page }) => {
+  test('탭 순서는 검수 전 → 자가진단 → 실전이고 처음엔 검수 전', async ({ page }) => {
     const tabs = page.getByRole('tab')
-    await expect(tabs.nth(0)).toContainText('자가진단')
-    await expect(tabs.nth(1)).toContainText('실전')
-    await expect(tabs.nth(2)).toContainText('검수 전')
+    await expect(tabs.nth(0)).toContainText('검수 전')
+    await expect(tabs.nth(1)).toContainText('자가진단')
+    await expect(tabs.nth(2)).toContainText('실전')
     await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
     await expect(page.getByRole('link', { name: '과제 만들기' }).first()).toBeVisible()
     const summary = await page.getByRole('group', { name: '상태별 과제 수' }).getByRole('button').allTextContents()
-    expect(summary[0]).toContain('자가진단')
-    expect(summary[1]).toContain('실전')
-    expect(summary[2]).toContain('검수 전')
-    expect((await titles(page)).sort()).toEqual(['요금제 개편안 손익 비교', '재고 차감 동시성', '쿠폰 할인 계산'])
+    expect(summary[0]).toContain('검수 전')
+    expect(summary[1]).toContain('자가진단')
+    expect(summary[2]).toContain('실전')
+    expect((await titles(page)).sort()).toEqual(['검수 전 로그 파서', '검수 전 매출 보고서'])
+  })
+
+  test('카드는 윗줄(직군·난이도·시간)과 역량 배지를 보여 주고 자가진단·실전·AI 생성 배지는 없다', async ({ page }) => {
+    await page.getByRole('tab', { name: /^자가진단/ }).click()
+    const card = page.locator('ul li').filter({ has: page.getByRole('heading', { name: '쿠폰 할인 계산' }) })
+    await expect(card.getByText('중급')).toBeVisible()
+    await expect(card.getByText('40', { exact: true })).toBeVisible()
+    const comps = card.getByRole('list', { name: '이 과제가 보는 역량' }).getByRole('listitem')
+    await expect(comps).toHaveText(['AI 통제력', 'AI 활용력'])
+    // 역량이 없는 카드는 그 줄이 없다
+    const plain = page.locator('ul li').filter({ has: page.getByRole('heading', { name: '재고 차감 동시성' }) })
+    await expect(plain.getByRole('list')).toHaveCount(0)
+    for (const text of ['자가진단', '실전', 'AI 생성', '자동 확인 통과']) await expect(page.locator('ul li').getByText(text)).toHaveCount(0)
+    // 자동 확인 실패는 검수 전 과제에서만
+    await expect(page.getByText('자동 확인 실패')).toHaveCount(0)
+    await page.getByRole('tab', { name: /검수 전/ }).click()
+    await expect(page.getByText('자동 확인 실패')).toHaveCount(1)
   })
 
   test('카드에는 메뉴 버튼과 등록 시간 줄이 없고, 누르면 검수 상세로 간다', async ({ page }) => {
+    await page.getByRole('tab', { name: /^자가진단/ }).click()
     const card = page.locator('ul li').filter({ has: page.locator('h3') }).first()
     await expect(card.getByRole('button')).toHaveCount(0)
     await expect(card.locator('.border-t')).toHaveCount(0)
@@ -38,6 +56,7 @@ test.describe('목록', () => {
   })
 
   test('직군 필터는 작은 세그먼트이고 현재 탭 안의 개수를 보여 준다', async ({ page }) => {
+    await page.getByRole('tab', { name: /^자가진단/ }).click()
     const group = page.getByRole('radiogroup', { name: '직군' })
     await expect(group.getByRole('radio')).toHaveText([/^전체\s*3$/, /^개발\s*2$/, /^비개발\s*1$/])
     await page.getByRole('tab', { name: /검수 전/ }).click()
@@ -45,8 +64,7 @@ test.describe('목록', () => {
   })
 
   test('직군 하위 필터는 탭 안에서만 거른다', async ({ page }) => {
-    await page.getByRole('tab', { name: /검수 전/ }).click()
-    expect(await titles(page)).toHaveLength(2)
+    await expect.poll(() => titles(page)).toHaveLength(2) // 처음 탭은 검수 전
     await page.getByRole('radio', { name: /^개발/ }).click()
     await expect.poll(() => titles(page)).toEqual(['검수 전 로그 파서'])
     await page.getByRole('radio', { name: /^비개발/ }).click()
@@ -54,6 +72,7 @@ test.describe('목록', () => {
   })
 
   test('검색은 부분 일치·공백 무시이고 결과가 없으면 안내한다', async ({ page }) => {
+    await page.getByRole('tab', { name: /^자가진단/ }).click()
     const search = page.getByPlaceholder(/찾기/)
     await search.fill('쿠폰 할인')
     await expect.poll(() => titles(page)).toEqual(['쿠폰 할인 계산'])
@@ -144,6 +163,19 @@ test.describe('과제 만들기', () => {
     expect(gen.body).not.toHaveProperty('jobRole')
     expect(gen.body).not.toHaveProperty('difficulty')
   })
+})
+
+test('추천 카드를 골라 만들면 그 카드의 역량을 같이 보낸다', async ({ page }) => {
+  const api = await mockApi(page)
+  await page.goto('/console/tasks/new')
+  await page.getByRole('button', { name: /^개발/ }).click()
+  await page.getByRole('button', { name: /추천 받기/ }).click()
+  await page.getByRole('button', { name: /^.*상황 \d/ }).nth(1).click()
+  await expect(page.getByLabel('함정')).toHaveValue(/함정 2/)
+  await page.getByRole('button', { name: /^다음/ }).click()
+  await page.getByRole('button', { name: '과제 만들기' }).click()
+  await expect(page.getByText(/과제를 만들었어요/)).toBeVisible({ timeout: 15_000 })
+  expect(api.sent.find((r) => r.path === '/api/admin/task-gen')!.body.competencies).toEqual(['usage', 'delegation'])
 })
 
 test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {

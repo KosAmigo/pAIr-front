@@ -180,6 +180,8 @@ export type ConsoleTaskSummary = {
   generated?: boolean | null
   /** AI 생성 자동 확인을 모두 통과했는지. AI 생성이 아니면 null */
   checksOk?: boolean | null
+  /** 이 과제가 특히 보는 역량 key 0~2개 (data/dashboard.ts STATS). 백엔드가 안 보내면 없다 */
+  competencies?: string[] | null
 }
 /** definition 은 백엔드 TaskDef (응시 화면 Task 와 같은 필드 + 채점 설정) */
 export type ConsoleTaskDetail = {
