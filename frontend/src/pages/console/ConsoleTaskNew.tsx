@@ -1,19 +1,20 @@
-// DESIGN.md §7-9-2 AI로 과제 만들기 (ADMIN). 2026-11-20 개편: ① 아이디어 → ② 확인 → ③ 생성 → ④ 검수.
-// ① 직군을 고르고 AI 추천을 받거나 직접 적는다(오른쪽 스포트라이트 미리보기가 바로 따라온다).
+// DESIGN.md §7-9-2 과제 만들기 (ADMIN). 2026-11-23 개편: ① 아이디어 → ② 확인 → ③ 생성 → ④ 검수.
+// ① 위에서 아래로: 주제(선택) → 직군 → 추천 받기 → 고른 내용 확인·수정 → 용도·제한 시간. 직무·난이도 칸은 없다(난이도는 AI가 정한다).
 // ② 요약 카드로 한 번 확인 → ③ 생성(2초마다 상태 조회, 화면을 떠나면 조회만 멈춤) → 결과에서 ④ 검수로 간다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, BarChart3, Check, CircleAlert, Code2, Globe2, Lock, Pencil, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleAlert, Globe2, Lock, Pencil, Sparkles } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
-import { GradientText, StageSection } from '../../components/fx'
-import { LevelPips } from '../../components/taskKind'
+import { GradientText } from '../../components/fx'
 import { PageHeader } from '../../components/SelfShell'
 import { Button } from '../../components/ui'
 import { prefersReduced } from '../../lib/motion'
 import {
   applySuggestion,
+  buildGenRequest,
   FILL_FIELDS,
   FILL_LABEL,
+  GEN_MINUTES,
   overwriteConflicts,
   pollJob,
   progressOf,
@@ -21,7 +22,6 @@ import {
   taskGenApi,
   validateForm,
   type FillField,
-  type GenDifficulty,
   type GenMinutes,
   type GenStep,
   type GenTrack,
@@ -30,32 +30,33 @@ import {
   type TaskGenJob,
 } from '../../data/taskGen'
 import { ConfirmModal } from './common'
-import { HeroSep } from './ConsoleHero'
 import { FlowSteps } from './task/FlowSteps'
 import { GenProgress } from './task/GenProgress'
 import { GenResult } from './task/GenResult'
+import { TRACK_ICON } from './task/badges'
 import { SuggestPanel } from './task/SuggestPanel'
 import { TRACK_TONE } from './task/trackTone'
+import { useSuggestions } from './task/useSuggestions'
 
-type Form = { track: GenTrack | null; jobRole: string; difficulty: GenDifficulty; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes }
-const EMPTY: Form = { track: null, jobRole: '', difficulty: '중급', topic: '', trap: '', usage: 'SELF', minutes: 60 }
+/** topicHint = ①에 적는 추천용 주제(선택), topic = ④의 주제/상황(생성 요청의 topic) */
+type Form = { track: GenTrack | null; topicHint: string; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes }
+const EMPTY: Form = { track: null, topicHint: '', topic: '', trap: '', usage: 'SELF', minutes: 40 }
 type Phase = 'idea' | 'confirm' | 'running' | 'result'
 const FLOW_AT: Record<Phase, number> = { idea: 0, confirm: 1, running: 2, result: 3 }
 
 const input =
   'w-full rounded-lg border border-line-strong bg-panel px-3.5 text-[15px] text-text outline-none transition-[border-color,box-shadow] focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
-const DIFFICULTIES: GenDifficulty[] = ['초급', '중급', '고급']
-const TRACKS: { value: GenTrack; title: string; desc: string; icon: typeof Code2 }[] = [
-  { value: 'DEV', title: '개발', desc: '시작 코드와 공개·숨은 테스트를 만들어요', icon: Code2 },
-  { value: 'BIZ', title: '비개발', desc: 'PDF 자료, CSV와 객관식·단답형 문항을 만들어요', icon: BarChart3 },
+const TRACKS: { value: GenTrack; title: string; desc: string }[] = [
+  { value: 'DEV', title: '개발', desc: '시작 코드와 공개·숨은 테스트를 만들어요' },
+  { value: 'BIZ', title: '비개발', desc: 'PDF 자료, CSV와 객관식·단답형 문항을 만들어요' },
 ]
-const USAGES: { value: GenUsage; title: string; sub: string; desc: string; icon: typeof Lock }[] = [
-  { value: 'SELF', title: '공개 문제', sub: '자가진단', desc: '공개하면 누구나 자가진단에서 풀어 볼 수 있어요.', icon: Globe2 },
-  { value: 'LIVE', title: '비공개 문제', sub: '실전 시험', desc: '실전 시험 회차에만 쓰고, 자가진단에는 절대 안 보여요. 문제가 새지 않아요.', icon: Lock },
+const USAGES: { value: GenUsage; title: string; desc: string; icon: typeof Lock }[] = [
+  { value: 'SELF', title: '공개 문제', desc: '공개하면 누구나 자가진단에서 풀어 볼 수 있어요.', icon: Globe2 },
+  { value: 'LIVE', title: '비공개 문제', desc: '실전 시험 회차에만 쓰고, 자가진단에는 절대 안 보여요. 문제가 새지 않아요.', icon: Lock },
 ]
 
 export default function ConsoleTaskNew() {
-  useConsoleCrumbs(['AI로 만들기'])
+  useConsoleCrumbs(['과제 만들기'])
   const [form, setForm] = useState<Form>(EMPTY)
   const [tried, setTried] = useState(false)
   const [phase, setPhase] = useState<Phase>('idea')
@@ -67,6 +68,8 @@ export default function ConsoleTaskNew() {
   const [progress, setProgress] = useState(0)
   const [pending, setPending] = useState<{ s: Suggestion; fields: FillField[] } | null>(null)
   const [flashing, setFlashing] = useState<Set<FillField>>(new Set())
+  const sug = useSuggestions()
+  const hintRef = useRef<HTMLInputElement>(null)
   const abort = useRef<AbortController | null>(null)
   const t0 = useRef(0)
   const stepT0 = useRef(0)
@@ -127,10 +130,6 @@ export default function ConsoleTaskNew() {
     FILL_FIELDS.forEach((k, i) => {
       const start = i * 220
       timers.current.push(window.setTimeout(() => flash(k), start))
-      if (k === 'difficulty') {
-        timers.current.push(window.setTimeout(() => set('difficulty', target.difficulty), start))
-        return
-      }
       const text = target[k]
       const n = Math.min(text.length, 24) // 아무리 길어도 24번에 나눠 쓴다
       for (let j = 1; j <= n; j++) {
@@ -140,6 +139,8 @@ export default function ConsoleTaskNew() {
     })
   }
   const pick = (s: Suggestion) => {
+    if (!form.track) return
+    sug.pick(form.track, s)
     const fields = overwriteConflicts(form, s)
     if (fields.length > 0) setPending({ s, fields })
     else fill(s)
@@ -167,8 +168,7 @@ export default function ConsoleTaskNew() {
     const ac = new AbortController()
     abort.current = ac
     try {
-      const req = { ...form, track: form.track, jobRole: form.jobRole.trim(), topic: form.topic.trim(), trap: form.trap.trim() }
-      const { jobId } = await taskGenApi.start(req)
+      const { jobId } = await taskGenApi.start(buildGenRequest({ ...form, track: form.track }))
       if (ac.signal.aborted) return
       const done = await pollJob(
         jobId,
@@ -204,97 +204,96 @@ export default function ConsoleTaskNew() {
     setPhase('idea')
   }
 
+  const track = form.track
+  const trackState = track ? sug.store[track] : undefined
 
   return (
     <>
-      <PageHeader label="NEW TASK" title="AI로 과제 만들기">
+      <PageHeader label="NEW TASK" title="과제 만들기">
         <FlowSteps at={phase === 'result' && job?.status === 'FAILED' ? FLOW_AT.running : FLOW_AT[phase]} />
       </PageHeader>
 
-      <div className="mx-auto w-full max-w-[1240px] px-8 pt-6 pb-12">
+      <div className="mx-auto w-full max-w-[960px] px-8 pt-6 pb-12">
         {phase === 'idea' && (
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <form
-              noValidate
-              onSubmit={(e) => {
-                e.preventDefault()
-                next()
-              }}
-              className="glass step-in flex flex-col gap-7 rounded-2xl bg-white/90! p-7 shadow-md!"
-            >
-              <Field n={1} title="직군" error={tried ? errors.track : null}>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {TRACKS.map((t) => {
-                    const on = form.track === t.value
-                    return (
-                      <button
-                        key={t.value}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => set('track', t.value)}
-                        className={cx(
-                          'flex items-center gap-3 rounded-xl border p-4 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5',
-                          on ? 'border-brand bg-brand-dim ring-2 ring-brand/20' : 'border-line bg-panel hover:border-line-strong hover:shadow-md',
-                        )}
-                      >
-                        <span className={cx('inline-flex size-11 shrink-0 items-center justify-center rounded-xl', TRACK_TONE[t.value].tile)} aria-hidden>
-                          <t.icon size={22} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-[16px] font-bold text-text">{t.title}</span>
-                          <span className="block text-[13px] break-keep text-text-muted">{t.desc}</span>
-                        </span>
-                        {on && <Check size={18} strokeWidth={3} className="ml-auto shrink-0 text-brand" aria-hidden />}
-                      </button>
-                    )
-                  })}
-                </div>
-              </Field>
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault()
+              next()
+            }}
+            className="glass step-in flex flex-col gap-7 rounded-2xl bg-white/90! p-7 shadow-md!"
+          >
+            <Field n={1} title="주제 (선택)" hint="만들고 싶은 주제를 적으면 그 주제에 맞춰 추천해요. 비워 두면 AI가 알아서 골라요.">
+              <input
+                ref={hintRef}
+                aria-label="주제"
+                value={form.topicHint}
+                onChange={(e) => set('topicHint', e.target.value)}
+                maxLength={100}
+                placeholder="예: 쿠폰 할인 계산, 요금제 개편안 손익 비교"
+                className={cx(input, 'h-11')}
+              />
+            </Field>
 
-              <SuggestPanel key={form.track ?? 'none'} track={form.track} jobRole={form.jobRole} difficulty={form.difficulty} onPick={pick} />
-
-              <Field n={2} title="직무" error={tried ? errors.jobRole : null}>
-                <input
-                  aria-label="직무"
-                  value={form.jobRole}
-                  onChange={(e) => set('jobRole', e.target.value)}
-                  maxLength={50}
-                  placeholder={form.track === 'BIZ' ? '예: 서비스 기획자' : '예: 백엔드'}
-                  className={cx(input, 'h-11', flashing.has('jobRole') && 'fill-flash')}
-                />
-              </Field>
-
-              <Field n={3} title="난이도">
-                <div className={cx('grid grid-cols-3 gap-2 rounded-xl', flashing.has('difficulty') && 'fill-flash')}>
-                  {DIFFICULTIES.map((d) => (
+            <Field n={2} title="직군" error={tried ? errors.track : null}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {TRACKS.map((t) => {
+                  const on = form.track === t.value
+                  const Icon = TRACK_ICON[t.value]
+                  return (
                     <button
-                      key={d}
+                      key={t.value}
                       type="button"
-                      aria-pressed={form.difficulty === d}
-                      onClick={() => set('difficulty', d)}
+                      aria-pressed={on}
+                      onClick={() => set('track', t.value)}
                       className={cx(
-                        'flex h-12 items-center justify-center rounded-xl border transition-colors',
-                        form.difficulty === d ? 'border-brand bg-brand-dim' : 'border-line bg-panel hover:border-line-strong',
+                        'flex items-center gap-3 rounded-xl border p-4 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5',
+                        on ? 'border-brand bg-brand-dim ring-2 ring-brand/20' : 'border-line bg-panel hover:border-line-strong hover:shadow-md',
                       )}
                     >
-                      <LevelPips level={d} />
+                      <span className={cx('inline-flex size-11 shrink-0 items-center justify-center rounded-xl', TRACK_TONE[t.value].tile)} aria-hidden>
+                        <Icon size={22} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[16px] font-bold text-text">{t.title}</span>
+                        <span className="block text-[13px] break-keep text-text-muted">{t.desc}</span>
+                      </span>
+                      {on && <Check size={18} strokeWidth={3} className="ml-auto shrink-0 text-brand" aria-hidden />}
                     </button>
-                  ))}
-                </div>
-              </Field>
+                  )
+                })}
+              </div>
+            </Field>
 
-              <Field n={4} title="주제" error={tried ? errors.topic : null}>
-                <input
-                  aria-label="주제"
+            <Field n={3} title="추천 받기">
+              <SuggestPanel
+                track={track}
+                topic={form.topicHint}
+                state={trackState}
+                loading={sug.loading !== null && sug.loading === track}
+                error={sug.error && sug.error.track === track ? sug.error.text : null}
+                onAsk={() => track && void sug.ask(track, form.topicHint)}
+                onPick={pick}
+                onAcceptTopic={() => track && sug.accept(track)}
+                onFixTopic={() => hintRef.current?.focus()}
+              />
+            </Field>
+
+            <Field n={4} title="주제/상황과 함정" hint="추천을 고르면 채워져요. 직접 적거나 고쳐도 돼요." error={tried ? (errors.topic ?? errors.trap) : null}>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-text-muted">주제/상황</span>
+                <textarea
+                  aria-label="주제/상황"
                   value={form.topic}
                   onChange={(e) => set('topic', e.target.value)}
+                  rows={2}
                   maxLength={100}
                   placeholder={form.track === 'BIZ' ? '예: 요금제 개편안 손익 비교' : '예: 쿠폰 할인 계산'}
-                  className={cx(input, 'h-11', flashing.has('topic') && 'fill-flash')}
+                  className={cx(input, 'py-2.5 leading-6', flashing.has('topic') && 'fill-flash')}
                 />
-              </Field>
-
-              <Field n={5} title="함정" hint="응시자가 AI 답을 그대로 믿으면 빠지는 지점을 적으세요." error={tried ? errors.trap : null}>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-text-muted">함정 · 응시자가 AI 답을 그대로 믿으면 빠지는 지점</span>
                 <textarea
                   aria-label="함정"
                   value={form.trap}
@@ -304,43 +303,39 @@ export default function ConsoleTaskNew() {
                   placeholder="예: 쿠폰 두 장을 겹치면 할인이 중복 적용됨"
                   className={cx(input, 'py-2.5 leading-6', flashing.has('trap') && 'fill-flash')}
                 />
-              </Field>
+              </label>
+            </Field>
 
-              <Field n={6} title="용도">
+            <Field n={5} title="용도와 제한 시간">
+              <div className="flex flex-col gap-4">
                 <UsagePicker value={form.usage} onChange={(v) => set('usage', v)} />
-              </Field>
-
-              <Field n={7} title="제한 시간">
-                <div className="flex gap-2">
-                  {([40, 60] as GenMinutes[]).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      aria-pressed={form.minutes === m}
-                      onClick={() => set('minutes', m)}
-                      className={cx(
-                        'h-11 min-w-24 rounded-xl border px-4 text-[15px] font-semibold transition-colors',
-                        form.minutes === m ? 'border-brand bg-brand-dim text-text' : 'border-line bg-panel text-text-muted hover:border-line-strong',
-                      )}
-                    >
-                      <span className="tnum font-mono">{m}</span>분
-                    </button>
-                  ))}
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-[14px] font-semibold text-text-muted">제한 시간</span>
+                  <div role="radiogroup" aria-label="제한 시간" className="glass flex w-fit rounded-full p-1">
+                    {GEN_MINUTES.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={form.minutes === m}
+                        onClick={() => set('minutes', m)}
+                        className={cx('h-9 min-w-20 rounded-full px-4 text-[15px] font-semibold transition-colors', form.minutes === m ? 'bg-panel text-text shadow-sm' : 'text-text-muted hover:text-text')}
+                      >
+                        <span className="tnum font-mono">{m}</span>분
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </Field>
-
-              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
-                {tried && !valid && <span className="mr-auto text-[14px] font-medium text-alert">빈 칸을 채워 주세요</span>}
-                <Button type="submit" variant="primary" size="lg">
-                  다음: 확인하기 <ArrowRight size={17} aria-hidden />
-                </Button>
               </div>
-            </form>
+            </Field>
 
-            <aside className="lg:sticky lg:top-6">
-              <LivePreview form={form} />
-            </aside>
-          </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
+              {tried && !valid && <span className="mr-auto text-[14px] font-medium text-alert">빈 칸을 채워 주세요</span>}
+              <Button type="submit" variant="primary" size="lg">
+                다음: 확인하기 <ArrowRight size={17} aria-hidden />
+              </Button>
+            </div>
+          </form>
         )}
 
         {phase === 'confirm' && form.track && (
@@ -397,126 +392,34 @@ function Field({ n, title, hint, error, children }: { n: number; title: string; 
   )
 }
 
+/** 용도: 작은 세그먼트 토글 + 고른 쪽의 한 줄 설명 */
 function UsagePicker({ value, onChange }: { value: GenUsage; onChange: (v: GenUsage) => void }) {
+  const cur = USAGES.find((u) => u.value === value) ?? USAGES[0]
   return (
-    <div role="radiogroup" aria-label="용도" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {USAGES.map((u) => {
-        const on = value === u.value
-        const live = u.value === 'LIVE'
-        return (
-          <button
-            key={u.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(u.value)}
-            className={cx(
-              'relative flex flex-col gap-2 overflow-hidden rounded-2xl border p-5 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5',
-              on ? (live ? 'border-text bg-text/5 ring-2 ring-text/15' : 'border-brand bg-brand-dim ring-2 ring-brand/20') : 'border-line bg-panel hover:border-line-strong hover:shadow-md',
-            )}
-          >
-            <span className="flex items-center gap-3">
-              <span className={cx('inline-flex size-11 items-center justify-center rounded-xl', live ? 'bg-text text-on-accent' : 'bg-brand-gradient text-on-accent')} aria-hidden>
-                <u.icon size={21} />
-              </span>
-              <span>
-                <span className="block text-[17px] font-extrabold text-text">{u.title}</span>
-                <span className="block text-[13px] font-semibold text-text-muted">{u.sub}</span>
-              </span>
-              <span
-                aria-hidden
-                className={cx('ml-auto inline-flex size-5 items-center justify-center rounded-full border-2', on ? (live ? 'border-text bg-text text-on-accent' : 'border-brand bg-brand text-on-accent') : 'border-line-strong')}
-              >
-                {on && <Check size={12} strokeWidth={3.5} />}
-              </span>
-            </span>
-            <span className="text-[14px] leading-[22px] break-keep text-text-muted">{u.desc}</span>
-            {live && (
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-text/8 px-2.5 py-1 text-[12px] font-bold text-text">
-                <Lock size={12} aria-hidden /> 자가진단에 절대 안 보임
-              </span>
-            )}
-          </button>
-        )
-      })}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div role="radiogroup" aria-label="용도" className="glass flex w-fit rounded-full p-1">
+        {USAGES.map((u) => {
+          const on = value === u.value
+          return (
+            <button
+              key={u.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(u.value)}
+              className={cx('inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[15px] font-semibold transition-colors', on ? 'bg-panel text-text shadow-sm' : 'text-text-muted hover:text-text')}
+            >
+              <u.icon size={15} aria-hidden /> {u.title}
+            </button>
+          )
+        })}
+      </div>
+      <p className="min-w-0 flex-1 text-[14px] break-keep text-text-muted">{cur.desc}</p>
     </div>
   )
 }
 
-/** 오른쪽 스포트라이트: 입력한 내용이 카드로 바로 보인다 */
-function LivePreview({ form }: { form: Form }) {
-  const items: [string, boolean][] = [
-    ['직군', !!form.track],
-    ['직무', !!form.jobRole.trim()],
-    ['주제', !!form.topic.trim()],
-    ['함정', !!form.trap.trim()],
-  ]
-  const done = items.filter(([, ok]) => ok).length
-  const T = form.track ? TRACKS.find((t) => t.value === form.track) : null
-  return (
-    <StageSection aria-label="만들 과제 미리보기" className="p-6">
-      <p className="label text-stage-brand">PREVIEW</p>
-      <p className="mt-1 text-[14px] font-semibold text-stage-muted">이런 과제를 만들어요</p>
-      <div className="glass-stage mt-4 rounded-2xl border border-stage-line p-5">
-        <div className="flex items-center gap-3">
-          {T && form.track ? (
-            <span className={cx('inline-flex size-11 items-center justify-center rounded-xl', TRACK_TONE[form.track].tile)} aria-hidden>
-              <T.icon size={22} />
-            </span>
-          ) : (
-            <span className="inline-flex size-11 items-center justify-center rounded-xl border border-dashed border-stage-line-strong" aria-hidden />
-          )}
-          <span className="min-w-0">
-            <span className="flex items-center gap-2 text-[13px] font-semibold text-stage-muted">
-              {T?.title ?? '직군'}
-              {form.jobRole.trim() && (
-                <>
-                  <HeroSep />
-                  <span className="truncate">{form.jobRole.trim()}</span>
-                </>
-              )}
-            </span>
-            <span className="block text-[13px] font-semibold text-stage-text">{form.usage === 'LIVE' ? '비공개 문제' : '공개 문제'}</span>
-          </span>
-        </div>
-        <p className={cx('mt-4 text-[19px] leading-7 font-extrabold break-keep', form.topic.trim() ? 'text-stage-text' : 'text-stage-faint')}>{form.topic.trim() || '주제를 적거나 추천을 고르세요'}</p>
-        <div className="mt-3 flex items-center gap-3">
-          <LevelPips level={form.difficulty} stage />
-          <span className="text-[13px] text-stage-muted">
-            <span className="tnum font-mono">{form.minutes}</span>분
-          </span>
-        </div>
-        {form.trap.trim() && (
-          <p className="mt-4 rounded-lg bg-stage-raised px-3 py-2 text-[13px] leading-5 break-keep text-stage-text">
-            <b className="font-bold">함정 </b>
-            {form.trap.trim()}
-          </p>
-        )}
-      </div>
-      <div className="mt-5">
-        <p className="flex items-baseline justify-between text-[13px] font-semibold text-stage-muted">
-          채운 칸
-          <span className="tnum font-mono text-stage-text">
-            {done} / {items.length}
-          </span>
-        </p>
-        <ul className="mt-2 grid grid-cols-2 gap-1.5">
-          {items.map(([name, ok]) => (
-            <li key={name} className={cx('flex items-center gap-1.5 text-[13px] font-semibold', ok ? 'text-stage-signal' : 'text-stage-faint')}>
-              <span className={cx('inline-flex size-4 items-center justify-center rounded-full', ok ? 'bg-stage-signal text-on-accent' : 'border border-stage-line-strong')} aria-hidden>
-                {ok && <Check size={10} strokeWidth={3.5} />}
-              </span>
-              {name}
-              <span className="sr-only">{ok ? ' 채움' : ' 비어 있음'}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </StageSection>
-  )
-}
-
-/** ② 확인: 만들기 전에 한 번 보는 요약 카드 */
+/** ② 확인: 만들기 전에 한 번 보는 요약 카드 (주제·함정·직군·용도·시간) */
 function ConfirmCard({
   form,
   error,
@@ -528,10 +431,14 @@ function ConfirmCard({
   onBack: () => void
   onStart: () => void
 }) {
+  const TrackIcon = TRACK_ICON[form.track]
   const rows: [string, ReactNode][] = [
-    ['직군', TRACKS.find((t) => t.value === form.track)?.title],
-    ['직무', form.jobRole.trim()],
-    ['난이도', <LevelPips key="l" level={form.difficulty} />],
+    [
+      '직군',
+      <span key="t" className="inline-flex items-center gap-1.5 font-semibold">
+        <TrackIcon size={14} aria-hidden /> {TRACKS.find((t) => t.value === form.track)?.title}
+      </span>,
+    ],
     ['제한 시간', <span key="m"><span className="tnum font-mono">{form.minutes}</span>분</span>],
     [
       '용도',
@@ -561,7 +468,7 @@ function ConfirmCard({
       )}
 
       <div className="mt-6 rounded-xl bg-[linear-gradient(135deg,rgb(139_92_246/0.07),transparent_60%)] p-5 ring-1 ring-line">
-        <p className="text-[13px] font-semibold text-text-muted">주제</p>
+        <p className="text-[13px] font-semibold text-text-muted">주제/상황</p>
         <p className="mt-0.5 text-[20px] leading-7 font-extrabold break-keep text-text">{form.topic.trim()}</p>
         <p className="mt-4 text-[13px] font-semibold text-text-muted">함정</p>
         <p className="mt-0.5 text-[15px] leading-6 break-keep text-text">{form.trap.trim()}</p>
