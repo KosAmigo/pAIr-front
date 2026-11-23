@@ -16,7 +16,13 @@ export const PERF = {
   mainBlockedPct: 20,
   /** 이보다 표본이 적으면 많이 느린 것으로 본다 */
   minSamples: 5,
-  /** 분석 간격(ms): 정상 / 느린 편 / 많이 느림. 정상은 core/frameBudget.ts 의 PC_MIN_ANALYZE_INTERVAL_MS 와 같다 */
+  /**
+   * 휴대폰 분석 비용까지 합산해 판정할 때의 한도(웹캠 p95 + 휴대폰 p95, ms). 잠정값: 코어 제한 측정 3점에만 근거한다.
+   * 제한 없음 약 185 → 좋은 PC(통과) / 2코어(2.5배 느림) 약 825 → 느리지만 웹캠 분석은 초당 7회로 돎 / 1코어 약 13700 → 사실상 멈춤.
+   * 그 사이를 가르는 값(300·1000·3000)은 실제 저사양 PC 측정이 없어 위 3점 사이에서 임의로 나눈 것이다.
+   */
+  combined: { slowP95Ms: 300, severeP95Ms: 1000, unfitP95Ms: 3000 },
+  /** 분석 간격(ms): 정상 / 느린 편 / 많이 느림(·unfit). 정상은 core/frameBudget.ts 의 PC_MIN_ANALYZE_INTERVAL_MS 와 같다 */
   intervalMs: { ok: 100, slow: 200, severe: 300 },
   /** 휴대폰 분석 간격(ms): 웹캠과 같은 단계로 함께 늘린다. 정상은 core/frameBudget.ts 의 PHONE_MIN_ANALYZE_INTERVAL_MS(200). 잠정값 */
   phoneIntervalMs: { ok: 200, slow: 400, severe: 600 },
@@ -39,7 +45,9 @@ export type PerfSample = {
 
 export type PerfSummary = { kind: 'worker' | 'main'; n: number; p50: number; p95: number; perSec: number; blockedPct: number }
 
-export type PerfVerdict = Verdict & { level: 'ok' | 'slow' | 'severe'; intervalMs: number; phoneIntervalMs: number }
+/** unfit: 이 PC 로는 감독 분석이 멈출 수 있음 (다른 PC 안내). 입장은 막지 않는다 — 현재 환경 점검 규칙대로 warn 으로 알리고 응시자가 판단한다 */
+export type PerfLevel = 'ok' | 'slow' | 'severe' | 'unfit'
+export type PerfVerdict = Verdict & { level: PerfLevel; intervalMs: number; phoneIntervalMs: number }
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0
@@ -70,8 +78,22 @@ export function perfVerdict(s: PerfSample): PerfVerdict {
   const p95 = sum.p95 + phoneP95
   const hw = [s.cores ? `${s.cores}코어` : '', s.memoryGB ? `메모리 ${s.memoryGB}GB 이상` : ''].filter(Boolean).join(' · ')
   const stat = `분석 1회 ${Math.round(sum.p95)}ms${phoneP95 ? ` + 휴대폰 ${Math.round(phoneP95)}ms` : ''} · 초당 ${sum.perSec.toFixed(1)}회${hw ? ` · ${hw}` : ''}`
-  const severe = sum.n < PERF.minSamples || p95 > PERF.severeP95Ms || sum.perSec < PERF.minRatePerSec
-  if (severe) {
+  // 휴대폰 비용이 있으면 합계 한도를, 없으면 웹캠 단독 한도를 쓴다
+  const hasPhone = phoneP95 > 0
+  const slowLimit = hasPhone ? PERF.combined.slowP95Ms : PERF.slowP95Ms
+  const severeLimit = hasPhone ? PERF.combined.severeP95Ms : PERF.severeP95Ms
+  // 감독이 멈출 수 있는 수준: 웹캠 분석 자체가 느리거나 드물거나, 합계가 한계를 크게 넘는 경우
+  const unfit = sum.n < PERF.minSamples || sum.p95 > PERF.severeP95Ms || sum.perSec < PERF.minRatePerSec || (hasPhone && p95 > PERF.combined.unfitP95Ms)
+  if (unfit) {
+    return {
+      status: 'warn',
+      level: 'unfit',
+      intervalMs: PERF.intervalMs.severe,
+      phoneIntervalMs: PERF.phoneIntervalMs.severe,
+      detail: `이 PC 로는 시험 감독이 멈출 수 있습니다 (${stat}). 가능하면 사양이 더 좋은 다른 PC 로 응시해 주세요. 다른 프로그램·탭을 닫아 보고 다시 점검할 수도 있습니다. 계속 진행하면 분석 간격을 가장 길게 늘려 진행하며 감독 기록에 남습니다.`,
+    }
+  }
+  if (p95 > severeLimit) {
     return {
       status: 'warn',
       level: 'severe',
@@ -81,7 +103,7 @@ export function perfVerdict(s: PerfSample): PerfVerdict {
     }
   }
   const mainBlocked = sum.kind === 'main' && sum.blockedPct >= PERF.mainBlockedPct
-  if (p95 > PERF.slowP95Ms || mainBlocked) {
+  if (p95 > slowLimit || mainBlocked) {
     return {
       status: 'warn',
       level: 'slow',
