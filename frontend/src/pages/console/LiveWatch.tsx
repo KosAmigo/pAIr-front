@@ -5,15 +5,14 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, Maximize2, Video, VideoOff, X } from 'lucide-react'
 import { cx } from '../../components/cx'
-import { PHONE_CAM_ENABLED } from '../../proctor/features'
 import { VIEW_CHANNELS, VIEW_CHANNEL_LABEL, type ViewChannel } from '../../proctor/relay/viewerSignal'
 import { ViewerSession } from '../../proctor/watch/ViewerSession'
 import { CHANNEL_TEXT, WATCH_IDLE, reduceWatch, watchStatusText, type ChannelPhase } from '../../proctor/watch/watchState'
 
 type Streams = Record<ViewChannel, MediaStream | null>
 const NO_STREAMS: Streams = { phone: null, webcam: null, screen: null }
-// 휴대폰 보조 캠을 꺼 둔 동안(PHONE_CAM_ENABLED=false)에는 감독관 화면에서 휴대폰 칸을 숨긴다
-const SHOWN_CHANNELS = VIEW_CHANNELS.filter((c) => c !== 'phone' || PHONE_CAM_ENABLED)
+// 휴대폰은 영상이 아니라 JPEG 프레임으로 PC 에만 전달하므로 감독관 실시간 화면에는 휴대폰 칸이 없다 (이벤트 앞뒤 사진으로 본다)
+const SHOWN_CHANNELS = VIEW_CHANNELS.filter((c) => c !== 'phone')
 
 export default function LiveWatch({ sessionId, participantId }: { sessionId: number; participantId: number }) {
   const [open, setOpen] = useState(false)

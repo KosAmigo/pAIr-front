@@ -1,9 +1,9 @@
 /**
  * 휴대폰 보조 캠 사용 여부.
- * 휴대폰 연결 코드(릴레이·QR·스캔)는 구현만 해 두었고 실제 서비스에서는 동작하지 않으므로,
- * 화면에는 휴대폰 환경 설정을 보여 주지 않는다. 나중에 쓰려면 true 로 바꾼다.
+ * 영상(WebRTC·TURN) 대신 JPEG 프레임을 서버 중계로 응시자 PC 에 보내는 방식으로 다시 켠다 (2026-11-23 확정).
+ * 분석은 응시자 PC 의 별도 Worker 에서 하고, 서버는 프레임을 그대로 넘기기만 한다.
  */
-export const PHONE_CAM_ENABLED = false
+export const PHONE_CAM_ENABLED = true
 
 /**
  * PC 화면 공유 사용 여부.

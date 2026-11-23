@@ -47,7 +47,7 @@ export function PhonePairCard() {
           </div>
           <div className="text-[13px] leading-5 text-text-muted">
             <p className="break-keep">휴대폰은 옆이나 뒤에 세워 두 손·키보드·시험 화면이 함께 보이게 놓습니다.</p>
-            <p className="mt-1 break-keep">같은 와이파이가 아니어도 연결됩니다. 영상은 서버에 저장되지 않고 PC 로만 직접 전달됩니다.</p>
+            <p className="mt-1 break-keep">같은 와이파이가 아니어도 연결됩니다. 사진은 서버가 저장하지 않고 PC 로만 넘겨 줍니다.</p>
           </div>
           {SHOW_CERT_NOTICE && (
             <div role="note" className="rounded-lg border border-caution/40 bg-caution/10 px-3 py-2.5 text-[13px] leading-5 text-text">

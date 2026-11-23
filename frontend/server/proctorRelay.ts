@@ -2,8 +2,11 @@
 // 운영에서는 팀원 백엔드가 같은 동작을 WebSocket 으로 제공한다. 이 파일은 로컬 개발·시연용.
 //  - PC 는 초대 토큰으로 붙고, 서버가 짝 코드(초대 토큰과 다른 값)를 발급해 QR 주소를 돌려준다.
 //  - 폰 알림은 저장하지 않고 PC 로 넘긴다 (PC 가 저장). 점검 사진은 PC 가 백엔드 env-scan 에 직접 올린다.
-//  - 휴대폰 영상은 WebRTC 로 PC 에 직접 가고, 이 서버는 시그널링(rtc 메시지)만 양쪽으로 넘긴다.
-//  - 폰 연결이 끊기거나 감시 중 15초간 신호가 없으면 PHONE_DISCONNECTED 를 남긴다.
+//  - 휴대폰은 영상이 아니라 JPEG 프레임(binary)을 보낸다. 서버는 최신 한 장만 PC 로 그대로 넘기고 분석·저장·로그는 하지 않는다.
+//  - 운영 중계(pAIr-back ProctorRelayHandler)와 같은 한도: 프레임 100KB, 휴대폰 1대 초당 5장(넘으면 폐기), JPEG 시작 바이트 검사.
+//  - 폰 연결이 끊기거나 15초간 신호가 없으면 PC 에 peer 메시지(disconnected | stale)만 알린다. PHONE_DISCONNECTED 이벤트는
+//    운영 중계처럼 서버가 저장하지 않고 PC 가 자기 아웃박스로 올린다.
+//  - 개발 전용: PC 가 보낸 quality 화질 요청을 휴대폰에 전달한다 (운영 중계는 아직 전달하지 않는다).
 import { randomBytes } from 'node:crypto'
 import type { IncomingMessage, Server as HttpServer } from 'node:http'
 import { networkInterfaces } from 'node:os'
@@ -19,6 +22,11 @@ import { RELAY_LOG_FILE, mask, relayLog } from './relayLog.ts'
 const RELAY_PATH = '/ws/proctor'
 const BACKEND = (process.env.PAIR_BACKEND_URL ?? 'http://localhost:8180').replace(/\/$/, '')
 const MAX_PAYLOAD = 2 * 1024 * 1024
+/** 운영 중계(RelayLimits)와 같은 값 */
+const MAX_FRAME_BYTES = 100_000
+const MAX_FRAMES_PER_SEC = 5
+/** 전송 대기가 이만큼 쌓인 PC 에는 프레임을 보내지 않는다 (오래된 프레임을 쌓지 않고 최신만) */
+const MAX_PC_BUFFERED = 120_000
 const INVITE = /^[A-Za-z0-9_-]{43}$/
 /** 사전 테스트(연습) 키. 이 브라우저가 만든 값이라 백엔드에 확인하지 않고, 어떤 기록도 저장하지 않는다 */
 const PRACTICE_KEY = /^practice-[a-f0-9]{42}$/
@@ -52,6 +60,7 @@ type Incoming = {
   violation?: Record<string, unknown>
   status?: Record<string, unknown>
   signal?: unknown
+  mode?: unknown
   channel?: unknown
   viewer?: unknown
   sessionId?: unknown
@@ -163,36 +172,9 @@ function pcIsUp(pair: Pair): boolean {
   return pair.pc?.readyState === WebSocket.OPEN
 }
 
-/** 서버가 직접 만든 폰 이벤트(연결 끊김·응답 없음)를 백엔드에 저장. 시작 전·시험 시간 밖이면 백엔드가 400 으로 거절한다 (그대로 둔다) */
-async function record(pair: Pair, v: Record<string, unknown>) {
-  if (pair.practice) return
-  const type = typeof v.type === 'string' ? v.type : null
-  const startedAt = typeof v.startedAt === 'number' ? new Date(v.startedAt).toISOString() : null
-  if (!type || !startedAt) return
-  try {
-    const res = await fetch(`${BACKEND}/api/entry/${encodeURIComponent(pair.invite)}/proctor-events`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type,
-        source: 'PHONE_CAM',
-        startedAt,
-        durationMs: typeof v.durationMs === 'number' ? Math.max(0, Math.round(v.durationMs)) : 0,
-        detail: typeof v.detail === 'object' && v.detail !== null ? v.detail : undefined,
-        snapshot: typeof v.snapshot === 'string' ? v.snapshot : undefined,
-      }),
-    })
-    if (!res.ok && res.status !== 400) log('폰 이벤트 저장 실패', res.status)
-  } catch {
-    log('폰 이벤트 저장 실패 (백엔드 연결 안 됨)')
-  }
-}
-
+/** 운영 중계는 끊김 이벤트를 저장하지 않는다 (PC 가 peer 메시지를 보고 올린다). 개발 릴레이도 같게 로그만 남긴다 */
 function systemEvent(pair: Pair, kind: string, message: string) {
-  const now = Date.now()
-  const v = { id: `relay-${now}`, kind, type: 'PHONE_DISCONNECTED', source: 'PHONE_CAM', message, startedAt: now, ts: now, durationMs: 0 }
-  void record(pair, v)
-  send(pair.pc, { type: 'violation', violation: v })
+  log(`${mask(pair.code)} ${kind}: ${message} (이벤트는 PC 가 peer 메시지로 올린다)`)
 }
 
 function setPhoneState(pair: Pair, state: PeerState, reason: string) {
@@ -283,7 +265,27 @@ function handle(ws: WebSocket, phoneOrigin: () => string) {
     }
   }
 
-  ws.on('message', async (raw) => {
+  /** 이 휴대폰의 최근 1초 프레임 수 (상한 초과분은 버린다) */
+  let frameWindowStart = 0
+  let frameCount = 0
+
+  ws.on('message', async (raw, isBinary) => {
+    if (isBinary) {
+      if (role !== 'phone' || !pair) return
+      const buf = Buffer.isBuffer(raw) ? raw : Buffer.concat(raw as Buffer[])
+      if (buf.length < 4 || buf.length > MAX_FRAME_BYTES || buf[0] !== 0xff || buf[1] !== 0xd8) return
+      const now = Date.now()
+      touchPhone(pair, connId, 'frame')
+      if (pair.phoneState !== 'connected') setPhoneState(pair, 'connected', '프레임 수신으로 복구')
+      if (now - frameWindowStart >= 1000) {
+        frameWindowStart = now
+        frameCount = 0
+      }
+      if (++frameCount > MAX_FRAMES_PER_SEC) return
+      const pc = pair.pc
+      if (pc && pc.readyState === WebSocket.OPEN && pc.bufferedAmount <= MAX_PC_BUFFERED) pc.send(buf, { binary: true })
+      return
+    }
     let msg: Incoming
     try {
       msg = JSON.parse(String(raw)) as Incoming
@@ -382,6 +384,12 @@ function handle(ws: WebSocket, phoneOrigin: () => string) {
       if (!signal) return
       if (role === 'phone') touchPhone(pair, connId, 'rtc')
       send(role === 'pc' ? pair.phone : pair.pc, { type: 'rtc', signal })
+      return
+    }
+
+    // 개발 전용: PC 의 화질 요청을 휴대폰에 전달한다
+    if (role === 'pc' && msg.type === 'quality' && (msg.mode === 'scan' || msg.mode === 'watch')) {
+      send(pair.phone, { type: 'quality', mode: msg.mode })
       return
     }
 

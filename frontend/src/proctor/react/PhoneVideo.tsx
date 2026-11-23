@@ -3,12 +3,12 @@ import { useCamHub } from './useCamHub.ts'
 
 const MESSAGE = {
   idle: '영상 대기 중',
-  connecting: '휴대폰 영상 연결 중',
+  connecting: '휴대폰 사진을 기다리는 중',
   live: '',
-  failed: '휴대폰 영상을 연결하지 못했습니다. 휴대폰 화면을 켠 채 QR 을 다시 찍어 주세요.',
+  failed: '휴대폰 사진을 받지 못했습니다. 휴대폰 화면을 켠 채 QR 을 다시 찍어 주세요.',
 } as const
 
-/** 휴대폰 보조 카메라 영상 (WebRTC 로 직접 받은 스트림, 소리 없음) */
+/** 휴대폰 보조 카메라 화면 (받은 JPEG 프레임을 캔버스 스트림으로 보여 준다, 소리 없음) */
 export function PhoneVideo() {
   const { phoneStream, phoneVideo } = useCamHub()
   const ref = useRef<HTMLVideoElement>(null)
@@ -20,7 +20,7 @@ export function PhoneVideo() {
 
   return (
     <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-lg border border-line bg-black">
-      <video ref={ref} autoPlay muted playsInline className="size-full object-contain" aria-label="휴대폰 보조 카메라 영상" />
+      <video ref={ref} autoPlay muted playsInline className="size-full object-contain" aria-label="휴대폰 보조 카메라 화면" />
       {phoneVideo !== 'live' && (
         <p
           role={phoneVideo === 'failed' ? 'alert' : 'status'}
