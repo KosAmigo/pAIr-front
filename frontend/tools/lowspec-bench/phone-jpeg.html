@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>휴대폰 JPEG 프레임 측정</title>
+<style>
+  body { font: 15px/1.5 system-ui, 'Malgun Gothic', sans-serif; margin: 12px; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  button { padding: 10px 16px; font-size: 16px; margin: 4px 4px 4px 0; }
+  video { width: 100%; max-width: 420px; background: #000; border-radius: 8px; display: block; margin: 8px 0; }
+  #msg { background: #eef6ff; padding: 8px; border-radius: 6px; min-height: 40px; font-weight: 600; }
+  pre { background: #f4f4f4; padding: 8px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+  table { border-collapse: collapse; font-size: 13px; margin: 6px 0; }
+  th, td { border: 1px solid #ccc; padding: 3px 7px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  small { color: #666; }
+</style>
+</head>
+<body>
+<h1>휴대폰 JPEG 프레임 측정</h1>
+<small>카메라 영상을 몇 fps로 JPEG로 만들어 보낼 때의 <b>크기·만드는 시간</b>과, 변화가 없을 때 <b>건너뛰면 얼마나 줄어드는지</b>를 잰다. 영상은 어디에도 전송·저장하지 않고 이 화면에서만 계산한다.</small>
+
+<div>
+  <label><input type="radio" name="cam" value="environment" checked /> 후면 카메라</label>
+  <label><input type="radio" name="cam" value="user" /> 전면 카메라</label>
+</div>
+<button id="start">측정 시작</button>
+<video id="v" muted playsinline></video>
+<div id="msg">대기 중. 시작하면 카메라 권한을 허용해 주세요. 책상 위(시험 때 비출 자리)를 비추고 휴대폰을 고정해 주세요.</div>
+<div id="out"></div>
+<button id="copy" disabled>결과 JSON 복사</button>
+<pre id="json"></pre>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const video = $('v')
+const canvas = document.createElement('canvas') // 하나를 계속 재사용한다 (아이폰 사파리는 새 캔버스 메모리를 늦게 돌려준다)
+const ctx = canvas.getContext('2d')
+const small = document.createElement('canvas')
+small.width = 64; small.height = 48
+const sctx = small.getContext('2d', { willReadFrequently: true })
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const say = (t) => { $('msg').textContent = t }
+const pct = (xs, p) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : 0 }
+const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
+const r1 = (x) => Math.round(x * 10) / 10
+
+function draw(w, h) {
+  if (canvas.width !== w) canvas.width = w
+  if (canvas.height !== h) canvas.height = h
+  const vw = video.videoWidth, vh = video.videoHeight
+  const dst = w / h, src = vw / vh
+  let sw = vw, sh = vh, sx = 0, sy = 0
+  if (src > dst) { sw = vh * dst; sx = (vw - sw) / 2 } else { sh = vw / dst; sy = (vh - sh) / 2 }
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h)
+}
+const toBlob = (q) => new Promise((res) => canvas.toBlob(res, 'image/jpeg', q))
+
+function grayFrame() {
+  sctx.drawImage(video, 0, 0, 64, 48)
+  const d = sctx.getImageData(0, 0, 64, 48).data
+  const g = new Uint8Array(64 * 48)
+  for (let i = 0; i < g.length; i++) g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]
+  return g
+}
+const diff = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length / 255 }
+
+async function sizeMatrix() {
+  const sizes = [[640, 480], [480, 360], [320, 240]]
+  const qs = [0.5, 0.6]
+  const rows = []
+  for (const [w, h] of sizes) {
+    for (const q of qs) {
+      say(`크기·시간 측정 중: ${w}×${h}, 화질 ${q} (책상 위를 그대로 비춰 주세요)`)
+      draw(w, h); await toBlob(q); await sleep(200); draw(w, h); await toBlob(q) // 워밍업
+      const kb = [], enc = []
+      for (let i = 0; i < 15; i++) {
+        const t0 = performance.now(); draw(w, h); const t1 = performance.now(); const b = await toBlob(q); const t2 = performance.now()
+        kb.push(b.size / 1024); enc.push((t1 - t0) + (t2 - t1))
+        await sleep(300)
+      }
+      rows.push({ size: `${w}x${h}`, q, kbMean: r1(mean(kb)), kbP95: r1(pct(kb, 95)), msMean: r1(mean(enc)), msP95: r1(pct(enc, 95)) })
+    }
+  }
+  return rows
+}
+
+// 마지막으로 "보낸" 프레임과 비교해 변화가 임계값 이상일 때만 보낸다. 5초 넘게 안 보냈으면 생존 신호로 한 장 보낸다
+async function changeDetection() {
+  const thresholds = [0.01, 0.02, 0.04]
+  const HEARTBEAT_MS = 5000
+  const phases = [['정지', 10, '휴대폰을 그대로 두고 책상 위를 가만히 둡니다'], ['움직임', 10, '책상 위에서 손을 천천히 움직이거나 물건을 옮겨 주세요']]
+  const result = {}
+  const refs = thresholds.map(() => ({ g: null, at: -1e9 }))
+  for (const [name, secs, hint] of phases) {
+    const sent = thresholds.map(() => 0)
+    let total = 0
+    const diffs = []
+    for (let i = 0; i < secs * 2; i++) { // 2fps
+      say(`변화 감지 측정 [${name}] ${hint} (${secs - Math.floor(i / 2)}초)`)
+      const g = grayFrame(); const now = performance.now()
+      thresholds.forEach((th, k) => {
+        const r = refs[k]
+        if (r.g === null) { r.g = g; r.at = now; sent[k]++; return }
+        const d = diff(g, r.g)
+        if (k === 0) diffs.push(d)
+        if (d >= th || now - r.at >= HEARTBEAT_MS) { r.g = g; r.at = now; sent[k]++ }
+      })
+      total++
+      await sleep(500)
+    }
+    result[name] = {
+      frames: total,
+      diffP50: r1(pct(diffs, 50) * 1000) / 1000, diffP95: r1(pct(diffs, 95) * 1000) / 1000,
+      sentRatio: Object.fromEntries(thresholds.map((th, k) => [String(th), r1((sent[k] / total) * 100) + '%'])),
+    }
+  }
+  return result
+}
+
+async function run() {
+  $('start').disabled = true
+  const facing = document.querySelector('input[name=cam]:checked').value
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+    video.srcObject = stream
+    await video.play()
+    while (video.readyState < 2 || !video.videoWidth) await sleep(100)
+    const settings = stream.getVideoTracks()[0].getSettings()
+    const result = {
+      ua: navigator.userAgent, dpr: devicePixelRatio, cores: navigator.hardwareConcurrency, memoryGB: navigator.deviceMemory ?? null,
+      camera: { facing, videoWidth: video.videoWidth, videoHeight: video.videoHeight, frameRate: settings.frameRate ?? null },
+    }
+    say('1초 후 시작합니다. 휴대폰을 책상 위를 향해 고정해 주세요.')
+    await sleep(1500)
+    result.sizeMatrix = await sizeMatrix()
+    result.changeDetection = await changeDetection()
+    stream.getTracks().forEach((t) => t.stop())
+    say('측정 완료! 아래 "결과 JSON 복사"를 눌러 PC 대화창에 붙여 넣어 주세요.')
+    const rows = result.sizeMatrix.map((r) => `<tr><td>${r.size}</td><td>${r.q}</td><td>${r.kbMean}</td><td>${r.kbP95}</td><td>${r.msMean}</td><td>${r.msP95}</td></tr>`).join('')
+    $('out').innerHTML = `<table><tr><th>해상도</th><th>화질</th><th>KB 평균</th><th>KB p95</th><th>만드는 시간 ms 평균</th><th>p95</th></tr>${rows}</table>` +
+      `<table><tr><th>구간</th><th>변화 p50/p95</th><th>임계 0.01로 보낸 비율</th><th>0.02</th><th>0.04</th></tr>${Object.entries(result.changeDetection).map(([k, v]) => `<tr><td>${k}</td><td>${v.diffP50}/${v.diffP95}</td><td>${v.sentRatio['0.01']}</td><td>${v.sentRatio['0.02']}</td><td>${v.sentRatio['0.04']}</td></tr>`).join('')}</table>`
+    $('json').textContent = JSON.stringify(result)
+    $('copy').disabled = false
+  } catch (e) {
+    say('실패: ' + (e && e.message ? e.message : e) + ' — 주소가 https:// 인지, 카메라 권한을 허용했는지 확인해 주세요.')
+    $('start').disabled = false
+  }
+}
+$('start').onclick = run
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('json').textContent); say('복사했습니다. PC 대화창에 붙여 넣어 주세요.') }
+  catch { say('복사가 막혔습니다. 아래 JSON 글자를 길게 눌러 직접 복사해 주세요.') }
+}
+</script>
+</body>
+</html>
