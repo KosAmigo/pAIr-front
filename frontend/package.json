@@ -21,6 +21,8 @@
     "test:proctor": "node --experimental-strip-types --test tests/proctor/*.test.ts",
     "test:scripts": "node --test tests/dev-all.test.mjs",
     "preview": "vite preview",
+    "e2e": "playwright test",
+    "shots": "playwright test --grep @shot",
     "test:questions": "node --experimental-strip-types --test tests/questions.test.mjs"
   },
   "dependencies": {
@@ -49,6 +51,7 @@
     "three": "0.187.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.6",

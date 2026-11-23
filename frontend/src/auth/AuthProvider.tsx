@@ -4,6 +4,8 @@ import { AuthContext, type AuthApi } from './auth'
 import { authApi, ensureAuthSessionKey, logoutSession, newAuthSession, readAuthSession, saveAuthSession, subscribeAuthSession, type AuthSession, AuthRequestError, AuthSessionExpiredError } from './authApi'
 import { accountMutation } from './account'
 import { CreditProvider } from '../data/CreditProvider'
+import { companyApi } from '../company/companyApi'
+import { needsOnboarding } from '../company/policy'
 
 // 토큰을 브라우저에 보관하고 서버에서 세션을 재검증해 로그인 상태를 앱 전체에 제공한다.
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -91,6 +93,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       logout,
       getProfile,
+      refreshProfile: async () => {
+        const expected = sessionRef.current
+        if (!expected) throw new AuthSessionExpiredError()
+        const user = await getProfile()
+        const current = sessionRef.current
+        if (!current || (expected.sessionKey ? current.sessionKey !== expected.sessionKey : current.token !== expected.token)) throw new AuthSessionExpiredError()
+        set({ ...current, user })
+        return user
+      },
+      acceptInvitation: async (inviteToken, name, password, code) => {
+        const response = await companyApi.accept(inviteToken, name, password, code)
+        set(newAuthSession(response))
+        return response.user
+      },
       changePassword: async (currentPassword, newPassword) => {
         if (!token) throw new AuthSessionExpiredError()
         const expected = await ensureAuthSessionKey()
@@ -120,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={api}>
-      <CreditProvider token={token ?? null}>{children}</CreditProvider>
+      <CreditProvider token={session && !needsOnboarding(session.user) ? session.token : null}>{children}</CreditProvider>
     </AuthContext.Provider>
   )
 }

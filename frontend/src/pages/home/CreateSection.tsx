@@ -1,5 +1,5 @@
 // DESIGN.md §7-1 ⑤ AI 과제 생성: 직군과 형태를 고르면 AI가 설명, 파일, 문항, 근거까지 초안을 만들고 사람이 검수해 공개한다.
-// 오른쪽 그림은 콘솔의 "AI로 과제 만들기" 화면을 줄인 것. 화면에 들어오면 단계가 차례로 끝나고 초안 카드가 뜬다.
+// 오른쪽 그림은 콘솔의 "과제 만들기" 화면을 줄인 것. 화면에 들어오면 단계가 차례로 끝나고 초안 카드가 뜬다.
 import { useRef } from 'react'
 import { CircleCheck, FileText, ListChecks, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
 import SectionHead, { Grad } from './SectionHead'
@@ -71,7 +71,7 @@ export default function CreateSection() {
       <div className="mt-16 grid items-start gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <Points items={POINTS} className="lg:pt-6" />
 
-        {/* 콘솔 "AI로 과제 만들기" 화면 축소판 */}
+        {/* 콘솔 "과제 만들기" 화면 축소판 */}
         <div data-gen className="relative" role="img" aria-label="AI가 과제 설명, 작업 파일, 문항, 후속 질문, 근거 문서를 차례로 만들고 검수 대기 초안이 만들어지는 화면">
           <GlowBorder className="rounded-[28px]">
           <div className={mockFrame}>

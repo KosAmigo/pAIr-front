@@ -5,6 +5,8 @@ import {
   countTabs,
   firstTab,
   filterTasks,
+  matchesQuery,
+  TAB_ORDER,
   trackOf,
   checkBadge,
   usageLock,
@@ -26,12 +28,36 @@ test('tabOf: 검수 전 = HIDDEN, 공개 문제 = OPEN/CLOSED + SELF, 비공개 
   assert.equal(tabOf(t({ status: 'CLOSED', usage: 'LIVE' })), 'private')
 })
 
-test('countTabs and firstTab open 검수 전 first only when it has tasks', () => {
+test('countTabs and firstTab: 처음에는 늘 공개 문제, 탭 순서는 공개 → 비공개 → 검수 전', () => {
   const list = [t({}), t({ status: 'OPEN' }), t({ status: 'OPEN', usage: 'LIVE' }), t({ status: 'CLOSED', usage: 'LIVE' })]
   assert.deepEqual(countTabs(list), { draft: 1, public: 1, private: 2 })
-  assert.equal(firstTab(countTabs(list)), 'draft')
-  assert.equal(firstTab({ draft: 0, public: 0, private: 3 }), 'private')
-  assert.equal(firstTab({ draft: 0, public: 0, private: 0 }), 'public')
+  assert.equal(firstTab(countTabs(list)), 'public')
+  assert.equal(firstTab({ draft: 0, public: 0, private: 3 }), 'public')
+  assert.deepEqual(TAB_ORDER, ['public', 'private', 'draft'])
+})
+
+test('matchesQuery: 부분 일치, 공백·대소문자 무시, 결과 없음', () => {
+  const a = t({ id: 'T-1', title: '쿠폰 할인 계산', summary: '중복 적용 함정', category: 'Backend API' })
+  assert.equal(matchesQuery(a, ''), true)
+  assert.equal(matchesQuery(a, '할인'), true) // 부분 일치
+  assert.equal(matchesQuery(a, '쿠폰할인'), true) // 공백 무시
+  assert.equal(matchesQuery(a, '  쿠 폰  '), true)
+  assert.equal(matchesQuery(a, '중복적용'), true) // 한 줄 소개
+  assert.equal(matchesQuery(a, 'BACKEND api'), true) // 대소문자·공백 무시, 주제
+  assert.equal(matchesQuery(a, '환불'), false)
+  assert.equal(matchesQuery(t({ title: 'x', summary: null, category: null }), '환불'), false)
+})
+
+test('filterTasks 검색은 탭·직군 안에서만 찾고, 결과가 없으면 빈 목록', () => {
+  const list = [
+    t({ id: 'A', title: '쿠폰 계산' }),
+    t({ id: 'B', type: 'biz', title: '쿠폰 요금제' }),
+    t({ id: 'C', status: 'OPEN', title: '쿠폰 공개' }),
+  ]
+  assert.deepEqual(filterTasks(list, { tab: 'draft', track: 'ALL', q: '쿠 폰' }).map((x) => x.id).sort(), ['A', 'B'])
+  assert.deepEqual(filterTasks(list, { tab: 'draft', track: 'BIZ', q: '쿠폰' }).map((x) => x.id), ['B'])
+  assert.deepEqual(filterTasks(list, { tab: 'public', track: 'BIZ', q: '쿠폰' }), [])
+  assert.deepEqual(filterTasks(list, { tab: 'draft', track: 'ALL', q: '없는말' }), [])
 })
 
 test('trackOf falls back to the old type field when track is missing', () => {

@@ -47,3 +47,12 @@ desktop.ini
 skills-lock.json
 # ui-ux-pro-max 는 .agents/ 를 가리키는 이 PC 전용 링크라 올리지 않는다 (각자 설치)
 .claude/skills/ui-ux-pro-max
+
+# 화면 확인 스크린샷: PC에만 저장하고 git 에는 올리지 않는다
+screenshots/task-console-v2/
+screenshots/task-console/
+screenshots/questions/
+screenshots/ai-task-gen/
+frontend/.shots/
+frontend/test-results/
+frontend/playwright-report/

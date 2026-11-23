@@ -1,17 +1,16 @@
-// AI 과제 만들기 (DESIGN.md §7-9-2, pAIr-docs 설계/AI_과제_생성_설계.md 8장 API).
+// 과제 만들기 (DESIGN.md §7-9-2, pAIr-docs 설계/AI_과제_생성_설계.md 8장 API).
 // 백엔드 응답 모양은 이 파일 한 곳에만 둔다. 모양이 달라지면 여기만 고친다.
 import { ApiError, call } from '../api.ts'
 
 export type GenTrack = 'DEV' | 'BIZ'
-export type GenDifficulty = '초급' | '중급' | '고급'
 /** SELF = 공개 문제(자가진단), LIVE = 비공개 문제(실전 시험) */
 export type GenUsage = 'SELF' | 'LIVE'
-export type GenMinutes = 40 | 60
+export type GenMinutes = 20 | 40 | 60
+export const GEN_MINUTES: GenMinutes[] = [20, 40, 60]
 
+/** 생성 요청. 직무·난이도는 보내지 않는다 (난이도는 AI가 정한다) */
 export type TaskGenRequest = {
   track: GenTrack
-  jobRole: string
-  difficulty: GenDifficulty
   topic: string
   trap: string
   usage: GenUsage
@@ -30,16 +29,20 @@ export type TaskGenJob = {
 
 /** AI 추천 카드 하나 (POST /api/admin/task-gen/suggestions, 한 번에 3개) */
 export type Suggestion = {
-  jobRole: string
-  difficulty: GenDifficulty
-  topic: string
+  /** 문제 상황 한 줄 (고르면 "주제/상황" 칸에 들어간다) */
+  situation: string
   trap: string
   /** 함정 종류 (예: 경계값, 중복 적용). 칩으로 보여 준다 */
   trapType: string
-  /** 왜 좋은 문제인지 한두 문장 */
+  /** 건드리는 역량 key 1~2개 (data/dashboard.ts 의 STATS key) */
+  competencies: string[]
+  /** 왜 좋은 문제인지 한두 문장 ("자세히"에서만 보인다) */
   why: string
 }
-export type SuggestRequest = { track: GenTrack; jobRole?: string; difficulty?: GenDifficulty; exclude?: string[] }
+/** 입력한 주제를 AI 가 어떻게 이해했는지. ok=false 면 사용자에게 한 번 확인받는다 */
+export type TopicCheck = { ok: boolean; understood: string; message?: string }
+export type SuggestResponse = { topicCheck: TopicCheck | null; suggestions: Suggestion[] }
+export type SuggestRequest = { track: GenTrack; topic?: string; exclude?: string[] }
 
 /** 과제 콘솔 상세에 보이는 생성 기록 (_gen/report.json, 백엔드 TaskGenerator.GenReport) */
 export type GenReport = {
@@ -49,7 +52,8 @@ export type GenReport = {
   inputTokens?: number
   outputTokens?: number
   passed?: boolean
-  form?: Partial<TaskGenRequest> | null
+  /** 예전 기록에는 jobRole·difficulty 가 남아 있을 수 있다 */
+  form?: (Partial<TaskGenRequest> & { jobRole?: string; difficulty?: string }) | null
   checks: GenCheck[]
   retryError?: string | null
   details?: Record<string, unknown> | null
@@ -59,40 +63,94 @@ const enc = encodeURIComponent
 export const taskGenApi = {
   start: (req: TaskGenRequest) => call<{ jobId: string }>('POST', '/api/admin/task-gen', req),
   job: (jobId: string) => call<TaskGenJob>('GET', `/api/admin/task-gen/${enc(jobId)}`),
-  suggest: (req: SuggestRequest) => call<{ suggestions: Suggestion[] }>('POST', '/api/admin/task-gen/suggestions', req),
+  suggest: (req: SuggestRequest) => call<SuggestResponse>('POST', '/api/admin/task-gen/suggestions', req),
   report: (code: string) => call<GenReport>('GET', `/api/admin/tasks/${enc(code)}/gen-report`),
 }
 
 // ── AI 추천 ─────────────────────────────────
 
-/** 추천 요청: 직군은 꼭, 직무·난이도는 적어 둔 것이 있으면 같이, 이미 받은 주제는 빼 달라고 */
-export function suggestRequest(f: Pick<TaskGenRequest, 'track' | 'jobRole' | 'difficulty'>, exclude: string[] = [], withDifficulty = false): SuggestRequest {
+/** 추천 요청: 직군은 꼭, 주제는 적었을 때만, 이미 받은 상황은 빼 달라고 */
+export function suggestRequest(f: { track: GenTrack; topic?: string }, exclude: string[] = []): SuggestRequest {
   const req: SuggestRequest = { track: f.track }
-  if (f.jobRole.trim()) req.jobRole = f.jobRole.trim()
-  if (withDifficulty) req.difficulty = f.difficulty
+  if (f.topic?.trim()) req.topic = f.topic.trim()
   if (exclude.length) req.exclude = exclude
   return req
 }
 
 /** 추천을 고르면 채워지는 칸 (화면에서 차례로 반짝인다) */
-export const FILL_FIELDS = ['jobRole', 'difficulty', 'topic', 'trap'] as const
+export const FILL_FIELDS = ['topic', 'trap'] as const
 export type FillField = (typeof FILL_FIELDS)[number]
-export const FILL_LABEL: Record<FillField, string> = { jobRole: '직무', difficulty: '난이도', topic: '주제', trap: '함정' }
+export const FILL_LABEL: Record<FillField, string> = { topic: '주제/상황', trap: '함정' }
 
-/** 이미 직접 적어 둔 칸 중 추천과 내용이 다른 칸. 있으면 덮어쓰기 전에 한 번 묻는다 (난이도는 늘 값이 있어 묻지 않는다) */
-export function overwriteConflicts(f: Pick<TaskGenRequest, 'jobRole' | 'topic' | 'trap'>, s: Suggestion): FillField[] {
-  return (['jobRole', 'topic', 'trap'] as const).filter((k) => f[k].trim() !== '' && f[k].trim() !== s[k].trim())
+/** 이미 직접 적어 둔 칸 중 추천과 내용이 다른 칸. 있으면 덮어쓰기 전에 한 번 묻는다 */
+export function overwriteConflicts(f: Pick<TaskGenRequest, 'topic' | 'trap'>, s: Suggestion): FillField[] {
+  const to: Record<FillField, string> = { topic: s.situation, trap: s.trap }
+  return FILL_FIELDS.filter((k) => f[k].trim() !== '' && f[k].trim() !== to[k].trim())
 }
 
 /** 추천 내용을 폼에 넣는다. 직군·용도·시간은 그대로 둔다 */
 export function applySuggestion<F extends Pick<TaskGenRequest, FillField>>(f: F, s: Suggestion): F {
-  return { ...f, jobRole: s.jobRole, difficulty: s.difficulty, topic: s.topic, trap: s.trap }
+  return { ...f, topic: s.situation, trap: s.trap }
 }
 
-/** "다시 추천" 때 뺄 주제: 앞서 받은 주제를 쌓되 중복은 없애고 최근 maxKeep 개만 */
-export function nextExclude(prev: string[], got: Pick<Suggestion, 'topic'>[], maxKeep = 15): string[] {
-  const all = [...prev, ...got.map((s) => s.topic.trim())].filter(Boolean)
+/** "다시 추천" 때 뺄 상황: 앞서 받은 상황을 쌓되 중복은 없애고 최근 maxKeep 개만 */
+export function nextExclude(prev: string[], got: Pick<Suggestion, 'situation'>[], maxKeep = 15): string[] {
+  const all = [...prev, ...got.map((s) => s.situation.trim())].filter(Boolean)
   return [...new Set(all.reverse())].reverse().slice(-maxKeep)
+}
+
+// ── 직군별 추천 보관 (한 화면 안에서 직군을 바꿔도 그대로 남는다) ──
+
+/** 한 직군에서 받은 추천과 고른 카드 */
+export type TrackSuggest = {
+  items: Suggestion[]
+  topicCheck: TopicCheck | null
+  /** 이 추천을 받을 때 적혀 있던 주제 (바뀌었는지 비교용) */
+  askedTopic: string
+  /** 주제 확인 박스에서 "이대로 보기"를 눌렀는지 */
+  accepted: boolean
+  /** 고른 카드의 situation */
+  picked: string | null
+  exclude: string[]
+}
+export type SuggestStore = Partial<Record<GenTrack, TrackSuggest>>
+
+/** 주제가 처음 받을 때와 같고 목록이 있으면 "다시 추천"(exclude 이어 씀), 아니면 새로 받는다 */
+export const isAgain = (t: TrackSuggest | undefined, topic: string): t is TrackSuggest => !!t && t.items.length > 0 && t.askedTopic === topic.trim()
+
+/** 이번 요청에 실을 exclude */
+export const excludeFor = (t: TrackSuggest | undefined, topic: string): string[] => (isAgain(t, topic) ? t.exclude : [])
+
+/** 새로 받은 응답을 그 직군 칸에 넣는다. 같은 주제면 exclude 를 이어 쌓고, 주제가 바뀌었으면 목록을 새로 바꾼다 */
+export function recordSuggestions(store: SuggestStore, track: GenTrack, topic: string, res: SuggestResponse): SuggestStore {
+  const prev = store[track]
+  const base = isAgain(prev, topic) ? prev.exclude : []
+  const items = res.suggestions ?? []
+  return {
+    ...store,
+    [track]: { items, topicCheck: res.topicCheck ?? null, askedTopic: topic.trim(), accepted: false, picked: null, exclude: nextExclude(base, items) },
+  }
+}
+
+export function pickSuggestion(store: SuggestStore, track: GenTrack, situation: string): SuggestStore {
+  const t = store[track]
+  return t ? { ...store, [track]: { ...t, picked: situation } } : store
+}
+
+export function acceptTopicCheck(store: SuggestStore, track: GenTrack): SuggestStore {
+  const t = store[track]
+  return t ? { ...store, [track]: { ...t, accepted: true } } : store
+}
+
+/** 주제 확인 박스를 보여야 하는지: AI 가 주제를 다르게 이해했고(ok=false) 아직 이대로 보기를 안 눌렀을 때 */
+export const needsTopicCheck = (t: TrackSuggest | undefined): boolean => !!t && t.topicCheck?.ok === false && !t.accepted
+
+/** 카드로 보여 줄 목록: 확인 대기 중에는 숨긴다 */
+export const visibleSuggestions = (t: TrackSuggest | undefined): Suggestion[] | null => (!t || needsTopicCheck(t) ? null : t.items)
+
+/** 주제 확인 박스 문장: '{입력한 주제}'를 '{understood}'(으)로 이해했어요. {message} 이대로 볼까요? */
+export function topicCheckText(topic: string, c: TopicCheck): string {
+  return `'${topic.trim()}'를 '${c.understood}'(으)로 이해했어요. ${c.message ? c.message + ' ' : ''}이대로 볼까요?`
 }
 
 export function suggestErrorMessage(e: unknown): string {
@@ -178,14 +236,18 @@ export const allChecksOk = (job: Pick<TaskGenJob, 'checks'>) => job.checks.every
 
 /** 폼 입력 검사. 오류가 없으면 빈 객체 */
 export function validateForm(
-  f: Pick<TaskGenRequest, 'jobRole' | 'topic' | 'trap'> & { track: GenTrack | null },
-): Partial<Record<'track' | 'jobRole' | 'topic' | 'trap', string>> {
-  const e: Partial<Record<'track' | 'jobRole' | 'topic' | 'trap', string>> = {}
+  f: Pick<TaskGenRequest, 'topic' | 'trap'> & { track: GenTrack | null },
+): Partial<Record<'track' | 'topic' | 'trap', string>> {
+  const e: Partial<Record<'track' | 'topic' | 'trap', string>> = {}
   if (!f.track) e.track = '직군을 고르세요'
-  if (!f.jobRole.trim()) e.jobRole = '직무를 입력하세요'
-  if (!f.topic.trim()) e.topic = '주제를 입력하세요'
+  if (!f.topic.trim()) e.topic = '주제나 상황을 입력하세요'
   if (!f.trap.trim()) e.trap = '함정을 입력하세요'
   return e
+}
+
+/** 화면 폼에서 서버로 보낼 생성 요청을 만든다 (직무·난이도 없음) */
+export function buildGenRequest(f: { track: GenTrack; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes }): TaskGenRequest {
+  return { track: f.track, topic: f.topic.trim(), trap: f.trap.trim(), usage: f.usage, minutes: f.minutes }
 }
 
 /**

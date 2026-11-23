@@ -14,6 +14,10 @@ import GraderResult from './pages/GraderResult'
 import { useAuth } from './auth/auth'
 import { AuthProvider } from './auth/AuthProvider'
 import RequireAuth from './auth/RequireAuth'
+import { OnboardingGate } from './auth/OnboardingGate'
+import Onboarding from './pages/Onboarding'
+import CompanyInvite from './pages/CompanyInvite'
+import CompanyMembers from './pages/console/CompanyMembers'
 import Login, { Signup } from './pages/Login'
 import MyPage from './pages/MyPage'
 import Credits from './pages/Credits'
@@ -84,11 +88,15 @@ export default function App() {
     <MotionConfig reducedMotion="user">
     <AuthProvider>
       <BrowserRouter>
+        <OnboardingGate>
         <Routes>
           {/* 로그인 없이 */}
           <Route path="/" element={home} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/company-invite" element={<CompanyInvite />} />
+          <Route path="/company-invites/accept" element={<CompanyInvite />} />
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/entry" element={<Entry />} />
           <Route path="/proctor/phone" element={phoneCam} />
           <Route path="/practice" element={practice} />
@@ -126,6 +134,9 @@ export default function App() {
               <Route element={<RequireAuth roles={['ADMIN', 'MANAGER']} />}>
                 <Route path="sessions/new" element={<ConsoleSessionNew />} />
               </Route>
+              <Route element={<RequireAuth roles={['MANAGER']} />}>
+                <Route path="members" element={<CompanyMembers />} />
+              </Route>
               <Route path="sessions/:sessionId" element={<ConsoleSessionDetail />} />
               <Route path="sessions/:sessionId/attempts/:attemptId" element={<ConsoleAttempt />} />
               <Route element={<RequireAuth roles={['ADMIN']} />}>
@@ -140,6 +151,7 @@ export default function App() {
 
           <Route path="*" element={home} />
         </Routes>
+        </OnboardingGate>
       </BrowserRouter>
     </AuthProvider>
     </MotionConfig>

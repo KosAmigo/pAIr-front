@@ -1,4 +1,4 @@
-// AI로 과제 만들기 단계 표시: ① 아이디어 → ② 확인 → ③ 생성 → ④ 검수.
+// 과제 만들기 단계 표시: ① 아이디어 → ② 확인 → ③ 생성 → ④ 검수.
 // 지난 단계는 체크, 지금 단계는 브랜드 그라데이션 원, 사이 선은 지난 만큼 차오른다(scaleX).
 import { Check } from 'lucide-react'
 import { motion } from 'motion/react'
