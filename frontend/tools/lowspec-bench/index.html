@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>pAIr 저사양 실측 (MediaPipe)</title>
+<style>
+  body { font: 14px/1.5 system-ui, 'Malgun Gothic', sans-serif; margin: 16px; max-width: 920px; color: #111; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  fieldset { margin: 8px 0; padding: 8px 12px; }
+  label { margin-right: 14px; white-space: nowrap; }
+  button { padding: 6px 14px; margin-right: 6px; }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid #ccc; padding: 4px 10px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  #log { white-space: pre-wrap; background: #f6f6f6; padding: 8px; min-height: 40px; }
+  video { width: 240px; background: #000; vertical-align: top; }
+  #spin { display: inline-block; width: 16px; height: 16px; background: #09f; margin-left: 12px; }
+  .ok { color: #070; } .warn { color: #a60; } .bad { color: #b00; }
+  small { color: #666; }
+</style>
+</head>
+<body>
+<h1>pAIr 저사양 실측 하네스</h1>
+<small>앱(<code>src/proctor/vision/models.ts</code>)과 같은 모델·옵션으로 브라우저 안에서 분석 시간과 화면 끊김을 잰다. 서버로 아무것도 보내지 않는다.</small>
+
+<fieldset><legend>입력</legend>
+  <label><input type="radio" name="src" value="cam" checked /> 웹캠</label>
+  <label><input type="radio" name="src" value="file" /> 영상 파일 <input type="file" id="file" accept="video/*" /></label>
+  <small>(재현성이 필요하면 같은 영상 파일을 모든 기기에서 쓴다)</small>
+</fieldset>
+
+<fieldset><legend>설정</legend>
+  <label>연산 장치
+    <select id="delegate"><option value="CPU">CPU</option><option value="GPU">GPU</option></select>
+  </label>
+  <label>실행 위치
+    <select id="where">
+      <option value="main">메인 스레드 (지금 앱 방식)</option>
+      <option value="worker">Web Worker (분리안)</option>
+    </select>
+  </label>
+  <label>실행 방식
+    <select id="mode">
+      <option value="app">앱과 동일 (한 번에 모델 1개, 얼굴3:나머지1, 최소 100ms 간격)</option>
+      <option value="raw">최대 속도 (선택 모델을 연달아, 휴식 없음)</option>
+    </select>
+  </label>
+  <label>시간(초) <input id="secs" type="number" value="30" min="5" max="300" style="width:60px" /></label>
+  <div>
+    모델:
+    <label><input class="m" type="checkbox" value="face" checked /> 얼굴</label>
+    <label><input class="m" type="checkbox" value="pose" checked /> 포즈(lite)</label>
+    <label><input class="m" type="checkbox" value="hand" /> 손</label>
+    <label><input class="m" type="checkbox" value="object" /> 물체(EfficientDet-Lite0)</label>
+  </div>
+</fieldset>
+
+<button id="start">시작</button><button id="stop" disabled>중지</button>
+<button id="copy" disabled>결과 JSON 복사</button>
+<span id="spin"></span>
+<div style="margin-top:8px"><video id="video" muted playsinline></video></div>
+<div id="log">대기 중. 저사양을 흉내 내려면 DevTools → Performance → CPU 4배/6배 느리게를 켜고 실행한다.</div>
+<div id="out"></div>
+
+<script type="module">
+import {
+  FilesetResolver, FaceLandmarker, PoseLandmarker, HandLandmarker, ObjectDetector,
+} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/vision_bundle.mjs'
+
+const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm'
+const M = 'https://storage.googleapis.com/mediapipe-models'
+const URLS = {
+  face: `${M}/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+  pose: `${M}/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
+  hand: `${M}/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+  object: `${M}/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite`,
+}
+const MIN_INTERVAL_MS = 100 // frameBudget.ts 의 PC_MIN_ANALYZE_INTERVAL_MS
+const LONG_FRAME_MS = 50
+
+const $ = (id) => document.getElementById(id)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const log = (s) => { $('log').textContent = s }
+
+const BUNDLE_CJS = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/vision_bundle.cjs'
+const WARMUP = 5 // 측정 전에 모델마다 몇 번 먼저 돌려 첫 실행 지연을 뺀다
+const T = { FilesetResolver, FaceLandmarker, PoseLandmarker, HandLandmarker, ObjectDetector }
+
+// 메인 스레드와 Worker 가 같은 옵션을 쓰도록 문자열로도 넘기는 함수 (바깥 변수를 쓰지 말 것)
+function buildOptions(kind, delegate, urls) {
+  const baseOptions = { modelAssetPath: urls[kind], delegate }
+  switch (kind) {
+    case 'face': return { cls: 'FaceLandmarker', opts: { baseOptions, runningMode: 'VIDEO', numFaces: 3, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true } }
+    case 'pose': return { cls: 'PoseLandmarker', opts: { baseOptions, runningMode: 'VIDEO', numPoses: 1 } }
+    case 'hand': return { cls: 'HandLandmarker', opts: { baseOptions, runningMode: 'VIDEO', numHands: 4 } }
+    default: return { cls: 'ObjectDetector', opts: { baseOptions, runningMode: 'VIDEO', scoreThreshold: 0.3, maxResults: 8, categoryAllowlist: ['cell phone', 'laptop', 'book'] } }
+  }
+}
+
+function create(kind, fs, delegate) {
+  const { cls, opts } = buildOptions(kind, delegate, URLS)
+  return T[cls].createFromOptions(fs, opts)
+}
+
+// Worker 안에서 도는 코드. 클래식 Worker 라 importScripts 로 wasm 을 불러오는 MediaPipe 기본 경로를 쓴다.
+function workerMain() {
+  let lib = null
+  const models = {}
+  self.onmessage = async (e) => {
+    const m = e.data
+    if (m.type === 'init') {
+      try {
+        const src = await (await fetch(m.bundle)).text()
+        const mod = { exports: {} }
+        new Function('module', 'exports', src)(mod, mod.exports)
+        lib = mod.exports
+        const fs = await lib.FilesetResolver.forVisionTasks(m.wasm)
+        const loadMs = {}
+        for (const k of m.kinds) {
+          const t = performance.now()
+          const { cls, opts } = buildOptions(k, m.delegate, m.urls)
+          models[k] = await lib[cls].createFromOptions(fs, opts)
+          loadMs[k] = performance.now() - t
+        }
+        postMessage({ type: 'ready', loadMs })
+      } catch (err) {
+        postMessage({ type: 'error', message: String((err && err.message) || err) })
+      }
+    } else if (m.type === 'detect') {
+      try {
+        const s = performance.now()
+        models[m.kind].detectForVideo(m.bitmap, m.ts)
+        const ms = performance.now() - s
+        m.bitmap.close()
+        postMessage({ type: 'done', id: m.id, ms })
+      } catch (err) {
+        postMessage({ type: 'done', id: m.id, error: String((err && err.message) || err) })
+      }
+    }
+  }
+}
+
+class WorkerClient {
+  constructor() {
+    const code = `const buildOptions=${buildOptions.toString()};(${workerMain.toString()})()`
+    this.url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }))
+    this.worker = new Worker(this.url)
+    this.pending = new Map()
+    this.seq = 0
+  }
+  init(kinds, delegate) {
+    return new Promise((resolve, reject) => {
+      this.worker.onerror = (e) => reject(new Error(`Worker 오류: ${e.message || '로딩 실패'}`))
+      this.worker.onmessage = (ev) => {
+        const m = ev.data
+        if (m.type === 'ready') {
+          this.worker.onmessage = (e2) => this.onDone(e2.data)
+          resolve(m.loadMs)
+        } else if (m.type === 'error') {
+          reject(new Error(m.message))
+        }
+      }
+      this.worker.postMessage({ type: 'init', kinds, delegate, urls: URLS, wasm: WASM, bundle: BUNDLE_CJS })
+    })
+  }
+  onDone(m) {
+    const p = this.pending.get(m.id)
+    if (!p) return
+    this.pending.delete(m.id)
+    if (m.error) p.reject(new Error(m.error)); else p.resolve(m.ms)
+  }
+  detect(kind, bitmap, ts) {
+    const id = ++this.seq
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject })
+      this.worker.postMessage({ type: 'detect', id, kind, bitmap, ts }, [bitmap])
+    })
+  }
+  terminate() {
+    this.worker.terminate()
+    URL.revokeObjectURL(this.url)
+  }
+}
+
+function pct(sorted, p) {
+  if (!sorted.length) return 0
+  return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]
+}
+function stats(arr) {
+  const s = [...arr].sort((a, b) => a - b)
+  const mean = s.length ? s.reduce((a, b) => a + b, 0) / s.length : 0
+  return { n: s.length, mean, p50: pct(s, 50), p95: pct(s, 95), max: s.length ? s[s.length - 1] : 0 }
+}
+const f1 = (x) => x.toFixed(1)
+
+function envInfo() {
+  let gpu = 'n/a'
+  try {
+    const gl = document.createElement('canvas').getContext('webgl')
+    const ext = gl && gl.getExtension('WEBGL_debug_renderer_info')
+    if (ext) gpu = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+  } catch { /* ignore */ }
+  return {
+    ua: navigator.userAgent,
+    cores: navigator.hardwareConcurrency,
+    memoryGB: navigator.deviceMemory ?? 'n/a',
+    gpu,
+    dpr: devicePixelRatio,
+  }
+}
+
+let running = false
+let lastResult = null
+
+async function setupVideo() {
+  const v = $('video')
+  const useFile = document.querySelector('input[name=src]:checked').value === 'file'
+  if (useFile) {
+    const f = $('file').files[0]
+    if (!f) throw new Error('영상 파일을 선택하세요')
+    v.srcObject = null
+    v.src = URL.createObjectURL(f)
+    v.loop = true
+  } else {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('웹캠을 쓸 수 없는 주소입니다. http://localhost:포트 로 접속하거나, "영상 파일"을 선택해 측정하세요 (IP 주소·file:// 은 웹캠이 막힘)')
+    }
+    v.removeAttribute('src')
+    v.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+  }
+  await v.play()
+  while (v.readyState < 2) await sleep(50)
+  return v
+}
+
+async function run() {
+  running = true
+  $('start').disabled = true; $('stop').disabled = false; $('copy').disabled = true; $('out').innerHTML = ''
+  const delegate = $('delegate').value
+  const mode = $('mode').value
+  const where = $('where').value
+  const inWorker = where === 'worker'
+  const secs = Number($('secs').value)
+  const enabled = [...document.querySelectorAll('.m:checked')].map((e) => e.value)
+  let client = null
+  try {
+    if (!enabled.length) throw new Error('모델을 하나 이상 선택하세요')
+    const video = await setupVideo()
+
+    log('모델 로딩 중...')
+    const loadMs = {}
+    let infer // (모델, 타임스탬프) => 추론에 걸린 ms
+    if (inWorker) {
+      client = new WorkerClient()
+      Object.assign(loadMs, await client.init(enabled, delegate))
+      infer = async (k, ts) => client.detect(k, await createImageBitmap(video), ts)
+    } else {
+      const fs = await FilesetResolver.forVisionTasks(WASM)
+      const models = {}
+      for (const k of enabled) {
+        const t = performance.now()
+        models[k] = await create(k, fs, delegate)
+        loadMs[k] = performance.now() - t
+      }
+      infer = async (k, ts) => {
+        const s = performance.now()
+        models[k].detectForVideo(video, ts)
+        return performance.now() - s
+      }
+    }
+
+    let lastTs = 0
+    const nextTs = () => { lastTs = Math.max(Math.round(performance.now()), lastTs + 1); return lastTs }
+    log('워밍업 중...')
+    for (let w = 0; w < WARMUP; w++) for (const k of enabled) await infer(k, nextTs())
+
+    const samples = Object.fromEntries(enabled.map((k) => [k, []]))
+    const ticks = []; const frameDeltas = []; const longtasks = []
+    let po = null
+    try {
+      po = new PerformanceObserver((l) => l.getEntries().forEach((e) => longtasks.push(e.duration)))
+      po.observe({ entryTypes: ['longtask'] })
+    } catch { /* longtask 미지원 브라우저 */ }
+
+    let lastRaf = performance.now()
+    const raf = (t) => { if (!running) return; frameDeltas.push(t - lastRaf); lastRaf = t; requestAnimationFrame(raf) }
+    requestAnimationFrame(raf)
+
+    const seq = enabled.flatMap((k) => (k === 'face' ? ['face', 'face', 'face'] : [k]))
+    let idx = 0
+    const startAt = performance.now(); const endAt = startAt + secs * 1000
+    while (running && performance.now() < endAt) {
+      const t0 = performance.now()
+      const batch = mode === 'app' ? [seq[idx++ % seq.length]] : enabled
+      for (const k of batch) samples[k].push(await infer(k, nextTs()))
+      const el = performance.now() - t0
+      ticks.push(el)
+      log(`측정 중 ${Math.round((performance.now() - startAt) / 1000)}/${secs}초 · 분석 ${ticks.length}회`)
+      // 메인 스레드는 걸린 시간만큼 쉬어 점유율을 줄인다. Worker 는 메인을 막지 않으니 최소 간격만 지킨다.
+      await sleep(mode === 'app' ? Math.max(MIN_INTERVAL_MS - el, inWorker ? 0 : el) : 0)
+    }
+    running = false
+    po?.disconnect()
+
+    const elapsed = (performance.now() - startAt) / 1000
+    const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null
+    const meanDelta = frameDeltas.length ? frameDeltas.reduce((a, b) => a + b, 0) / frameDeltas.length : 0
+    const fsd = [...frameDeltas].sort((a, b) => a - b)
+    lastResult = {
+      env: envInfo(), config: { delegate, mode, where, secs, enabled, warmup: WARMUP },
+      loadMs: Object.fromEntries(Object.entries(loadMs).map(([k, v]) => [k, Math.round(v)])),
+      perModel: Object.fromEntries(enabled.map((k) => [k, stats(samples[k])])),
+      tick: stats(ticks),
+      analysisPerSec: ticks.length / elapsed,
+      ui: {
+        fps: meanDelta ? 1000 / meanDelta : 0,
+        p95FrameMs: pct(fsd, 95),
+        framesOver50ms: frameDeltas.filter((d) => d > LONG_FRAME_MS).length,
+        framesOver100ms: frameDeltas.filter((d) => d > 100).length,
+        frames: frameDeltas.length,
+      },
+      longtasks: {
+        count: longtasks.length,
+        totalMs: Math.round(longtasks.reduce((a, b) => a + b, 0)),
+        blockedPct: (longtasks.reduce((a, b) => a + b, 0) / (elapsed * 1000)) * 100,
+      },
+      heapMB: heap,
+    }
+    render(lastResult)
+    $('copy').disabled = false
+    log('완료')
+  } catch (e) {
+    log(`실패: ${e && e.message ? e.message : e}`)
+  } finally {
+    running = false
+    client?.terminate()
+    $('start').disabled = false; $('stop').disabled = true
+    const v = $('video')
+    if (v.srcObject) v.srcObject.getTracks().forEach((t) => t.stop())
+  }
+}
+
+function render(r) {
+  // Worker 는 틱 시간이 길어도 화면을 막지 않으므로 "메인 스레드가 막힌 비율"로 본다 (임시 기준 5% / 15%).
+  const blocked = r.longtasks.blockedPct
+  const verdict = r.config.where === 'worker'
+    ? (blocked <= 5 ? ['ok', `여유 (메인 스레드 막힘 ${f1(blocked)}%)`]
+      : blocked <= 15 ? ['warn', `주의 (메인 스레드 막힘 ${f1(blocked)}%)`]
+      : ['bad', `위험 (메인 스레드 막힘 ${f1(blocked)}%)`])
+    : (r.tick.p95 <= 50 ? ['ok', '여유 (분석 1회 p95 ≤ 50ms)']
+      : r.tick.p95 <= 100 ? ['warn', '주의 (50~100ms: 입력이 끊길 수 있음)']
+      : ['bad', '위험 (100ms 초과: Worker 분리 또는 간격 확대 필요)'])
+  const rows = Object.entries(r.perModel).map(([k, s]) =>
+    `<tr><td>${k}</td><td>${s.n}</td><td>${f1(s.mean)}</td><td>${f1(s.p50)}</td><td>${f1(s.p95)}</td><td>${f1(s.max)}</td><td>${r.loadMs[k]}</td></tr>`).join('')
+  $('out').innerHTML = `
+    <p class="${verdict[0]}"><b>${verdict[1]}</b></p>
+    <table><tr><th>모델</th><th>횟수</th><th>평균ms</th><th>p50</th><th>p95</th><th>최대</th><th>로딩ms</th></tr>${rows}
+    <tr><td><b>분석 1회(틱)</b></td><td>${r.tick.n}</td><td>${f1(r.tick.mean)}</td><td>${f1(r.tick.p50)}</td><td>${f1(r.tick.p95)}</td><td>${f1(r.tick.max)}</td><td>-</td></tr></table>
+    <table>
+      <tr><td>분석 속도</td><td>${f1(r.analysisPerSec)} 회/초</td></tr>
+      <tr><td>화면 갱신(rAF)</td><td>${f1(r.ui.fps)} fps · p95 프레임 ${f1(r.ui.p95FrameMs)}ms</td></tr>
+      <tr><td>끊긴 프레임</td><td>&gt;50ms ${r.ui.framesOver50ms}개 / &gt;100ms ${r.ui.framesOver100ms}개 (전체 ${r.ui.frames})</td></tr>
+      <tr><td>롱태스크(50ms↑)</td><td>${r.longtasks.count}건 · 합계 ${r.longtasks.totalMs}ms (측정 시간의 ${f1(r.longtasks.blockedPct)}%)</td></tr>
+      <tr><td>실행 위치</td><td>${r.config.where === 'worker' ? 'Web Worker' : '메인 스레드'} · ${r.config.delegate}</td></tr>
+      <tr><td>JS 힙</td><td>${r.heapMB ?? 'n/a'} MB</td></tr>
+      <tr><td>기기</td><td>코어 ${r.env.cores} · 메모리 ${r.env.memoryGB}GB · GPU ${r.env.gpu}</td></tr>
+    </table>`
+}
+
+$('start').onclick = run
+$('stop').onclick = () => { running = false }
+$('copy').onclick = async () => {
+  await navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2))
+  log('JSON을 클립보드에 복사했습니다')
+}
+
+// 화면이 얼마나 부드러운지 눈으로도 보이게 하는 표시기
+let deg = 0
+;(function spin() { deg = (deg + 4) % 360; $('spin').style.transform = `rotate(${deg}deg)`; requestAnimationFrame(spin) })()
+</script>
+</body>
+</html>
