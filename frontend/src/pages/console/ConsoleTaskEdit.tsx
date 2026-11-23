@@ -1,5 +1,5 @@
 // DESIGN.md §7-9-3 과제 검수 (ADMIN). 2026-11-20 개편.
-// 위: 스포트라이트 머리(상태 배지, 제목, 수치) → 상태 흐름(검수 전 → 공개/비공개) + 용도 토글(검수 전만) + 주인공 버튼.
+// 위: 스포트라이트 머리(상태 배지, 제목, 수치) → 상태 흐름(검수 전 → 자가진단/실전) + 용도 토글(검수 전만) + 주인공 버튼.
 // 아래: 알약 탭(개요, 파일, 자료, 문항, 자동 확인 결과) + 오른쪽 검수 체크리스트(브라우저에만 저장).
 // 내용 편집은 백엔드 API 가 없어 읽기 전용이다. 공개·숨기기·용도 바꾸기만 한다.
 import { useState } from 'react'
@@ -74,7 +74,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
     setBusy(true)
     try {
       setSummary(await setPublished(s.id, open))
-      toast.show(!open ? '숨겼어요. 검수 전으로 돌아갔어요' : s.usage === 'LIVE' ? '비공개 문제로 올렸어요. 실전 회차에서 고를 수 있어요' : '공개 문제로 올렸어요. 자가진단에 나와요')
+      toast.show(!open ? '숨겼어요. 검수 전으로 돌아갔어요' : s.usage === 'LIVE' ? '실전으로 올렸어요. 회차에서 고를 수 있어요' : '자가진단으로 올렸어요. 자가진단에 나와요')
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '바꾸지 못했어요')
     } finally {
@@ -82,7 +82,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
     }
   }
 
-  const publishLabel = s.usage === 'LIVE' ? '비공개 문제로 올리기' : '공개 문제로 올리기'
+  const publishLabel = s.usage === 'LIVE' ? '실전으로 올리기' : '자가진단으로 올리기'
   const nextText = draft
     ? checklist.done < REVIEW_CHECKS.length
       ? `내용을 읽고 체크리스트(${checklist.done}/${REVIEW_CHECKS.length})를 채운 뒤 올리세요.`
@@ -90,8 +90,8 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
     : isClosed(s)
       ? '내린 과제예요. 목록에는 남지만 새 응시는 막혀 있어요.'
       : s.usage === 'LIVE'
-        ? '실전 회차를 만들 때 고를 수 있어요. 자가진단에는 보이지 않아요.'
-        : '자가진단 과제 목록에 나오고 있어요.'
+        ? '회차를 만들 때 고를 수 있어요. 자가진단에는 보이지 않아요.'
+        : '누구나 자가진단에서 풀 수 있어요.'
 
   return (
     <>
@@ -229,7 +229,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
             <>
               {check === 'fail' && <>자동 확인에서 실패한 항목이 있어요. </>}
               {checklist.done < REVIEW_CHECKS.length && <>체크리스트를 {checklist.done}/{REVIEW_CHECKS.length}개만 확인했어요. </>}
-              그래도 {s.usage === 'LIVE' ? '비공개 문제(실전 시험 전용)' : '공개 문제(자가진단)'}로 올릴까요?
+              그래도 {s.usage === 'LIVE' ? '실전' : '자가진단'}으로 올릴까요?
             </>
           }
         />

@@ -1,8 +1,8 @@
 // DESIGN.md §7-9-2 과제 만들기 (ADMIN). 2026-11-23 개편: ① 아이디어 → ② 확인 → ③ 생성 → ④ 검수.
-// ① 위에서 아래로: 주제(선택) → 직군 → 추천 받기 → 고른 내용 확인·수정 → 용도·제한 시간. 직무·난이도 칸은 없다(난이도는 AI가 정한다).
+// ① 위에서 아래로: 직군 → 주제(선택, 추천 방향) → 추천 받기 → 고른 내용 확인·수정 → 용도·제한 시간. 직무·난이도 칸은 없다(난이도는 AI가 정한다).
 // ② 요약 카드로 한 번 확인 → ③ 생성(2초마다 상태 조회, 화면을 떠나면 조회만 멈춤) → 결과에서 ④ 검수로 간다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, Check, CircleAlert, Globe2, Lock, Pencil, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleAlert, Pencil, FilePlus2, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { GradientText } from '../../components/fx'
@@ -33,12 +33,13 @@ import { ConfirmModal } from './common'
 import { FlowSteps } from './task/FlowSteps'
 import { GenProgress } from './task/GenProgress'
 import { GenResult } from './task/GenResult'
-import { TRACK_ICON } from './task/badges'
+import { TRACK_ICON, USAGE_ICON } from '../../components/domainIcons'
+import { choiceClass } from './task/choice'
 import { SuggestPanel } from './task/SuggestPanel'
 import { TRACK_TONE } from './task/trackTone'
 import { useSuggestions } from './task/useSuggestions'
 
-/** topicHint = ①에 적는 추천용 주제(선택), topic = ④의 주제/상황(생성 요청의 topic) */
+/** topicHint = ②에 적는 추천 방향(주제, 선택), topic = ④의 상황(생성 요청의 topic) */
 type Form = { track: GenTrack | null; topicHint: string; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes }
 const EMPTY: Form = { track: null, topicHint: '', topic: '', trap: '', usage: 'SELF', minutes: 40 }
 type Phase = 'idea' | 'confirm' | 'running' | 'result'
@@ -50,9 +51,9 @@ const TRACKS: { value: GenTrack; title: string; desc: string }[] = [
   { value: 'DEV', title: '개발', desc: '시작 코드와 공개·숨은 테스트를 만들어요' },
   { value: 'BIZ', title: '비개발', desc: 'PDF 자료, CSV와 객관식·단답형 문항을 만들어요' },
 ]
-const USAGES: { value: GenUsage; title: string; desc: string; icon: typeof Lock }[] = [
-  { value: 'SELF', title: '공개 문제', desc: '공개하면 누구나 자가진단에서 풀어 볼 수 있어요.', icon: Globe2 },
-  { value: 'LIVE', title: '비공개 문제', desc: '실전 시험 회차에만 쓰고, 자가진단에는 절대 안 보여요. 문제가 새지 않아요.', icon: Lock },
+const USAGES: { value: GenUsage; title: string; desc: string; icon: LucideIcon }[] = [
+  { value: 'SELF', title: '자가진단', desc: '누구나 자가진단에서 풀어요', icon: USAGE_ICON.SELF },
+  { value: 'LIVE', title: '실전', desc: '기업 회차에만 써요', icon: USAGE_ICON.LIVE },
 ]
 
 export default function ConsoleTaskNew() {
@@ -223,19 +224,7 @@ export default function ConsoleTaskNew() {
             }}
             className="glass step-in flex flex-col gap-7 rounded-2xl bg-white/90! p-7 shadow-md!"
           >
-            <Field n={1} title="주제 (선택)" hint="만들고 싶은 주제를 적으면 그 주제에 맞춰 추천해요. 비워 두면 AI가 알아서 골라요.">
-              <input
-                ref={hintRef}
-                aria-label="주제"
-                value={form.topicHint}
-                onChange={(e) => set('topicHint', e.target.value)}
-                maxLength={100}
-                placeholder="예: 쿠폰 할인 계산, 요금제 개편안 손익 비교"
-                className={cx(input, 'h-11')}
-              />
-            </Field>
-
-            <Field n={2} title="직군" error={tried ? errors.track : null}>
+            <Field n={1} title="직군" error={tried ? errors.track : null}>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {TRACKS.map((t) => {
                   const on = form.track === t.value
@@ -246,16 +235,13 @@ export default function ConsoleTaskNew() {
                       type="button"
                       aria-pressed={on}
                       onClick={() => set('track', t.value)}
-                      className={cx(
-                        'flex items-center gap-3 rounded-xl border p-4 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5',
-                        on ? 'border-brand bg-brand-dim ring-2 ring-brand/20' : 'border-line bg-panel hover:border-line-strong hover:shadow-md',
-                      )}
+                      className={cx('flex items-center gap-3 rounded-xl p-4 text-left', choiceClass(on))}
                     >
                       <span className={cx('inline-flex size-11 shrink-0 items-center justify-center rounded-xl', TRACK_TONE[t.value].tile)} aria-hidden>
                         <Icon size={22} />
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-[16px] font-bold text-text">{t.title}</span>
+                        <span className={cx('block text-[16px] font-bold', on ? 'text-brand' : 'text-text')}>{t.title}</span>
                         <span className="block text-[13px] break-keep text-text-muted">{t.desc}</span>
                       </span>
                       {on && <Check size={18} strokeWidth={3} className="ml-auto shrink-0 text-brand" aria-hidden />}
@@ -263,6 +249,18 @@ export default function ConsoleTaskNew() {
                   )
                 })}
               </div>
+            </Field>
+
+            <Field n={2} title="주제 (선택)" hint="비워 두면 AI가 다양하게 추천해요">
+              <input
+                ref={hintRef}
+                aria-label="주제"
+                value={form.topicHint}
+                onChange={(e) => set('topicHint', e.target.value)}
+                maxLength={100}
+                placeholder="예: 쿠폰 할인 계산, 요금제 개편안 손익 비교"
+                className={cx(input, 'h-11')}
+              />
             </Field>
 
             <Field n={3} title="추천 받기">
@@ -279,11 +277,11 @@ export default function ConsoleTaskNew() {
               />
             </Field>
 
-            <Field n={4} title="주제/상황과 함정" hint="추천을 고르면 채워져요. 직접 적거나 고쳐도 돼요." error={tried ? (errors.topic ?? errors.trap) : null}>
+            <Field n={4} title="상황과 함정" hint="추천을 고르면 채워져요. 직접 적거나 고쳐도 돼요." error={tried ? (errors.topic ?? errors.trap) : null}>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold text-text-muted">주제/상황</span>
+                <span className="text-[13px] font-semibold text-text-muted">상황</span>
                 <textarea
-                  aria-label="주제/상황"
+                  aria-label="상황"
                   value={form.topic}
                   onChange={(e) => set('topic', e.target.value)}
                   rows={2}
@@ -307,23 +305,29 @@ export default function ConsoleTaskNew() {
             </Field>
 
             <Field n={5} title="용도와 제한 시간">
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-start gap-x-10 gap-y-5">
                 <UsagePicker value={form.usage} onChange={(v) => set('usage', v)} />
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-[14px] font-semibold text-text-muted">제한 시간</span>
-                  <div role="radiogroup" aria-label="제한 시간" className="glass flex w-fit rounded-full p-1">
-                    {GEN_MINUTES.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        role="radio"
-                        aria-checked={form.minutes === m}
-                        onClick={() => set('minutes', m)}
-                        className={cx('h-9 min-w-20 rounded-full px-4 text-[15px] font-semibold transition-colors', form.minutes === m ? 'bg-panel text-text shadow-sm' : 'text-text-muted hover:text-text')}
-                      >
-                        <span className="tnum font-mono">{m}</span>분
-                      </button>
-                    ))}
+                <div className="flex flex-col gap-2">
+                  <span className="text-[14px] font-bold text-text">제한 시간</span>
+                  <div role="radiogroup" aria-label="제한 시간" className="flex gap-2">
+                    {GEN_MINUTES.map((m) => {
+                      const on = form.minutes === m
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => set('minutes', m)}
+                          className={cx('inline-flex h-14 min-w-24 items-center justify-center gap-1.5 rounded-xl px-4 text-[16px] font-bold', choiceClass(on))}
+                        >
+                          {on && <Check size={16} strokeWidth={3} aria-hidden />}
+                          <span>
+                            <span className="tnum font-mono">{m}</span>분
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -332,7 +336,7 @@ export default function ConsoleTaskNew() {
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
               {tried && !valid && <span className="mr-auto text-[14px] font-medium text-alert">빈 칸을 채워 주세요</span>}
               <Button type="submit" variant="primary" size="lg">
-                다음: 확인하기 <ArrowRight size={17} aria-hidden />
+                다음 <ArrowRight size={17} aria-hidden />
               </Button>
             </div>
           </form>
@@ -392,12 +396,12 @@ function Field({ n, title, hint, error, children }: { n: number; title: string; 
   )
 }
 
-/** 용도: 작은 세그먼트 토글 + 고른 쪽의 한 줄 설명 */
+/** 용도: 가로로 놓인 큰 선택 칸 두 개(아이콘 + 이름 + 한 줄 설명) */
 function UsagePicker({ value, onChange }: { value: GenUsage; onChange: (v: GenUsage) => void }) {
-  const cur = USAGES.find((u) => u.value === value) ?? USAGES[0]
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <div role="radiogroup" aria-label="용도" className="glass flex w-fit rounded-full p-1">
+    <div className="flex flex-col gap-2">
+      <span className="text-[14px] font-bold text-text">용도</span>
+      <div role="radiogroup" aria-label="용도" className="flex flex-wrap gap-2">
         {USAGES.map((u) => {
           const on = value === u.value
           return (
@@ -407,14 +411,18 @@ function UsagePicker({ value, onChange }: { value: GenUsage; onChange: (v: GenUs
               role="radio"
               aria-checked={on}
               onClick={() => onChange(u.value)}
-              className={cx('inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[15px] font-semibold transition-colors', on ? 'bg-panel text-text shadow-sm' : 'text-text-muted hover:text-text')}
+              className={cx('flex h-14 min-w-[210px] items-center gap-3 rounded-xl px-4 text-left', choiceClass(on))}
             >
-              <u.icon size={15} aria-hidden /> {u.title}
+              <u.icon size={20} aria-hidden className="shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-[16px] leading-5 font-bold">{u.title}</span>
+                <span className={cx('block text-[12px] leading-4 font-semibold break-keep', on ? 'text-brand' : 'text-text-muted')}>{u.desc}</span>
+              </span>
+              {on && <Check size={16} strokeWidth={3} className="ml-auto shrink-0" aria-hidden />}
             </button>
           )
         })}
       </div>
-      <p className="min-w-0 flex-1 text-[14px] break-keep text-text-muted">{cur.desc}</p>
     </div>
   )
 }
@@ -444,11 +452,11 @@ function ConfirmCard({
       '용도',
       form.usage === 'LIVE' ? (
         <span key="u" className="inline-flex items-center gap-1.5 font-semibold">
-          <Lock size={14} aria-hidden /> 비공개 문제 (실전 시험, 자가진단에 안 보임)
+          <USAGE_ICON.LIVE size={14} aria-hidden /> 실전 (기업 회차에만 씀)
         </span>
       ) : (
         <span key="u" className="inline-flex items-center gap-1.5 font-semibold">
-          <Globe2 size={14} aria-hidden /> 공개 문제 (자가진단)
+          <USAGE_ICON.SELF size={14} aria-hidden /> 자가진단 (누구나 자가진단에서 풂)
         </span>
       ),
     ],
@@ -468,7 +476,7 @@ function ConfirmCard({
       )}
 
       <div className="mt-6 rounded-xl bg-[linear-gradient(135deg,rgb(139_92_246/0.07),transparent_60%)] p-5 ring-1 ring-line">
-        <p className="text-[13px] font-semibold text-text-muted">주제/상황</p>
+        <p className="text-[13px] font-semibold text-text-muted">상황</p>
         <p className="mt-0.5 text-[20px] leading-7 font-extrabold break-keep text-text">{form.topic.trim()}</p>
         <p className="mt-4 text-[13px] font-semibold text-text-muted">함정</p>
         <p className="mt-0.5 text-[15px] leading-6 break-keep text-text">{form.trap.trim()}</p>
@@ -487,7 +495,7 @@ function ConfirmCard({
           <ArrowLeft size={16} aria-hidden /> <Pencil size={14} aria-hidden /> 고치기
         </Button>
         <Button variant="primary" size="lg" onClick={onStart} className="h-12 rounded-full px-6 text-[16px]">
-          <Sparkles size={18} aria-hidden /> 과제 만들기
+          <FilePlus2 size={18} aria-hidden /> 과제 만들기
         </Button>
       </div>
     </section>

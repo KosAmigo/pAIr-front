@@ -3,7 +3,7 @@
 import { ApiError, call } from '../api.ts'
 
 export type GenTrack = 'DEV' | 'BIZ'
-/** SELF = 공개 문제(자가진단), LIVE = 비공개 문제(실전 시험) */
+/** SELF = 자가진단, LIVE = 실전 */
 export type GenUsage = 'SELF' | 'LIVE'
 export type GenMinutes = 20 | 40 | 60
 export const GEN_MINUTES: GenMinutes[] = [20, 40, 60]
@@ -29,7 +29,7 @@ export type TaskGenJob = {
 
 /** AI 추천 카드 하나 (POST /api/admin/task-gen/suggestions, 한 번에 3개) */
 export type Suggestion = {
-  /** 문제 상황 한 줄 (고르면 "주제/상황" 칸에 들어간다) */
+  /** 문제 상황 한 줄 (고르면 "상황" 칸에 들어간다) */
   situation: string
   trap: string
   /** 함정 종류 (예: 경계값, 중복 적용). 칩으로 보여 준다 */
@@ -80,7 +80,7 @@ export function suggestRequest(f: { track: GenTrack; topic?: string }, exclude: 
 /** 추천을 고르면 채워지는 칸 (화면에서 차례로 반짝인다) */
 export const FILL_FIELDS = ['topic', 'trap'] as const
 export type FillField = (typeof FILL_FIELDS)[number]
-export const FILL_LABEL: Record<FillField, string> = { topic: '주제/상황', trap: '함정' }
+export const FILL_LABEL: Record<FillField, string> = { topic: '상황', trap: '함정' }
 
 /** 이미 직접 적어 둔 칸 중 추천과 내용이 다른 칸. 있으면 덮어쓰기 전에 한 번 묻는다 */
 export function overwriteConflicts(f: Pick<TaskGenRequest, 'topic' | 'trap'>, s: Suggestion): FillField[] {
@@ -240,7 +240,7 @@ export function validateForm(
 ): Partial<Record<'track' | 'topic' | 'trap', string>> {
   const e: Partial<Record<'track' | 'topic' | 'trap', string>> = {}
   if (!f.track) e.track = '직군을 고르세요'
-  if (!f.topic.trim()) e.topic = '주제나 상황을 입력하세요'
+  if (!f.topic.trim()) e.topic = '상황을 입력하세요'
   if (!f.trap.trim()) e.trap = '함정을 입력하세요'
   return e
 }

@@ -20,7 +20,7 @@ import {
 
 const t = (o) => ({ id: 'T', type: 'dev', title: '과제', minutes: 60, usage: 'SELF', parentId: null, status: 'HIDDEN', publishedAt: null, updatedAt: null, ...o })
 
-test('tabOf: 검수 전 = HIDDEN, 공개 문제 = OPEN/CLOSED + SELF, 비공개 문제 = OPEN/CLOSED + LIVE', () => {
+test('tabOf: 검수 전 = HIDDEN, 자가진단 = OPEN/CLOSED + SELF, 실전 = OPEN/CLOSED + LIVE', () => {
   assert.equal(tabOf(t({ status: 'HIDDEN', usage: 'LIVE' })), 'draft')
   assert.equal(tabOf(t({ status: 'OPEN', usage: 'SELF' })), 'public')
   assert.equal(tabOf(t({ status: 'CLOSED', usage: 'SELF' })), 'public')
@@ -28,7 +28,7 @@ test('tabOf: 검수 전 = HIDDEN, 공개 문제 = OPEN/CLOSED + SELF, 비공개 
   assert.equal(tabOf(t({ status: 'CLOSED', usage: 'LIVE' })), 'private')
 })
 
-test('countTabs and firstTab: 처음에는 늘 공개 문제, 탭 순서는 공개 → 비공개 → 검수 전', () => {
+test('countTabs and firstTab: 처음에는 늘 자가진단, 탭 순서는 자가진단 → 실전 → 검수 전', () => {
   const list = [t({}), t({ status: 'OPEN' }), t({ status: 'OPEN', usage: 'LIVE' }), t({ status: 'CLOSED', usage: 'LIVE' })]
   assert.deepEqual(countTabs(list), { draft: 1, public: 1, private: 2 })
   assert.equal(firstTab(countTabs(list)), 'public')

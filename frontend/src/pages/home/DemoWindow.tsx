@@ -1,7 +1,8 @@
 // DESIGN.md §7-1 ① 시험 화면 데모. 실제 응시 화면을 줄인 가짜 창이다 (정적 마크업 + 타이핑).
 // 12초 주기로: 코드 타이핑 → AI 대화 → 테스트 통과. 화면 밖이면 멈추고, 움직임을 끄면 마지막 장면에서 멈춘다.
 import { useEffect, useRef, useState } from 'react'
-import { Bot, ClipboardList, Files, Play, Hammer, CornerDownLeft } from 'lucide-react'
+import { Bot, Files, Play, Hammer, CornerDownLeft } from 'lucide-react'
+import { TaskIcon } from '../../components/domainIcons'
 import { cx } from '../../components/cx'
 import { prefersReducedMotion } from './motion'
 
@@ -123,7 +124,7 @@ export default function DemoWindow({ className }: { className?: string }) {
           <span className="relative text-brand">
             <Files size={18} />
           </span>
-          <ClipboardList size={18} />
+          <TaskIcon size={18} />
           <Bot size={18} className="mt-auto mb-3" />
         </div>
 

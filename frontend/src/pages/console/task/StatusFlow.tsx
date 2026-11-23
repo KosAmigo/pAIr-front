@@ -1,6 +1,7 @@
-// 과제 상태 흐름: 검수 전 → 공개 문제(자가진단) 또는 비공개 문제(실전). 지금 있는 칸을 강조하고,
+// 과제 상태 흐름: 검수 전 → 자가진단 또는 실전. 지금 있는 칸을 강조하고,
 // 가는 길(용도)은 실선, 다른 길은 점선으로 그린다. 복기 트리처럼 한 줄기에서 두 갈래로 갈라지는 모양.
-import { Check, FileClock, Globe2, Lock, type LucideIcon } from 'lucide-react'
+import { Check, FileClock, type LucideIcon } from 'lucide-react'
+import { USAGE_ICON } from '../../../components/domainIcons'
 import { cx } from '../../../components/cx'
 import type { TaskUsage } from '../../../consoleApi'
 import type { TaskTab } from '../../../data/taskBoard'
@@ -40,8 +41,8 @@ export function StatusFlow({ tab, usage }: { tab: TaskTab; usage: TaskUsage }) {
         <path d="M0 38 H10 C22 38 22 60 34 60 H44" fill="none" strokeWidth="2" strokeLinecap="round" className={usage === 'LIVE' ? 'stroke-stage-text' : 'stroke-stage-line-strong'} strokeDasharray={usage === 'LIVE' ? undefined : '3 4'} />
       </svg>
       <div className="flex flex-col gap-2">
-        <Node icon={Globe2} label="공개 문제" sub="자가진단" state={pub('SELF')} tone="brand" />
-        <Node icon={Lock} label="비공개 문제" sub="실전 시험 전용" state={pub('LIVE')} tone="text" />
+        <Node icon={USAGE_ICON.SELF} label="자가진단" sub="누구나 풀어요" state={pub('SELF')} tone="brand" />
+        <Node icon={USAGE_ICON.LIVE} label="실전" sub="회차 전용" state={pub('LIVE')} tone="text" />
       </div>
     </div>
   )

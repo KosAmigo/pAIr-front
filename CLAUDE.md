@@ -5,6 +5,7 @@
 - Keep components small and reusable.
 - Separate API calls from UI components.
 - Handle loading and error states.
+- 과제·개발·비개발·자가진단·실전 아이콘은 `components/domainIcons`에서만 가져온다.
 
 ## Testing
 - Write tests for important business logic.
