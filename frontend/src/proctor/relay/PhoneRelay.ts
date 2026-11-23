@@ -6,6 +6,10 @@ import type { MainToWorker, WorkerToMain } from './relayWorkerCore.ts'
 
 export interface PhoneRelay {
   send(msg: ClientMsg): void
+  /** 촬영 루프가 살아 있다는 신호 (끊기면 생존 신호도 멈춘다) */
+  alive(): void
+  /** JPEG 한 장을 보낸다 (밀리면 버린다) */
+  sendFrame(data: ArrayBuffer): void
   close(): void
   /** 지금까지 보낸 바이트 수 (근사치) */
   readonly bytesSent: number
@@ -41,6 +45,15 @@ class WorkerPhoneRelay implements PhoneRelay {
 
   health(maxTimerLagMs: number): RelayHealth {
     return { ...this.latest, maxTimerLagMs }
+  }
+
+  alive() {
+    this.post({ kind: 'alive' })
+  }
+
+  sendFrame(data: ArrayBuffer) {
+    this.bytesSent += data.byteLength
+    this.worker.postMessage({ kind: 'frame', data } satisfies MainToWorker, [data])
   }
 
   close() {

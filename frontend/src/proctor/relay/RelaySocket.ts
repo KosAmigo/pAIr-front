@@ -10,6 +10,8 @@ function relayUrl(): string {
 
 const MAX_RETRY_DELAY_MS = 5000
 const MAX_QUEUE = 200
+/** 전송 대기 바이트가 프레임 서너 장(약 14KB × 4)을 넘으면 새 프레임은 버린다 */
+const MAX_BUFFERED_BYTES = 60_000
 
 /**
  * 끊기면 자동 재연결하고, 끊긴 동안 보낸 메시지는 모아 뒀다 다시 보낸다.
@@ -23,6 +25,7 @@ export class RelaySocket {
   private readonly hello: () => ClientMsg
   private readonly onMessage: (msg: ServerMsg) => void
   private readonly onOpenChange?: (open: boolean) => void
+  private readonly onBinary?: (data: ArrayBuffer) => void
   /** 실제로 보낸 바이트 수 (영상 전송 대비 비교용) */
   bytesSent = 0
   private reconnects = 0
@@ -30,7 +33,8 @@ export class RelaySocket {
   private lastCloseCode = 0
   private opened = false
 
-  constructor(hello: () => ClientMsg, onMessage: (msg: ServerMsg) => void, onOpenChange?: (open: boolean) => void) {
+  constructor(hello: () => ClientMsg, onMessage: (msg: ServerMsg) => void, onOpenChange?: (open: boolean) => void, onBinary?: (data: ArrayBuffer) => void) {
+    this.onBinary = onBinary
     this.hello = hello
     this.onMessage = onMessage
     this.onOpenChange = onOpenChange
@@ -40,6 +44,7 @@ export class RelaySocket {
   private connect() {
     const ws = new WebSocket(relayUrl())
     this.ws = ws
+    ws.binaryType = 'arraybuffer'
     ws.onopen = () => {
       if (this.opened) this.reconnects++
       this.opened = true
@@ -51,6 +56,11 @@ export class RelaySocket {
       this.onOpenChange?.(true)
     }
     ws.onmessage = (e) => {
+      if (typeof e.data !== 'string') {
+        // 휴대폰 JPEG 프레임 (서버가 최신 한 장만 넘긴다)
+        if (e.data instanceof ArrayBuffer) this.onBinary?.(e.data)
+        return
+      }
       let msg: ServerMsg
       try {
         msg = JSON.parse(String(e.data)) as ServerMsg
@@ -82,6 +92,17 @@ export class RelaySocket {
   /** 연결돼 있을 때만 보낸다 (끊긴 동안 쌓아 두면 안 되는 heartbeat 용) */
   sendIfOpen(msg: ClientMsg) {
     if (this.isOpen()) this.raw(JSON.stringify(msg))
+  }
+
+  /** 휴대폰 페이지가 워커 없이 이 소켓을 직접 쓸 때의 자리 맞춤 (생존 신호 게이팅은 워커에서만 한다) */
+  alive() {}
+
+  /** 프레임(binary) 전송. 끊겼거나 보내는 쪽 버퍼가 차 있으면 버린다 (오래된 프레임을 쌓지 않는다) */
+  sendFrame(data: ArrayBuffer) {
+    const ws = this.ws
+    if (!ws || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > MAX_BUFFERED_BYTES) return
+    ws.send(data)
+    this.bytesSent += data.byteLength
   }
 
   private raw(data: string) {

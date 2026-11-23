@@ -43,6 +43,12 @@ export type ClientMsg =
   | { type: 'phone-alert'; violation: CamViolation }
   | { type: 'phone-status'; status: PhoneStatus }
   | { type: 'rtc'; signal: RtcSignal }
+  /**
+   * PC → 휴대폰: 송신 화질. 'scan'(책상 스캔 동안 높은 화질) / 'watch'(평소 낮은 화질).
+   * 운영 중계는 아직 이 메시지를 휴대폰에 전달하지 않는다(백엔드 "미구현: quality 제어 신호 전달"). 그래서 휴대폰은
+   * 연결 직후 일정 시간만 scan 으로 보내고 스스로 watch 로 돌아간다 (PhoneCamPage). 개발 릴레이는 이 메시지를 전달한다.
+   */
+  | { type: 'quality'; mode: 'scan' | 'watch' }
   /** 워커가 메인 스레드와 무관하게 1초마다 보내는 생존 신호 */
   | { type: 'heartbeat' }
   /**
@@ -65,6 +71,8 @@ export type ServerMsg =
   | { type: 'phone-alert'; violation: CamViolation }
   | { type: 'phone-status'; status: PhoneStatus }
   | { type: 'rtc'; signal: RtcSignal }
+  /** 개발 릴레이 전용: PC 가 보낸 화질 요청을 휴대폰에 전달한다 */
+  | { type: 'quality'; mode: 'scan' | 'watch' }
   | { type: 'error'; message: string }
   /** 서버 → 감독관: 시청 상태 */
   | { type: 'watch-state'; state: ServerWatchState; message?: string }
