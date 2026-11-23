@@ -6,7 +6,7 @@ import { cx } from '../../../components/cx'
 import { GlowBorder, Magnetic, Particles } from '../../../components/fx'
 import { Button, ButtonLink } from '../../../components/ui'
 import { springs } from '../../../lib/motion'
-import { allChecksOk, fmtElapsed, type TaskGenJob } from '../../../data/taskGen'
+import { allChecksOk, countChecks, fmtElapsed, type TaskGenJob } from '../../../data/taskGen'
 import { CheckTable } from './CheckTable'
 
 export function GenResult({ job, elapsed, onRetry, onNew }: { job: TaskGenJob; elapsed: number; onRetry: () => void; onNew: () => void }) {
@@ -32,7 +32,7 @@ export function GenResult({ job, elapsed, onRetry, onNew }: { job: TaskGenJob; e
   }
 
   const ok = allChecksOk(job)
-  const failed = job.checks.filter((c) => !c.ok).length
+  const { fail: failed, warn: warned } = countChecks(job.checks)
   const href = job.taskCode ? `/console/tasks/${encodeURIComponent(job.taskCode)}` : '/console/tasks'
   return (
     <>
@@ -51,13 +51,19 @@ export function GenResult({ job, elapsed, onRetry, onNew }: { job: TaskGenJob; e
             </motion.span>
             <div className="min-w-0 flex-1">
               <h2 className="text-[24px] leading-8 font-extrabold tracking-[-0.02em] break-keep text-text">
-                {ok ? '과제를 만들었어요! 자동 확인도 모두 통과했어요' : `자동 확인에서 ${failed}개가 걸렸어요`}
+                {ok ? `과제를 만들었어요! 자동 확인도 통과했어요${warned > 0 ? ` (경고 ${warned}개)` : ''}` : `자동 확인에서 ${failed}개가 걸렸어요`}
               </h2>
               <p className="mt-1 text-[15px] break-keep text-text-muted">
                 {ok
                   ? '검수 전 상태로 저장했어요. 이제 사람이 확인하고 공개하면 돼요.'
                   : '그래도 검수 전으로 저장했어요(어디에도 안 보여요). 빨간 줄을 확인하고 고쳐 쓰거나 숨겨 두세요.'}
               </p>
+              {ok && warned > 0 && (
+                <p role="status" className="mt-3 flex items-start gap-2 rounded-lg bg-caution/12 px-3 py-2 text-[14px] leading-6 font-semibold break-keep text-text">
+                  <TriangleAlert size={16} className="mt-1 shrink-0 text-caution" aria-hidden />
+                  확인해 볼 경고가 {warned}개 있어요. 아래 노란 줄을 먼저 읽어 보세요.
+                </p>
+              )}
               <p className="tnum mt-2 flex flex-wrap gap-x-3 font-mono text-[12px] text-text-muted">
                 {job.taskCode && <span>{job.taskCode}</span>}
                 <span>걸린 시간 {fmtElapsed(elapsed)}</span>

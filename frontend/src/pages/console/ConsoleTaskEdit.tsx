@@ -11,6 +11,8 @@ import { Glass, Magnetic } from '../../components/fx'
 import { Button } from '../../components/ui'
 import type { ConsoleTaskSummary } from '../../consoleApi'
 import { setPublished, useTaskDetail } from '../../data/consoleTasks'
+import { countChecks } from '../../data/taskGen'
+import { useGenReport } from '../../data/taskReview'
 import { checkBadge, isClosed, madeAt, REVIEW_CHECKS, tabOf, trackOf, TRACK_LABEL } from '../../data/taskBoard'
 import { ConfirmModal, TaskStatusBadge } from './common'
 import { ConsoleHero, HeroSep, PillTabs } from './ConsoleHero'
@@ -65,6 +67,11 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
   const tab = tabOf(s)
   const draft = tab === 'draft'
   const check = checkBadge(s)
+  // 백엔드 checksOk 는 경고도 false 로 센다. 기록을 읽어 실패가 없고 경고만 있으면 확인 모달에서 묻지 않는다(읽는 동안엔 실패로 본다)
+  const report = useGenReport(code, check === 'fail')
+  const counts = report.state === 'ready' ? countChecks(report.data.checks ?? []) : null
+  const warnOnly = counts !== null && counts.fail === 0 && counts.warn > 0
+  const checkFailed = check === 'fail' && !warnOnly
 
   const tabs: Tab[] = track === 'BIZ' ? ['overview', 'files', 'materials', 'questions', 'report'] : ['overview', 'files', 'report']
   const asked = params.get('tab') as Tab | null
@@ -163,7 +170,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
                     variant="primary"
                     size="lg"
                     disabled={busy}
-                    onClick={() => (checklist.done < REVIEW_CHECKS.length || check === 'fail' ? setConfirm('publish') : void change(true))}
+                    onClick={() => (checklist.done < REVIEW_CHECKS.length || checkFailed ? setConfirm('publish') : void change(true))}
                     className="h-11 rounded-full px-6"
                   >
                     <Rocket size={17} aria-hidden /> {publishLabel}
@@ -227,7 +234,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
           }}
           body={
             <>
-              {check === 'fail' && <>자동 확인에서 실패한 항목이 있어요. </>}
+              {checkFailed && <>자동 확인에서 실패한 항목이 있어요. </>}
               {checklist.done < REVIEW_CHECKS.length && <>체크리스트를 {checklist.done}/{REVIEW_CHECKS.length}개만 확인했어요. </>}
               그래도 {s.usage === 'LIVE' ? '실전' : '자가진단'}으로 올릴까요?
             </>

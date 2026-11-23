@@ -178,6 +178,24 @@ test('추천 카드를 골라 만들면 그 카드의 역량을 같이 보낸다
   expect(api.sent.find((r) => r.path === '/api/admin/task-gen')!.body.competencies).toEqual(['usage', 'delegation'])
 })
 
+test('경고만 있으면 축하는 그대로, 경고 안내와 경고 줄이 위에 보인다', async ({ page }) => {
+  await mockApi(page)
+  await page.goto('/console/tasks/new')
+  await page.getByRole('button', { name: /^개발/ }).click()
+  await page.getByRole('button', { name: /추천 받기/ }).click()
+  await page.getByRole('button', { name: /^.*상황 \d/ }).first().click()
+  await expect(page.getByLabel('함정')).toHaveValue(/함정/)
+  await page.getByRole('button', { name: /^다음/ }).click()
+  await page.getByRole('button', { name: '과제 만들기' }).click()
+  await expect(page.getByRole('heading', { name: /과제를 만들었어요.*경고 1개/ })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('status').filter({ hasText: '확인해 볼 경고가 1개 있어요' })).toBeVisible()
+  const rows = page.getByRole('list', { name: '자동 확인 결과' }).getByRole('listitem')
+  await expect(rows.first()).toHaveAttribute('data-state', 'warn') // 경고가 통과보다 위
+  await expect(rows.first().getByRole('img', { name: '경고' })).toBeVisible()
+  await expect(page.getByText('1 / 2 통과')).toBeVisible()
+  await expect(page.getByRole('img', { name: '실패' })).toHaveCount(0)
+})
+
 test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
   const p = info.project.name
   await mockApi(page)
