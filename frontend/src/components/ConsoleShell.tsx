@@ -18,10 +18,11 @@ const MENU: MenuItem[] = [
   { to: '/console/tasks', label: '과제', icon: FileStack, roles: ['ADMIN'] },
   { to: '/console/sessions', label: '회차', icon: CalendarClock, roles: ['ADMIN', 'MANAGER', 'PROCTOR'] },
   { to: '/console/companies', label: '회사', icon: Building2, roles: ['ADMIN'] },
+  { to: '/console/members', label: '회사 회원', icon: Building2, roles: ['MANAGER'] },
 ]
 
 /** 경로 → 브레드크럼 첫 칸 이름 */
-const SECTION: Record<string, string> = { tasks: '과제', sessions: '회차', companies: '회사' }
+const SECTION: Record<string, string> = { tasks: '과제', sessions: '회차', companies: '회사', members: '회사 회원' }
 
 export function ConsoleShell() {
   // 토큰에서 확인된 사용자 역할에 맞는 콘솔 메뉴만 표시한다.

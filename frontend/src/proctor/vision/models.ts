@@ -7,15 +7,9 @@ import {
   PoseLandmarker,
 } from '@mediapipe/tasks-vision'
 import { OBJECT_LABELS } from '../core/phoneRules.ts'
-
-const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm'
-const MODEL = 'https://storage.googleapis.com/mediapipe-models'
-const URLS = {
-  face: `${MODEL}/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-  pose: `${MODEL}/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
-  hand: `${MODEL}/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-  object: `${MODEL}/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite`,
-}
+import { forcedDelegate, type Delegate } from './delegate.ts'
+import { faceLandmarkerOptions, handLandmarkerOptions, poseLandmarkerOptions } from './modelOptions.ts'
+import { MODEL_URLS as URLS, WASM_URL } from './visionAssets.ts'
 
 type WasmFileset = Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>
 let fileset: Promise<WasmFileset> | null = null
@@ -24,22 +18,8 @@ function getFileset() {
   return fileset
 }
 
-/**
- * 아이폰 사파리는 GPU delegate 로 모델을 여러 번 돌리면 WebGL 메모리가 쌓여 탭이 메모리 부족으로 죽는다
- * ("이 페이지에 문제가 반복적으로 발생했습니다"). 아이폰은 CPU 로 시작한다.
- * 주소 끝에 &delegate=gpu 또는 &delegate=cpu 를 붙이면 기기와 상관없이 그 쪽으로 고정한다 (비교 시험용).
- */
-function forcedDelegate(): 'GPU' | 'CPU' | null {
-  const choice = new URLSearchParams(location.search).get('delegate')
-  if (choice === 'gpu') return 'GPU'
-  if (choice === 'cpu') return 'CPU'
-  const ua = navigator.userAgent
-  const isIos = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
-  return isIos ? 'CPU' : null
-}
-
-/** GPU로 먼저 시도하고, 안 되는 기기(일부 폰)는 CPU로 */
-async function withDelegate<T>(create: (delegate: 'GPU' | 'CPU') => Promise<T>): Promise<T> {
+/** GPU로 먼저 시도하고, 안 되는 기기(일부 폰)는 CPU로. 아이폰·주소 지정은 delegate.ts 의 forcedDelegate 를 따른다 */
+async function withDelegate<T>(create: (delegate: Delegate) => Promise<T>): Promise<T> {
   const forced = forcedDelegate()
   if (forced) return create(forced)
   try {
@@ -53,35 +33,21 @@ async function withDelegate<T>(create: (delegate: 'GPU' | 'CPU') => Promise<T>):
 export async function createFaceLandmarker() {
   const fs = await getFileset()
   return withDelegate((delegate) =>
-    FaceLandmarker.createFromOptions(fs, {
-      baseOptions: { modelAssetPath: URLS.face, delegate },
-      runningMode: 'VIDEO',
-      numFaces: 3,
-      outputFaceBlendshapes: true,
-      outputFacialTransformationMatrixes: true,
-    }),
+    FaceLandmarker.createFromOptions(fs, faceLandmarkerOptions(delegate)),
   )
 }
 
 export async function createPoseLandmarker() {
   const fs = await getFileset()
   return withDelegate((delegate) =>
-    PoseLandmarker.createFromOptions(fs, {
-      baseOptions: { modelAssetPath: URLS.pose, delegate },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-    }),
+    PoseLandmarker.createFromOptions(fs, poseLandmarkerOptions(delegate)),
   )
 }
 
 export async function createHandLandmarker() {
   const fs = await getFileset()
   return withDelegate((delegate) =>
-    HandLandmarker.createFromOptions(fs, {
-      baseOptions: { modelAssetPath: URLS.hand, delegate },
-      runningMode: 'VIDEO',
-      numHands: 4,
-    }),
+    HandLandmarker.createFromOptions(fs, handLandmarkerOptions(delegate)),
   )
 }
 

@@ -6,7 +6,7 @@ export type CompanyRole = 'MANAGER' | 'PROCTOR'
 export const isCompanyRole = (r: Role | undefined): r is CompanyRole => r === 'MANAGER' || r === 'PROCTOR'
 export const canManageSessions = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER'
 export const canReviewProctor = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER' || r === 'PROCTOR'
-export type AuthUser = { id: number; email: string; name: string; role: Role; companyName?: string; companyId?: number | null }
+export type AuthUser = { id: number; email: string; name: string; role: Role; companyName?: string; companyId?: number | null; emailVerified?: boolean; passwordChangeRequired?: boolean }
 
 export function homeFor(role: Role) {
   return role === 'USER' ? '/tasks' : isCompanyRole(role) ? '/console/sessions' : '/console/tasks'
@@ -21,6 +21,8 @@ export type AuthApi = {
   signup: (name: string, email: string, password: string, code: string) => Promise<AuthUser>
   logout: () => Promise<void>
   getProfile: () => Promise<AuthUser>
+  refreshProfile: () => Promise<AuthUser>
+  acceptInvitation: (token: string, name: string, password: string, code: string) => Promise<AuthUser>
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   withdraw: (currentPassword: string) => Promise<void>
 }

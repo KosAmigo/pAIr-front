@@ -1,6 +1,6 @@
 // DESIGN.md §7-8 로그인, 회원가입 (2026-11-19 개편: 반반 쇼케이스)
 // 왼쪽 절반은 다크 무대: 큰 문장 + 역량 육각형 미리보기 + 떠 있는 유리 칩. 오른쪽 절반은 오로라 위 유리 폼 카드(GlowBorder).
-// 로그인과 일반 회원가입은 백엔드 인증 API(/api/auth)에 연결한다. 기업 계정은 도입 문의 → 승인 → 초대로 만든다(준비 중 안내).
+// 로그인과 일반 회원가입은 백엔드 인증 API(/api/auth)에 연결한다.
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, Check, Eye, EyeOff, GitBranch, ShieldCheck, Sparkles, TriangleAlert, User } from 'lucide-react'
@@ -12,6 +12,8 @@ import { StatHex } from '../components/dashboard/StatHex'
 import { STATS } from '../data/dashboard'
 import { homeFor, useAuth } from '../auth/auth'
 import { AuthRequestError } from '../auth/authApi'
+import { needsOnboarding } from '../company/policy'
+import { companyApi } from '../company/companyApi'
 
 const inputCls =
   'h-11 w-full rounded-sm border border-line-strong bg-panel px-3 text-[16px] text-text outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-text-faint focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
@@ -140,7 +142,7 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false)
 
   if (loading) return null
-  if (signedIn && user) return <Navigate to={next ?? homeFor(user.role)} replace />
+  if (signedIn && user) return <Navigate to={needsOnboarding(user) ? '/onboarding' : next ?? homeFor(user.role)} replace />
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -148,7 +150,7 @@ export default function Login() {
     setSubmitting(true)
     try {
       const u = await login(email, password)
-      nav(next ?? homeFor(u.role), { replace: true })
+      nav(needsOnboarding(u) ? '/onboarding' : next ?? homeFor(u.role), { replace: true })
     } catch (e) {
       setError(e instanceof Error ? e.message : '로그인에 실패했습니다.')
     } finally {
@@ -218,7 +220,7 @@ export function Signup() {
   }, [cooldownUntil])
 
   if (loading) return null
-  if (signedIn && user) return <Navigate to={next ?? homeFor(user.role)} replace />
+  if (signedIn && user) return <Navigate to={needsOnboarding(user) ? '/onboarding' : next ?? homeFor(user.role)} replace />
 
   const isCompany = kind === 'company'
   const rules = [
@@ -396,9 +398,24 @@ export function Signup() {
 /**
  * 기업 도입 문의 (기획_결정사항 §4, company_inquiries). 기업 회원은 자체 가입하지 않는다:
  * 문의 → 관리자 승인(회사 등록) → 담당자에게 초대 메일 → 초대 링크로 계정을 만든다.
- * 문의 접수 API 가 아직 백엔드에 없어 지금은 준비 중 안내만 보여 준다 (가짜로 저장하지 않는다).
+ * 문의와 회원 명단은 서버에서 최종 검증한다.
  */
 function CompanyInquiry({ onBack }: { onBack: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await companyApi.submitInquiry(new FormData(event.currentTarget))
+      setDone(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '문의를 제출하지 못했습니다.')
+    } finally { setBusy(false) }
+  }
   return (
     <AuthLayout
       title="기업 도입 문의"
@@ -408,15 +425,22 @@ function CompanyInquiry({ onBack }: { onBack: () => void }) {
         </button>
       }
     >
-      <p className="mt-2 text-[14px] leading-6 text-text-muted">기업 계정은 직접 가입하지 않습니다. 문의를 남기면 관리자가 승인한 뒤 담당자에게 초대 메일을 보냅니다.</p>
-      <div role="status" className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-dashed border-line-strong bg-panel px-6 py-10 text-center">
-        <Building2 size={28} strokeWidth={1.75} className="text-text-faint" aria-hidden />
-        <p className="text-[16px] font-semibold text-text">준비 중인 기능입니다</p>
-        <p className="text-[14px] leading-6 break-keep text-text-muted">온라인 문의 접수는 아직 준비 중입니다. 도입을 원하시면 pAIr 운영팀에 직접 연락해 주세요.</p>
-        <Link to="/" className="text-[14px] font-semibold text-brand hover:underline">
-          처음으로
-        </Link>
-      </div>
+      <p className="mt-2 text-[14px] leading-6 text-text-muted">사업자 번호는 필수이며 진위 확인은 하지 않습니다. 매니저는 정확히 1명이어야 합니다. 감독관은 선택 사항입니다.</p>
+      <a href="/api/company-inquiries/members-template.csv" download className="mt-3 inline-block text-sm font-semibold text-brand underline">회원 명단 CSV 양식 다운로드</a>
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      {done ? <p role="status" className="mt-6 text-text">문의가 접수되었습니다. 관리자 확인 후 안내해 드립니다.</p> : (
+        <form className="mt-5 flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
+          <Field id="companyName" label="회사명"><input id="companyName" name="companyName" required className={inputCls} /></Field>
+          <Field id="businessNo" label="사업자 번호"><input id="businessNo" name="businessNo" required className={inputCls} /></Field>
+          <Field id="contactName" label="담당자 이름"><input id="contactName" name="contactName" required className={inputCls} /></Field>
+          <Field id="contactEmail" label="담당자 이메일"><input id="contactEmail" name="contactEmail" type="email" required className={inputCls} /></Field>
+          <Field id="members" label="회원 명단 CSV" hint="열: 회원명,회원이메일,역할 (MANAGER 또는 PROCTOR)">
+            <input id="members" name="members" type="file" accept=".csv,text/csv" required className="text-sm text-text" />
+          </Field>
+          <Field id="inquiryMessage" label="문의 내용 (선택)"><textarea id="inquiryMessage" name="message" rows={3} className={`${inputCls} h-auto py-2`} /></Field>
+          <Button type="submit" variant="primary" size="lg" disabled={busy}>{busy ? '제출 중…' : '문의 제출'}</Button>
+        </form>
+      )}
     </AuthLayout>
   )
 }
