@@ -3,13 +3,13 @@
 // 입력한 주제를 AI 가 다르게 이해했으면(topicCheck.ok=false) 카드 위에 확인 박스를 먼저 보여 준다.
 // 받은 목록과 고른 카드는 부모(useSuggestions)가 직군별로 들고 있어서 직군을 바꿨다 돌아와도 그대로다.
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, CircleAlert, Lightbulb, MessageCircleQuestion, RefreshCw } from 'lucide-react'
+import { Check, CircleAlert, Zap, Lightbulb, MessageCircleQuestion, RefreshCw } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { Button } from '../../../components/ui'
 import { Spotlight } from '../../../components/fx'
 import { STATS } from '../../../data/dashboard'
 import { isAgain, needsTopicCheck, topicCheckText, visibleSuggestions, type GenTrack, type Suggestion, type TrackSuggest } from '../../../data/taskGen'
-import { distance, duration, easing, stagger, useShouldAnimate } from '../../../lib/motion'
+import { distance, springs, stagger, useShouldAnimate } from '../../../lib/motion'
 
 type Props = {
   track: GenTrack | null
@@ -93,13 +93,13 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
                     {items.map((s, i) => (
                       <motion.li
                         key={s.situation}
-                        initial={animate ? { opacity: 0, y: distance.app, scale: 0.97 } : false}
+                        initial={animate ? { opacity: 0, y: distance.app * 2, scale: 0.94 } : false}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         whileHover={animate ? { y: -4 } : undefined}
-                        transition={{ duration: duration.slow, ease: easing.expo, delay: i * stagger.normal * 2 }}
+                        transition={{ ...springs.gentle, delay: i * stagger.normal * 2 }}
                         className="flex"
                       >
-                        <SuggestCard s={s} on={state?.picked === s.situation} dim={!!state?.picked && state.picked !== s.situation} onPick={() => onPick(s)} />
+                        <SuggestCard s={s} i={i} on={state?.picked === s.situation} dim={!!state?.picked && state.picked !== s.situation} onPick={() => onPick(s)} />
                       </motion.li>
                     ))}
                   </ul>
@@ -121,10 +121,10 @@ function CompetencyChips({ keys }: { keys: string[] }) {
       {list.map((st) => (
         <span
           key={st.key}
-          style={{ backgroundColor: `color-mix(in srgb, ${st.color} 12%, transparent)` }}
+          style={{ backgroundColor: `color-mix(in srgb, ${st.color} 14%, transparent)` }}
           className="inline-flex h-6 min-w-0 shrink items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold text-text"
         >
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: st.color }} />
+          <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: st.color, boxShadow: `0 0 6px ${st.color}` }} />
           <span className="truncate">{st.name}</span>
         </span>
       ))}
@@ -132,16 +132,23 @@ function CompetencyChips({ keys }: { keys: string[] }) {
   )
 }
 
+/** 카드마다 다른 색 번짐(브랜드색 계열 3가지): 보라, 파랑, 연보라 */
+const HUES = [
+  ['139 92 246', '47 91 234'],
+  ['47 91 234', '139 92 246'],
+  ['168 85 247', '99 102 241'],
+] as const
+
 /** 카드 전체가 누르는 곳. 위에서부터 함정 유형 → 상황 → 함정 → 역량. why 는 마우스를 올리면 title 로만 */
-function SuggestCard({ s, on, dim, onPick }: { s: Suggestion; on: boolean; dim: boolean; onPick: () => void }) {
+function SuggestCard({ s, i, on, dim, onPick }: { s: Suggestion; i: number; on: boolean; dim: boolean; onPick: () => void }) {
+  const [a, b] = HUES[i % HUES.length]
   return (
     <div
+      data-on={on}
+      style={{ ['--sg-a' as string]: a, ['--sg-b' as string]: b }}
       className={cx(
-        'group w-full rounded-2xl p-[1.5px] transition-[opacity,box-shadow,background-color] duration-300 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand/30',
-        on
-          ? 'bg-brand-gradient shadow-[0_14px_32px_-14px_rgb(108_71_255/0.65)]'
-          : 'bg-[linear-gradient(135deg,rgb(108_71_255/0.28),rgb(47_91_234/0.1)_55%,rgb(108_71_255/0.22))] hover:bg-[linear-gradient(135deg,rgb(108_71_255/0.7),rgb(47_91_234/0.5))] hover:shadow-[0_14px_30px_-16px_rgb(108_71_255/0.55)]',
-        dim && 'opacity-60 hover:opacity-100',
+        'sg-card group w-full rounded-2xl p-[1.5px] transition-[opacity,transform,box-shadow] duration-300 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand/30',
+        dim && 'scale-[0.98] opacity-60 hover:scale-100 hover:opacity-100',
       )}
     >
       <Spotlight
@@ -150,16 +157,25 @@ function SuggestCard({ s, on, dim, onPick }: { s: Suggestion; on: boolean; dim: 
         onClick={onPick}
         aria-pressed={on}
         title={s.why || undefined}
-        className="relative flex h-full min-h-[240px] w-full cursor-pointer flex-col gap-3 rounded-[14.5px] bg-panel p-5 text-left outline-none"
+        className="relative flex h-full min-h-[240px] w-full cursor-pointer flex-col gap-3 overflow-hidden rounded-[14.5px] bg-panel p-5 text-left outline-none"
       >
+        <span aria-hidden className="sg-aurora" />
+        <span aria-hidden className="sg-shine" />
         <span className="relative z-10 flex items-center justify-between gap-2">
-          <span className="inline-flex h-7 max-w-full items-center rounded-full bg-brand-dim px-3 text-[13px] font-bold text-brand">
-            <span className="truncate">{s.trapType || '함정'}</span>
+          <span className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border border-brand/30 bg-brand-dim px-2.5 text-[13px] font-bold">
+            <Zap size={13} aria-hidden className="shrink-0 text-brand" fill="currentColor" />
+            <span className="text-brand-gradient truncate">{s.trapType || '함정'}</span>
           </span>
           {on && (
-            <span className="bg-brand-gradient inline-flex size-6 shrink-0 items-center justify-center rounded-full text-on-accent" aria-hidden>
-              <Check size={14} strokeWidth={3} />
-            </span>
+            <motion.span
+              initial={{ scale: 0, rotate: -40 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={springs.gentle}
+              className="bg-brand-gradient inline-flex size-7 shrink-0 items-center justify-center rounded-full text-on-accent shadow-[0_6px_14px_-4px_rgb(108_71_255/0.7)]"
+              aria-hidden
+            >
+              <Check size={15} strokeWidth={3} />
+            </motion.span>
           )}
         </span>
         <span className="relative z-10 text-[16px] leading-6 font-bold break-keep text-text">{s.situation}</span>
