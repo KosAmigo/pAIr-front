@@ -79,7 +79,7 @@ test.describe('과제 만들기', () => {
     const dev = page.getByRole('button', { name: /^개발/ })
     const biz = page.getByRole('button', { name: /^비개발/ })
     const askBtn = page.getByRole('button', { name: /추천 받기|다시 추천/ })
-    const pickBtns = page.getByRole('button', { name: /이걸로 채우기|채웠어요/ })
+    const pickBtns = page.getByRole('button', { name: /^.*상황 \d/ })
     const topicInput = page.getByLabel('주제', { exact: true })
 
     await topicInput.fill('주문 취소 재고 복구')
@@ -87,9 +87,8 @@ test.describe('과제 만들기', () => {
     await dev.click()
     await askBtn.click()
     await expect(pickBtns).toHaveCount(3)
-    await expect(page.getByText('왜 좋은 문제인가 1')).toBeHidden() // why 는 "자세히"에서만
-    await page.getByRole('button', { name: '자세히' }).first().click()
-    await expect(page.getByText('왜 좋은 문제인가 1')).toBeVisible()
+    await expect(page.getByText('왜 좋은 문제인가 1')).toBeHidden() // why 는 카드에 안 보이고 title 로만
+    await expect(pickBtns.first()).toHaveAttribute('title', /왜 좋은 문제인가 1/)
     await pickBtns.first().click()
     await expect(page.getByLabel('상황', { exact: true })).toHaveValue(/상황 1/)
     await expect(page.getByLabel('함정')).toHaveValue(/함정 1/)
@@ -101,7 +100,7 @@ test.describe('과제 만들기', () => {
     await expect(pickBtns).toHaveCount(3)
     await dev.click()
     await expect(pickBtns).toHaveCount(3)
-    await expect(page.getByRole('button', { name: /채웠어요/ })).toHaveCount(1)
+    await expect(page.locator('button[aria-pressed="true"]', { hasText: /상황 \d/ })).toHaveCount(1)
 
     // 다시 추천은 앞서 받은 상황을 exclude 로 보낸다
     await askBtn.click()
@@ -172,8 +171,7 @@ test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
   await expect(page.getByRole('group', { name: '주제 확인' })).toBeVisible()
   await shot(page, '11-new-topic-check', p)
   await page.getByRole('button', { name: '이대로 보기' }).click()
-  await page.getByRole('button', { name: '자세히' }).first().click()
-  await page.getByRole('button', { name: '이걸로 채우기' }).first().click()
+  await page.getByRole('button', { name: /상황 \d/ }).first().click()
   await expect(page.getByLabel('함정')).toHaveValue(/함정 1/)
   await shot(page, '12-new-picked', p)
   await page.getByRole('radio', { name: '실전' }).click()
