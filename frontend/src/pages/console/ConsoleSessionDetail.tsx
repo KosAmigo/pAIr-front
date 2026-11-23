@@ -40,6 +40,7 @@ import { ConfirmModal, Modal, RowMenu } from './common'
 import { fmtHm, fmtLeft, fmtShort, fmtTime, useNow, useToast } from './format'
 import { Loading } from './Loading'
 import ProctorPanel from './ProctorPanel'
+import EnvCheckCard from './EnvCheckCard'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
 type Tab = 'overview' | 'participants' | 'live' | 'results'
@@ -852,6 +853,7 @@ function Live({
               </button>
             </div>
             <div className="p-4">
+              {s.proctoring && <EnvCheckCard session={s} p={opened} pollMs={paused ? undefined : 5000} />}
               <ProctorPanel session={s} p={opened} pollMs={paused ? undefined : 5000} onRestored={reload} />
             </div>
           </aside>

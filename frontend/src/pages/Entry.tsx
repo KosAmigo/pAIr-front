@@ -37,6 +37,8 @@ import { saveLiveExam } from '../proctor/liveExam.ts'
 import { checksSkipped } from '../proctor/testSkip.ts'
 import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED } from '../proctor/features.ts'
 import { useCamHub } from '../proctor/react/useCamHub.ts'
+import { useEnvProgressUpload } from '../proctor/react/useEnvProgressUpload.ts'
+import NoticeBanner from '../proctor/react/NoticeBanner.tsx'
 import type { EnvCheckResult } from '../proctor/react/EnvCheckPanel.tsx'
 
 // 환경 점검은 분석 모델이 무거워 실전 입장 링크로 들어왔을 때만 불러온다
@@ -427,6 +429,7 @@ function ConsentStep({ view, busy, error, onNext, onBack }: { view: ExamView; bu
 // ── 3. 환경 점검 (실제 입장 링크): 왼쪽 카메라, 오른쪽 실제 점검 목록 ──
 function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () => void; onBack: () => void }) {
   const [saving, setSaving] = useState(false)
+  const uploadProgress = useEnvProgressUpload(invite)
   const [error, setError] = useState<string | null>(null)
   const save = async (r: EnvCheckResult) => {
     // 버튼을 누른 직후여야 전체 화면이 허용된다 (대기실 → 시험 화면까지 이어진다)
@@ -472,7 +475,7 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
           <Button variant="ghost" onClick={onBack}>
             <ArrowLeft size={18} aria-hidden /> 이전
           </Button>
-          <span className="ml-auto text-[14px] text-text-muted">{saving ? '점검 결과를 저장하는 중' : '모든 항목을 통과하면 대기실로 갑니다'}</span>
+          <span className="ml-auto text-[14px] text-text-muted">{saving ? '점검 결과를 저장하는 중' : '응시 환경은 AI 모델이 판단하므로 오류가 표시될 수 있습니다. 환경이 올바르게 갖춰졌다면 "점검 결과 저장"을 눌러 대기실로 입장하고 시험에 응시해 주세요.'}</span>
         </>
       }
     >
@@ -482,7 +485,7 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
         </p>
       )}
       <Suspense fallback={loading}>
-        <EnvCheckPanel withAside={false} onPassed={(r) => void save(r)} />
+        <EnvCheckPanel withAside={false} onPassed={(r) => void save(r)} onProgress={uploadProgress} />
       </Suspense>
     </StepCard>
   )
@@ -885,6 +888,7 @@ export default function Entry() {
   )
   return (
     <div className="relative isolate flex min-h-full flex-col overflow-x-clip">
+      <NoticeBanner invite={viaLink ? invite : null} />
       {waiting ? (
         <StageSection shape="inset" className="flex min-h-full flex-1 flex-col rounded-none! border-0! shadow-none!" aria-label="대기실">
           <div className="flex min-h-full flex-col">
