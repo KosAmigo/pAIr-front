@@ -10,4 +10,4 @@ export const PHONE_CAM_ENABLED = false
  * 지금은 웹캠(MediaPipe 몸·고개 분석)과 브라우저 이벤트(탭·창·마우스 이탈), 이벤트 스냅샷만으로 감독한다.
  * false 면 화면 공유 요청·안내를 보여 주지 않고 입장·시험 중 연결 조건에서도 뺀다. 나중에 쓰려면 true 로 바꾼다.
  */
-export const SCREEN_SHARE_ENABLED = false
+export const SCREEN_SHARE_ENABLED = true

@@ -1,8 +1,9 @@
 // DESIGN.md §7-9-4a 감독 패널: 시험 시간 축 + 이벤트 카드 + 담당자 판단(문제 없음 / 부정 의심)
 // 이벤트는 백엔드(응시자별 감독 이벤트)에서 불러오고, 판단은 바로 백엔드에 저장한다.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AppWindow,
+  BellRing,
   BookOpen,
   Camera,
   ClipboardPaste,
@@ -17,11 +18,14 @@ import {
   ScanFace,
   Smartphone,
   Users,
+  Volume2,
+  VolumeX,
   ImageOff,
   ShieldCheck,
   ShieldAlert,
   type LucideIcon,
   WifiOff,
+  X,
 } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
@@ -34,6 +38,8 @@ import { ConfirmModal, Modal } from './common'
 import { fmtTime } from './format'
 import LiveWatch from './LiveWatch'
 import { Loading } from './Loading'
+import { loadSoundPref, playAlertSound, saveSoundPref } from './alertSound'
+import { useNewEvents } from './useNewEvents'
 
 const ICON: Record<EventType, LucideIcon> = {
   TAB_HIDDEN: AppWindow,
@@ -112,7 +118,32 @@ export default function ProctorPanel({
   const loaded = useLoad(session.proctoring ? `pev-${session.id}-${p.id}` : null, () => consoleApi.participantEvents(session.id, p.id), pollMs)
   const scan = useLoad(session.proctoring ? `env-${session.id}-${p.id}` : null, () => consoleApi.envScanPhotos(session.id, p.id))
   const events = byTime(loaded.data ?? [])
+  const fresh = useNewEvents(`${session.id}-${p.id}`, loaded.data)
+  const [soundOn, setSoundOn] = useState(loadSoundPref)
+  const alertedCount = useRef(0)
+  const freshCount = fresh.items.length
+  useEffect(() => {
+    // 새 이벤트가 늘었을 때만 울린다 (확인해서 비워지거나 소리를 켜고 끌 때는 울리지 않는다)
+    if (soundOn && freshCount > alertedCount.current) playAlertSound()
+    alertedCount.current = freshCount
+  }, [freshCount, soundOn])
+  const toggleSound = () => {
+    const next = !soundOn
+    setSoundOn(next)
+    saveSoundPref(next)
+    if (next) playAlertSound() // 켜자마자 한 번 들려 줘서 소리가 나는지 확인하게 한다
+  }
+  const freshIds = new Set(fresh.items.map((e) => e.id))
+  const latestFresh = fresh.items.length ? byTime(fresh.items)[fresh.items.length - 1] : null
   const unconfirmed = countUnconfirmed(events)
+  const showFresh = () => {
+    if (!latestFresh) return
+    setFilter('all')
+    setFocus(latestFresh.id)
+    fresh.dismiss()
+    // 필터를 '전체'로 돌린 뒤 카드가 그려지고 나서 움직인다
+    window.setTimeout(() => document.getElementById(`ev-${latestFresh.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50)
+  }
   const shown = events.filter((e) => (filter === 'open' ? !e.review : filter === 'suspect' ? e.review === 'SUSPECT' : true))
   const span = Date.parse(session.endsAt) - Date.parse(session.startsAt)
   const pos = (iso: string) => Math.min(100, Math.max(0, ((Date.parse(iso) - Date.parse(session.startsAt)) / span) * 100))
@@ -153,8 +184,33 @@ export default function ProctorPanel({
               서버 미확인 {unconfirmed}건
             </span>
           )}
-          <span className="tnum ml-auto font-mono text-[12px] text-text-muted">이벤트 {events.length}건</span>
+          <span className={cx('tnum ml-auto font-mono text-[12px]', fresh.items.length ? 'font-semibold text-alert' : 'text-text-muted')}>이벤트 {events.length}건</span>
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-pressed={soundOn}
+            aria-label={soundOn ? '새 이벤트 알림음 끄기' : '새 이벤트 알림음 켜기'}
+            title={soundOn ? '알림음 켜짐 (누르면 끔)' : '알림음 꺼짐 (누르면 켬)'}
+            className={cx('inline-flex size-7 items-center justify-center rounded-md hover:bg-panel-raised', soundOn ? 'text-brand' : 'text-text-faint')}
+          >
+            {soundOn ? <Volume2 size={15} aria-hidden /> : <VolumeX size={15} aria-hidden />}
+          </button>
         </div>
+        {latestFresh && (
+          <div role="alert" className="mt-3 flex items-center gap-2 rounded-md border border-alert bg-alert/10 px-3 py-2 text-[13px] text-alert">
+            <BellRing size={16} className="shrink-0 animate-pulse" aria-hidden />
+            <span className="min-w-0 flex-1 break-keep">
+              <strong className="font-semibold">새 이벤트{fresh.items.length > 1 && ` ${fresh.items.length}건`}</strong> · {EVENT_LABEL[latestFresh.type] ?? latestFresh.type}
+              <span className="tnum ml-1 font-mono text-[12px]">{elapsed(session, latestFresh.startedAt)}</span>
+            </span>
+            <Button size="sm" variant="secondary" onClick={showFresh}>
+              확인하기
+            </Button>
+            <button type="button" onClick={fresh.dismiss} aria-label="알림 닫기" className="inline-flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-alert/15">
+              <X size={15} aria-hidden />
+            </button>
+          </div>
+        )}
         {session.proctoring ? (
           <p className="mt-1 text-[13px] text-text-muted">{p.enteredAt ? `${fmtTime(p.enteredAt)} 입장` : '아직 입장 전'}</p>
         ) : (
@@ -200,6 +256,7 @@ export default function ProctorPanel({
                     'absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 border-2 border-panel',
                     isCameraEvent(e) ? 'rounded-full bg-alert' : 'rotate-45 rounded-[2px] bg-caution',
                     focus === e.id && 'ring-2 ring-brand',
+                    freshIds.has(e.id) && 'animate-pulse ring-2 ring-alert',
                   )}
                   style={{ left: `${pos(e.startedAt)}%` }}
                 />
@@ -235,7 +292,7 @@ export default function ProctorPanel({
           <ol className="fx-cards flex flex-col gap-3 p-4">
             {shown.length === 0 && <li className="py-8 text-center text-[14px] text-text-muted">{events.length ? '조건에 맞는 이벤트가 없습니다.' : '감독 이벤트가 없습니다.'}</li>}
             {shown.map((e) => (
-              <EventCard key={e.id} e={e} time={elapsed(session, e.startedAt)} focused={focus === e.id} onPhoto={() => setPhoto(e)} onReview={(r, note) => review(e, r, note)} />
+              <EventCard key={e.id} e={e} time={elapsed(session, e.startedAt)} focused={focus === e.id} fresh={freshIds.has(e.id)} onPhoto={() => setPhoto(e)} onReview={(r, note) => review(e, r, note)} />
             ))}
           </ol>
         </>
@@ -269,12 +326,15 @@ function EventCard({
   e,
   time,
   focused,
+  fresh,
   onPhoto,
   onReview,
 }: {
   e: ProctorEventView
   time: string
   focused: boolean
+  /** 방금 들어와 아직 확인하지 않은 이벤트 */
+  fresh: boolean
   onPhoto: () => void
   onReview: (r: EventReview | null, note: string | undefined) => void
 }) {
@@ -290,7 +350,12 @@ function EventCard({
   return (
     <li
       id={`ev-${e.id}`}
-      className={cx('relative overflow-hidden rounded-md border bg-panel transition-shadow', focused ? 'border-brand shadow-md' : 'border-line', !e.review && 'border-l-2 border-l-caution')}
+      className={cx(
+        'relative overflow-hidden rounded-md border bg-panel transition-shadow',
+        focused ? 'border-brand shadow-md' : 'border-line',
+        !e.review && 'border-l-2 border-l-caution',
+        fresh && 'ring-2 ring-alert',
+      )}
     >
       <div className={cx('flex gap-3 p-3', low && 'opacity-60')}>
         <span className={cx('inline-flex size-9 shrink-0 items-center justify-center rounded-md', cam ? 'bg-alert/10 text-alert' : 'bg-caution/10 text-caution')}>
@@ -299,6 +364,7 @@ function EventCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="text-[15px] font-semibold text-text">{EVENT_LABEL[e.type] ?? e.type}</p>
+            {fresh && <span className="rounded-sm bg-alert px-1.5 text-[11px] font-bold text-white">NEW</span>}
             {low && <span className="rounded-sm bg-panel-raised px-1.5 text-[11px] font-semibold text-text-muted">확신도 낮음</span>}
             {check && (
               <span
