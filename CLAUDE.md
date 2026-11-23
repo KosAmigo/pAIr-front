@@ -10,6 +10,7 @@
 - Write tests for important business logic.
 - Run relevant tests after modifications.
 - Run build before completing tasks.
+- 화면 확인은 Playwright로 한다: `npm run e2e`(동작 검사), `npm run shots`(스크린샷을 `frontend/.shots/`에 저장, git 에 올리지 않음).
 
 ## Token Efficiency
 - Inspect only files relevant to the task.
