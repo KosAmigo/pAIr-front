@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Clock, Code2, FileText, Loader2, Sparkles } from 'lucide-react'
+import { ArrowRight, Clock, Loader2, Sparkles } from 'lucide-react'
+import { trackIconOf } from '../components/domainIcons'
 import { motion } from 'motion/react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ErrorState } from '../components/ErrorState'
@@ -24,8 +25,10 @@ type Row = Task & { status: TaskSummary['status'] }
 const isOpen = (t: Row) => t.status === 'OPEN'
 const startUrl = (t: Row) => `/exam/new?task=${encodeURIComponent(t.id)}`
 const trackName = (t: Row) => (t.type === 'biz' ? '비개발' : '개발')
-const TrackIcon = ({ t, ...rest }: { t: Row; size: number; strokeWidth?: number; className?: string }) =>
-  t.type === 'biz' ? <FileText {...rest} aria-hidden /> : <Code2 {...rest} aria-hidden />
+const TrackIcon = ({ t, ...rest }: { t: Row; size: number; strokeWidth?: number; className?: string }) => {
+  const Icon = trackIconOf(t.type)
+  return <Icon {...rest} aria-hidden />
+}
 
 /** 추천 과제: 이 화면의 다크 무대 */
 function Featured({ t }: { t: Row }) {

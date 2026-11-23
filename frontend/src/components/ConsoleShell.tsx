@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { CrumbContext } from './consoleCrumbs'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Building2, CalendarClock, FileStack, FlaskConical, ShieldCheck } from 'lucide-react'
+import { Building2, CalendarClock, FlaskConical, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { TaskIcon } from './domainIcons'
 import { motion } from 'motion/react'
 import { springs } from '../lib/motion'
 import { cx } from './cx'
@@ -13,9 +14,9 @@ import { UserMenu } from './UserMenu'
 import { useAuth, type Role } from '../auth/auth'
 import { useTaskList } from '../data/consoleTasks'
 
-type MenuItem = { to: string; label: string; icon: typeof FileStack; roles: Role[]; count?: number }
+type MenuItem = { to: string; label: string; icon: LucideIcon; roles: Role[]; count?: number }
 const MENU: MenuItem[] = [
-  { to: '/console/tasks', label: '과제', icon: FileStack, roles: ['ADMIN'] },
+  { to: '/console/tasks', label: '과제', icon: TaskIcon, roles: ['ADMIN'] },
   { to: '/console/sessions', label: '회차', icon: CalendarClock, roles: ['ADMIN', 'MANAGER', 'PROCTOR'] },
   { to: '/console/companies', label: '회사', icon: Building2, roles: ['ADMIN'] },
   { to: '/console/members', label: '회사 회원', icon: Building2, roles: ['MANAGER'] },

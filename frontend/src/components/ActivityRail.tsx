@@ -1,4 +1,5 @@
-import { Bot, ClipboardList, Files, ListChecks, PanelBottom } from 'lucide-react'
+import { Bot, Files, ListChecks, PanelBottom } from 'lucide-react'
+import { TaskIcon } from './domainIcons'
 import type { ComponentType } from 'react'
 import { cx } from './cx'
 
@@ -65,7 +66,7 @@ export function ActivityRail({
   const pick = (s: Exclude<SidePanel, null>) => onSide(side === s ? null : s)
   return (
     <nav aria-label="응시 도구" data-tour="rail" className="flex w-12 shrink-0 flex-col border-r border-line bg-panel">
-      <RailButton label={side === 'task' ? '과제 패널 접기' : '과제'} icon={ClipboardList} active={side === 'task'} onClick={() => pick('task')} />
+      <RailButton label={side === 'task' ? '과제 패널 접기' : '과제'} icon={TaskIcon} active={side === 'task'} onClick={() => pick('task')} />
       <RailButton label={side === 'files' ? '파일 패널 접기' : '파일 탐색기'} icon={Files} active={side === 'files'} onClick={() => pick('files')} />
       {questions && (
         <RailButton

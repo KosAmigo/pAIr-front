@@ -10,13 +10,13 @@ const task = (id: string, o: Task): Task => ({
   updatedAt: '2026-11-20T00:00:00Z', createdAt: `2026-11-${10 + id.length}T00:00:00Z`, generated: true, checksOk: true, difficulty: '중급', ...o,
 })
 
-/** 목록 화면용 과제: 공개 3(개발 2, 비개발 1), 비공개 1, 검수 전 2(개발 1, 비개발 1) */
+/** 목록 화면용 과제: 자가진단 3(개발 2, 비개발 1), 실전 1, 검수 전 2(개발 1, 비개발 1) */
 export const TASKS: Task[] = [
-  task('A1', { title: '쿠폰 할인 계산', summary: '쿠폰 두 장 중복 적용 함정', track: 'DEV' }),
+  task('A1', { title: '쿠폰 할인 계산', summary: '쿠폰 두 장 중복 적용 함정', track: 'DEV', competencies: ['control', 'usage'] }),
   task('A22', { title: '재고 차감 동시성', summary: '락 없이 읽고 쓰면 음수', track: 'DEV' }),
   task('B1', { title: '요금제 개편안 손익 비교', summary: '표의 단위를 놓치기 쉬워요', track: 'BIZ', type: 'biz' }),
-  task('C1', { title: '실전 환불 정책 분석', summary: '예외 조항', track: 'BIZ', type: 'biz', usage: 'LIVE' }),
-  task('D1', { title: '검수 전 로그 파서', summary: '경계값', track: 'DEV', status: 'HIDDEN' }),
+  task('C1', { title: '실전 환불 정책 분석', summary: '예외 조항', track: 'BIZ', type: 'biz', usage: 'LIVE', competencies: ['delivery'] }),
+  task('D1', { title: '검수 전 로그 파서', summary: '경계값', track: 'DEV', status: 'HIDDEN', checksOk: false }),
   task('D22', { title: '검수 전 매출 보고서', summary: '합계 오류', track: 'BIZ', type: 'biz', status: 'HIDDEN' }),
 ]
 
@@ -45,6 +45,12 @@ export async function mockApi(page: Page) {
     const json = (data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) })
     if (path === '/api/auth/me') return json({ id: 1, email: 'admin@example.test', name: '관리자', role: 'ADMIN', emailVerified: true })
     if (path === '/api/console/tasks') return json(TASKS)
+    // 과제 상세: 카드를 눌러 상세로 갈 때 화면이 터지지 않을 만큼만
+    const detail = path.match(/^\/api\/console\/tasks\/([^/]+)$/)
+    if (detail) {
+      const summary = TASKS.find((t) => t.id === decodeURIComponent(detail[1]))
+      if (summary) return json({ summary, definition: { id: summary.id, title: summary.title, requirements: [], d4Minutes: null, requiredHeadings: null } })
+    }
     if (path === '/api/admin/task-gen/suggestions') {
       sent.push({ method: req.method(), path, body })
       const base = (body.track === 'DEV' ? 0 : 10) + (body.exclude?.length ?? 0)

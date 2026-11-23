@@ -1,19 +1,19 @@
 // AI 추천 받기 (과제 만들기 ③). 직군을 고르면 켜진다.
-// 누르면 반짝이는 자리 3개 → 추천 카드 3개(상황, 함정, 함정 유형 칩, 역량 칩, "자세히"에 왜 좋은지). 카드를 누르면 onPick.
+// 누르면 반짝이는 자리 3개 → 추천 카드 3개(함정 유형 칩 → 상황 → 함정 → 역량 칩 한 줄. why 는 마우스를 올리면 title). 카드를 누르면 onPick.
 // 입력한 주제를 AI 가 다르게 이해했으면(topicCheck.ok=false) 카드 위에 확인 박스를 먼저 보여 준다.
 // 받은 목록과 고른 카드는 부모(useSuggestions)가 직군별로 들고 있어서 직군을 바꿨다 돌아와도 그대로다.
-import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowRight, ChevronDown, CircleAlert, Lightbulb, MessageCircleQuestion, RefreshCw, Sparkles, Wand2 } from 'lucide-react'
+import { Check, CircleAlert, Zap, Lightbulb, MessageCircleQuestion, RefreshCw } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { Button } from '../../../components/ui'
+import { Spotlight } from '../../../components/fx'
 import { STATS } from '../../../data/dashboard'
 import { isAgain, needsTopicCheck, topicCheckText, visibleSuggestions, type GenTrack, type Suggestion, type TrackSuggest } from '../../../data/taskGen'
-import { distance, duration, easing, stagger } from '../../../lib/motion'
+import { distance, springs, stagger, useShouldAnimate } from '../../../lib/motion'
 
 type Props = {
   track: GenTrack | null
-  /** ①에 적은 주제 (없을 수 있다) */
+  /** ②에 적은 주제 (없을 수 있다) */
   topic: string
   state: TrackSuggest | undefined
   loading: boolean
@@ -27,12 +27,13 @@ type Props = {
 export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPick, onAcceptTopic, onFixTopic }: Props) {
   const items = visibleSuggestions(state)
   const again = isAgain(state, topic)
+  const animate = useShouldAnimate()
   const check = needsTopicCheck(state) ? state?.topicCheck : null
   return (
     <section aria-labelledby="suggest-title" className="relative overflow-hidden rounded-2xl border border-brand/20 bg-[linear-gradient(135deg,rgb(139_92_246/0.08),rgb(255_255_255/0.6)_45%,rgb(47_91_234/0.07))] p-5">
       <div className="flex flex-wrap items-center gap-3">
         <span className="bg-brand-gradient inline-flex size-10 items-center justify-center rounded-xl text-on-accent shadow-[0_8px_20px_-8px_rgb(108_71_255/0.8)]" aria-hidden>
-          <Wand2 size={20} />
+          <Lightbulb size={20} />
         </span>
         <div className="min-w-0 flex-1">
           <h2 id="suggest-title" className="text-[16px] font-bold text-text">
@@ -43,7 +44,7 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
           </p>
         </div>
         <Button variant={again ? 'secondary' : 'primary'} disabled={!track || loading} onClick={onAsk}>
-          {again ? <RefreshCw size={15} aria-hidden className={loading ? 'animate-spin' : undefined} /> : <Sparkles size={16} aria-hidden />}
+          {again && <RefreshCw size={15} aria-hidden className={loading ? 'animate-spin' : undefined} />}
           {loading ? '추천 만드는 중' : again ? '다시 추천' : '추천 받기'}
         </Button>
       </div>
@@ -56,13 +57,13 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
 
       <div aria-live="polite" aria-busy={loading}>
         {loading ? (
-          <ul className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3" aria-label="추천을 만드는 중">
+          <ul className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3 lg:gap-5" aria-label="추천을 만드는 중">
             {[0, 1, 2].map((i) => (
-              <li key={i} className="shimmer flex h-[168px] flex-col gap-3 rounded-xl border border-line bg-panel p-4">
-                <span className="h-5 w-16 rounded-full bg-panel-raised" />
+              <li key={i} className="shimmer flex min-h-[243px] flex-col gap-3 rounded-2xl border border-brand/20 bg-panel p-5">
+                <span className="h-7 w-20 rounded-full bg-panel-raised" />
                 <span className="h-5 w-4/5 rounded bg-panel-raised" />
-                <span className="h-4 w-full rounded bg-panel-raised" />
-                <span className="h-4 w-2/3 rounded bg-panel-raised" />
+                <span className="mt-auto h-[84px] w-full rounded-xl bg-panel-raised" />
+                <span className="h-6 w-28 rounded-full bg-panel-raised" />
               </li>
             ))}
           </ul>
@@ -88,16 +89,17 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
               <>
                 {items.length === 0 && <p className="mt-4 text-[14px] text-text-muted">추천이 비어 있어요. 다시 눌러 보세요.</p>}
                 <AnimatePresence mode="popLayout">
-                  <ul key={items.map((s) => s.situation).join('|')} className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <ul key={items.map((s) => s.situation).join('|')} className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3 lg:gap-5">
                     {items.map((s, i) => (
                       <motion.li
                         key={s.situation}
-                        initial={{ opacity: 0, y: distance.app, scale: 0.98 }}
+                        initial={animate ? { opacity: 0, y: distance.app * 2, scale: 0.94 } : false}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{ duration: duration.slow, ease: easing.expo, delay: i * stagger.normal * 2 }}
+                        whileHover={animate ? { y: distance.lift } : undefined}
+                        transition={{ ...springs.gentle, delay: i * stagger.normal * 2 }}
                         className="flex"
                       >
-                        <SuggestCard s={s} on={state?.picked === s.situation} onPick={() => onPick(s)} />
+                        <SuggestCard s={s} i={i} on={state?.picked === s.situation} dim={!!state?.picked && state.picked !== s.situation} onPick={() => onPick(s)} />
                       </motion.li>
                     ))}
                   </ul>
@@ -111,61 +113,81 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
   )
 }
 
-/** 역량 칩: STATS 의 이름과 색. 모르는 key 는 건너뛴다 */
+/** 역량 칩: STATS 의 이름과 색을 옅게. 한 줄에 두고 넘치면 말줄임 */
 function CompetencyChips({ keys }: { keys: string[] }) {
   const list = keys.map((k) => STATS.find((s) => s.key === k)).filter((s): s is (typeof STATS)[number] => !!s).slice(0, 2)
   return (
-    <>
+    <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
       {list.map((st) => (
         <span
           key={st.key}
           style={{ backgroundColor: `color-mix(in srgb, ${st.color} 14%, transparent)` }}
-          className="inline-flex h-[22px] items-center gap-1.5 rounded-full px-2 text-[12px] font-semibold text-text"
+          className="inline-flex h-6 min-w-0 shrink items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold text-text"
         >
-          <span aria-hidden className="size-1.5 rounded-full" style={{ backgroundColor: st.color }} />
-          {st.name}
+          <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: st.color, boxShadow: `0 0 6px ${st.color}` }} />
+          <span className="truncate">{st.name}</span>
         </span>
       ))}
-    </>
+    </span>
   )
 }
 
-function SuggestCard({ s, on, onPick }: { s: Suggestion; on: boolean; onPick: () => void }) {
-  const [open, setOpen] = useState(false)
+/** 카드마다 다른 색 번짐(브랜드색 계열 3가지): 보라, 파랑, 연보라 */
+const HUES = [
+  ['139 92 246', '47 91 234'],
+  ['47 91 234', '139 92 246'],
+  ['168 85 247', '99 102 241'],
+] as const
+
+/** 카드 전체가 누르는 곳. 위에서부터 함정 유형 → 상황 → 함정 → 역량. why 는 마우스를 올리면 title 로만 */
+function SuggestCard({ s, i, on, dim, onPick }: { s: Suggestion; i: number; on: boolean; dim: boolean; onPick: () => void }) {
+  const [a, b] = HUES[i % HUES.length]
+  const animate = useShouldAnimate()
   return (
     <div
+      data-on={on}
+      style={{ ['--sg-a' as string]: a, ['--sg-b' as string]: b }}
       className={cx(
-        'group flex w-full flex-col rounded-xl border bg-panel shadow-sm transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-1 hover:shadow-md',
-        on ? 'border-brand ring-2 ring-brand/25' : 'border-line hover:border-brand/40',
+        'sg-card group w-full rounded-2xl p-[1.5px] transition-[opacity,transform,box-shadow] duration-300 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand/30',
+        dim && 'scale-[0.98] opacity-75 hover:scale-100 hover:opacity-100',
       )}
     >
-      <button type="button" onClick={onPick} aria-pressed={on} className="flex flex-1 flex-col gap-2 rounded-t-xl p-4 text-left outline-offset-[-2px]">
-        <span className="text-[16px] leading-6 font-bold break-keep text-text group-hover:text-brand">{s.situation}</span>
-        <span className="line-clamp-2 text-[13px] leading-5 break-keep text-text-muted">
-          <b className="font-semibold text-text">함정 </b>
-          {s.trap}
+      <Spotlight
+        as="button"
+        type="button"
+        onClick={onPick}
+        aria-pressed={on}
+        title={s.why || undefined}
+        className="relative flex h-full min-h-[240px] w-full cursor-pointer flex-col gap-3 overflow-hidden rounded-[14.5px] bg-panel p-5 text-left outline-none"
+      >
+        <span aria-hidden className="sg-aurora" />
+        <span aria-hidden className="sg-shine" />
+        <span className="relative z-10 flex items-center justify-between gap-2">
+          <span className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border border-brand/30 bg-brand-dim px-2.5 text-[13px] font-bold">
+            <Zap size={13} aria-hidden className="shrink-0 text-brand" fill="currentColor" />
+            <span className="text-brand-gradient truncate">{s.trapType || '함정'}</span>
+          </span>
+          {on && (
+            <motion.span
+              initial={animate ? { scale: 0, rotate: -40 } : false}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={springs.gentle}
+              className="bg-brand-gradient inline-flex size-7 shrink-0 items-center justify-center rounded-full text-on-accent shadow-[0_6px_14px_-4px_rgb(108_71_255/0.7)]"
+              aria-hidden
+            >
+              <Check size={15} strokeWidth={3} />
+            </motion.span>
+          )}
         </span>
-        <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
-          <span className="inline-flex h-[22px] items-center rounded-full bg-alert/8 px-2 text-[12px] font-semibold text-alert">{s.trapType || '함정'}</span>
+        <span className="relative z-10 text-[16px] leading-6 font-bold break-keep text-balance text-text">{s.situation}</span>
+        <span className="relative z-10 mt-auto flex flex-col gap-1 rounded-xl bg-panel-raised p-3">
+          <span className="text-[12px] font-bold text-text-muted">함정</span>
+          <span className="text-[14px] leading-6 font-medium break-keep text-pretty text-text">{s.trap}</span>
+        </span>
+        <span className="relative z-10">
           <CompetencyChips keys={s.competencies} />
         </span>
-        <span className={cx('flex items-center gap-1 text-[13px] font-semibold', on ? 'text-brand' : 'text-text-faint group-hover:text-brand')}>
-          {on ? '채웠어요' : '이걸로 채우기'} <ArrowRight size={14} aria-hidden />
-        </span>
-      </button>
-      {s.why && (
-        <div className="border-t border-line px-4 py-2">
-          <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex items-center gap-1 text-[13px] font-semibold text-text-muted hover:text-text">
-            자세히 <ChevronDown size={14} aria-hidden className={cx('transition-transform', open && 'rotate-180')} />
-          </button>
-          {open && (
-            <p className="mt-2 flex gap-1.5 rounded-lg bg-panel-raised/70 px-2.5 py-2 text-[12px] leading-[18px] break-keep text-text-muted">
-              <Lightbulb size={14} className="mt-0.5 shrink-0 text-caution" aria-hidden />
-              {s.why}
-            </p>
-          )}
-        </div>
-      )}
+      </Spotlight>
     </div>
   )
 }

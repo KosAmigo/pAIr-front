@@ -1,4 +1,4 @@
-// 직군 강조색: 개발 = branch-2(파랑), 비개발 = comp-6(청록). 상태 색(검수 전 caution, 공개 brand, 비공개 text)과 섞지 않는다.
+// 직군 강조색: 개발 = branch-2(파랑), 비개발 = comp-6(청록). 상태 색(검수 전 caution, 자가진단 brand, 실전 text)과 섞지 않는다.
 import type { Track } from '../../../data/taskBoard'
 
 export const TRACK_TONE: Record<Track, { tile: string; text: string; ring: string }> = {

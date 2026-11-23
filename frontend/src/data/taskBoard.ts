@@ -1,16 +1,16 @@
 // 과제 콘솔의 화면 규칙(탭 나누기, 거르기, 용도 바꾸기 상태, 검수 체크리스트)을 모은 순수 로직.
 // 화면·API 를 부르지 않으므로 node 테스트(tests/task-board.test.mjs)에서 바로 쓴다.
-// 상태 이름은 화면에 영어로 보이지 않게 여기서 "검수 전 / 공개 문제 / 비공개 문제"로 바꾼다 (2026-11-20 결정).
+// 상태 이름은 화면에 영어로 보이지 않게 여기서 "검수 전 / 자가진단 / 실전"로 바꾼다 (2026-11-20 결정).
 import type { AdminQuestion, ConsoleTaskSummary, TaskUsage } from '../consoleApi'
 import type { Question } from './questions'
 
-/** 검수 전 = HIDDEN, 공개 문제 = OPEN(또는 내림 CLOSED) + SELF, 비공개 문제 = OPEN(또는 CLOSED) + LIVE */
+/** 검수 전 = HIDDEN, 자가진단 = OPEN(또는 내림 CLOSED) + SELF, 실전 = OPEN(또는 CLOSED) + LIVE */
 export type TaskTab = 'draft' | 'public' | 'private'
-export const TAB_LABEL: Record<TaskTab, string> = { draft: '검수 전', public: '공개 문제', private: '비공개 문제' }
+export const TAB_LABEL: Record<TaskTab, string> = { draft: '검수 전', public: '자가진단', private: '실전' }
 export const TAB_HINT: Record<TaskTab, string> = {
   draft: '어디에도 안 보여요. 사람이 확인해야 해요',
-  public: '자가진단에서 누구나 풀어요',
-  private: '실전 시험에만 나와요',
+  public: '누구나 자가진단에서 풀 수 있어요',
+  private: '회차에만 쓰고 자가진단에는 안 보여요',
 }
 
 type Row = Pick<ConsoleTaskSummary, 'status' | 'usage'>
@@ -29,9 +29,9 @@ export function countTabs(list: Row[]): Record<TaskTab, number> {
   return c
 }
 
-/** 탭 순서와 처음 열 탭: 공개 문제 → 비공개 문제 → 검수 전. 처음에는 늘 공개 문제 (검수 전 개수는 화면에서 배지로 눈에 띄게) */
-export const TAB_ORDER: TaskTab[] = ['public', 'private', 'draft']
-export const firstTab = (_counts?: Record<TaskTab, number>): TaskTab => 'public'
+/** 탭 순서: 검수 전 → 자가진단 → 실전. 처음에는 검수 전, 검수 전이 비어 있으면 자가진단 */
+export const TAB_ORDER: TaskTab[] = ['draft', 'public', 'private']
+export const firstTab = (counts?: Record<TaskTab, number>): TaskTab => (!counts || counts.draft > 0 ? 'draft' : 'public')
 
 export type Track = 'DEV' | 'BIZ'
 export type TrackFilter = 'ALL' | Track

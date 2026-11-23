@@ -439,6 +439,16 @@ Fallback:
 
 - **Lucide** (`lucide-react`)만 쓴다. 기본 크기 18px, 작은 메타 16px, 강조 시 22px, stroke 1.75이다.
 - 초기화면 기능 아이콘은 40px 둥근 사각형(`radius-md`) 안에 22px 아이콘, 배경은 해당 색 @ 10%. 3D 일러스트 아이콘은 쓰지 않는다.
+- 개념 아이콘은 한 곳(`frontend/src/components/domainIcons.ts`)에서만 가져온다. 같은 개념은 어느 화면이든 같은 아이콘을 쓴다.
+
+| 개념 | 아이콘 |
+| --- | --- |
+| 과제 | `FileStack` |
+| 개발 | `Code2` |
+| 비개발 | `FileText` |
+| 자가진단 | `UserRoundCheck` |
+| 실전 | `Building2` |
+
 - 이모지를 아이콘으로 쓰지 않는다.
 - 아이콘만 있는 버튼은 최소 32×32 히트 영역에 `aria-label`과 툴팁을 단다.
 
