@@ -2,18 +2,14 @@
 // 위 스포트라이트 = 세 칸 요약(누르면 그 탭) + "과제 만들기" 주인공 버튼. 아래 = 알약 탭(오른쪽에 검색) + 직군 하위 거르기 + 카드 그리드.
 // 데이터는 백엔드 /api/console/tasks. 새 칸(track, summary, generated …)은 없을 수 있어 옵셔널로 다룬다.
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { FileClock, FilePlus2, Globe2, Lock, Search, X, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
 import { CountUp, GradientText, Magnetic, RevealGroup, RevealItem, StageSection } from '../../components/fx'
 import { ButtonLink } from '../../components/ui'
-import type { ConsoleTaskSummary } from '../../consoleApi'
-import { loadTasks, setPublished, useTaskList } from '../../data/consoleTasks'
-import { countTabs, filterTasks, firstTab, TAB_HINT, TAB_LABEL, TAB_ORDER, tabOf, type TaskTab, type TrackFilter } from '../../data/taskBoard'
-import { ConfirmModal } from './common'
+import { loadTasks, useTaskList } from '../../data/consoleTasks'
+import { countTabs, filterTasks, firstTab, TAB_HINT, TAB_LABEL, TAB_ORDER, type TaskTab, type TrackFilter } from '../../data/taskBoard'
 import { PillTabs } from './ConsoleHero'
-import { useToast } from './format'
 import { TRACK_ICON } from './task/badges'
 import { TaskCard, TaskCardSkeleton } from './task/TaskCard'
 
@@ -28,45 +24,15 @@ const TABS = TAB_ORDER
 export default function ConsoleTasks() {
   const { list, error } = useTaskList()
   const all = useMemo(() => list ?? [], [list])
-  const nav = useNavigate()
-  const toast = useToast()
   const counts = useMemo(() => countTabs(all), [all])
   // 사용자가 탭을 고르기 전에는 공개 문제부터 연다 (검수 전이 있으면 탭에 개수 배지가 눈에 띄게 뜬다)
   const [picked, setPicked] = useState<TaskTab | null>(null)
   const tab = picked ?? (list ? firstTab(counts) : 'draft')
   const [track, setTrack] = useState<TrackFilter>('ALL')
   const [q, setQ] = useState('')
-  const [hiding, setHiding] = useState<ConsoleTaskSummary | null>(null)
-  const [busy, setBusy] = useState(false)
 
   const rows = useMemo(() => filterTasks(all, { tab, track, q }), [all, tab, track, q])
   const filtered = track !== 'ALL' || q.trim() !== ''
-
-  const change = async (t: ConsoleTaskSummary, open: boolean) => {
-    setBusy(true)
-    try {
-      await setPublished(t.id, open)
-      toast.show(
-        !open
-          ? '숨겼어요. 검수 전으로 돌아가 어디에도 보이지 않아요'
-          : t.usage === 'LIVE'
-            ? '비공개 문제로 올렸어요. 실전 회차를 만들 때 고를 수 있어요'
-            : '공개 문제로 올렸어요. 자가진단에 나와요',
-      )
-    } catch (e) {
-      toast.show(e instanceof Error ? e.message : '바꾸지 못했어요')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const menuFor = (t: ConsoleTaskSummary) => [
-    { text: tabOf(t) === 'draft' ? '검수하기' : '자세히 보기', onClick: () => nav(`/console/tasks/${encodeURIComponent(t.id)}`) },
-    { text: '응시자로 보기', onClick: () => window.open(`/console/tasks/${encodeURIComponent(t.id)}/preview`, '_blank', 'noopener') },
-    t.status === 'HIDDEN'
-      ? { text: t.usage === 'LIVE' ? '비공개 문제로 올리기' : '공개 문제로 올리기', disabled: busy, onClick: () => void change(t, true) }
-      : { text: '숨기기 (검수 전으로)', danger: true, disabled: busy, onClick: () => setHiding(t) },
-  ]
 
   return (
     <>
@@ -141,7 +107,7 @@ export default function ConsoleTasks() {
         {error && list == null ? (
           <ErrorState message={error} onRetry={() => void loadTasks()} />
         ) : list == null ? (
-          <ul aria-label="과제를 불러오는 중" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <ul aria-label="과제를 불러오는 중" className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
             {[0, 1, 2].map((i) => (
               <TaskCardSkeleton key={i} />
             ))}
@@ -152,10 +118,10 @@ export default function ConsoleTasks() {
             {rows.length === 0 ? (
               <Empty tab={tab} filtered={filtered} total={all.length} onClear={() => (setTrack('ALL'), setQ(''))} />
             ) : (
-              <RevealGroup as="ul" key={`${tab}-${track}`} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <RevealGroup as="ul" key={`${tab}-${track}`} className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
                 {rows.map((t) => (
                   <RevealItem key={t.id} as="li" className="flex">
-                    <TaskCard task={t} menu={menuFor(t)} />
+                    <TaskCard task={t} />
                   </RevealItem>
                 ))}
               </RevealGroup>
@@ -164,26 +130,6 @@ export default function ConsoleTasks() {
         )}
       </div>
 
-      {hiding && (
-        <ConfirmModal
-          title="이 과제를 숨길까요?"
-          danger
-          confirm="숨기기"
-          disabled={busy}
-          onClose={() => setHiding(null)}
-          onConfirm={() => {
-            const t = hiding
-            setHiding(null)
-            void change(t, false)
-          }}
-          body={
-            <>
-              「{hiding.title}」이 검수 전으로 돌아가 {hiding.usage === 'LIVE' ? '회차 만들기' : '자가진단 과제 목록'}에서 사라집니다. 지난 응시 기록은 그대로 남아요.
-            </>
-          }
-        />
-      )}
-      {toast.node}
     </>
   )
 }

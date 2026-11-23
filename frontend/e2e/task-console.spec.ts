@@ -29,6 +29,14 @@ test.describe('목록', () => {
     expect((await titles(page)).sort()).toEqual(['요금제 개편안 손익 비교', '재고 차감 동시성', '쿠폰 할인 계산'])
   })
 
+  test('카드에는 메뉴 버튼과 등록 시간 줄이 없고, 누르면 검수 상세로 간다', async ({ page }) => {
+    const card = page.locator('ul li').filter({ has: page.locator('h3') }).first()
+    await expect(card.getByRole('button')).toHaveCount(0)
+    await expect(card.locator('.border-t')).toHaveCount(0)
+    await card.locator('h3').click()
+    await expect(page).toHaveURL(/\/console\/tasks\/[^/]+$/)
+  })
+
   test('직군 하위 필터는 탭 안에서만 거른다', async ({ page }) => {
     await page.getByRole('tab', { name: /검수 전/ }).click()
     expect(await titles(page)).toHaveLength(2)
@@ -137,6 +145,7 @@ test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
   await mockApi(page)
   await page.goto('/console/tasks')
   await expect(page.locator('ul h3').first()).toBeVisible()
+  await page.waitForTimeout(1200) // 카드가 나타나는 애니메이션이 끝난 뒤 찍는다
   await shot(page, '01-list-public', p)
   await page.getByRole('tab', { name: /검수 전/ }).click()
   await page.getByRole('radio', { name: '개발', exact: true }).click()
