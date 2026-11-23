@@ -65,7 +65,7 @@ export async function mockApi(page: Page) {
     }
     if (path.startsWith('/api/admin/task-gen/j1')) {
       polls++
-      return json({ status: polls > 1 ? 'DONE' : 'RUNNING', step: '확인 중', taskCode: 'N1', checks: [{ name: '컴파일', ok: true, detail: '' }], error: null })
+      return json({ status: polls > 1 ? 'DONE' : 'RUNNING', step: '확인 중', taskCode: 'N1', checks: [{ name: '컴파일', ok: true, detail: '' }, { name: '분량 대비 시간', ok: false, level: 'warn', detail: '40분 치고 분량이 적어요' }], error: null })
     }
     return json([])
   })

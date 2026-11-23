@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
-import { taskGenApi, pollJob, stepStates, startErrorMessage, validateForm, allChecksOk } from '../src/data/taskGen.ts'
+import { taskGenApi, pollJob, stepStates, startErrorMessage, validateForm, allChecksOk, checkState, countChecks } from '../src/data/taskGen.ts'
 
 const originalFetch = globalThis.fetch
 afterEach(() => { globalThis.fetch = originalFetch })
@@ -29,6 +29,22 @@ test('pollJob reports every state and stops on DONE', async () => {
   assert.deepEqual(seen, ['생성 중', '확인 중', '저장 중'])
   assert.equal(done.taskCode, 'T-1')
   assert.equal(allChecksOk(done), true)
+})
+
+test('checkState: ok 는 통과, level=warn 은 경고, level 없음/fail 은 실패', () => {
+  assert.equal(checkState({ ok: true }), 'pass')
+  assert.equal(checkState({ ok: true, level: 'warn' }), 'pass')
+  assert.equal(checkState({ ok: false, level: 'warn' }), 'warn')
+  assert.equal(checkState({ ok: false, level: 'fail' }), 'fail')
+  assert.equal(checkState({ ok: false }), 'fail')
+})
+
+test('경고는 실패로 세지 않고 allChecksOk 도 막지 않는다', () => {
+  const c = (ok, level) => ({ name: 'n', ok, detail: '', level })
+  assert.deepEqual(countChecks([c(true), c(false, 'warn'), c(false)]), { pass: 1, warn: 1, fail: 1 })
+  assert.equal(allChecksOk({ checks: [c(true), c(false, 'warn')] }), true)
+  assert.equal(allChecksOk({ checks: [c(true), c(false, 'warn'), c(false)] }), false)
+  assert.equal(allChecksOk({ checks: [c(false)] }), false) // level 없음 = fail
 })
 
 test('pollJob stops when aborted and survives one failed lookup', async () => {

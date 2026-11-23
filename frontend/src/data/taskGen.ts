@@ -20,7 +20,9 @@ export type TaskGenRequest = {
 }
 
 export type GenStep = '생성 중' | '확인 중' | '다시 생성 중' | '저장 중'
-export type GenCheck = { name: string; ok: boolean; detail: string }
+/** level 은 실패했을 때의 등급: warn = 재생성을 일으키지 않는 경고. 없으면(예전 기록) fail */
+export type GenCheck = { name: string; ok: boolean; detail: string; level?: 'fail' | 'warn' }
+export type CheckState = 'pass' | 'warn' | 'fail'
 export type TaskGenJob = {
   status: 'RUNNING' | 'DONE' | 'FAILED'
   step: GenStep | null
@@ -234,7 +236,18 @@ export function startErrorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-export const allChecksOk = (job: Pick<TaskGenJob, 'checks'>) => job.checks.every((c) => c.ok)
+/** 통과 / 경고(!ok 이고 level=warn) / 실패(그 외 !ok, level 없음 포함) */
+export const checkState = (c: Pick<GenCheck, 'ok' | 'level'>): CheckState => (c.ok ? 'pass' : c.level === 'warn' ? 'warn' : 'fail')
+
+/** 개수 집계. 경고는 실패에 넣지 않는다 */
+export function countChecks(checks: Pick<GenCheck, 'ok' | 'level'>[]) {
+  const n = { pass: 0, warn: 0, fail: 0 }
+  for (const c of checks) n[checkState(c)]++
+  return n
+}
+
+/** 실패가 없으면 true. 경고만 있어도 통과로 본다 */
+export const allChecksOk = (job: Pick<TaskGenJob, 'checks'>) => countChecks(job.checks).fail === 0
 
 /** 폼 입력 검사. 오류가 없으면 빈 객체 */
 export function validateForm(
