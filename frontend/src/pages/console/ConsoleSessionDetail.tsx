@@ -40,6 +40,7 @@ import { ConfirmModal, Modal, RowMenu } from './common'
 import { fmtHm, fmtLeft, fmtShort, fmtTime, useNow, useToast } from './format'
 import { Loading } from './Loading'
 import ProctorPanel from './ProctorPanel'
+import { RetentionBar } from './RetentionBar'
 import EnvCheckCard from './EnvCheckCard'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
@@ -945,6 +946,7 @@ function Results({ s }: { s: SessionSummary }) {
   return (
     <div className="flex flex-col gap-6">
       {ev.error && <ErrorState compact message={`감독 이벤트: ${ev.error}`} onRetry={ev.reload} />}
+      {s.proctoring && <RetentionBar sessionId={s.id} />}
       <Distribution rows={r.rows.filter((x) => x.items)} cols={cols} maxOf={maxOf} average={r.average} />
       <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
         <header className="flex h-12 items-center gap-3 border-b border-line px-4">
@@ -1009,7 +1011,8 @@ function Results({ s }: { s: SessionSummary }) {
             <tbody>
               {rows.map((p) => {
                 const done = p.score != null
-                const canOpen = p.state === 'SUBMITTED' || done
+                // 제출하지 않은 응시자도 감독 이벤트(증거 구간)가 있으면 열어서 확정/기각할 수 있다
+                const canOpen = p.state === 'SUBMITTED' || done || evTotal(p) > 0 || unreviewedOf(events, p.participantId) > 0
                 const total = evTotal(p)
                 const open = unreviewedOf(events, p.participantId)
                 const sus = suspectsOf(events, p.participantId)

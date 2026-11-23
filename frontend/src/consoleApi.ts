@@ -236,6 +236,19 @@ async function blobUrl(url: string): Promise<string> {
   return URL.createObjectURL(await res.blob())
 }
 
+/** 이벤트 앞뒤 증거 구간의 사진 한 장 (GET .../events/{id}/clip) */
+export type ClipFrameView = { id: number; source: 'PC_CAM' | 'PHONE_CAM'; offsetMs: number; sizeBytes: number; deleted: boolean }
+export type EventClipView = { eventId: number; frames: ClipFrameView[] }
+/** 사진 보관 기간·연장 (GET .../retention). 회차 단위 */
+export type RetentionView = {
+  expiresAt: string
+  extensionsUsed: number
+  maxExtensions: number
+  extensionDays: number
+  canExtend: boolean
+  history: { seq: number; extendedBy: number; extendedAt: string; days: number; expiresBefore: string; expiresAfter: string }[]
+}
+
 const S = '/api/console/sessions'
 
 export const consoleApi = {
@@ -268,6 +281,13 @@ export const consoleApi = {
   review: (id: number, eventId: number, review: EventReview | null, note?: string) =>
     call<ProctorEventView>('PUT', `${S}/${id}/events/${eventId}/review`, { review, note }),
   snapshotUrl: (id: number, eventId: number) => blobUrl(`${S}/${id}/events/${eventId}/snapshot`),
+  /** 이벤트 앞뒤 증거 구간 목록 (시간순) */
+  eventClip: (id: number, eventId: number) => call<EventClipView>('GET', `${S}/${id}/events/${eventId}/clip`),
+  clipImageUrl: (id: number, eventId: number, frameId: number) => blobUrl(`${S}/${id}/events/${eventId}/clip/${frameId}/image`),
+  /** { 이벤트번호: 사진 장수 } — 증거 구간이 있는 이벤트 표시용 */
+  clips: (id: number) => call<Record<string, number>>('GET', `${S}/${id}/clips`),
+  retention: (id: number) => call<RetentionView>('GET', `${S}/${id}/retention`),
+  extendRetention: (id: number) => call<RetentionView>('POST', `${S}/${id}/retention/extend`),
   envScanPhotos: (id: number, participantId: number) => call<EnvScanPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-scan`),
   /** 점검 결과: 진행 중이면 LIVE(실시간), 저장됐으면 SAVED. 아직 없으면 null */
   envCheck: (id: number, participantId: number) => call<EnvCheckView | null>('GET', `${S}/${id}/participants/${participantId}/env-check`),

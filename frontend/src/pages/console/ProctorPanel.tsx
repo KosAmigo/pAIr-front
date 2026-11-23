@@ -8,6 +8,7 @@ import {
   Camera,
   ClipboardPaste,
   EyeOff,
+  Film,
   Hand,
   Link2,
   Loader2,
@@ -37,7 +38,9 @@ import { Button } from '../../components/ui'
 import { ConfirmModal, Modal } from './common'
 import { fmtTime } from './format'
 import LiveWatch from './LiveWatch'
+import { EvidenceClipModal } from './EvidenceClip'
 import { Loading } from './Loading'
+import { RetentionBar } from './RetentionBar'
 import { loadSoundPref, playAlertSound, saveSoundPref } from './alertSound'
 import { useNewEvents } from './useNewEvents'
 
@@ -109,6 +112,7 @@ export default function ProctorPanel({
   const [filter, setFilter] = useState<Filter>('all')
   const [focus, setFocus] = useState<number | null>(null)
   const [photo, setPhoto] = useState<ProctorEventView | null>(null)
+  const [clipFor, setClipFor] = useState<ProctorEventView | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [confirmRestore, setConfirmRestore] = useState(false)
   const [restoring, setRestoring] = useState(false)
@@ -117,6 +121,8 @@ export default function ProctorPanel({
   const canRestore = canReviewProctor(user?.role) && session.phase === 'LIVE' && p.linkExpired && !p.submittedAt
   const loaded = useLoad(session.proctoring ? `pev-${session.id}-${p.id}` : null, () => consoleApi.participantEvents(session.id, p.id), pollMs)
   const scan = useLoad(session.proctoring ? `env-${session.id}-${p.id}` : null, () => consoleApi.envScanPhotos(session.id, p.id))
+  // 증거 구간(이벤트 앞 8초·뒤 4초 사진)이 있는 이벤트 → 장수
+  const clips = useLoad(session.proctoring ? `clips-${session.id}` : null, () => consoleApi.clips(session.id), pollMs)
   const events = byTime(loaded.data ?? [])
   const fresh = useNewEvents(`${session.id}-${p.id}`, loaded.data)
   const [soundOn, setSoundOn] = useState(loadSoundPref)
@@ -216,6 +222,7 @@ export default function ProctorPanel({
         ) : (
           <p className="mt-1 text-[13px] text-text-muted">감독을 쓰지 않은 회차입니다.</p>
         )}
+        {session.proctoring && session.phase === 'ENDED' && <RetentionBar sessionId={session.id} className="mt-3" />}
         {canRestore && (
           <div role="alert" className="mt-3 flex items-center gap-2 rounded-md border border-alert/40 bg-alert/10 px-3 py-2 text-[13px] text-alert">
             <WifiOff size={16} className="shrink-0" aria-hidden />
@@ -292,7 +299,7 @@ export default function ProctorPanel({
           <ol className="fx-cards flex flex-col gap-3 p-4">
             {shown.length === 0 && <li className="py-8 text-center text-[14px] text-text-muted">{events.length ? '조건에 맞는 이벤트가 없습니다.' : '감독 이벤트가 없습니다.'}</li>}
             {shown.map((e) => (
-              <EventCard key={e.id} e={e} time={elapsed(session, e.startedAt)} focused={focus === e.id} fresh={freshIds.has(e.id)} onPhoto={() => setPhoto(e)} onReview={(r, note) => review(e, r, note)} />
+              <EventCard key={e.id} e={e} time={elapsed(session, e.startedAt)} focused={focus === e.id} fresh={freshIds.has(e.id)} clipCount={clips.data?.[String(e.id)] ?? 0} onClip={() => setClipFor(e)} onPhoto={() => setPhoto(e)} onReview={(r, note) => review(e, r, note)} />
             ))}
           </ol>
         </>
@@ -309,6 +316,7 @@ export default function ProctorPanel({
         />
       )}
 
+      {clipFor && <EvidenceClipModal sessionId={session.id} eventId={clipFor.id} title={EVENT_LABEL[clipFor.type] ?? clipFor.type} onClose={() => setClipFor(null)} />}
       {photo && (
         <Modal title={`${EVENT_LABEL[photo.type]} 스냅샷`} onClose={() => setPhoto(null)} actions={null}>
           <Snapshot sessionId={session.id} eventId={photo.id} />
@@ -327,6 +335,8 @@ function EventCard({
   time,
   focused,
   fresh,
+  clipCount,
+  onClip,
   onPhoto,
   onReview,
 }: {
@@ -335,6 +345,9 @@ function EventCard({
   focused: boolean
   /** 방금 들어와 아직 확인하지 않은 이벤트 */
   fresh: boolean
+  /** 증거 구간 사진 장수 (0 이면 없음) */
+  clipCount: number
+  onClip: () => void
   onPhoto: () => void
   onReview: (r: EventReview | null, note: string | undefined) => void
 }) {
@@ -386,6 +399,11 @@ function EventCard({
             {e.confidence != null && ` │ 확신도 ${e.confidence.toFixed(2)}`}
           </p>
           {detail && <p className="mt-1 text-[13px] break-all text-text">{detail}</p>}
+          {clipCount > 0 && (
+            <button type="button" onClick={onClip} className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:underline">
+              <Film size={14} aria-hidden /> 증거 구간 보기 ({clipCount}장)
+            </button>
+          )}
         </div>
         {e.snapshot && (
           <button
