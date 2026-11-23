@@ -58,6 +58,9 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
         </nav>
         <div className="ml-auto flex items-center">
           <div className="mr-3"><CreditPill /></div>
+          <Link to="/credits" className="mr-3 inline-flex h-8 items-center rounded-md border border-line px-3 text-[14px] font-medium text-brand hover:bg-panel-raised">
+            충전
+          </Link>
           {user && user.role !== 'USER' && (
             <Link
               to="/console"
