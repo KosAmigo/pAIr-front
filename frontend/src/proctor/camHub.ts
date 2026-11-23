@@ -10,19 +10,24 @@ import { buildPcBaseline, pcConditions, pcProfile, type PcBaseline, type PcFeatu
 import { RuleEngine } from './core/RuleEngine.ts'
 import { angleDiff } from './core/stats.ts'
 import type { PeerState, PhoneStatus, ScanStage, ServerMsg } from './relay/protocol.ts'
-import type { VideoMode } from './relay/rtcSignal.ts'
+import type { SendMode } from './relay/phoneSenderCore.ts'
 import { RelaySocket } from './relay/RelaySocket.ts'
-import { PcLink, type LinkState } from './relay/peerLink.ts'
+import type { LinkState } from './relay/peerLink.ts'
+import { PhoneSurface } from './relay/phoneSurface.ts'
 import { ViewerSender, type ViewSources } from './relay/viewerSender.ts'
 import { PHONE_ANALYSIS_IDLE, PhoneAnalysis, type PhoneAnalysisState } from './phoneAnalysis.ts'
+import { EvidenceRecorder } from './evidenceRecorder.ts'
+import { PHONE_DROP_MESSAGE, phoneDropEvent } from './core/phoneLink.ts'
 import { SCREEN_EVENTS_ACCEPTED, toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
 import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED, VISION_WORKER_ENABLED } from './features.ts'
-import { PC_MIN_ANALYZE_INTERVAL_MS } from './core/frameBudget.ts'
+import { PC_MIN_ANALYZE_INTERVAL_MS, PHONE_MIN_ANALYZE_INTERVAL_MS } from './core/frameBudget.ts'
 import { captureSnapshot, frameLoop, openCamera, stopCamera } from './vision/camera.ts'
 import { forcedDelegate } from './vision/delegate.ts'
 import { guardedAnalyzer } from './vision/guardedAnalyzer.ts'
 import type { MainModels, VisionBackend } from './vision/visionBackend.ts'
+import { createPhoneBackend } from './vision/phoneBackend.ts'
+import { PhoneStepper, makeLumaReader } from './vision/phoneStepper.ts'
 import { createPcBackend, forcedVision } from './vision/visionBackendFactory.ts'
 
 const CALIBRATION_MS = 3000
@@ -33,6 +38,10 @@ const MAX_LOG = 50
 const GATE_TICK_MS = 1000
 /** 이벤트 순간 사진용으로 메모리에만 두는 흐린 화면을 이 간격으로 갱신한다 (저장·전송 아님) */
 const BLUR_REFRESH_MS = 10_000
+/** 웹캠 사진을 증거 구간 링 버퍼에 두는 간격과 크기 (이벤트 때만 일부가 올라간다) */
+const PC_CLIP_FRAME_MS = 1000
+const PC_CLIP_WIDTH = 400
+const PC_CLIP_QUALITY = 0.55
 
 export type ScanFrame = { source: 'pc' | 'phone'; stage: ScanStage; image: string; objects: string[]; at: number }
 export type ActiveRule = { kind: string; message: string; heldMs: number; durationMs: number }
@@ -112,7 +121,6 @@ let video: HTMLVideoElement | null = null
 let stream: MediaStream | null = null
 let relay: RelaySocket | null = null
 let outbox: CamOutbox | null = null
-let link: PcLink | null = null
 /** 감독관 실시간 영상 송신. 감독관이 열었을 때만 연결이 생긴다 */
 let viewers: ViewerSender | null = null
 let stopLoop: (() => void) | null = null
@@ -137,24 +145,88 @@ let lastBlur: string | undefined
 let lastBlurAt = 0
 let gateTimer: number | null = null
 let gateState: GateState = GATE_INITIAL
-/** 지금 분석 중인 휴대폰 영상 (같은 영상이면 다시 시작하지 않는다) */
-let analyzedStream: MediaStream | null = null
+/** 휴대폰 분석 최소 간격. 환경 점검에서 이 PC 가 느리다고 나오면 늘린다 (setPhoneAnalysisIntervalMs) */
+let phoneIntervalMs = PHONE_MIN_ANALYZE_INTERVAL_MS
+let phoneFallbackReason: string | null = null
+/** 증거 구간: 웹캠·휴대폰 프레임 링 버퍼와 이벤트 약 5초 뒤 업로드 예약 */
+const evidence = new EvidenceRecorder()
+/** 환경 점검 동안만 쓰는 "영상처럼 보이는" 휴대폰 화면 (책상 스캔·미리보기). 감독 중에는 만들지 않는다 */
+let phoneSurface: PhoneSurface | null = null
+const phoneFrameListeners = new Set<(jpeg: ArrayBuffer) => void>()
 const phoneAnalyzer = new PhoneAnalysis({
+  createBackend: () =>
+    createPhoneBackend({
+      loadMainStep: async () => {
+        const m = await import('./vision/models.ts')
+        const [hand, object] = await Promise.all([m.createHandLandmarker(), m.createObjectDetector()])
+        const stepper = new PhoneStepper({ hand, object }, makeLumaReader())
+        return (image, ts) => stepper.step(image, ts)
+      },
+      delegate: forcedDelegate() ?? 'CPU',
+      enabled: VISION_WORKER_ENABLED,
+      force: forcedVision(),
+      onFallback: (reason) => {
+        phoneFallbackReason = reason instanceof Error ? reason.message : String(reason)
+        console.warn('휴대폰 Worker 분석을 쓸 수 없어 메인 스레드 분석으로 전환합니다:', reason)
+      },
+    }),
   onState: (phoneAnalysis) => set({ phoneAnalysis }),
-  onViolation: (v) => {
-    void outbox?.enqueue(v)
-    pushLog(v)
-  },
+  onViolation: (v) => submitViolation(v),
   serverOffsetMs: () => serverOffset,
+  intervalMs: () => phoneIntervalMs,
 })
+let phoneAnalysisOn = false
 
-/** 감독 중이고 휴대폰 영상이 있으면 분석을 시작하고, 영상이 없어지면 멈춘다. 영상이 바뀌면 새 영상으로 다시 시작한다 */
+/** 감독 중이고 휴대폰이 연결돼 있으면 분석을 시작하고, 끊기면 멈춘다. 다시 연결되면 새로 시작한다(보정부터) */
 function syncPhoneAnalysis() {
-  const wanted = monitoringWanted ? state.phoneStream : null
-  if (wanted === analyzedStream) return
-  analyzedStream = wanted
-  if (wanted) void phoneAnalyzer.start(wanted)
+  const wanted = PHONE_CAM_ENABLED && monitoringWanted && state.phone === 'connected'
+  if (wanted === phoneAnalysisOn) return
+  phoneAnalysisOn = wanted
+  if (wanted) phoneAnalyzer.start()
   else phoneAnalyzer.stop()
+}
+
+/** 환경 점검 중 휴대폰이 연결돼 있으면 책상 스캔용 화면을 만들고, 감독이 시작되거나 끊기면 없앤다 */
+function syncPhoneSurface() {
+  const wanted = PHONE_CAM_ENABLED && !monitoringWanted && state.phone === 'connected'
+  if (wanted && !phoneSurface) phoneSurface = new PhoneSurface()
+  if (!wanted && phoneSurface) {
+    phoneSurface.close()
+    phoneSurface = null
+    set({ phoneStream: null, phoneVideo: 'idle' })
+  }
+}
+
+/** 새 연결(입장 토큰이 바뀜·연습)을 시작할 때 휴대폰 쪽 상태를 비운다 */
+function resetPhoneSide() {
+  phoneAnalysisOn = false
+  phoneAnalyzer.stop()
+  evidence.clear()
+  if (phoneSurface) {
+    phoneSurface.close()
+    phoneSurface = null
+  }
+}
+
+/** 휴대폰이 보낸 JPEG 한 장 (서버가 넘긴 최신 한 장) */
+function onRelayBinary(buf: ArrayBuffer) {
+  const at = Date.now()
+  evidence.pushPhone(at, new Blob([buf], { type: 'image/jpeg' }))
+  if (phoneSurface) {
+    phoneSurface.draw(buf)
+    if (state.phoneStream !== phoneSurface.stream) set({ phoneStream: phoneSurface.stream, phoneVideo: 'live' })
+  }
+  if (monitoringWanted) phoneAnalyzer.offer(buf)
+  phoneFrameListeners.forEach((l) => l(buf))
+}
+
+/** 카메라 이벤트를 보관함에 넣고 화면 로그에 띄운다. 카메라 이벤트는 약 5초 뒤 앞뒤 사진 구간도 올린다 */
+function submitViolation(v: CamViolation) {
+  const box = outbox
+  pushLog(v)
+  if (!box) return
+  const { clientId } = box.record(v)
+  if (v.source === 'PC_CAM' || v.source === 'PHONE_CAM') evidence.schedule(clientId, Date.now(), (id, frames) => box.attachClip(id, frames))
 }
 
 /** 세 채널이 지금 연결돼 있는지. 화면 공유는 전체 화면이 아니면(창·탭) 연결로 치지 않는다 */
@@ -192,7 +264,8 @@ function recordScreen(type: ScreenEventType) {
 
 /** 감독관에게 보낼 원본 영상. 죽은 웹캠·끊긴 휴대폰·멈춘 화면 공유는 null (감독관 화면에 "영상 없음") */
 function viewSources(): ViewSources {
-  return { webcam: state.webcamLive ? stream : null, phone: state.phoneStream, screen: screenHandle?.stream ?? null }
+  // 휴대폰은 영상이 아니라 JPEG 프레임으로만 보내므로 감독관 실시간 화면에는 휴대폰 영상이 없다 (영상 스트리밍은 범위 밖)
+  return { webcam: state.webcamLive ? stream : null, phone: null, screen: screenHandle?.stream ?? null }
 }
 
 function newViewerSender(): ViewerSender {
@@ -299,22 +372,12 @@ export const camHub = {
   connect(invite: string) {
     if (state.invite === invite && relay) return
     relay?.close()
-    link?.close()
-    link = new PcLink(
-      (signal) => relay?.send({ type: 'rtc', signal }),
-      (phoneVideo, phoneStream) => {
-        set({ phoneVideo, phoneStream })
-        syncPhoneAnalysis()
-      },
-    )
     viewers?.closeAll()
     viewers = newViewerSender()
     outbox = new CamOutbox(invite)
-    analyzedStream = null
-    phoneAnalyzer.stop()
+    resetPhoneSide()
     set({ ...INITIAL, invite, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind })
-    syncPhoneAnalysis()
-    relay = new RelaySocket(() => ({ type: 'hello-pc', invite }), onRelayMessage, onRelayOpenChange)
+    relay = new RelaySocket(() => ({ type: 'hello-pc', invite }), onRelayMessage, onRelayOpenChange, onRelayBinary)
     void outbox.flush()
   },
 
@@ -325,20 +388,11 @@ export const camHub = {
   connectPractice() {
     if (state.practice && relay) return
     relay?.close()
-    link?.close()
-    link = new PcLink(
-      (signal) => relay?.send({ type: 'rtc', signal }),
-      (phoneVideo, phoneStream) => {
-        set({ phoneVideo, phoneStream })
-        syncPhoneAnalysis()
-      },
-    )
     outbox = null
-    analyzedStream = null
-    phoneAnalyzer.stop()
+    resetPhoneSide()
     const key = `practice-${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`
     set({ ...INITIAL, practice: true, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind })
-    relay = new RelaySocket(() => ({ type: 'hello-pc', invite: key, practice: true }), onRelayMessage, onRelayOpenChange)
+    relay = new RelaySocket(() => ({ type: 'hello-pc', invite: key, practice: true }), onRelayMessage, onRelayOpenChange, onRelayBinary)
   },
 
   /** 화면 공유 시작. 동의 버튼 클릭 안에서 불러야 한다. 창·탭만 공유하면 바로 끊고 안내한다 */
@@ -428,13 +482,20 @@ export const camHub = {
   },
 
   /** 휴대폰 송신 화질 전환 (책상 스캔 동안만 'scan') */
-  setPhoneQuality(mode: VideoMode) {
-    link?.setQuality(mode)
+  setPhoneQuality(mode: SendMode) {
+    relay?.send({ type: 'quality', mode })
   },
 
-  /** 휴대폰 손전등 (어두운 방 점검용) */
-  setPhoneTorch(on: boolean) {
-    link?.setTorch(on)
+  /**
+   * 휴대폰 손전등 (어두운 방 점검용). 영상(WebRTC) 연결을 없애면서 휴대폰으로 가는 제어 채널도 없어졌고,
+   * 운영 중계도 PC → 휴대폰 메시지를 전달하지 않는다. 지금은 아무것도 하지 않는다.
+   */
+  setPhoneTorch(_on: boolean) {},
+
+  /** 휴대폰 JPEG 프레임을 받을 때마다 부른다 (환경 점검 미리보기용). 해제 함수를 돌려준다 */
+  onPhoneFrame(listener: (jpeg: ArrayBuffer) => void) {
+    phoneFrameListeners.add(listener)
+    return () => void phoneFrameListeners.delete(listener)
   },
 
   /** 책상 스캔 사진 1장: 화면용으로 보관하고 파일 서버(백엔드 env-scan)에 올린다. 업로드가 실패해도 점검은 계속된다 */
@@ -456,6 +517,7 @@ export const camHub = {
     serverOffset = serverOffsetMs
     activeProfile = profile
     monitoringWanted = true
+    syncPhoneSurface() // 감독이 시작되면 책상 스캔용 화면은 필요 없다 (감독 중 프레임은 분석 Worker 로 바로 간다)
     // 기다리는 동안(모델 내려받기 등) stop() 이나 다시 시작이 불리면 이 호출은 무효가 된다
     const gen = ++monitorGen
     syncPhoneAnalysis()
@@ -502,6 +564,14 @@ export const camHub = {
     analysisIntervalMs = Math.min(500, Math.max(PC_MIN_ANALYZE_INTERVAL_MS, Math.round(ms)))
   },
 
+  /** 휴대폰 분석 간격(ms). setAnalysisIntervalMs 와 같은 규칙으로 늘린다 */
+  setPhoneAnalysisIntervalMs(ms: number) {
+    phoneIntervalMs = Math.min(1000, Math.max(PHONE_MIN_ANALYZE_INTERVAL_MS, Math.round(ms)))
+  },
+  /** 지금 쓰는 휴대폰 분석 방식 (Worker 인지 메인인지). 감독을 시작하기 전에는 null */
+  phoneVisionKind: (): 'worker' | 'main' | null => phoneAnalyzer.kind,
+  phoneFallbackReason: (): string | null => phoneFallbackReason,
+
   /** 지금 쓰는 PC 분석 방식 (Worker 인지 메인 스레드인지). 감독을 시작하기 전에는 null */
   visionKind: (): 'worker' | 'main' | null => vision?.kind ?? null,
   /** Worker 를 못 써서 메인으로 넘어갔다면 그 이유. 아니면 null (진단용) */
@@ -522,10 +592,9 @@ export const camHub = {
 
   /** 휴대폰 기준 위치를 현재 영상으로 다시 잡는다 */
   recalibratePhone() {
-    const current = state.phoneStream
-    if (!monitoringWanted || !current) return
-    analyzedStream = current
-    void phoneAnalyzer.start(current)
+    if (!monitoringWanted || state.phone !== 'connected') return
+    phoneAnalysisOn = true
+    phoneAnalyzer.start()
   },
 
   recordBrowser(v: CamViolation) {
@@ -542,7 +611,7 @@ export const camHub = {
     screenHandle?.stop()
     screenHandle = null
     lastBlur = undefined
-    analyzedStream = null
+    phoneAnalysisOn = false
     phoneAnalyzer.dispose()
     stopLoop?.()
     stopLoop = null
@@ -553,19 +622,26 @@ export const camHub = {
     visionLoading = null
     visionFallbackReason = null
     analysisIntervalMs = PC_MIN_ANALYZE_INTERVAL_MS
+    phoneIntervalMs = PHONE_MIN_ANALYZE_INTERVAL_MS
+    phoneFallbackReason = null
     // 상태는 먼저 비운다. 비동기로 기다리는 사이 새로 연결(connect)해도 그 연결을 닫지 않게 한다
-    const closing = { outbox, relay, link, stream, video }
+    // 아직 올리지 않은 증거 구간은 기다리지 않고 지금 모은 프레임으로 올린다 (outbox 를 비우기 전에 넘겨 둔다)
+    await evidence.flushPending()
+    evidence.clear()
+    if (phoneSurface) {
+      phoneSurface.close()
+      phoneSurface = null
+    }
+    const closing = { outbox, relay, stream, video }
     viewers?.closeAll()
     viewers = null
     outbox = null
     relay = null
-    link = null
     stream = null
     video = null
     set({ ...INITIAL })
     await closing.outbox?.flush()
     closing.relay?.close()
-    closing.link?.close()
     stopCamera(closing.stream)
     closing.video?.remove()
   },
@@ -576,15 +652,21 @@ function runMonitoring(baseline: PcBaseline, analyze: (now: number) => Promise<P
   const profile = pcProfile(profileName)
   const engine = new RuleEngine(profile.rules)
   let lastUi = 0
+  let lastClipFrame = Number.NEGATIVE_INFINITY
   set({ monitor: 'monitoring', monitoringSince: Date.now(), error: null })
   stopLoop = frameLoop(v, async (now) => {
     const f = await analyze(now)
     if (!f) return
+    // 증거 구간용 웹캠 사진은 1초에 한 장만 링 버퍼에 둔다 (이벤트가 날 때만 일부가 올라간다)
+    if (now - lastClipFrame >= PC_CLIP_FRAME_MS) {
+      lastClipFrame = now
+      const photo = captureSnapshot(v, PC_CLIP_WIDTH, PC_CLIP_QUALITY)
+      if (photo && outbox) evidence.pushPc(Date.now(), photo)
+    }
     for (const fired of engine.evaluate(pcConditions(f, baseline, profile.thresholds), now)) {
       const viol = toCamViolation(fired, 'PC_CAM', captureSnapshot(v), detailFor(f, baseline), serverOffsetMs)
       if (!viol) continue
-      void outbox?.enqueue(viol)
-      pushLog(viol)
+      submitViolation(viol)
     }
     if (now - lastUi > UI_INTERVAL_MS) {
       lastUi = now
@@ -612,27 +694,25 @@ function onRelayMessage(msg: ServerMsg) {
         .then((phoneQr) => set({ phoneQr }))
         .catch(() => set({ phoneQr: null }))
       break
-    case 'peer':
-      // 폰이 새로 붙으면 영상을 보내 달라고 요청한다. 끊기면 영상 연결도 닫는다
-      if (msg.phone === 'connected' && state.phone !== 'connected') link?.request()
-      if (msg.phone === 'disconnected') link?.close()
+    case 'peer': {
+      // 운영 중계는 연결 상태만 알린다. 끊김·응답 없음 이벤트는 이 PC 가 만들어 자기 보관함으로 올린다
+      const drop = monitoringWanted && !state.practice ? phoneDropEvent(state.phone, msg.phone) : null
       set({ phone: msg.phone, phoneStatus: msg.phone === 'connected' ? state.phoneStatus : null })
+      if (drop) {
+        const nowPerf = performance.now()
+        const v = toCamViolation({ kind: drop, message: PHONE_DROP_MESSAGE[drop], startedAt: nowPerf, ts: nowPerf, durationMs: 0 }, 'PHONE_CAM', undefined, undefined, serverOffset)
+        if (v) submitViolation(v)
+      }
+      syncPhoneAnalysis()
+      syncPhoneSurface()
       break
+    }
     case 'phone-status':
       set({ phoneStatus: msg.status })
       break
     case 'violation':
       // 서버가 직접 만든 이벤트(연결 끊김 등)는 서버가 이미 저장했다. 여기서는 보여 주기만 한다
       pushLog(msg.violation)
-      break
-    case 'phone-alert':
-      // 휴대폰이 알려 온 이벤트(감독 화면 이탈)는 PC 가 저장한다
-      if (msg.violation.source !== 'PHONE_CAM') break
-      void outbox?.enqueue(msg.violation)
-      pushLog(msg.violation)
-      break
-    case 'rtc':
-      void link?.handle(msg.signal)
       break
     case 'viewer-request':
       viewers?.request(msg.viewer, msg.channel)

@@ -1,12 +1,12 @@
 // 휴대폰 보조 캠 페이지: /proctor/phone?p={짝 코드} (PC 화면의 QR 로 들어온다).
-// 휴대폰은 카메라 영상을 PC 로 보내기만 한다. 책상 스캔·손·물체 분석과 경고 저장은 전부 응시자 PC 가 받은 영상으로 한다 (모델·추론 없음).
+// 휴대폰은 영상이 아니라 JPEG 프레임(변화가 있을 때와 5초마다)을 서버 중계로 PC 에 보내기만 한다.
+// 책상 스캔·손·물체 분석과 경고 저장은 전부 응시자 PC 가 받은 프레임으로 한다 (모델·추론·영상 스트리밍 없음).
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Smartphone } from 'lucide-react'
 import { Button, Logo, StatusDot } from '../../components/ui'
-import { toCamViolation } from '../core/events.ts'
-import { PhoneLink } from '../relay/peerLink.ts'
 import { createPhoneRelay, type PhoneRelay } from '../relay/PhoneRelay.ts'
+import { PhoneFrameSender } from '../relay/phoneSender.ts'
 import { openCamera, stopCamera } from '../vision/camera.ts'
 
 type Phase = 'connecting' | 'ready' | 'loading' | 'sending' | 'error'
@@ -15,7 +15,7 @@ type Phase = 'connecting' | 'ready' | 'loading' | 'sending' | 'error'
 const TRACE_KEY = 'pair.phone.lastPhase'
 const PHASE_LABEL: Partial<Record<Phase, string>> = {
   loading: '카메라 준비',
-  sending: '영상 송신',
+  sending: '사진 송신',
 }
 
 function readLastPhase(): Phase | null {
@@ -31,13 +31,10 @@ const STATUS_INTERVAL_MS = 1000
 export default function PhoneCamPage() {
   const [params] = useSearchParams()
   const pairCode = params.get('p') ?? ''
-  // 주소 끝에 &rtc=off 를 붙이면 PC 로 영상을 보내지 않는다 (진단용)
-  const rtcEnabled = params.get('rtc') !== 'off'
-
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const socketRef = useRef<PhoneRelay | null>(null)
-  const linkRef = useRef<PhoneLink | null>(null)
+  const senderRef = useRef<PhoneFrameSender | null>(null)
   const sendingRef = useRef(false)
 
   const [phaseState, setPhase] = useState<Phase>('connecting')
@@ -58,21 +55,12 @@ export default function PhoneCamPage() {
       // 저장소를 못 쓰면 기록만 못 남긴다
     }
   }, [phase])
-  /** PC 로 영상을 보내지 못했을 때 등 화면에 띄울 안내 */
-  const [notice, setNotice] = useState('')
-
   useEffect(() => {
     if (!pairCode) return
-    const link = new PhoneLink(
-      (signal) => socketRef.current?.send({ type: 'rtc', signal }),
-      () => setNotice('PC 로 영상을 보내지 못했습니다. PC 화면의 안내를 확인해 주세요.'),
-      rtcEnabled,
-    )
-    linkRef.current = link
     const socket = createPhoneRelay(
       pairCode,
       (msg) => {
-        if (msg.type === 'rtc') void link.handle(msg.signal)
+        if (msg.type === 'quality') senderRef.current?.setRequestedMode(msg.mode)
         if (msg.type === 'phone-joined') setPhase((p) => (p === 'connecting' ? 'ready' : p))
         if (msg.type === 'error') {
           setFatal(true)
@@ -91,28 +79,16 @@ export default function PhoneCamPage() {
       lastTick = now
       socket.send({ type: 'phone-status', status: { sending: sendingRef.current, bytesSent: socket.bytesSent, relay: socket.health(maxLag) } })
     }, STATUS_INTERVAL_MS)
-
-    // 다른 앱으로 전환하면 바로 알린다 (전송이 안 되면 서버가 응답 없음으로 잡는다)
-    const onVisibility = () => {
-      if (document.visibilityState !== 'hidden') return
-      const now = performance.now()
-      const v = toCamViolation(
-        { kind: 'phone_hidden', message: '휴대폰에서 감독 화면을 벗어났습니다', startedAt: now, ts: now, durationMs: 0 },
-        'PHONE_CAM',
-        undefined,
-      )
-      if (v) socket.send({ type: 'phone-alert', violation: v })
-    }
-    document.addEventListener('visibilitychange', onVisibility)
+    // 다른 앱으로 전환하면 촬영이 멈춰 프레임·생존 신호가 끊기고, 서버가 15초 뒤 PC 에 응답 없음(stale)을 알린다.
+    // (운영 중계는 phone-alert 를 전달하지 않으므로 따로 알리지 않는다)
     return () => {
       window.clearInterval(statusTimer)
-      document.removeEventListener('visibilitychange', onVisibility)
+      senderRef.current?.stop()
+      senderRef.current = null
       socket.close()
-      link.close()
-      linkRef.current = null
       stopCamera(streamRef.current)
     }
-  }, [pairCode, rtcEnabled])
+  }, [pairCode])
 
   async function start() {
     const video = videoRef.current
@@ -122,9 +98,11 @@ export default function PhoneCamPage() {
       setPhase('loading')
       // 화면 꺼짐 방지
       await (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<unknown> } }).wakeLock?.request('screen').catch(() => undefined)
-      // PC 가 작은 물체까지 분석할 수 있도록 고해상도로 연다
+      // 책상 스캔 때 고해상도 프레임을 만들 수 있도록 카메라는 1280×720 으로 연다 (평소 송신은 512px 로 줄여 보낸다)
       if (!streamRef.current) streamRef.current = await openCamera(video, 'environment', { width: 1280, height: 720 })
-      linkRef.current?.setStream(streamRef.current)
+      const socket = socketRef.current
+      if (socket && !senderRef.current) senderRef.current = new PhoneFrameSender(video, socket)
+      senderRef.current?.start()
       setPhase('sending')
     } catch (e) {
       setPhase('error')
@@ -160,7 +138,7 @@ export default function PhoneCamPage() {
               </p>
             )}
             <p className="text-[14px] leading-6 break-keep text-text-muted">
-              시작하면 카메라 영상이 PC 로 전달됩니다. 이후 안내(책상 스캔 등)는 모두 PC 화면에 나옵니다. 영상은 서버에 저장되지 않고 PC 로만 직접 전달되며, 분석은 PC 에서 합니다.
+              시작하면 카메라 사진이 PC 로 전달됩니다(변화가 있을 때와 5초마다). 이후 안내(책상 스캔 등)는 모두 PC 화면에 나옵니다. 사진은 서버가 저장하지 않고 PC 로만 넘기며, 분석은 PC 에서 합니다.
             </p>
             <Button variant="primary" size="lg" onClick={() => void start()}>
               {phase === 'error' ? '다시 시도' : '보조 캠 시작'}
@@ -169,8 +147,7 @@ export default function PhoneCamPage() {
         )}
         {phase === 'sending' && (
           <>
-            {notice && <p className="text-[13px] leading-5 break-keep text-caution">{notice}</p>}
-            <StatusDot status="ok" label="영상 송신 중" />
+            <StatusDot status="ok" label="사진 송신 중" />
             <p className="text-[15px] leading-6 break-keep">
               <b>PC 화면의 안내를 따라 주세요.</b> 책상 스캔 때는 책상 전체가 보이는 곳에 세워 두고, 시험 중에는 카메라에 <b>두 손, 키보드, 시험 화면</b>이 함께 보이게 놓습니다.
             </p>

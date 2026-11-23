@@ -2,6 +2,10 @@
 
 const CHUNK = 0x8000
 
+export async function blobToDataUrl(blob: Blob): Promise<string> {
+  return jpegToDataUrl(await blob.arrayBuffer())
+}
+
 /** JPEG 바이트를 "data:image/jpeg;base64,..." 로 바꾼다 (큰 배열도 안전하게 나눠서 변환) */
 export function jpegToDataUrl(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf)
