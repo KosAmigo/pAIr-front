@@ -1,4 +1,4 @@
-// DESIGN.md §7-9-1 과제 목록 (ADMIN). 2026-11-23 정리: 공개 문제 → 비공개 문제 → 검수 전 순서.
+// DESIGN.md §7-9-1 과제 목록 (ADMIN). 2026-11-23 정리: 자가진단 → 실전 → 검수 전 순서.
 // 위 스포트라이트 = 세 칸 요약(누르면 그 탭) + "과제 만들기" 주인공 버튼. 아래 = 알약 탭(오른쪽에 검색) + 직군 하위 거르기 + 카드 그리드.
 // 데이터는 백엔드 /api/console/tasks. 새 칸(track, summary, generated …)은 없을 수 있어 옵셔널로 다룬다.
 import { useMemo, useState } from 'react'
@@ -8,7 +8,7 @@ import { ErrorState } from '../../components/ErrorState'
 import { CountUp, GradientText, Magnetic, RevealGroup, RevealItem, StageSection } from '../../components/fx'
 import { ButtonLink } from '../../components/ui'
 import { loadTasks, useTaskList } from '../../data/consoleTasks'
-import { countTabs, filterTasks, firstTab, TAB_HINT, TAB_LABEL, TAB_ORDER, type TaskTab, type TrackFilter } from '../../data/taskBoard'
+import { countTabs, filterTasks, firstTab, TAB_HINT, TAB_LABEL, TAB_ORDER, trackOf, type TaskTab, type TrackFilter } from '../../data/taskBoard'
 import { PillTabs } from './ConsoleHero'
 import { TRACK_ICON } from './task/badges'
 import { TaskCard, TaskCardSkeleton } from './task/TaskCard'
@@ -25,13 +25,18 @@ export default function ConsoleTasks() {
   const { list, error } = useTaskList()
   const all = useMemo(() => list ?? [], [list])
   const counts = useMemo(() => countTabs(all), [all])
-  // 사용자가 탭을 고르기 전에는 공개 문제부터 연다 (검수 전이 있으면 탭에 개수 배지가 눈에 띄게 뜬다)
+  // 사용자가 탭을 고르기 전에는 자가진단부터 연다 (검수 전이 있으면 탭에 개수 배지가 눈에 띄게 뜬다)
   const [picked, setPicked] = useState<TaskTab | null>(null)
   const tab = picked ?? (list ? firstTab(counts) : 'draft')
   const [track, setTrack] = useState<TrackFilter>('ALL')
   const [q, setQ] = useState('')
 
   const rows = useMemo(() => filterTasks(all, { tab, track, q }), [all, tab, track, q])
+  // 직군 칸의 개수: 지금 상태 탭(과 검색어) 안에서 센다
+  const trackCounts = useMemo(() => {
+    const inTab = filterTasks(all, { tab, track: 'ALL', q })
+    return { ALL: inTab.length, DEV: inTab.filter((t) => trackOf(t) === 'DEV').length, BIZ: inTab.filter((t) => trackOf(t) === 'BIZ').length }
+  }, [all, tab, q])
   const filtered = track !== 'ALL' || q.trim() !== ''
 
   return (
@@ -52,8 +57,7 @@ export default function ConsoleTasks() {
                 label: (
                   <>
                     {TAB_LABEL[v]}
-                    {v !== 'draft' && <span className="hidden text-[13px] font-medium opacity-80 sm:inline">{v === 'public' ? '(자가진단)' : '(실전)'}</span>}
-                    {v === 'draft' && counts.draft > 0 ? (
+                                        {v === 'draft' && counts.draft > 0 ? (
                       <span className="tnum inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-caution px-1.5 font-mono text-[13px] font-bold text-on-accent ">{counts.draft}</span>
                     ) : (
                       <span className="tnum font-mono text-[13px] opacity-80">{counts[v]}</span>
@@ -78,29 +82,35 @@ export default function ConsoleTasks() {
               )}
             </label>
           </div>
-          <div role="radiogroup" aria-label="직군" className="glass flex w-fit rounded-full p-1">
-            {(
-              [
-                ['ALL', '전체'],
-                ['DEV', '개발'],
-                ['BIZ', '비개발'],
-              ] as const
-            ).map(([v, l]) => {
-              const Icon = v === 'ALL' ? null : TRACK_ICON[v]
-              return (
-                <button
-                  key={v}
-                  type="button"
-                  role="radio"
-                  aria-checked={track === v}
-                  onClick={() => setTrack(v)}
-                  className={cx('inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold transition-colors', track === v ? 'bg-panel text-text shadow-sm' : 'text-text-muted hover:text-text')}
-                >
-                  {Icon && <Icon size={14} aria-hidden />}
-                  {l}
-                </button>
-              )
-            })}
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] font-semibold text-text-faint" aria-hidden>
+              직군
+            </span>
+            <div role="radiogroup" aria-label="직군" className="flex w-fit gap-0.5 rounded-full bg-panel-raised p-0.5">
+              {(
+                [
+                  ['ALL', '전체'],
+                  ['DEV', '개발'],
+                  ['BIZ', '비개발'],
+                ] as const
+              ).map(([v, l]) => {
+                const Icon = v === 'ALL' ? null : TRACK_ICON[v]
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={track === v}
+                    onClick={() => setTrack(v)}
+                    className={cx('inline-flex h-7 items-center gap-1 rounded-full px-3 text-[13px] font-semibold transition-colors', track === v ? 'bg-white text-text shadow-sm' : 'text-text-muted hover:text-text')}
+                  >
+                    {Icon && <Icon size={13} aria-hidden />}
+                    {l}
+                    <span className="tnum font-mono text-[12px] font-medium opacity-70">{trackCounts[v]}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
 
@@ -187,7 +197,7 @@ function Summary({ counts, loading, tab, onTab }: { counts: Record<TaskTab, numb
                   )}
                   <span className="text-[13px] font-medium text-stage-muted">개</span>
                 </span>
-                <span className="text-[12px] leading-4 break-keep text-stage-muted">{v === 'public' ? '자가진단' : v === 'private' ? '실전 시험 전용' : '어디에도 안 보임'}</span>
+                <span className="text-[12px] leading-4 break-keep text-stage-muted">{v === 'public' ? '누구나 풀 수 있어요' : v === 'private' ? '회차에만 써요' : '어디에도 안 보임'}</span>
               </button>
             )
           })}
@@ -206,8 +216,8 @@ function Empty({ tab, filtered, total, onClear }: { tab: TaskTab; filtered: bool
       : tab === 'draft'
         ? '검수할 과제가 없어요. 모두 확인했어요!'
         : tab === 'public'
-          ? '아직 공개 문제가 없어요. 검수 전 과제를 확인하고 공개해 보세요.'
-          : '아직 비공개 문제가 없어요. 실전 시험용 과제를 만들어 보세요.'
+          ? '아직 자가진단 과제가 없어요. 검수 전 과제를 확인하고 올려 보세요.'
+          : '아직 실전 과제가 없어요. 회차에 쓸 과제를 만들어 보세요.'
   return (
     <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-line-strong bg-panel/70 px-6 py-16 text-center">
       <span className="relative inline-flex size-16 items-center justify-center rounded-2xl bg-brand-dim text-brand">

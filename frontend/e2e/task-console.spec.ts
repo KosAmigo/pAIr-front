@@ -15,16 +15,16 @@ test.describe('목록', () => {
     await expect(page.locator('ul h3').first()).toBeVisible()
   })
 
-  test('탭 순서는 공개 → 비공개 → 검수 전이고 처음엔 공개 문제', async ({ page }) => {
+  test('탭 순서는 자가진단 → 실전 → 검수 전이고 처음엔 자가진단', async ({ page }) => {
     const tabs = page.getByRole('tab')
-    await expect(tabs.nth(0)).toContainText('공개 문제')
-    await expect(tabs.nth(1)).toContainText('비공개 문제')
+    await expect(tabs.nth(0)).toContainText('자가진단')
+    await expect(tabs.nth(1)).toContainText('실전')
     await expect(tabs.nth(2)).toContainText('검수 전')
     await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
     await expect(page.getByRole('link', { name: '과제 만들기' }).first()).toBeVisible()
     const summary = await page.getByRole('group', { name: '상태별 과제 수' }).getByRole('button').allTextContents()
-    expect(summary[0]).toContain('공개 문제')
-    expect(summary[1]).toContain('비공개 문제')
+    expect(summary[0]).toContain('자가진단')
+    expect(summary[1]).toContain('실전')
     expect(summary[2]).toContain('검수 전')
     expect((await titles(page)).sort()).toEqual(['요금제 개편안 손익 비교', '재고 차감 동시성', '쿠폰 할인 계산'])
   })
@@ -37,12 +37,19 @@ test.describe('목록', () => {
     await expect(page).toHaveURL(/\/console\/tasks\/[^/]+$/)
   })
 
+  test('직군 필터는 작은 세그먼트이고 현재 탭 안의 개수를 보여 준다', async ({ page }) => {
+    const group = page.getByRole('radiogroup', { name: '직군' })
+    await expect(group.getByRole('radio')).toHaveText([/^전체\s*3$/, /^개발\s*2$/, /^비개발\s*1$/])
+    await page.getByRole('tab', { name: /검수 전/ }).click()
+    await expect(group.getByRole('radio')).toHaveText([/^전체\s*2$/, /^개발\s*1$/, /^비개발\s*1$/])
+  })
+
   test('직군 하위 필터는 탭 안에서만 거른다', async ({ page }) => {
     await page.getByRole('tab', { name: /검수 전/ }).click()
     expect(await titles(page)).toHaveLength(2)
-    await page.getByRole('radio', { name: '개발', exact: true }).click()
+    await page.getByRole('radio', { name: /^개발/ }).click()
     await expect.poll(() => titles(page)).toEqual(['검수 전 로그 파서'])
-    await page.getByRole('radio', { name: '비개발' }).click()
+    await page.getByRole('radio', { name: /^비개발/ }).click()
     await expect.poll(() => titles(page)).toEqual(['검수 전 매출 보고서'])
   })
 
@@ -52,7 +59,7 @@ test.describe('목록', () => {
     await expect.poll(() => titles(page)).toEqual(['쿠폰 할인 계산'])
     await search.fill('쿠폰할인')
     await expect.poll(() => titles(page)).toEqual(['쿠폰 할인 계산'])
-    // 현재 탭(공개 문제) 안에서만 찾는다: 검수 전 과제는 안 나옴
+    // 현재 탭(자가진단) 안에서만 찾는다: 검수 전 과제는 안 나옴
     await search.fill('로그')
     await expect(page.getByText('조건에 맞는 과제가 없어요')).toBeVisible()
     await search.fill('없는검색어')
@@ -119,8 +126,8 @@ test.describe('과제 만들기', () => {
     await expect(topicInput).toBeFocused()
 
     // 용도·시간 → 확인 → 생성 요청 본문
-    await page.getByRole('radio', { name: '비공개 문제' }).click()
-    await expect(page.getByText('실전 시험 회차에만 쓰고')).toBeVisible()
+    await page.getByRole('radio', { name: '실전' }).click()
+    await expect(page.getByText('회차에만 쓰고')).toBeVisible()
     for (const m of [20, 40, 60]) {
       await page.getByRole('radio', { name: `${m}분` }).click()
       await expect(page.getByRole('radio', { name: `${m}분` })).toHaveAttribute('aria-checked', 'true')
@@ -148,11 +155,11 @@ test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
   await page.waitForTimeout(1200) // 카드가 나타나는 애니메이션이 끝난 뒤 찍는다
   await shot(page, '01-list-public', p)
   await page.getByRole('tab', { name: /검수 전/ }).click()
-  await page.getByRole('radio', { name: '개발', exact: true }).click()
+  await page.getByRole('radio', { name: /^개발/ }).click()
   await expect.poll(async () => (await titles(page)).length).toBe(1)
   await shot(page, '02-list-draft-dev', p)
-  await page.getByRole('tab', { name: /^공개 문제/ }).click()
-  await page.getByRole('radio', { name: '전체' }).click()
+  await page.getByRole('tab', { name: /^자가진단/ }).click()
+  await page.getByRole('radio', { name: /^전체/ }).click()
   await page.getByPlaceholder(/찾기/).fill('쿠폰 할인')
   await expect.poll(async () => (await titles(page)).length).toBe(1)
   await shot(page, '03-list-search', p)
@@ -169,7 +176,7 @@ test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
   await page.getByRole('button', { name: '이걸로 채우기' }).first().click()
   await expect(page.getByLabel('함정')).toHaveValue(/함정 1/)
   await shot(page, '12-new-picked', p)
-  await page.getByRole('radio', { name: '비공개 문제' }).click()
+  await page.getByRole('radio', { name: '실전' }).click()
   await page.getByRole('radio', { name: '20분' }).click()
   await page.getByRole('button', { name: /다음: 확인하기/ }).click()
   await expect(page.getByRole('heading', { name: /이대로/ })).toBeVisible()

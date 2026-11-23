@@ -10,7 +10,7 @@ const task = (id: string, o: Task): Task => ({
   updatedAt: '2026-11-20T00:00:00Z', createdAt: `2026-11-${10 + id.length}T00:00:00Z`, generated: true, checksOk: true, difficulty: '중급', ...o,
 })
 
-/** 목록 화면용 과제: 공개 3(개발 2, 비개발 1), 비공개 1, 검수 전 2(개발 1, 비개발 1) */
+/** 목록 화면용 과제: 자가진단 3(개발 2, 비개발 1), 실전 1, 검수 전 2(개발 1, 비개발 1) */
 export const TASKS: Task[] = [
   task('A1', { title: '쿠폰 할인 계산', summary: '쿠폰 두 장 중복 적용 함정', track: 'DEV' }),
   task('A22', { title: '재고 차감 동시성', summary: '락 없이 읽고 쓰면 음수', track: 'DEV' }),

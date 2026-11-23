@@ -172,7 +172,7 @@ const STATUS_STAGE = {
   public: { cls: 'bg-stage-brand/12 text-stage-brand', dot: 'bg-stage-brand' },
   private: { cls: 'bg-stage-text/8 text-stage-text', dot: 'bg-stage-text' },
 }
-/** 과제 상태 배지: 검수 전 / 공개 문제 / 비공개 문제 (+ 내림). 영어 상태 이름은 보이지 않는다 */
+/** 과제 상태 배지: 검수 전 / 자가진단 / 실전 (+ 내림). 영어 상태 이름은 보이지 않는다 */
 export function TaskStatusBadge({ task, stage }: { task: Pick<ConsoleTaskSummary, 'status' | 'usage'>; stage?: boolean }) {
   const tab = tabOf(task)
   const s = (stage ? STATUS_STAGE : STATUS)[tab]

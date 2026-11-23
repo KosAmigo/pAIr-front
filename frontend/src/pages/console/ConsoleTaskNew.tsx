@@ -51,8 +51,8 @@ const TRACKS: { value: GenTrack; title: string; desc: string }[] = [
   { value: 'BIZ', title: '비개발', desc: 'PDF 자료, CSV와 객관식·단답형 문항을 만들어요' },
 ]
 const USAGES: { value: GenUsage; title: string; desc: string; icon: typeof Lock }[] = [
-  { value: 'SELF', title: '공개 문제', desc: '공개하면 누구나 자가진단에서 풀어 볼 수 있어요.', icon: Globe2 },
-  { value: 'LIVE', title: '비공개 문제', desc: '실전 시험 회차에만 쓰고, 자가진단에는 절대 안 보여요. 문제가 새지 않아요.', icon: Lock },
+  { value: 'SELF', title: '자가진단', desc: '올리면 누구나 자가진단에서 풀 수 있어요.', icon: Globe2 },
+  { value: 'LIVE', title: '실전', desc: '회차에만 쓰고 자가진단에는 안 보여요. 문제가 새지 않아요.', icon: Lock },
 ]
 
 export default function ConsoleTaskNew() {
@@ -444,11 +444,11 @@ function ConfirmCard({
       '용도',
       form.usage === 'LIVE' ? (
         <span key="u" className="inline-flex items-center gap-1.5 font-semibold">
-          <Lock size={14} aria-hidden /> 비공개 문제 (실전 시험, 자가진단에 안 보임)
+          <Lock size={14} aria-hidden /> 실전 (회차에만 쓰고 자가진단에는 안 보임)
         </span>
       ) : (
         <span key="u" className="inline-flex items-center gap-1.5 font-semibold">
-          <Globe2 size={14} aria-hidden /> 공개 문제 (자가진단)
+          <Globe2 size={14} aria-hidden /> 자가진단 (누구나 풀 수 있음)
         </span>
       ),
     ],

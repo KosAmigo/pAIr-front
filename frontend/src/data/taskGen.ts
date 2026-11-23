@@ -3,7 +3,7 @@
 import { ApiError, call } from '../api.ts'
 
 export type GenTrack = 'DEV' | 'BIZ'
-/** SELF = 공개 문제(자가진단), LIVE = 비공개 문제(실전 시험) */
+/** SELF = 자가진단, LIVE = 실전 */
 export type GenUsage = 'SELF' | 'LIVE'
 export type GenMinutes = 20 | 40 | 60
 export const GEN_MINUTES: GenMinutes[] = [20, 40, 60]

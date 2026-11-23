@@ -10,8 +10,8 @@ import { usageErrorMessage, usageLock, usageReducer } from '../../../data/taskBo
 import { springs } from '../../../lib/motion'
 
 const OPTIONS: { value: TaskUsage; label: string; icon: typeof Lock }[] = [
-  { value: 'SELF', label: '공개 문제', icon: Globe2 },
-  { value: 'LIVE', label: '비공개 문제', icon: Lock },
+  { value: 'SELF', label: '자가진단', icon: Globe2 },
+  { value: 'LIVE', label: '실전', icon: Lock },
 ]
 
 export function UsageToggle({ task, onChanged }: { task: ConsoleTaskSummary; onChanged: (s: ConsoleTaskSummary) => void }) {
@@ -72,7 +72,7 @@ export function UsageToggle({ task, onChanged }: { task: ConsoleTaskSummary; onC
         </p>
       ) : (
         <p className="max-w-[300px] text-[12px] break-keep text-stage-muted">
-          {lock ?? (st.usage === 'LIVE' ? '실전 시험 전용이에요. 자가진단에는 절대 안 보여요.' : '공개하면 자가진단에 나와요. 바꾸려면 지금(검수 전) 바꾸세요.')}
+          {lock ?? (st.usage === 'LIVE' ? '회차에만 쓰고 자가진단에는 안 보여요.' : '올리면 누구나 자가진단에서 풀 수 있어요. 바꾸려면 지금(검수 전) 바꾸세요.')}
         </p>
       )}
     </div>

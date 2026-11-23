@@ -1,5 +1,5 @@
 // 과제 콘솔 작은 부품: 직군 아이콘 칸, AI 생성 배지, 자동 확인 배지, 시간 칩.
-// 직군 색은 개발 = branch-2(파랑), 비개발 = comp-6(청록). 상태 색(검수 전 caution, 공개 brand, 비공개 text)과 섞지 않는다.
+// 직군 색은 개발 = branch-2(파랑), 비개발 = comp-6(청록). 상태 색(검수 전 caution, 자가진단 brand, 실전 text)과 섞지 않는다.
 import { CircleCheck, CircleX, Clock, Code2, FileText, Sparkles, type LucideIcon } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { TRACK_LABEL, type Track } from '../../../data/taskBoard'

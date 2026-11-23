@@ -33,7 +33,7 @@ export function TaskCard({ task: t }: { task: ConsoleTaskSummary }) {
           {check && <CheckBadge result={check} />}
           {t.usage === 'LIVE' && (
             <span className="inline-flex h-[22px] items-center gap-1 rounded-full bg-text/8 px-2 text-[12px] font-semibold text-text">
-              <Lock size={12} aria-hidden /> {tab === 'draft' ? '비공개용' : '실전 전용'}
+              <Lock size={12} aria-hidden /> 실전
             </span>
           )}
           {closed && (
