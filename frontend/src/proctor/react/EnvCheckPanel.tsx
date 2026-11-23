@@ -20,7 +20,7 @@ import {
   updateItem,
 } from '../check/envChecks.ts'
 import { audioProbe, grabPixels, isAutomated, isChromium, screenInfo, webglRenderer } from '../check/probes.ts'
-import { PERF, perfVerdict } from '../check/perfCheck.ts'
+import { PERF, perfVerdict, type PerfLevel } from '../check/perfCheck.ts'
 import { measurePerf } from '../check/perfProbe.ts'
 import type { ScanStage } from '../relay/protocol.ts'
 import { attachHiddenVideo, captureSnapshot, frameLoop } from '../vision/camera.ts'
@@ -87,6 +87,8 @@ export default function EnvCheckPanel({
   const [result, setResult] = useState<EnvCheckResult | null>(null)
   const [run, setRun] = useState(0)
   const [skipPhone, setSkipPhone] = useState(false)
+  /** 이 PC 의 분석 속도 판정 등급. 'unfit' 이면 다른 PC 를 쓰라는 안내를 크게 보여 준다 (입장은 막지 않는다) */
+  const [perfLevel, setPerfLevel] = useState<PerfLevel | null>(null)
   /** 휴대폰으로 감지된 장면: 응시자가 맞는지 확인할 때까지 스캔이 기다린다 */
   const [found, setFound] = useState<string[]>([])
 
@@ -286,6 +288,7 @@ export default function EnvCheckPanel({
 
       // 2-2) 이 PC 의 분석 속도: 입장은 막지 않는다. 느리면 안내하고 분석 간격을 늘려 진행하며 점검 결과(감독 기록)에 남는다
       if (todo('performance')) {
+        setPerfLevel(null)
         set('performance', { status: 'running', detail: '분석 속도를 재는 중입니다' })
         setPrompt('화면을 정면으로 보고 가만히 앉아 주세요 (이 PC의 분석 속도를 재는 중입니다)')
         try {
@@ -296,6 +299,7 @@ export default function EnvCheckPanel({
           if (cancelled) return
           camHub.setAnalysisIntervalMs(verdict.intervalMs)
           camHub.setPhoneAnalysisIntervalMs(verdict.phoneIntervalMs)
+          setPerfLevel(verdict.level)
           apply('performance', verdict)
         } catch (e) {
           if (cancelled) return
@@ -423,6 +427,12 @@ export default function EnvCheckPanel({
           </div>
         )}
         {found.length > 0 && !result && <p className="text-[13px] text-text-muted">방금 찾은 것: {found.join(', ')}</p>}
+        {perfLevel === 'unfit' && (
+          <div role="alert" data-testid="slow-pc-notice" className="flex flex-col gap-1 rounded-lg border border-alert/40 bg-alert/10 px-3 py-2.5 text-[14px] leading-6 text-alert">
+            <strong className="font-semibold">이 PC 로는 시험 감독이 멈출 수 있습니다</strong>
+            <span className="break-keep">사양이 더 좋은 다른 PC 로 응시해 주세요. 다른 프로그램·탭을 모두 닫고 다시 점검해 볼 수도 있습니다. 이 안내만으로 입장이 막히지는 않지만, 감독이 끊기면 시험 기록에 남습니다.</span>
+          </div>
+        )}
         <CheckList items={items} />
         {canSkipChecks && (
           <div className="flex items-center gap-3 rounded-lg border border-dashed border-line-strong px-3 py-2">
