@@ -29,9 +29,9 @@ export function countTabs(list: Row[]): Record<TaskTab, number> {
   return c
 }
 
-/** 탭 순서와 처음 열 탭: 자가진단 → 실전 → 검수 전. 처음에는 늘 자가진단 (검수 전 개수는 화면에서 배지로 눈에 띄게) */
-export const TAB_ORDER: TaskTab[] = ['public', 'private', 'draft']
-export const firstTab = (_counts?: Record<TaskTab, number>): TaskTab => 'public'
+/** 탭 순서: 검수 전 → 자가진단 → 실전. 처음에는 검수 전, 검수 전이 비어 있으면 자가진단 */
+export const TAB_ORDER: TaskTab[] = ['draft', 'public', 'private']
+export const firstTab = (counts?: Record<TaskTab, number>): TaskTab => (!counts || counts.draft > 0 ? 'draft' : 'public')
 
 export type Track = 'DEV' | 'BIZ'
 export type TrackFilter = 'ALL' | Track

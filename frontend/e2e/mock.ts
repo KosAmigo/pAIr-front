@@ -49,7 +49,7 @@ export async function mockApi(page: Page) {
     const detail = path.match(/^\/api\/console\/tasks\/([^/]+)$/)
     if (detail) {
       const summary = TASKS.find((t) => t.id === decodeURIComponent(detail[1]))
-      if (summary) return json({ summary, definition: { id: summary.id, title: summary.title, d4Minutes: null, requiredHeadings: null } })
+      if (summary) return json({ summary, definition: { id: summary.id, title: summary.title, requirements: [], d4Minutes: null, requiredHeadings: null } })
     }
     if (path === '/api/admin/task-gen/suggestions') {
       sent.push({ method: req.method(), path, body })
