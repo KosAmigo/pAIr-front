@@ -5,6 +5,9 @@ import type { EventSource, ProctorEventType } from '../core/events.ts'
 /** 백엔드가 다른 호스트면 VITE_API_BASE (예: https://api.pair.test). 비우면 같은 호스트의 /api (Vite 프록시) */
 const BASE = ((import.meta.env?.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '')
 
+/** 동의 문구 버전. 문구를 바꿀 때마다 올린다 (백엔드는 값을 그대로 저장만 한다: proctor_consents.consent_version, 최대 20자) */
+export const CONSENT_VERSION = 'v2'
+
 export type Phase = 'UPCOMING' | 'LIVE' | 'ENDED'
 
 export type EntryInfo = {
@@ -54,6 +57,9 @@ export type ProctorEventRequest = {
   clientId?: string
 }
 
+/** 이벤트 앞뒤 증거 구간의 사진 한 장 (POST .../proctor-events/{clientId}/clip). offsetMs: 이벤트 시각 기준 -8000~4000 */
+export type ClipFrameRequest = { source: 'PC_CAM' | 'PHONE_CAM'; offsetMs: number; image: string }
+
 /** status: HTTP 상태 (네트워크 오류면 0). 아웃박스가 다시 보낼지 정할 때 쓴다 */
 export class ProctorApiError extends Error {
   readonly status: number
@@ -99,7 +105,7 @@ const enc = encodeURIComponent
 export const proctorApi = {
   serverTime: () => call<{ serverNow: string }>('GET', '/api/time'),
   entry: (invite: string) => call<EntryInfo>('GET', `/api/entry/${enc(invite)}`),
-  consent: (invite: string, envCheck: unknown, consentVersion = 'v1') =>
+  consent: (invite: string, envCheck: unknown, consentVersion = CONSENT_VERSION) =>
     call<EntryInfo>('POST', `/api/entry/${enc(invite)}/consent`, { consentVersion, envCheck }),
   enter: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/enter`),
   start: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/start`),
@@ -117,6 +123,9 @@ export const proctorApi = {
   /** 콘솔이 보낸 안내 메시지 (읽음 여부 포함) */
   notices: (invite: string) => call<InviteNotice[]>('GET', `/api/entry/${enc(invite)}/notices`),
   readNotice: (invite: string, noticeId: number) => call<null>('POST', `/api/entry/${enc(invite)}/notices/${noticeId}/read`),
+  /** 이벤트 앞뒤 증거 구간 사진 (이벤트가 같은 clientId 로 먼저 저장돼 있어야 한다. 응답 201 본문 없음) */
+  uploadClip: (invite: string, clientId: string, frames: ClipFrameRequest[]) =>
+    call<null>('POST', `/api/entry/${enc(invite)}/proctor-events/${enc(clientId)}/clip`, { frames }),
   recordEvent: (invite: string, event: ProctorEventRequest) =>
     call<{ id: number }>('POST', `/api/entry/${enc(invite)}/proctor-events`, event),
 }
