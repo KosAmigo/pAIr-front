@@ -42,6 +42,11 @@ export class PhoneFrameSender {
     return this.stats
   }
 
+  /** 보내지 못해 버려진 프레임이 있으면 다음 틱에 같은 변화를 다시 보낸다 (변화 감지기가 "보냈다"고 기록해 놓쳐 버리는 것을 막는다) */
+  frameDropped() {
+    this.gate.reset()
+  }
+
   start() {
     if (this.timer !== null) return
     this.startedAt = performance.now()
@@ -61,6 +66,8 @@ export class PhoneFrameSender {
 
   private async tick() {
     const v = this.video
+    // 다른 앱으로 전환하면 영상 프레임이 멈춘다. 그때는 생존 신호도 프레임도 보내지 않아야 서버가 응답 없음(stale)으로 알린다
+    if (document.visibilityState === 'hidden') return
     if (v.readyState < 2 || !v.videoWidth) return
     const now = performance.now()
     this.relay.alive() // 촬영 루프가 살아 있다 (끊기면 워커의 생존 신호도 멈춘다)

@@ -69,9 +69,9 @@ export class ProctorApiError extends Error {
     this.status = status
   }
 
-  /** 네트워크 오류·서버 오류만 다시 보낼 가치가 있다. 4xx 는 다시 보내도 같은 결과 */
+  /** 네트워크 오류·서버 오류·요청 시간 초과(408)·요청 과다(429)만 다시 보낼 가치가 있다. 나머지 4xx 는 다시 보내도 같은 결과 */
   get retryable(): boolean {
-    return this.status === 0 || this.status >= 500
+    return this.status === 0 || this.status >= 500 || this.status === 408 || this.status === 429
   }
 }
 

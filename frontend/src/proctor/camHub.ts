@@ -17,7 +17,7 @@ import { PhoneSurface } from './relay/phoneSurface.ts'
 import { ViewerSender, type ViewSources } from './relay/viewerSender.ts'
 import { PHONE_ANALYSIS_IDLE, PhoneAnalysis, type PhoneAnalysisState } from './phoneAnalysis.ts'
 import { EvidenceRecorder } from './evidenceRecorder.ts'
-import { PHONE_DROP_MESSAGE, phoneDropEvent } from './core/phoneLink.ts'
+import { PHONE_DROP_MESSAGE, phoneDropEvent, phoneFramesFresh } from './core/phoneLink.ts'
 import { SCREEN_EVENTS_ACCEPTED, toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
 import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED, VISION_WORKER_ENABLED } from './features.ts'
@@ -38,6 +38,13 @@ const MAX_LOG = 50
 const GATE_TICK_MS = 1000
 /** 이벤트 순간 사진용으로 메모리에만 두는 흐린 화면을 이 간격으로 갱신한다 (저장·전송 아님) */
 const BLUR_REFRESH_MS = 10_000
+/** 시험 종료 때 남은 이벤트·구간 업로드를 기다리는 최대 시간 */
+const STOP_FLUSH_MAX_MS = 4000
+
+function withTimeout(p: Promise<unknown> | undefined, ms: number): Promise<unknown> {
+  if (!p) return Promise.resolve()
+  return Promise.race([p.catch(() => undefined), new Promise((r) => setTimeout(r, ms))])
+}
 /** 웹캠 사진을 증거 구간 링 버퍼에 두는 간격과 크기 (이벤트 때만 일부가 올라간다) */
 const PC_CLIP_FRAME_MS = 1000
 const PC_CLIP_WIDTH = 400
@@ -55,6 +62,8 @@ export type CamState = {
   phoneUrl: string | null
   phoneQr: string | null
   phoneStatus: PhoneStatus | null
+  /** 휴대폰이 연결돼 있고 최근 프레임도 오고 있는지 (페이지만 열고 카메라를 안 켠 경우·카메라가 막힌 경우를 잡는다) */
+  phoneLive: boolean
   /** 휴대폰 영상 (WebRTC). 영상이 오기 전에는 null */
   phoneStream: MediaStream | null
   phoneVideo: LinkState
@@ -94,6 +103,7 @@ const INITIAL: CamState = {
   phoneUrl: null,
   phoneQr: null,
   phoneStatus: null,
+  phoneLive: false,
   phoneStream: null,
   phoneVideo: 'idle',
   phoneAnalysis: PHONE_ANALYSIS_IDLE,
@@ -211,6 +221,8 @@ function resetPhoneSide() {
 /** 휴대폰이 보낸 JPEG 한 장 (서버가 넘긴 최신 한 장) */
 function onRelayBinary(buf: ArrayBuffer) {
   const at = Date.now()
+  lastPhoneFrameAt = at
+  if (!state.phoneLive) set({ phoneLive: true }) // 게이트가 안 도는 환경 점검·사전 테스트에서도 프레임이 오면 연결로 본다
   evidence.pushPhone(at, new Blob([buf], { type: 'image/jpeg' }))
   if (phoneSurface) {
     phoneSurface.draw(buf)
@@ -235,13 +247,32 @@ export function channelUp(st: CamState): ChannelUp {
     // 모델 로딩 시간과 무관하게 웹캠 트랙이 살아 있는지만 본다
     webcam: st.webcamLive,
     // 휴대폰 캠을 쓰지 않으면 이 채널은 항상 연결된 것으로 본다 (입장·시험 중 차단 조건에서 빠진다)
-    phone: !PHONE_CAM_ENABLED || st.phone === 'connected',
+    phone: !PHONE_CAM_ENABLED || (st.phone === 'connected' && st.phoneLive),
     screen: !SCREEN_SHARE_ENABLED || (st.screen === 'sharing' && st.screenKind !== 'partial'),
   }
 }
 
+/** 마지막으로 휴대폰 프레임을 받은 시각(없으면 휴대폰이 연결된 시각). 프레임이 없는 "연결"을 잡는 데 쓴다 */
+let lastPhoneFrameAt = 0
+let gateTicks = 0
+/** 보관함 재시도 간격(틱 수 = 초). 구간 업로드가 일시 오류로 실패했을 때 다음 이벤트·종료만 기다리지 않게 한다 */
+const OUTBOX_RETRY_TICKS = 15
+
+/** 프레임이 끊긴 것으로 처음 판정되는 순간에만 한 번 이벤트를 만든다 */
+function checkPhoneLive(now: number) {
+  const live = state.phone === 'connected' && phoneFramesFresh(lastPhoneFrameAt, now)
+  if (live === state.phoneLive) return
+  set({ phoneLive: live })
+  if (live || state.phone !== 'connected' || !monitoringWanted || state.practice) return
+  const perf = performance.now()
+  const v = toCamViolation({ kind: 'phone_stale', message: PHONE_DROP_MESSAGE.phone_stale, startedAt: perf, ts: perf, durationMs: 0 }, 'PHONE_CAM', undefined, undefined, serverOffset)
+  if (v) submitViolation(v)
+}
+
 function tickGate() {
   const now = Date.now()
+  if (PHONE_CAM_ENABLED) checkPhoneLive(now)
+  if (++gateTicks % OUTBOX_RETRY_TICKS === 0 && outbox && (outbox.pending > 0 || outbox.pendingClips > 0)) void outbox.flush()
   const { state: next, gate } = stepGate(gateState, channelUp(state), now)
   gateState = next
   if (screenHandle && now - lastBlurAt > BLUR_REFRESH_MS) refreshBlur()
@@ -640,8 +671,8 @@ export const camHub = {
     phoneIntervalMs = PHONE_MIN_ANALYZE_INTERVAL_MS
     phoneFallbackReason = null
     // 상태는 먼저 비운다. 비동기로 기다리는 사이 새로 연결(connect)해도 그 연결을 닫지 않게 한다
-    // 아직 올리지 않은 증거 구간은 기다리지 않고 지금 모은 프레임으로 올린다 (outbox 를 비우기 전에 넘겨 둔다)
-    await evidence.flushPending()
+    // 아직 올리지 않은 증거 구간은 기다리지 않고 지금 모은 프레임으로 올린다 (동기 부분에서 프레임을 집어 두므로 바로 비워도 된다)
+    const flushing = evidence.flushPending()
     evidence.clear()
     if (phoneSurface) {
       phoneSurface.close()
@@ -655,7 +686,9 @@ export const camHub = {
     stream = null
     video = null
     set({ ...INITIAL })
-    await closing.outbox?.flush()
+    // 업로드가 느려도 시험 종료(카메라·연결 정리)를 오래 붙잡지 않는다. 못 올린 이벤트는 브라우저 저장소에 남아 다음에 다시 보낸다
+    await withTimeout(flushing, STOP_FLUSH_MAX_MS)
+    await withTimeout(closing.outbox?.flush(), STOP_FLUSH_MAX_MS)
     closing.relay?.close()
     stopCamera(closing.stream)
     closing.video?.remove()
@@ -712,7 +745,8 @@ function onRelayMessage(msg: ServerMsg) {
     case 'peer': {
       // 운영 중계는 연결 상태만 알린다. 끊김·응답 없음 이벤트는 이 PC 가 만들어 자기 보관함으로 올린다
       const drop = monitoringWanted && !state.practice ? phoneDropEvent(state.phone, msg.phone) : null
-      set({ phone: msg.phone, phoneStatus: msg.phone === 'connected' ? state.phoneStatus : null })
+      if (msg.phone === 'connected' && state.phone !== 'connected') lastPhoneFrameAt = Date.now()
+      set({ phone: msg.phone, phoneStatus: msg.phone === 'connected' ? state.phoneStatus : null, phoneLive: msg.phone === 'connected' ? state.phoneLive : false })
       if (drop) {
         const nowPerf = performance.now()
         const v = toCamViolation({ kind: drop, message: PHONE_DROP_MESSAGE[drop], startedAt: nowPerf, ts: nowPerf, durationMs: 0 }, 'PHONE_CAM', undefined, undefined, serverOffset)

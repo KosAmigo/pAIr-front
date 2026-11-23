@@ -16,6 +16,14 @@ export function phoneDropEvent(prev: PeerState, next: PeerState): PhoneDropKind 
   return null
 }
 
+/** 휴대폰이 "연결"돼 있어도 이 시간 동안 프레임이 한 장도 안 오면 카메라가 꺼진 것으로 본다 (페이지만 열고 시작을 안 누름·카메라 권한 거부·카메라 막힘) */
+export const PHONE_FRAME_TIMEOUT_MS = 20_000
+
+/** 마지막 프레임 이후 시간이 한도 안인가. 휴대폰은 변화가 없어도 5초마다 한 장 보내므로 20초면 충분히 넉넉하다 */
+export function phoneFramesFresh(lastFrameAt: number, now: number): boolean {
+  return now - lastFrameAt < PHONE_FRAME_TIMEOUT_MS
+}
+
 export const PHONE_DROP_MESSAGE: Record<PhoneDropKind, string> = {
   phone_disconnected: '보조 카메라(휴대폰) 연결이 끊겼습니다',
   phone_stale: '보조 카메라에서 신호가 오지 않습니다 (화면 꺼짐·앱 전환 의심)',

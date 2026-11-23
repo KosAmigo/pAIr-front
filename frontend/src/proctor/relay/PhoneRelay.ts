@@ -8,8 +8,9 @@ export interface PhoneRelay {
   send(msg: ClientMsg): void
   /** 촬영 루프가 살아 있다는 신호 (끊기면 생존 신호도 멈춘다) */
   alive(): void
-  /** JPEG 한 장을 보낸다 (밀리면 버린다) */
+  /** JPEG 한 장을 보낸다 (밀리면 버린다). 버려지면 onFrameDropped 로 알린다 */
   sendFrame(data: ArrayBuffer): void
+  onFrameDropped(cb: () => void): void
   close(): void
   /** 지금까지 보낸 바이트 수 (근사치) */
   readonly bytesSent: number
@@ -29,6 +30,7 @@ class WorkerPhoneRelay implements PhoneRelay {
       const m = e.data
       if (m.kind === 'msg') onMessage(m.msg)
       else if (m.kind === 'open') onOpenChange(m.open)
+      else if (m.kind === 'dropped') this.dropped?.()
       else this.latest = m.health
     }
     this.post({ kind: 'init', pairCode })
@@ -45,6 +47,12 @@ class WorkerPhoneRelay implements PhoneRelay {
 
   health(maxTimerLagMs: number): RelayHealth {
     return { ...this.latest, maxTimerLagMs }
+  }
+
+  private dropped: (() => void) | null = null
+
+  onFrameDropped(cb: () => void) {
+    this.dropped = cb
   }
 
   alive() {

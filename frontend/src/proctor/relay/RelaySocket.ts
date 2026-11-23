@@ -98,12 +98,16 @@ export class RelaySocket {
   alive() {}
 
   /** 프레임(binary) 전송. 끊겼거나 보내는 쪽 버퍼가 차 있으면 버린다 (오래된 프레임을 쌓지 않는다) */
-  sendFrame(data: ArrayBuffer) {
+  sendFrame(data: ArrayBuffer): boolean {
     const ws = this.ws
-    if (!ws || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > MAX_BUFFERED_BYTES) return
+    if (!ws || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > MAX_BUFFERED_BYTES) return false
     ws.send(data)
     this.bytesSent += data.byteLength
+    return true
   }
+
+  /** 워커 없이 직접 쓸 때 버려진 프레임을 알리는 콜백 (sendFrame 이 false 를 돌려주므로 호출하는 쪽이 직접 처리한다) */
+  onFrameDropped(_cb: () => void) {}
 
   private raw(data: string) {
     this.ws?.send(data)

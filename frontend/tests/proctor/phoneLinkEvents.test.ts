@@ -48,3 +48,12 @@ describe('modeAt', () => {
     expect(modeAt(SCAN_FALLBACK_MS * 10, 'scan')).toBe('scan')
   })
 })
+
+import { PHONE_FRAME_TIMEOUT_MS, phoneFramesFresh } from '../../src/proctor/core/phoneLink.ts'
+
+describe('phoneFramesFresh', () => {
+  it('마지막 프레임 이후 20초 안이면 신선하다 (연결만 되고 프레임이 없는 상태를 잡는 기준)', () => {
+    expect(phoneFramesFresh(1000, 1000 + PHONE_FRAME_TIMEOUT_MS - 1)).toBe(true)
+    expect(phoneFramesFresh(1000, 1000 + PHONE_FRAME_TIMEOUT_MS)).toBe(false)
+  })
+})

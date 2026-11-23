@@ -4,12 +4,15 @@ import { perfVerdict, summarizePerf } from '../../src/proctor/check/perfCheck.ts
 import { measurePerf } from '../../src/proctor/check/perfProbe.ts'
 import { frameLoop } from '../../src/proctor/vision/camera.ts'
 import { createPcBackend } from '../../src/proctor/vision/visionBackendFactory.ts'
+import { createPhoneBackend, type PhoneVisionBackend } from '../../src/proctor/vision/phoneBackend.ts'
 
 const FACE_IMAGE = 'https://storage.googleapis.com/mediapipe-assets/portrait.jpg' // MediaPipe 공식 샘플 (얼굴 1명)
 const WARMUP = 5
 const params = new URLSearchParams(location.search)
 const vision = params.get('vision') === 'main' ? 'main' : 'worker'
 const secs = Number(params.get('secs') ?? 30)
+/** phone=1 이면 휴대폰 분석 Worker 도 함께 돌린다 (웹캠 Worker 와 동시에). 휴대폰 프레임은 초당 약 2.5장(실제 송신 빈도와 비슷) */
+const withPhone = params.get('phone') === '1'
 const delegate = params.get('delegate') === 'gpu' ? 'GPU' : 'CPU'
 
 const out = document.getElementById('out') as HTMLPreElement
@@ -49,6 +52,16 @@ async function makeFaceVideo(): Promise<HTMLVideoElement> {
   return v
 }
 
+/** 웹캠 영상 한 장을 512px JPEG 로 만든다 (휴대폰이 보내는 프레임 대용. 손이 없어 손 모델은 실제보다 가볍게 나올 수 있다) */
+async function makePhoneJpeg(video: HTMLVideoElement): Promise<ArrayBuffer> {
+  const c = document.createElement('canvas')
+  c.width = 512
+  c.height = 384
+  c.getContext('2d')!.drawImage(video, 0, 0, 512, 384)
+  const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.5))
+  return blob.arrayBuffer()
+}
+
 async function run() {
   const result: Record<string, unknown> = { vision, secs, delegate, cores: navigator.hardwareConcurrency, search: location.search }
   try {
@@ -72,6 +85,39 @@ async function run() {
     result.readyMs = Math.round(performance.now() - t0)
     result.backend = backend.kind
     result.fallbackReason = reason
+    let phoneBackend: PhoneVisionBackend | null = null
+    const phoneMs: number[] = []
+    let phoneRunning = false
+    if (withPhone) {
+      const pt0 = performance.now()
+      phoneBackend = await createPhoneBackend({
+        loadMainStep: async () => {
+          const m = await import('../../src/proctor/vision/models.ts')
+          const { PhoneStepper, makeLumaReader } = await import('../../src/proctor/vision/phoneStepper.ts')
+          const [hand, object] = await Promise.all([m.createHandLandmarker(), m.createObjectDetector()])
+          const stepper = new PhoneStepper({ hand, object }, makeLumaReader())
+          return (image, ts) => stepper.step(image, ts)
+        },
+        delegate,
+        enabled: true,
+        force: vision,
+        onFallback: (r) => { result.phoneFallbackReason = String((r as Error)?.message ?? r) },
+      })
+      const jpeg = await makePhoneJpeg(video)
+      for (let i = 0; i < 3; i++) await phoneBackend.analyze(jpeg.slice(0), performance.now())
+      result.phoneReadyMs = Math.round(performance.now() - pt0)
+      result.phoneBackend = phoneBackend.kind
+      phoneRunning = true
+      void (async () => {
+        while (phoneRunning) {
+          const s = performance.now()
+          await phoneBackend!.analyze(jpeg.slice(0), s)
+          const took = performance.now() - s
+          if (phoneRunning) phoneMs.push(took)
+          await new Promise((r) => setTimeout(r, Math.max(0, 400 - took)))
+        }
+      })()
+    }
     backend.resetPc()
     // 모델을 올린 직후의 정리 작업(컴파일·GC)이 측정에 섞이지 않게 잠시 쉰다
     await new Promise((r) => setTimeout(r, 3000))
@@ -119,10 +165,13 @@ async function run() {
       )
     })
     running = false
+    phoneRunning = false
     clearInterval(lagTimer)
     const elapsed = (performance.now() - started) / 1000
     const fd = [...frameDeltas].sort((a, b) => a - b)
     result.analysis = { n: analysisMs.length, perSec: r1(analysisMs.length / elapsed), p50: r1(pct(analysisMs, 50)), p95: r1(pct(analysisMs, 95)), max: r1(Math.max(...analysisMs)) }
+    if (withPhone) result.phoneAnalysis = { n: phoneMs.length, perSec: r1(phoneMs.length / elapsed), p50: r1(pct(phoneMs, 50)), p95: r1(pct(phoneMs, 95)), max: r1(Math.max(0, ...phoneMs)) }
+    phoneBackend?.dispose()
     result.facesDetected = lastFaceCount
     result.ui = {
       fps: r1(frameDeltas.length / elapsed),

@@ -1,7 +1,7 @@
 // 별도 프로필의 Edge 를 띄워 모든 프로세스를 지정한 코어에만 묶은 뒤 app-path.html 측정을 돌려 JSON 한 줄로 출력한다.
 // DevTools CPU 스로틀은 Worker 에 적용되지 않아서, 코어 제한(프로세스 어피니티)으로 Worker 까지 같이 느리게 만든다. Windows 전용.
 //   node run-affinity.mjs --vision worker --cpus 20,21 --secs 30 [--base http://localhost:5174]
-//   --cpus all 이면 제한하지 않는다.
+//   --cpus all 이면 제한하지 않는다. --phone 1 이면 휴대폰 분석 Worker 도 동시에 돌린다.
 import { spawn, execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -58,7 +58,7 @@ try {
   if (!target) throw new Error('Edge 디버그 포트에 연결하지 못했습니다')
   const c = await cdp(target.webSocketDebuggerUrl)
   await c.send('Page.enable')
-  await c.send('Page.navigate', { url: `${base}/tools/lowspec-bench/app-path.html?vision=${vision}&secs=${secs}${args.mode ? `&mode=${args.mode}` : ''}` })
+  await c.send('Page.navigate', { url: `${base}/tools/lowspec-bench/app-path.html?vision=${vision}&secs=${secs}${args.mode ? `&mode=${args.mode}` : ''}${args.phone ? '&phone=1' : ''}` })
   await sleep(4000) // 페이지와 모듈이 올라오게 한다
   const pinned = pinAll()
   await sleep(500)

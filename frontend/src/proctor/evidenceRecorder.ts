@@ -68,8 +68,13 @@ export class EvidenceRecorder {
     if (!job) return
     this.jobs.delete(clientId)
     this.clearTimer(job.timer)
-    const frames = await this.collect(job.anchor)
-    if (frames.length > 0) await job.attach(clientId, frames)
+    try {
+      const frames = await this.collect(job.anchor)
+      if (frames.length > 0) await job.attach(clientId, frames)
+    } catch (e) {
+      // 사진 변환·업로드 예약이 실패해도 시험은 계속된다. 이 구간만 버려진다
+      console.warn('증거 구간을 준비하지 못했습니다:', e instanceof Error ? e.message : e)
+    }
   }
 
   private async collect(anchor: number): Promise<ClipFrameRequest[]> {

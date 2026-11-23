@@ -99,3 +99,12 @@ describe('CamOutbox 증거 구간', () => {
     expect(t.sentEvents).toHaveLength(1)
   })
 })
+
+describe('재시도 대상', () => {
+  it('요청 과다(429)·시간 초과(408)는 다시 보내고, 다른 4xx 는 버린다', () => {
+    expect(new ProctorApiError('x', 429).retryable).toBe(true)
+    expect(new ProctorApiError('x', 408).retryable).toBe(true)
+    expect(new ProctorApiError('x', 413).retryable).toBe(false)
+    expect(new ProctorApiError('x', 404).retryable).toBe(false)
+  })
+})

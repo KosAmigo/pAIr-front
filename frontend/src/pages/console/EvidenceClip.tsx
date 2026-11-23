@@ -1,5 +1,5 @@
 // 이벤트 앞뒤 증거 구간 타임라인: 웹캠·휴대폰 사진을 시간순으로 훑어보고 크게 본다.
-// 사진은 로그인 헤더가 필요해 blob URL 로 받는다 (눌러서 볼 때가 아니라 보이는 칸만 받는다).
+// 사진은 로그인 헤더가 필요해 blob URL 로 받는다 (모달을 열면 구간 사진을 모두 받는다. 최대 24장, 장당 약 14KB).
 import { useEffect, useState } from 'react'
 import { ImageOff, Loader2 } from 'lucide-react'
 import { cx } from '../../components/cx'
@@ -7,7 +7,7 @@ import { ErrorState } from '../../components/ErrorState'
 import { consoleApi, type ClipFrameView } from '../../consoleApi'
 import { useLoad } from '../../data/consoleSessions'
 import { Modal } from './common'
-import { offsetLabel, splitBySource } from './evidenceView'
+import { nearestToEvent, offsetLabel, splitBySource } from './evidenceView'
 import { Loading } from './Loading'
 
 function useFrameImage(sessionId: number, eventId: number, frame: ClipFrameView) {
@@ -32,7 +32,7 @@ function useFrameImage(sessionId: number, eventId: number, frame: ClipFrameView)
   return state?.id === frame.id ? state : null
 }
 
-function Thumb({ sessionId, eventId, frame, selected, onPick }: { sessionId: number; eventId: number; frame: ClipFrameView; selected: boolean; onPick: () => void }) {
+function Thumb({ sessionId, eventId, frame, selected, nearestId, onPick }: { sessionId: number; eventId: number; frame: ClipFrameView; selected: boolean; nearestId: number | null; onPick: () => void }) {
   const img = useFrameImage(sessionId, eventId, frame)
   return (
     <button
@@ -45,12 +45,12 @@ function Thumb({ sessionId, eventId, frame, selected, onPick }: { sessionId: num
       <span className="flex aspect-video items-center justify-center bg-panel-raised text-text-faint">
         {frame.deleted ? <ImageOff size={14} aria-hidden /> : img?.url ? <img src={img.url} alt="" className="size-full object-cover" /> : img?.error ? <ImageOff size={14} aria-hidden /> : <Loader2 size={14} className="animate-spin" aria-hidden />}
       </span>
-      <span className={cx('tnum block px-1 py-0.5 text-center font-mono', frame.offsetMs === 0 ? 'font-semibold text-alert' : 'text-text-muted')}>{offsetLabel(frame.offsetMs)}</span>
+      <span className={cx('tnum block px-1 py-0.5 text-center font-mono', nearestId === frame.id ? 'font-semibold text-alert' : 'text-text-muted')}>{offsetLabel(frame.offsetMs)}</span>
     </button>
   )
 }
 
-function Row({ title, frames, ...rest }: { title: string; frames: ClipFrameView[]; sessionId: number; eventId: number; selectedId: number | null; onPick: (f: ClipFrameView) => void }) {
+function Row({ title, frames, ...rest }: { title: string; frames: ClipFrameView[]; sessionId: number; eventId: number; selectedId: number | null; nearestId: number | null; onPick: (f: ClipFrameView) => void }) {
   return (
     <div>
       <p className="mb-1 text-[13px] font-semibold text-text">
@@ -61,7 +61,7 @@ function Row({ title, frames, ...rest }: { title: string; frames: ClipFrameView[
       ) : (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {frames.map((f) => (
-            <Thumb key={f.id} sessionId={rest.sessionId} eventId={rest.eventId} frame={f} selected={rest.selectedId === f.id} onPick={() => rest.onPick(f)} />
+            <Thumb key={f.id} sessionId={rest.sessionId} eventId={rest.eventId} frame={f} selected={rest.selectedId === f.id} nearestId={rest.nearestId} onPick={() => rest.onPick(f)} />
           ))}
         </div>
       )}
@@ -85,7 +85,8 @@ export function EvidenceClipModal({ sessionId, eventId, title, onClose }: { sess
   const [picked, setPicked] = useState<ClipFrameView | null>(null)
   const frames = clip.data?.frames ?? []
   const { pc, phone } = splitBySource(frames)
-  const current = picked ?? frames.find((f) => f.offsetMs === 0 && !f.deleted) ?? frames.find((f) => !f.deleted) ?? null
+  const nearest = nearestToEvent(frames)
+  const current = picked ?? nearest
   const allDeleted = frames.length > 0 && frames.every((f) => f.deleted)
   return (
     <Modal title={`${title} 증거 구간`} onClose={onClose} actions={null}>
@@ -96,9 +97,9 @@ export function EvidenceClipModal({ sessionId, eventId, title, onClose }: { sess
       {frames.length > 0 && (
         <div className="flex flex-col gap-3">
           {current && !current.deleted && <Big sessionId={sessionId} eventId={eventId} frame={current} />}
-          <p className="text-[12px] text-text-muted">0.0초가 이벤트가 감지된 시각입니다. 앞 8초·뒤 4초 안의 사진만 보관합니다.</p>
-          <Row title="웹캠" frames={pc} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} onPick={setPicked} />
-          <Row title="휴대폰" frames={phone} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} onPick={setPicked} />
+          <p className="text-[12px] text-text-muted">0초가 이벤트가 감지된 시각이고, 붉은 글씨가 그 시각에 가장 가까운 사진입니다. 앞 8초·뒤 4초 안의 사진만 보관합니다.</p>
+          <Row title="웹캠" frames={pc} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} nearestId={nearest?.id ?? null} onPick={setPicked} />
+          <Row title="휴대폰" frames={phone} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} nearestId={nearest?.id ?? null} onPick={setPicked} />
         </div>
       )}
     </Modal>

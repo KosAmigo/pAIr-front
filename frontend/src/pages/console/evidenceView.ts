@@ -47,6 +47,13 @@ export function offsetLabel(offsetMs: number): string {
 
 export type ClipFrameLike = { id: number; source: 'PC_CAM' | 'PHONE_CAM'; offsetMs: number; sizeBytes: number; deleted: boolean }
 
+/** 이벤트 시각(0초)에 가장 가까운 삭제되지 않은 사진. 사진 시각은 도착 시각이라 정확히 0 인 경우가 드물다 */
+export function nearestToEvent<T extends ClipFrameLike>(frames: T[]): T | null {
+  let best: T | null = null
+  for (const f of frames) if (!f.deleted && (best === null || Math.abs(f.offsetMs) < Math.abs(best.offsetMs))) best = f
+  return best
+}
+
 /** 구간 사진을 웹캠 줄과 휴대폰 줄로 나누고 시간순으로 정렬한다 */
 export function splitBySource<T extends ClipFrameLike>(frames: T[]): { pc: T[]; phone: T[] } {
   const sorted = [...frames].sort((a, b) => a.offsetMs - b.offsetMs)

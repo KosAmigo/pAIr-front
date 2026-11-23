@@ -51,3 +51,14 @@ describe('splitBySource', () => {
     expect(r.phone.map((f) => f.id)).toEqual([3])
   })
 })
+
+import { nearestToEvent } from '../../src/pages/console/evidenceView.ts'
+
+describe('nearestToEvent', () => {
+  it('이벤트 시각(0)에 가장 가까운 삭제되지 않은 사진을 고른다', () => {
+    const f = (id: number, offsetMs: number, deleted = false) => ({ id, source: 'PC_CAM' as const, offsetMs, sizeBytes: 1, deleted })
+    expect(nearestToEvent([f(1, -8000), f(2, -400), f(3, 1200)])?.id).toBe(2)
+    expect(nearestToEvent([f(1, -100, true), f(2, 3000)])?.id).toBe(2)
+    expect(nearestToEvent([])).toBeNull()
+  })
+})

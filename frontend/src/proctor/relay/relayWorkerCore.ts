@@ -15,6 +15,8 @@ export type WorkerToMain =
   | { kind: 'msg'; msg: ServerMsg }
   | { kind: 'open'; open: boolean }
   | { kind: 'health'; health: RelayHealth }
+  /** 보내지 못해 버린 프레임이 있다 (메인의 변화 감지기가 그 변화를 다시 보내게 한다) */
+  | { kind: 'dropped' }
 
 /** 서버는 15초 무신호면 PC 에 stale 을 알린다. 그 안에 여러 번 닿도록 5초마다 */
 export const HEARTBEAT_MS = 5000
@@ -31,7 +33,7 @@ export interface WorkerSocket {
   close(): void
   health(maxTimerLagMs: number): RelayHealth
   /** 프레임 전송. 연결이 끊겼거나 밀려 있으면 버린다 (쌓지 않는다) */
-  sendFrame(data: ArrayBuffer): void
+  sendFrame(data: ArrayBuffer): boolean
 }
 
 export interface WorkerDeps {
@@ -77,7 +79,7 @@ export function createRelayWorker(deps: WorkerDeps): (m: MainToWorker) => void {
       return
     }
     if (m.kind === 'frame') {
-      socket?.sendFrame(m.data)
+      if (socket && !socket.sendFrame(m.data)) deps.post({ kind: 'dropped' })
       return
     }
     if (m.kind === 'send') {

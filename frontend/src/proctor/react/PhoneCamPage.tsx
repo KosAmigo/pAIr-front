@@ -77,6 +77,8 @@ export default function PhoneCamPage() {
       const now = performance.now()
       maxLag = Math.max(maxLag, Math.round(now - lastTick - STATUS_INTERVAL_MS))
       lastTick = now
+      // 서버는 phone-status 도 "신호"로 센다. 다른 앱으로 전환한 동안에는 보내지 않아야 응답 없음(stale)이 제때 잡힌다
+      if (document.visibilityState === 'hidden') return
       socket.send({ type: 'phone-status', status: { sending: sendingRef.current, bytesSent: socket.bytesSent, relay: socket.health(maxLag) } })
     }, STATUS_INTERVAL_MS)
     // 다른 앱으로 전환하면 촬영이 멈춰 프레임·생존 신호가 끊기고, 서버가 15초 뒤 PC 에 응답 없음(stale)을 알린다.
@@ -101,7 +103,11 @@ export default function PhoneCamPage() {
       // 책상 스캔 때 고해상도 프레임을 만들 수 있도록 카메라는 1280×720 으로 연다 (평소 송신은 512px 로 줄여 보낸다)
       if (!streamRef.current) streamRef.current = await openCamera(video, 'environment', { width: 1280, height: 720 })
       const socket = socketRef.current
-      if (socket && !senderRef.current) senderRef.current = new PhoneFrameSender(video, socket)
+      if (socket && !senderRef.current) {
+        const sender = new PhoneFrameSender(video, socket)
+        socket.onFrameDropped(() => sender.frameDropped())
+        senderRef.current = sender
+      }
       senderRef.current?.start()
       setPhase('sending')
     } catch (e) {
@@ -138,7 +144,7 @@ export default function PhoneCamPage() {
               </p>
             )}
             <p className="text-[14px] leading-6 break-keep text-text-muted">
-              시작하면 카메라 사진이 PC 로 전달됩니다(변화가 있을 때와 5초마다). 이후 안내(책상 스캔 등)는 모두 PC 화면에 나옵니다. 사진은 서버가 저장하지 않고 PC 로만 넘기며, 분석은 PC 에서 합니다.
+              시작하면 카메라 사진이 PC 로 전달됩니다(변화가 있을 때와 5초마다). 이후 안내(책상 스캔 등)는 모두 PC 화면에 나옵니다. 평소 사진은 서버가 저장하지 않고 PC 로만 넘기며 분석은 PC 에서 합니다. 이상이 감지되면 그 앞뒤 사진만 부정행위 검토용으로 저장됩니다.
             </p>
             <Button variant="primary" size="lg" onClick={() => void start()}>
               {phase === 'error' ? '다시 시도' : '보조 캠 시작'}

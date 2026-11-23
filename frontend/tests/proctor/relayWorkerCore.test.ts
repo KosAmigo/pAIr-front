@@ -22,7 +22,11 @@ function setup() {
       state.closed = true
     },
     health: () => HEALTH,
-    sendFrame: (d) => frames.push(d),
+    sendFrame: (d) => {
+      if (!state.open) return false
+      frames.push(d)
+      return true
+    },
   }
   const handle = createRelayWorker({
     createSocket: (hello, onMessage, onOpenChange) => {
@@ -142,4 +146,12 @@ test('alive 를 한 번도 받지 않았다면(촬영 시작 전) heartbeat 는 
   t.clock.now = 10 * ALIVE_WINDOW_MS
   t.state.tick?.()
   expect(t.sent).toHaveLength(1)
+})
+
+test('프레임을 못 보냈으면(연결 끊김·밀림) 메인에 알려 변화 감지기가 다시 보내게 한다', () => {
+  const t = setup()
+  t.handle({ kind: 'init', pairCode: 'abc' })
+  t.state.open = false
+  t.handle({ kind: 'frame', data: new Uint8Array([0xff, 0xd8, 1, 2]).buffer })
+  expect(t.posted.some((m) => m.kind === 'dropped')).toBe(true)
 })
