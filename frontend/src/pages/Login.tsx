@@ -43,7 +43,8 @@ function AuthLayout({ title, children, footer }: { title: string; children: Reac
             </p>
             <p className="mt-4 max-w-[440px] text-[17px] leading-7 text-stage-muted">풀이 과정 전체를 6가지 역량으로 채점하고, 아쉬웠던 순간으로 돌아가 다시 풀어 볼 수 있습니다.</p>
           </Reveal>
-          <div className="relative mt-auto flex justify-center" aria-hidden>
+          {/* 육각형은 문장 바로 아래에 둔다(mt-auto 로 바닥에 붙이면 회원가입처럼 폼이 길 때 아래로 밀려 잘렸다) */}
+          <div className="relative mt-6 flex justify-center" aria-hidden>
             <StatHex stats={DEMO_STATS} total={DEMO_TOTAL} active={active} onActive={setActive} size={400} />
             {CHIPS.map((c) => (
               <span key={c.text} className={`auth-float glass-stage absolute inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold text-stage-text ${c.cls}`} style={{ animationDelay: c.delay }}>
@@ -163,7 +164,7 @@ export default function Login() {
       footer={
         <>
           계정이 없나요?{' '}
-          <Link to={`/signup${next ? `?next=${encodeURIComponent(next)}` : ''}`} className="font-semibold text-brand hover:underline">
+          <Link to={`/signup${next ? `?next=${encodeURIComponent(next)}` : ''}`} className="ml-1.5 font-semibold text-brand hover:underline">
             회원가입
           </Link>
         </>
@@ -303,7 +304,7 @@ export function Signup() {
       footer={
         <>
           이미 계정이 있나요?{' '}
-          <Link to="/login" className="font-semibold text-brand hover:underline">
+          <Link to="/login" className="ml-1.5 font-semibold text-brand hover:underline">
             로그인
           </Link>
         </>

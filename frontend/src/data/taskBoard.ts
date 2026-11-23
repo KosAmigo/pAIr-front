@@ -29,8 +29,9 @@ export function countTabs(list: Row[]): Record<TaskTab, number> {
   return c
 }
 
-/** 처음 열 탭: 검수 전이 있으면 그것부터, 없으면 공개 문제 */
-export const firstTab = (counts: Record<TaskTab, number>): TaskTab => (counts.draft > 0 ? 'draft' : counts.public > 0 || counts.private === 0 ? 'public' : 'private')
+/** 탭 순서와 처음 열 탭: 공개 문제 → 비공개 문제 → 검수 전. 처음에는 늘 공개 문제 (검수 전 개수는 화면에서 배지로 눈에 띄게) */
+export const TAB_ORDER: TaskTab[] = ['public', 'private', 'draft']
+export const firstTab = (_counts?: Record<TaskTab, number>): TaskTab => 'public'
 
 export type Track = 'DEV' | 'BIZ'
 export type TrackFilter = 'ALL' | Track
@@ -42,13 +43,21 @@ export const TRACK_LABEL: Record<Track, string> = { DEV: '개발', BIZ: '비개�
 /** 만든 날(없으면 수정·공개 시각). 정렬과 카드 표시에 쓴다 */
 export const madeAt = (t: Pick<ConsoleTaskSummary, 'createdAt' | 'updatedAt' | 'publishedAt'>) => t.createdAt ?? t.updatedAt ?? t.publishedAt ?? null
 
+/** 검색용 글자 정리: 공백을 모두 없애고 소문자로 */
+export const normalizeSearch = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, '').toLowerCase()
+
+/** 제목·한 줄 소개·주제(category)·코드에 검색어가 들어 있는지. 부분 일치, 공백·대소문자 무시 */
+export function matchesQuery(t: Pick<ConsoleTaskSummary, 'title' | 'id' | 'summary' | 'category'>, q: string): boolean {
+  const n = normalizeSearch(q)
+  return !n || [t.title, t.summary, t.category, t.id].some((v) => normalizeSearch(v).includes(n))
+}
+
 /** 탭, 직군, 검색어로 거르고 최근 만든 것부터 */
 export function filterTasks<T extends ConsoleTaskSummary>(list: T[], f: { tab: TaskTab; track: TrackFilter; q: string }): T[] {
-  const q = f.q.trim().toLowerCase()
   return list
     .filter((t) => tabOf(t) === f.tab)
     .filter((t) => f.track === 'ALL' || trackOf(t) === f.track)
-    .filter((t) => !q || [t.title, t.id, t.summary, t.category].some((v) => v?.toLowerCase().includes(q)))
+    .filter((t) => matchesQuery(t, f.q))
     .sort((a, b) => (madeAt(b) ?? '').localeCompare(madeAt(a) ?? ''))
 }
 

@@ -32,7 +32,7 @@ export function TaskCard({ task: t, menu }: { task: ConsoleTaskSummary; menu: Me
       {/* 검수 전 카드는 위쪽에 주의색 띠 */}
       {tab === 'draft' && <span aria-hidden className="absolute inset-x-5 top-0 h-0.5 rounded-b-full bg-caution/70" />}
       <div className="relative z-10 flex items-start gap-3">
-        <TrackTile track={track} category={t.category} />
+        <TrackTile track={track} />
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pt-0.5">
           {t.generated && <AiBadge />}
           {check && <CheckBadge result={check} />}

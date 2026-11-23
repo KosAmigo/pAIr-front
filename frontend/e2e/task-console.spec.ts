@@ -1,0 +1,168 @@
+// 과제 콘솔 화면 시나리오: 목록(탭 순서, 직군 하위 필터, 검색)과 과제 만들기(추천 유지, 주제 확인, 생성 요청 본문).
+// 동작은 단언으로 검사하고, @shot 테스트는 .shots/task-console-v2/ 에 스크린샷을 저장한다(저장소에는 올리지 않는다).
+import { expect, test, type Page } from '@playwright/test'
+import { mockApi, TYPO_TOPIC } from './mock'
+
+const SHOTS = '.shots/task-console-v2'
+const shot = (page: Page, name: string, project: string) => page.screenshot({ path: `${SHOTS}/${project}-${name}.png`, fullPage: true })
+const titles = async (page: Page) => (await page.locator('ul h3').allTextContents()).map((t) => t.trim())
+
+test.describe('목록', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockApi(page)
+    await page.goto('/console/tasks')
+    await expect(page.getByRole('tab')).toHaveCount(3)
+    await expect(page.locator('ul h3').first()).toBeVisible()
+  })
+
+  test('탭 순서는 공개 → 비공개 → 검수 전이고 처음엔 공개 문제', async ({ page }) => {
+    const tabs = page.getByRole('tab')
+    await expect(tabs.nth(0)).toContainText('공개 문제')
+    await expect(tabs.nth(1)).toContainText('비공개 문제')
+    await expect(tabs.nth(2)).toContainText('검수 전')
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('link', { name: '과제 만들기' }).first()).toBeVisible()
+    const summary = await page.getByRole('group', { name: '상태별 과제 수' }).getByRole('button').allTextContents()
+    expect(summary[0]).toContain('공개 문제')
+    expect(summary[1]).toContain('비공개 문제')
+    expect(summary[2]).toContain('검수 전')
+    expect((await titles(page)).sort()).toEqual(['요금제 개편안 손익 비교', '재고 차감 동시성', '쿠폰 할인 계산'])
+  })
+
+  test('직군 하위 필터는 탭 안에서만 거른다', async ({ page }) => {
+    await page.getByRole('tab', { name: /검수 전/ }).click()
+    expect(await titles(page)).toHaveLength(2)
+    await page.getByRole('radio', { name: '개발', exact: true }).click()
+    await expect.poll(() => titles(page)).toEqual(['검수 전 로그 파서'])
+    await page.getByRole('radio', { name: '비개발' }).click()
+    await expect.poll(() => titles(page)).toEqual(['검수 전 매출 보고서'])
+  })
+
+  test('검색은 부분 일치·공백 무시이고 결과가 없으면 안내한다', async ({ page }) => {
+    const search = page.getByPlaceholder(/찾기/)
+    await search.fill('쿠폰 할인')
+    await expect.poll(() => titles(page)).toEqual(['쿠폰 할인 계산'])
+    await search.fill('쿠폰할인')
+    await expect.poll(() => titles(page)).toEqual(['쿠폰 할인 계산'])
+    // 현재 탭(공개 문제) 안에서만 찾는다: 검수 전 과제는 안 나옴
+    await search.fill('로그')
+    await expect(page.getByText('조건에 맞는 과제가 없어요')).toBeVisible()
+    await search.fill('없는검색어')
+    await expect(page.getByText('조건에 맞는 과제가 없어요')).toBeVisible()
+  })
+})
+
+test.describe('과제 만들기', () => {
+  test('주제 → 추천 → 직군을 바꿔도 유지 → 주제 확인 → 용도·시간 → 생성 요청 본문', async ({ page }) => {
+    const api = await mockApi(page)
+    await page.goto('/console/tasks/new')
+    await expect(page.getByRole('heading', { name: '과제 만들기', level: 1 })).toBeVisible()
+    // 직무·난이도 칸은 없다
+    await expect(page.getByLabel('직무')).toHaveCount(0)
+    await expect(page.getByText('난이도')).toHaveCount(0)
+
+    const dev = page.getByRole('button', { name: /^개발/ })
+    const biz = page.getByRole('button', { name: /^비개발/ })
+    const askBtn = page.getByRole('button', { name: /추천 받기|다시 추천/ })
+    const pickBtns = page.getByRole('button', { name: /이걸로 채우기|채웠어요/ })
+    const topicInput = page.getByLabel('주제', { exact: true })
+
+    await topicInput.fill('주문 취소 재고 복구')
+    await expect(askBtn).toBeDisabled() // 직군을 고르기 전
+    await dev.click()
+    await askBtn.click()
+    await expect(pickBtns).toHaveCount(3)
+    await expect(page.getByText('왜 좋은 문제인가 1')).toBeHidden() // why 는 "자세히"에서만
+    await page.getByRole('button', { name: '자세히' }).first().click()
+    await expect(page.getByText('왜 좋은 문제인가 1')).toBeVisible()
+    await pickBtns.first().click()
+    await expect(page.getByLabel('주제/상황')).toHaveValue(/상황 1/)
+    await expect(page.getByLabel('함정')).toHaveValue(/함정 1/)
+
+    // 비개발에서 따로 추천 → 개발로 돌아오면 앞서 받은 목록과 고른 카드가 그대로
+    await biz.click()
+    await expect(pickBtns).toHaveCount(0)
+    await askBtn.click()
+    await expect(pickBtns).toHaveCount(3)
+    await dev.click()
+    await expect(pickBtns).toHaveCount(3)
+    await expect(page.getByRole('button', { name: /채웠어요/ })).toHaveCount(1)
+
+    // 다시 추천은 앞서 받은 상황을 exclude 로 보낸다
+    await askBtn.click()
+    await expect.poll(() => api.sent.at(-1)?.body.exclude?.length).toBe(3)
+    expect(api.sent.at(-1)?.body).toMatchObject({ track: 'DEV', topic: '주문 취소 재고 복구' })
+
+    // 오타 주제: 확인 박스가 카드 위에 뜨고 카드는 숨는다
+    await topicInput.fill(TYPO_TOPIC)
+    await askBtn.click()
+    const box = page.getByRole('group', { name: '주제 확인' })
+    await expect(box).toContainText(`'${TYPO_TOPIC}'를 '쿠폰 할인 계산'(으)로 이해했어요`)
+    await expect(pickBtns).toHaveCount(0)
+    const askedBefore = api.sent.length
+    await box.getByRole('button', { name: '이대로 보기' }).click()
+    await expect(pickBtns).toHaveCount(3)
+    expect(api.sent.length).toBe(askedBefore) // 추가 요청 없음
+
+    // 주제 고치기: 주제 칸에 포커스
+    await askBtn.click()
+    await expect(box).toBeVisible()
+    await box.getByRole('button', { name: '주제 고치기' }).click()
+    await expect(topicInput).toBeFocused()
+
+    // 용도·시간 → 확인 → 생성 요청 본문
+    await page.getByRole('radio', { name: '비공개 문제' }).click()
+    await expect(page.getByText('실전 시험 회차에만 쓰고')).toBeVisible()
+    for (const m of [20, 40, 60]) {
+      await page.getByRole('radio', { name: `${m}분` }).click()
+      await expect(page.getByRole('radio', { name: `${m}분` })).toHaveAttribute('aria-checked', 'true')
+    }
+    await page.getByRole('radio', { name: '20분' }).click()
+    await page.getByLabel('주제/상황').fill('주문 취소 재고 복구')
+    await page.getByLabel('함정').fill('취소가 두 번 오면 재고가 두 번 늘어남')
+    await page.getByRole('button', { name: /다음: 확인하기/ }).click()
+    await expect(page.getByRole('heading', { name: /이대로/ })).toBeVisible()
+    await page.getByRole('button', { name: '과제 만들기' }).click()
+    await expect(page.getByText(/과제를 만들었어요/)).toBeVisible({ timeout: 15_000 })
+
+    const gen = api.sent.find((r) => r.path === '/api/admin/task-gen')!
+    expect(gen.body).toEqual({ track: 'DEV', topic: '주문 취소 재고 복구', trap: '취소가 두 번 오면 재고가 두 번 늘어남', usage: 'LIVE', minutes: 20 })
+    expect(gen.body).not.toHaveProperty('jobRole')
+    expect(gen.body).not.toHaveProperty('difficulty')
+  })
+})
+
+test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
+  const p = info.project.name
+  await mockApi(page)
+  await page.goto('/console/tasks')
+  await expect(page.locator('ul h3').first()).toBeVisible()
+  await shot(page, '01-list-public', p)
+  await page.getByRole('tab', { name: /검수 전/ }).click()
+  await page.getByRole('radio', { name: '개발', exact: true }).click()
+  await expect.poll(async () => (await titles(page)).length).toBe(1)
+  await shot(page, '02-list-draft-dev', p)
+  await page.getByRole('tab', { name: /^공개 문제/ }).click()
+  await page.getByRole('radio', { name: '전체' }).click()
+  await page.getByPlaceholder(/찾기/).fill('쿠폰 할인')
+  await expect.poll(async () => (await titles(page)).length).toBe(1)
+  await shot(page, '03-list-search', p)
+
+  await page.goto('/console/tasks/new')
+  await shot(page, '10-new-empty', p)
+  await page.getByLabel('주제', { exact: true }).fill(TYPO_TOPIC)
+  await page.getByRole('button', { name: /^개발/ }).click()
+  await page.getByRole('button', { name: '추천 받기' }).click()
+  await expect(page.getByRole('group', { name: '주제 확인' })).toBeVisible()
+  await shot(page, '11-new-topic-check', p)
+  await page.getByRole('button', { name: '이대로 보기' }).click()
+  await page.getByRole('button', { name: '자세히' }).first().click()
+  await page.getByRole('button', { name: '이걸로 채우기' }).first().click()
+  await expect(page.getByLabel('함정')).toHaveValue(/함정 1/)
+  await shot(page, '12-new-picked', p)
+  await page.getByRole('radio', { name: '비공개 문제' }).click()
+  await page.getByRole('radio', { name: '20분' }).click()
+  await page.getByRole('button', { name: /다음: 확인하기/ }).click()
+  await expect(page.getByRole('heading', { name: /이대로/ })).toBeVisible()
+  await shot(page, '13-new-confirm', p)
+})

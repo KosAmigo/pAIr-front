@@ -1,16 +1,16 @@
 // 과제 콘솔 작은 부품: 직군 아이콘 칸, AI 생성 배지, 자동 확인 배지, 시간 칩.
 // 직군 색은 개발 = branch-2(파랑), 비개발 = comp-6(청록). 상태 색(검수 전 caution, 공개 brand, 비공개 text)과 섞지 않는다.
-import { BarChart3, CircleCheck, CircleX, Clock, Code2, Sparkles } from 'lucide-react'
-import { KIND_ICON } from '../../../components/taskKindIcons'
+import { CircleCheck, CircleX, Clock, Code2, FileText, Sparkles, type LucideIcon } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { TRACK_LABEL, type Track } from '../../../data/taskBoard'
 import { TRACK_TONE } from './trackTone'
 
-const TRACK_ICON = { DEV: Code2, BIZ: BarChart3 }
+/** 콘솔 과제 화면의 직군 아이콘은 이 둘뿐: 개발 = </>, 비개발 = 문서 (자가진단 과제 목록과 같다) */
+export const TRACK_ICON: Record<Track, LucideIcon> = { DEV: Code2, BIZ: FileText }
 
-/** 직군 아이콘 칸. category 가 과제 형태 키면 그 아이콘, 아니면 직군 아이콘 */
-export function TrackTile({ track, category, size = 44 }: { track: Track; category?: string | null; size?: number }) {
-  const Icon = (category && KIND_ICON[category]) || TRACK_ICON[track]
+/** 직군 아이콘 칸 */
+export function TrackTile({ track, size = 44 }: { track: Track; size?: number }) {
+  const Icon = TRACK_ICON[track]
   return (
     <span
       aria-hidden
