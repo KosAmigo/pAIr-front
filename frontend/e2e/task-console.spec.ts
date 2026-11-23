@@ -91,7 +91,7 @@ test.describe('과제 만들기', () => {
     await page.getByRole('button', { name: '자세히' }).first().click()
     await expect(page.getByText('왜 좋은 문제인가 1')).toBeVisible()
     await pickBtns.first().click()
-    await expect(page.getByLabel('주제/상황')).toHaveValue(/상황 1/)
+    await expect(page.getByLabel('상황', { exact: true })).toHaveValue(/상황 1/)
     await expect(page.getByLabel('함정')).toHaveValue(/함정 1/)
 
     // 비개발에서 따로 추천 → 개발로 돌아오면 앞서 받은 목록과 고른 카드가 그대로
@@ -127,15 +127,15 @@ test.describe('과제 만들기', () => {
 
     // 용도·시간 → 확인 → 생성 요청 본문
     await page.getByRole('radio', { name: '실전' }).click()
-    await expect(page.getByText('회차에만 쓰고')).toBeVisible()
+    await expect(page.getByText('기업 회차에만 써요')).toBeVisible()
     for (const m of [20, 40, 60]) {
       await page.getByRole('radio', { name: `${m}분` }).click()
       await expect(page.getByRole('radio', { name: `${m}분` })).toHaveAttribute('aria-checked', 'true')
     }
     await page.getByRole('radio', { name: '20분' }).click()
-    await page.getByLabel('주제/상황').fill('주문 취소 재고 복구')
+    await page.getByLabel('상황', { exact: true }).fill('주문 취소 재고 복구')
     await page.getByLabel('함정').fill('취소가 두 번 오면 재고가 두 번 늘어남')
-    await page.getByRole('button', { name: /다음: 확인하기/ }).click()
+    await page.getByRole('button', { name: /^다음/ }).click()
     await expect(page.getByRole('heading', { name: /이대로/ })).toBeVisible()
     await page.getByRole('button', { name: '과제 만들기' }).click()
     await expect(page.getByText(/과제를 만들었어요/)).toBeVisible({ timeout: 15_000 })
@@ -178,7 +178,7 @@ test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
   await shot(page, '12-new-picked', p)
   await page.getByRole('radio', { name: '실전' }).click()
   await page.getByRole('radio', { name: '20분' }).click()
-  await page.getByRole('button', { name: /다음: 확인하기/ }).click()
+  await page.getByRole('button', { name: /^다음/ }).click()
   await expect(page.getByRole('heading', { name: /이대로/ })).toBeVisible()
   await shot(page, '13-new-confirm', p)
 })

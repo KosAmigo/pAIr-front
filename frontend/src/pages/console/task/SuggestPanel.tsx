@@ -4,16 +4,17 @@
 // 받은 목록과 고른 카드는 부모(useSuggestions)가 직군별로 들고 있어서 직군을 바꿨다 돌아와도 그대로다.
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowRight, ChevronDown, CircleAlert, Lightbulb, MessageCircleQuestion, RefreshCw, Sparkles, Wand2 } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, CircleAlert, Lightbulb, MessageCircleQuestion, RefreshCw, Sparkles, Wand2 } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { Button } from '../../../components/ui'
+import { choiceClass } from './choice'
 import { STATS } from '../../../data/dashboard'
 import { isAgain, needsTopicCheck, topicCheckText, visibleSuggestions, type GenTrack, type Suggestion, type TrackSuggest } from '../../../data/taskGen'
 import { distance, duration, easing, stagger } from '../../../lib/motion'
 
 type Props = {
   track: GenTrack | null
-  /** ①에 적은 주제 (없을 수 있다) */
+  /** ②에 적은 주제 (없을 수 있다) */
   topic: string
   state: TrackSuggest | undefined
   loading: boolean
@@ -135,12 +136,15 @@ function SuggestCard({ s, on, onPick }: { s: Suggestion; on: boolean; onPick: ()
   return (
     <div
       className={cx(
-        'group flex w-full flex-col rounded-xl border bg-panel shadow-sm transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-1 hover:shadow-md',
-        on ? 'border-brand ring-2 ring-brand/25' : 'border-line hover:border-brand/40',
+        'group flex w-full flex-col rounded-xl shadow-sm hover:shadow-md has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand/30',
+        choiceClass(on),
       )}
     >
       <button type="button" onClick={onPick} aria-pressed={on} className="flex flex-1 flex-col gap-2 rounded-t-xl p-4 text-left outline-offset-[-2px]">
-        <span className="text-[16px] leading-6 font-bold break-keep text-text group-hover:text-brand">{s.situation}</span>
+        <span className={cx('flex items-start gap-1.5 text-[16px] leading-6 font-bold break-keep', on ? 'text-brand' : 'text-text group-hover:text-brand')}>
+          {on && <Check size={18} strokeWidth={3} className="mt-[3px] shrink-0" aria-hidden />}
+          {s.situation}
+        </span>
         <span className="line-clamp-2 text-[13px] leading-5 break-keep text-text-muted">
           <b className="font-semibold text-text">함정 </b>
           {s.trap}
@@ -149,7 +153,7 @@ function SuggestCard({ s, on, onPick }: { s: Suggestion; on: boolean; onPick: ()
           <span className="inline-flex h-[22px] items-center rounded-full bg-alert/8 px-2 text-[12px] font-semibold text-alert">{s.trapType || '함정'}</span>
           <CompetencyChips keys={s.competencies} />
         </span>
-        <span className={cx('flex items-center gap-1 text-[13px] font-semibold', on ? 'text-brand' : 'text-text-faint group-hover:text-brand')}>
+        <span className={cx('flex items-center gap-1 text-[13px] font-semibold', on ? 'text-brand' : 'text-text-muted group-hover:text-brand')}>
           {on ? '채웠어요' : '이걸로 채우기'} <ArrowRight size={14} aria-hidden />
         </span>
       </button>
