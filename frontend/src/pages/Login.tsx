@@ -162,7 +162,7 @@ export default function Login() {
       footer={
         <>
           계정이 없나요?{' '}
-          <Link to={`/signup${next ? `?next=${encodeURIComponent(next)}` : ''}`} className="font-semibold text-brand hover:underline">
+          <Link to={`/signup${next ? `?next=${encodeURIComponent(next)}` : ''}`} className="ml-1.5 font-semibold text-brand hover:underline">
             회원가입
           </Link>
         </>
@@ -302,7 +302,7 @@ export function Signup() {
       footer={
         <>
           이미 계정이 있나요?{' '}
-          <Link to="/login" className="font-semibold text-brand hover:underline">
+          <Link to="/login" className="ml-1.5 font-semibold text-brand hover:underline">
             로그인
           </Link>
         </>
