@@ -319,7 +319,7 @@ export default function ConsoleTaskNew() {
                           role="radio"
                           aria-checked={on}
                           onClick={() => set('minutes', m)}
-                          className={cx('inline-flex h-14 min-w-24 items-center justify-center gap-1.5 rounded-xl px-4 text-[16px] font-bold', choiceClass(on))}
+                          className={cx('inline-flex h-14 w-24 items-center justify-center gap-1.5 rounded-xl px-4 text-[16px] font-bold', choiceClass(on))}
                         >
                           {on && <Check size={16} strokeWidth={3} aria-hidden />}
                           <span>
@@ -411,7 +411,7 @@ function UsagePicker({ value, onChange }: { value: GenUsage; onChange: (v: GenUs
               role="radio"
               aria-checked={on}
               onClick={() => onChange(u.value)}
-              className={cx('flex h-14 min-w-[210px] items-center gap-3 rounded-xl px-4 text-left', choiceClass(on))}
+              className={cx('flex h-14 w-[240px] items-center gap-3 rounded-xl px-4 text-left', choiceClass(on))}
             >
               <u.icon size={20} aria-hidden className="shrink-0" />
               <span className="min-w-0">
