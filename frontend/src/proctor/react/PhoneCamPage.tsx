@@ -6,7 +6,9 @@ import { useSearchParams } from 'react-router-dom'
 import { Smartphone } from 'lucide-react'
 import { Button, Logo, StatusDot } from '../../components/ui'
 import { createPhoneRelay, type PhoneRelay } from '../relay/PhoneRelay.ts'
+import { parseQualityMode } from '../core/phoneQuality.ts'
 import { PhoneFrameSender } from '../relay/phoneSender.ts'
+import type { SendMode } from '../relay/phoneSenderCore.ts'
 import { openCamera, stopCamera } from '../vision/camera.ts'
 
 type Phase = 'connecting' | 'ready' | 'loading' | 'sending' | 'error'
@@ -35,6 +37,7 @@ export default function PhoneCamPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const socketRef = useRef<PhoneRelay | null>(null)
   const senderRef = useRef<PhoneFrameSender | null>(null)
+  const modeRef = useRef<SendMode | null>(null)
   const sendingRef = useRef(false)
 
   const [phaseState, setPhase] = useState<Phase>('connecting')
@@ -60,7 +63,14 @@ export default function PhoneCamPage() {
     const socket = createPhoneRelay(
       pairCode,
       (msg) => {
-        if (msg.type === 'quality') senderRef.current?.setRequestedMode(msg.mode)
+        if (msg.type === 'quality') {
+          // 서버가 phone-joined 직후(촬영을 시작하기 전)에도 보내므로 기억해 두었다가 송신기가 만들어지면 적용한다
+          const mode = parseQualityMode(msg.mode)
+          if (mode) {
+            modeRef.current = mode
+            senderRef.current?.setRequestedMode(mode)
+          }
+        }
         if (msg.type === 'phone-joined') setPhase((p) => (p === 'connecting' ? 'ready' : p))
         if (msg.type === 'error') {
           setFatal(true)
@@ -105,6 +115,7 @@ export default function PhoneCamPage() {
       const socket = socketRef.current
       if (socket && !senderRef.current) {
         const sender = new PhoneFrameSender(video, socket)
+        sender.setRequestedMode(modeRef.current)
         socket.onFrameDropped(() => sender.frameDropped())
         senderRef.current = sender
       }

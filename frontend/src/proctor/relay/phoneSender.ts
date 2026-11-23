@@ -59,7 +59,7 @@ export class PhoneFrameSender {
     this.timer = null
   }
 
-  /** PC 가 요청한 화질 모드 (개발 릴레이만 전달한다). 없으면 시작 후 시간으로 정한다 */
+  /** 서버가 보낸 화질 모드. 재연결하면 서버가 현재 모드를 다시 보내 준다 */
   setRequestedMode(mode: SendMode | null) {
     this.requested = mode
   }
@@ -71,7 +71,7 @@ export class PhoneFrameSender {
     if (v.readyState < 2 || !v.videoWidth) return
     const now = performance.now()
     this.relay.alive() // 촬영 루프가 살아 있다 (끊기면 워커의 생존 신호도 멈춘다)
-    const mode = modeAt(now - this.startedAt, this.requested)
+    const mode = modeAt(this.requested)
     if (mode !== this.mode) {
       this.mode = mode
       this.gate.reset()

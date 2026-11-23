@@ -17,6 +17,7 @@ import { PhoneSurface } from './relay/phoneSurface.ts'
 import { ViewerSender, type ViewSources } from './relay/viewerSender.ts'
 import { PHONE_ANALYSIS_IDLE, PhoneAnalysis, type PhoneAnalysisState } from './phoneAnalysis.ts'
 import { EvidenceRecorder } from './evidenceRecorder.ts'
+import { PhoneQualityController } from './core/phoneQuality.ts'
 import { PHONE_DROP_MESSAGE, phoneDropEvent, phoneFramesFresh } from './core/phoneLink.ts'
 import { SCREEN_EVENTS_ACCEPTED, toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
@@ -186,6 +187,8 @@ const phoneAnalyzer = new PhoneAnalysis({
   intervalMs: () => phoneIntervalMs,
 })
 let phoneAnalysisOn = false
+/** PC 가 마지막으로 요청한 휴대폰 화질 모드 (서버가 짝에 저장하고 휴대폰 재연결 때 다시 보내 준다) */
+const phoneQuality = new PhoneQualityController()
 
 /** 감독 중이고 휴대폰이 연결돼 있으면 분석을 시작하고, 끊기면 멈춘다. 다시 연결되면 새로 시작한다(보정부터) */
 function syncPhoneAnalysis() {
@@ -209,6 +212,7 @@ function syncPhoneSurface() {
 
 /** 새 연결(입장 토큰이 바뀜·연습)을 시작할 때 휴대폰 쪽 상태를 비운다 */
 function resetPhoneSide() {
+  phoneQuality.reset()
   phoneAnalysisOn = false
   phoneAnalyzer.stop()
   evidence.clear()
@@ -514,7 +518,8 @@ export const camHub = {
 
   /** 휴대폰 송신 화질 전환 (책상 스캔 동안만 'scan') */
   setPhoneQuality(mode: SendMode) {
-    relay?.send({ type: 'quality', mode })
+    const msg = phoneQuality.set(mode)
+    if (msg) relay?.send(msg)
   },
 
   /**
@@ -658,6 +663,7 @@ export const camHub = {
     screenHandle = null
     lastBlur = undefined
     phoneAnalysisOn = false
+    phoneQuality.reset()
     phoneAnalyzer.dispose()
     stopLoop?.()
     stopLoop = null
@@ -732,6 +738,8 @@ function pushLog(v: CamViolation) {
 function onRelayOpenChange(open: boolean) {
   if (!open) viewers?.closeAll()
   set({ relayOpen: open, viewers: viewers?.viewerCount() ?? 0 })
+  // 연결이 (다시) 맺어지면 현재 화질 모드를 알린다 (서버가 짝에 이전 모드를 들고 있을 수 있다)
+  if (open) relay?.send(phoneQuality.resend())
 }
 
 function onRelayMessage(msg: ServerMsg) {

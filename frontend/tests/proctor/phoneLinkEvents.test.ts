@@ -1,6 +1,6 @@
 import { describe, expect, it } from './expect.ts'
 import { phoneDropEvent } from '../../src/proctor/core/phoneLink.ts'
-import { SCAN_FALLBACK_MS, frameSizeFor, modeAt } from '../../src/proctor/relay/phoneSenderCore.ts'
+import { frameSizeFor, modeAt } from '../../src/proctor/relay/phoneSenderCore.ts'
 
 describe('phoneDropEvent', () => {
   it('연결돼 있다가 끊기면 phone_disconnected', () => {
@@ -38,14 +38,12 @@ describe('frameSizeFor', () => {
 })
 
 describe('modeAt', () => {
-  it('시작 직후는 scan, 정해진 시간이 지나면 watch (PC 의 화질 요청이 없어도 돌아온다)', () => {
-    expect(modeAt(0, null)).toBe('scan')
-    expect(modeAt(SCAN_FALLBACK_MS - 1, null)).toBe('scan')
-    expect(modeAt(SCAN_FALLBACK_MS, null)).toBe('watch')
+  it('서버가 알려 주기 전에는 평소(watch)이고, 시간이 지나도 스스로 바꾸지 않는다', () => {
+    expect(modeAt(null)).toBe('watch')
   })
-  it('PC 가 화질을 요청하면 그 값을 따른다', () => {
-    expect(modeAt(10, 'watch')).toBe('watch')
-    expect(modeAt(SCAN_FALLBACK_MS * 10, 'scan')).toBe('scan')
+  it('서버가 보낸 quality.mode 를 그대로 따른다', () => {
+    expect(modeAt('scan')).toBe('scan')
+    expect(modeAt('watch')).toBe('watch')
   })
 })
 

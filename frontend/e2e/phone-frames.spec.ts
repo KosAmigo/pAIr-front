@@ -28,7 +28,11 @@ test('휴대폰 페이지가 JPEG 프레임을 보내고 PC 가 받는다 (서�
   const phone = await ctx.newPage()
   const sent: number[] = []
   const heartbeats: string[] = []
+  const qualityMsgs: string[] = []
   phone.on('websocket', (ws) => {
+    ws.on('framereceived', (f) => {
+      if (typeof f.payload === 'string' && f.payload.includes('"quality"')) qualityMsgs.push(f.payload)
+    })
     ws.on('framesent', (f) => {
       if (typeof f.payload === 'string') {
         if (f.payload.includes('"heartbeat"')) heartbeats.push(f.payload)
@@ -47,5 +51,10 @@ test('휴대폰 페이지가 JPEG 프레임을 보내고 PC 가 받는다 (서�
   expect(Math.max(...received)).toBeLessThanOrEqual(100_000)
   await pc.waitForTimeout(6_000)
   expect(heartbeats.length).toBeGreaterThanOrEqual(1)
+  // 화질 모드는 서버가 알려 준다: 휴대폰이 붙으면 현재 모드(기본 watch)를 받고, 자체 타이머로 바꾸지 않는다
+  expect(qualityMsgs.length).toBeGreaterThanOrEqual(1)
+  expect(qualityMsgs[0]).toContain('"watch"')
+  const tail = sent.slice(-3)
+  expect(Math.max(...tail)).toBeLessThan(45_000) // watch(긴 변 512px, 약 14KB 목표)
   await ctx.close()
 })

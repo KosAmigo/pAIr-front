@@ -6,7 +6,7 @@
 //  - 운영 중계(pAIr-back ProctorRelayHandler)와 같은 한도: 프레임 100KB, 휴대폰 1대 초당 5장(넘으면 폐기), JPEG 시작 바이트 검사.
 //  - 폰 연결이 끊기거나 15초간 신호가 없으면 PC 에 peer 메시지(disconnected | stale)만 알린다. PHONE_DISCONNECTED 이벤트는
 //    운영 중계처럼 서버가 저장하지 않고 PC 가 자기 아웃박스로 올린다.
-//  - 개발 전용: PC 가 보낸 quality 화질 요청을 휴대폰에 전달한다 (운영 중계는 아직 전달하지 않는다).
+//  - 화질 모드: PC 가 보낸 quality 를 짝에 저장하고 휴대폰에 전달하며, 휴대폰이 붙으면 phone-joined 직후 현재 모드를 보낸다 (기본 watch).
 import { randomBytes } from 'node:crypto'
 import type { IncomingMessage, Server as HttpServer } from 'node:http'
 import { networkInterfaces } from 'node:os'
@@ -43,6 +43,8 @@ type Pair = {
   lastPhoneSeen: number
   /** 폰이 감시를 시작했는지 (모델 로딩 중 멈춤을 응답 없음으로 오인하지 않게) */
   phoneMonitoring: boolean
+  /** 휴대폰 송신 화질 모드. PC 가 바꾸고 서버가 저장하며 휴대폰이 붙을 때마다 다시 보낸다 (운영 중계와 같다) */
+  quality: 'watch' | 'scan'
   lastHealthKey?: string
   /** 입장 정보(회차 이름·이메일): 개발 릴레이가 감독관이 고른 응시자와 이 짝을 맞춰 보려고 쓴다 (아래 resolveWatchTarget) */
   email?: string
@@ -309,6 +311,7 @@ function handle(ws: WebSocket, phoneOrigin: () => string) {
           phoneState: 'disconnected',
           lastPhoneSeen: 0,
           phoneMonitoring: false,
+          quality: 'watch',
           practice,
           room: EMPTY_ROOM,
           viewers: new Map(),
@@ -372,6 +375,7 @@ function handle(ws: WebSocket, phoneOrigin: () => string) {
       p.lastPhoneSeen = Date.now()
       log(`hello-phone conn#${connId} 짝 ${mask(p.code)}`)
       send(ws, { type: 'phone-joined' })
+      send(ws, { type: 'quality', mode: p.quality })
       setPhoneState(p, 'connected', `hello-phone conn#${connId}`)
       return
     }
@@ -387,9 +391,12 @@ function handle(ws: WebSocket, phoneOrigin: () => string) {
       return
     }
 
-    // 개발 전용: PC 의 화질 요청을 휴대폰에 전달한다
-    if (role === 'pc' && msg.type === 'quality' && (msg.mode === 'scan' || msg.mode === 'watch')) {
-      send(pair.phone, { type: 'quality', mode: msg.mode })
+    // PC 가 보낸 화질 모드만 받아 짝에 저장하고 휴대폰에 바로 전달한다 (모르는 mode·휴대폰이 보낸 quality 는 무시)
+    if (msg.type === 'quality') {
+      if (role === 'pc' && (msg.mode === 'scan' || msg.mode === 'watch')) {
+        pair.quality = msg.mode
+        send(pair.phone, { type: 'quality', mode: msg.mode })
+      }
       return
     }
 
