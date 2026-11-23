@@ -57,13 +57,13 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
 
       <div aria-live="polite" aria-busy={loading}>
         {loading ? (
-          <ul className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3" aria-label="추천을 만드는 중">
+          <ul className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3 lg:gap-5" aria-label="추천을 만드는 중">
             {[0, 1, 2].map((i) => (
-              <li key={i} className="shimmer flex min-h-[203px] flex-col gap-3 rounded-2xl border border-brand/20 bg-panel p-5">
+              <li key={i} className="shimmer flex min-h-[243px] flex-col gap-3 rounded-2xl border border-brand/20 bg-panel p-5">
                 <span className="h-7 w-20 rounded-full bg-panel-raised" />
                 <span className="h-5 w-4/5 rounded bg-panel-raised" />
-                <span className="h-4 w-full rounded bg-panel-raised" />
-                <span className="mt-auto h-6 w-28 rounded-full bg-panel-raised" />
+                <span className="mt-auto h-[84px] w-full rounded-xl bg-panel-raised" />
+                <span className="h-6 w-28 rounded-full bg-panel-raised" />
               </li>
             ))}
           </ul>
@@ -89,7 +89,7 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
               <>
                 {items.length === 0 && <p className="mt-4 text-[14px] text-text-muted">추천이 비어 있어요. 다시 눌러 보세요.</p>}
                 <AnimatePresence mode="popLayout">
-                  <ul key={items.map((s) => s.situation).join('|')} className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <ul key={items.map((s) => s.situation).join('|')} className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3 lg:gap-5">
                     {items.map((s, i) => (
                       <motion.li
                         key={s.situation}
@@ -150,7 +150,7 @@ function SuggestCard({ s, on, dim, onPick }: { s: Suggestion; on: boolean; dim: 
         onClick={onPick}
         aria-pressed={on}
         title={s.why || undefined}
-        className="relative flex h-full min-h-[200px] w-full cursor-pointer flex-col gap-3 rounded-[14.5px] bg-panel p-5 text-left outline-none"
+        className="relative flex h-full min-h-[240px] w-full cursor-pointer flex-col gap-3 rounded-[14.5px] bg-panel p-5 text-left outline-none"
       >
         <span className="relative z-10 flex items-center justify-between gap-2">
           <span className="inline-flex h-7 max-w-full items-center rounded-full bg-brand-dim px-3 text-[13px] font-bold text-brand">
@@ -162,9 +162,12 @@ function SuggestCard({ s, on, dim, onPick }: { s: Suggestion; on: boolean; dim: 
             </span>
           )}
         </span>
-        <span className="relative z-10 line-clamp-2 text-[16px] leading-6 font-bold break-keep text-text">{s.situation}</span>
-        <span className="relative z-10 line-clamp-2 text-[13px] leading-5 font-medium break-keep text-text-muted">{s.trap}</span>
-        <span className="relative z-10 mt-auto pt-1">
+        <span className="relative z-10 text-[16px] leading-6 font-bold break-keep text-text">{s.situation}</span>
+        <span className="relative z-10 mt-auto flex flex-col gap-1 rounded-xl bg-panel-raised p-3">
+          <span className="text-[12px] font-bold text-text-muted">함정</span>
+          <span className="text-[14px] leading-6 font-medium break-keep text-text">{s.trap}</span>
+        </span>
+        <span className="relative z-10">
           <CompetencyChips keys={s.competencies} />
         </span>
       </Spotlight>
