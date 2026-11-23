@@ -2,16 +2,17 @@
 // 상태 전환 규칙은 data/taskBoard.ts 의 usageReducer (테스트 있음).
 import { useEffect, useReducer } from 'react'
 import { motion } from 'motion/react'
-import { Globe2, Loader2, Lock } from 'lucide-react'
+import { Loader2, type LucideIcon } from 'lucide-react'
+import { USAGE_ICON } from '../../../components/domainIcons'
 import { cx } from '../../../components/cx'
 import type { ConsoleTaskSummary, TaskUsage } from '../../../consoleApi'
 import { setUsage } from '../../../data/consoleTasks'
 import { usageErrorMessage, usageLock, usageReducer } from '../../../data/taskBoard'
 import { springs } from '../../../lib/motion'
 
-const OPTIONS: { value: TaskUsage; label: string; icon: typeof Lock }[] = [
-  { value: 'SELF', label: '자가진단', icon: Globe2 },
-  { value: 'LIVE', label: '실전', icon: Lock },
+const OPTIONS: { value: TaskUsage; label: string; icon: LucideIcon }[] = [
+  { value: 'SELF', label: '자가진단', icon: USAGE_ICON.SELF },
+  { value: 'LIVE', label: '실전', icon: USAGE_ICON.LIVE },
 ]
 
 export function UsageToggle({ task, onChanged }: { task: ConsoleTaskSummary; onChanged: (s: ConsoleTaskSummary) => void }) {

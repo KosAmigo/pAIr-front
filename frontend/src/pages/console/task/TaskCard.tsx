@@ -1,7 +1,8 @@
 // 과제 목록 카드 (DESIGN.md §7-9-1, 2026-11-20 개편). 카드 전체가 검수 상세로 가는 링크이고,
 // 공개하기·숨기기는 검수 상세 화면에서 한다. 누를 수 있는 카드라 호버하면 떠오르고 Spotlight 가 비친다.
 import { Link } from 'react-router-dom'
-import { CircleMinus, Lock } from 'lucide-react'
+import { CircleMinus } from 'lucide-react'
+import { USAGE_ICON } from '../../../components/domainIcons'
 import { cx } from '../../../components/cx'
 import { Spotlight } from '../../../components/fx'
 import { LevelPips, type Level } from '../../../components/taskKind'
@@ -33,7 +34,7 @@ export function TaskCard({ task: t }: { task: ConsoleTaskSummary }) {
           {check && <CheckBadge result={check} />}
           {t.usage === 'LIVE' && (
             <span className="inline-flex h-[22px] items-center gap-1 rounded-full bg-text/8 px-2 text-[12px] font-semibold text-text">
-              <Lock size={12} aria-hidden /> 실전
+              <USAGE_ICON.LIVE size={12} aria-hidden /> 실전
             </span>
           )}
           {closed && (

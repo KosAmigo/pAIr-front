@@ -2,7 +2,7 @@
 // 위 스포트라이트 = 세 칸 요약(누르면 그 탭) + "과제 만들기" 주인공 버튼. 아래 = 알약 탭(오른쪽에 검색) + 직군 하위 거르기 + 카드 그리드.
 // 데이터는 백엔드 /api/console/tasks. 새 칸(track, summary, generated …)은 없을 수 있어 옵셔널로 다룬다.
 import { useMemo, useState } from 'react'
-import { FileClock, FilePlus2, Globe2, Lock, Search, X, type LucideIcon } from 'lucide-react'
+import { FileClock, FilePlus2, Search, X, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
 import { CountUp, GradientText, Magnetic, RevealGroup, RevealItem, StageSection } from '../../components/fx'
@@ -10,10 +10,10 @@ import { ButtonLink } from '../../components/ui'
 import { loadTasks, useTaskList } from '../../data/consoleTasks'
 import { countTabs, filterTasks, firstTab, TAB_HINT, TAB_LABEL, TAB_ORDER, trackOf, type TaskTab, type TrackFilter } from '../../data/taskBoard'
 import { PillTabs } from './ConsoleHero'
-import { TRACK_ICON } from './task/badges'
+import { TRACK_ICON, USAGE_ICON } from '../../components/domainIcons'
 import { TaskCard, TaskCardSkeleton } from './task/TaskCard'
 
-const TAB_ICON: Record<TaskTab, LucideIcon> = { draft: FileClock, public: Globe2, private: Lock }
+const TAB_ICON: Record<TaskTab, LucideIcon> = { draft: FileClock, public: USAGE_ICON.SELF, private: USAGE_ICON.LIVE }
 const TAB_TONE: Record<TaskTab, { num: string; icon: string }> = {
   draft: { num: 'text-stage-caution', icon: 'bg-stage-caution/12 text-stage-caution' },
   public: { num: 'text-stage-brand', icon: 'bg-stage-brand/12 text-stage-brand' },
@@ -83,9 +83,6 @@ export default function ConsoleTasks() {
             </label>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] font-semibold text-text-faint" aria-hidden>
-              직군
-            </span>
             <div role="radiogroup" aria-label="직군" className="flex w-fit gap-0.5 rounded-full bg-panel-raised p-0.5">
               {(
                 [
@@ -197,7 +194,7 @@ function Summary({ counts, loading, tab, onTab }: { counts: Record<TaskTab, numb
                   )}
                   <span className="text-[13px] font-medium text-stage-muted">개</span>
                 </span>
-                <span className="text-[12px] leading-4 break-keep text-stage-muted">{v === 'public' ? '누구나 풀 수 있어요' : v === 'private' ? '회차에만 써요' : '어디에도 안 보임'}</span>
+                <span className="text-[12px] leading-4 break-keep text-stage-muted">{v === 'public' ? '누구나 풀 수 있어요' : v === 'private' ? '회차에만 써요' : '검수를 기다려요'}</span>
               </button>
             )
           })}

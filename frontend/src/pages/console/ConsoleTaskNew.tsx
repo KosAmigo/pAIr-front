@@ -2,7 +2,7 @@
 // ① 위에서 아래로: 직군 → 주제(선택, 추천 방향) → 추천 받기 → 고른 내용 확인·수정 → 용도·제한 시간. 직무·난이도 칸은 없다(난이도는 AI가 정한다).
 // ② 요약 카드로 한 번 확인 → ③ 생성(2초마다 상태 조회, 화면을 떠나면 조회만 멈춤) → 결과에서 ④ 검수로 간다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, Building2, Check, CircleAlert, GraduationCap, Pencil, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleAlert, Pencil, Sparkles, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { GradientText } from '../../components/fx'
@@ -33,7 +33,7 @@ import { ConfirmModal } from './common'
 import { FlowSteps } from './task/FlowSteps'
 import { GenProgress } from './task/GenProgress'
 import { GenResult } from './task/GenResult'
-import { TRACK_ICON } from './task/badges'
+import { TRACK_ICON, USAGE_ICON } from '../../components/domainIcons'
 import { choiceClass } from './task/choice'
 import { SuggestPanel } from './task/SuggestPanel'
 import { TRACK_TONE } from './task/trackTone'
@@ -51,9 +51,9 @@ const TRACKS: { value: GenTrack; title: string; desc: string }[] = [
   { value: 'DEV', title: '개발', desc: '시작 코드와 공개·숨은 테스트를 만들어요' },
   { value: 'BIZ', title: '비개발', desc: 'PDF 자료, CSV와 객관식·단답형 문항을 만들어요' },
 ]
-const USAGES: { value: GenUsage; title: string; desc: string; icon: typeof Building2 }[] = [
-  { value: 'SELF', title: '자가진단', desc: '누구나 자가진단에서 풀어요', icon: GraduationCap },
-  { value: 'LIVE', title: '실전', desc: '기업 회차에만 써요', icon: Building2 },
+const USAGES: { value: GenUsage; title: string; desc: string; icon: LucideIcon }[] = [
+  { value: 'SELF', title: '자가진단', desc: '누구나 자가진단에서 풀어요', icon: USAGE_ICON.SELF },
+  { value: 'LIVE', title: '실전', desc: '기업 회차에만 써요', icon: USAGE_ICON.LIVE },
 ]
 
 export default function ConsoleTaskNew() {
@@ -452,11 +452,11 @@ function ConfirmCard({
       '용도',
       form.usage === 'LIVE' ? (
         <span key="u" className="inline-flex items-center gap-1.5 font-semibold">
-          <Building2 size={14} aria-hidden /> 실전 (기업 회차에만 씀)
+          <USAGE_ICON.LIVE size={14} aria-hidden /> 실전 (기업 회차에만 씀)
         </span>
       ) : (
         <span key="u" className="inline-flex items-center gap-1.5 font-semibold">
-          <GraduationCap size={14} aria-hidden /> 자가진단 (누구나 자가진단에서 풂)
+          <USAGE_ICON.SELF size={14} aria-hidden /> 자가진단 (누구나 자가진단에서 풂)
         </span>
       ),
     ],

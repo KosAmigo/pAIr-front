@@ -1,7 +1,8 @@
 // DESIGN.md §7-1 ⑤ AI 과제 생성: 직군과 형태를 고르면 AI가 설명, 파일, 문항, 근거까지 초안을 만들고 사람이 검수해 공개한다.
 // 오른쪽 그림은 콘솔의 "과제 만들기" 화면을 줄인 것. 화면에 들어오면 단계가 차례로 끝나고 초안 카드가 뜬다.
 import { useRef } from 'react'
-import { CircleCheck, FileText, ListChecks, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
+import { CircleCheck, ListChecks, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
+import { TaskIcon } from '../../components/domainIcons'
 import SectionHead, { Grad } from './SectionHead'
 import Points from './Points'
 import { floatCard, mockFrame } from './homeStyles'
@@ -113,7 +114,7 @@ export default function CreateSection() {
           <div data-draft className={floatCard}>
             <div className="flex gap-3">
               <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-caution/10 text-caution">
-                <FileText size={18} aria-hidden />
+                <TaskIcon size={18} aria-hidden />
               </span>
               <div className="min-w-0">
                 <p className="text-[15px] font-bold text-text">주문 처리 장애 원인 분석</p>
