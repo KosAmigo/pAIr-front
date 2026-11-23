@@ -58,7 +58,7 @@ test('validateForm allows 비개발 and blocks empty fields', () => {
 // ── AI 추천 (2026-11-23 새 API) ──
 import {
   suggestRequest, applySuggestion, overwriteConflicts, nextExclude, suggestErrorMessage, progressOf, stepNarration,
-  buildGenRequest, GEN_MINUTES, recordSuggestions, pickSuggestion, acceptTopicCheck, needsTopicCheck, visibleSuggestions,
+  buildGenRequest, pickedCompetencies, GEN_MINUTES, recordSuggestions, pickSuggestion, acceptTopicCheck, needsTopicCheck, visibleSuggestions,
   isAgain, excludeFor, topicCheckText,
 } from '../src/data/taskGen.ts'
 
@@ -183,4 +183,15 @@ test('start error about shared DB + local storage is explained', async () => {
 
 test('validateForm asks for a track first', () => {
   assert.deepEqual(Object.keys(validateForm({ ...REQ, track: null })), ['track'])
+})
+
+test('competencies are sent only when a picked card is left unchanged', () => {
+  const f = { track: 'DEV', topic: '상황1', trap: '함정1', usage: 'SELF', minutes: 20 }
+  let st = recordSuggestions({}, 'DEV', '', { topicCheck: null, suggestions: [sug(1, { competencies: ['control', 'usage'] })] })
+  assert.equal(pickedCompetencies(f, st.DEV), undefined) // 고르기 전
+  st = pickSuggestion(st, 'DEV', '상황1')
+  assert.deepEqual(pickedCompetencies(f, st.DEV), ['control', 'usage'])
+  assert.deepEqual(buildGenRequest(f, ['control']).competencies, ['control'])
+  assert.equal('competencies' in buildGenRequest(f), false)
+  assert.equal(pickedCompetencies({ ...f, trap: '직접 고침' }, st.DEV), undefined)
 })

@@ -15,6 +15,8 @@ export type TaskGenRequest = {
   trap: string
   usage: GenUsage
   minutes: GenMinutes
+  /** 추천 카드를 골라 만들 때만. 직접 입력이면 보내지 않는다 */
+  competencies?: string[]
 }
 
 export type GenStep = '생성 중' | '확인 중' | '다시 생성 중' | '저장 중'
@@ -246,8 +248,20 @@ export function validateForm(
 }
 
 /** 화면 폼에서 서버로 보낼 생성 요청을 만든다 (직무·난이도 없음) */
-export function buildGenRequest(f: { track: GenTrack; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes }): TaskGenRequest {
-  return { track: f.track, topic: f.topic.trim(), trap: f.trap.trim(), usage: f.usage, minutes: f.minutes }
+export function buildGenRequest(
+  f: { track: GenTrack; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes },
+  competencies?: string[],
+): TaskGenRequest {
+  const req: TaskGenRequest = { track: f.track, topic: f.topic.trim(), trap: f.trap.trim(), usage: f.usage, minutes: f.minutes }
+  if (competencies && competencies.length > 0) req.competencies = competencies
+  return req
+}
+
+/** 고른 추천 카드의 역량. 상황·함정을 그대로 두었을 때만(직접 고쳤거나 직접 입력이면 없음) */
+export function pickedCompetencies(f: Pick<TaskGenRequest, 'topic' | 'trap'>, t: TrackSuggest | undefined): string[] | undefined {
+  const s = t?.picked ? t.items.find((i) => i.situation === t.picked) : undefined
+  if (!s || f.topic.trim() !== s.situation.trim() || f.trap.trim() !== s.trap.trim()) return undefined
+  return s.competencies
 }
 
 /**
