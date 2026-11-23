@@ -95,7 +95,7 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
                         key={s.situation}
                         initial={animate ? { opacity: 0, y: distance.app * 2, scale: 0.94 } : false}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        whileHover={animate ? { y: -4 } : undefined}
+                        whileHover={animate ? { y: distance.lift } : undefined}
                         transition={{ ...springs.gentle, delay: i * stagger.normal * 2 }}
                         className="flex"
                       >
@@ -142,13 +142,14 @@ const HUES = [
 /** 카드 전체가 누르는 곳. 위에서부터 함정 유형 → 상황 → 함정 → 역량. why 는 마우스를 올리면 title 로만 */
 function SuggestCard({ s, i, on, dim, onPick }: { s: Suggestion; i: number; on: boolean; dim: boolean; onPick: () => void }) {
   const [a, b] = HUES[i % HUES.length]
+  const animate = useShouldAnimate()
   return (
     <div
       data-on={on}
       style={{ ['--sg-a' as string]: a, ['--sg-b' as string]: b }}
       className={cx(
         'sg-card group w-full rounded-2xl p-[1.5px] transition-[opacity,transform,box-shadow] duration-300 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand/30',
-        dim && 'scale-[0.98] opacity-60 hover:scale-100 hover:opacity-100',
+        dim && 'scale-[0.98] opacity-75 hover:scale-100 hover:opacity-100',
       )}
     >
       <Spotlight
@@ -168,7 +169,7 @@ function SuggestCard({ s, i, on, dim, onPick }: { s: Suggestion; i: number; on: 
           </span>
           {on && (
             <motion.span
-              initial={{ scale: 0, rotate: -40 }}
+              initial={animate ? { scale: 0, rotate: -40 } : false}
               animate={{ scale: 1, rotate: 0 }}
               transition={springs.gentle}
               className="bg-brand-gradient inline-flex size-7 shrink-0 items-center justify-center rounded-full text-on-accent shadow-[0_6px_14px_-4px_rgb(108_71_255/0.7)]"
@@ -178,10 +179,10 @@ function SuggestCard({ s, i, on, dim, onPick }: { s: Suggestion; i: number; on: 
             </motion.span>
           )}
         </span>
-        <span className="relative z-10 text-[16px] leading-6 font-bold break-keep text-text">{s.situation}</span>
+        <span className="relative z-10 text-[16px] leading-6 font-bold break-keep text-balance text-text">{s.situation}</span>
         <span className="relative z-10 mt-auto flex flex-col gap-1 rounded-xl bg-panel-raised p-3">
           <span className="text-[12px] font-bold text-text-muted">함정</span>
-          <span className="text-[14px] leading-6 font-medium break-keep text-text">{s.trap}</span>
+          <span className="text-[14px] leading-6 font-medium break-keep text-pretty text-text">{s.trap}</span>
         </span>
         <span className="relative z-10">
           <CompetencyChips keys={s.competencies} />
