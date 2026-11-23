@@ -1,7 +1,6 @@
 // 카메라 감독 허브 (앱 전체에서 하나).
 // 입장 화면 환경 점검 → 대기실 → 응시 화면까지 화면이 바뀌어도 카메라·분석 모델·폰 연결을 그대로 이어 쓴다.
 // React 는 useSyncExternalStore 로 이 상태를 읽는다 (react/useCamHub.ts).
-import type { FaceLandmarker, FaceLandmarkerResult, HandLandmarker, PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import QRCode from 'qrcode'
 import { CamOutbox } from './api/camOutbox.ts'
 import { proctorApi } from './api/proctorApi.ts'
@@ -18,12 +17,17 @@ import { ViewerSender, type ViewSources } from './relay/viewerSender.ts'
 import { PHONE_ANALYSIS_IDLE, PhoneAnalysis, type PhoneAnalysisState } from './phoneAnalysis.ts'
 import { SCREEN_EVENTS_ACCEPTED, toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
-import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED } from './features.ts'
+import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED, VISION_WORKER_ENABLED } from './features.ts'
 import { PC_MIN_ANALYZE_INTERVAL_MS } from './core/frameBudget.ts'
 import { captureSnapshot, frameLoop, openCamera, stopCamera } from './vision/camera.ts'
-import { pcFeatures } from './vision/features.ts'
+import { forcedDelegate } from './vision/delegate.ts'
+import { guardedAnalyzer } from './vision/guardedAnalyzer.ts'
+import type { MainModels, VisionBackend } from './vision/visionBackend.ts'
+import { createPcBackend, forcedVision } from './vision/visionBackendFactory.ts'
 
 const CALIBRATION_MS = 3000
+/** 분석이 이 횟수만큼 연달아 실패하면 감독을 멈추고 오류로 알린다 (한두 프레임 실패는 건너뛴다) */
+const MAX_ANALYSIS_FAILURES = 3
 const UI_INTERVAL_MS = 500
 const MAX_LOG = 50
 const GATE_TICK_MS = 1000
@@ -31,7 +35,6 @@ const GATE_TICK_MS = 1000
 const BLUR_REFRESH_MS = 10_000
 
 export type ScanFrame = { source: 'pc' | 'phone'; stage: ScanStage; image: string; objects: string[]; at: number }
-export type CamModels = { face: FaceLandmarker; pose: PoseLandmarker; hand: HandLandmarker }
 export type ActiveRule = { kind: string; message: string; heldMs: number; durationMs: number }
 
 export type CamState = {
@@ -107,13 +110,23 @@ let state: CamState = INITIAL
 const listeners = new Set<() => void>()
 let video: HTMLVideoElement | null = null
 let stream: MediaStream | null = null
-let models: CamModels | null = null
 let relay: RelaySocket | null = null
 let outbox: CamOutbox | null = null
 let link: PcLink | null = null
 /** 감독관 실시간 영상 송신. 감독관이 열었을 때만 연결이 생긴다 */
 let viewers: ViewerSender | null = null
 let stopLoop: (() => void) | null = null
+/** PC 웹캠 분석 백엔드 (Worker 또는 메인). 첫 감독 시작 때 만들고 시험이 끝나면 닫는다 */
+let vision: VisionBackend | null = null
+let visionLoading: Promise<VisionBackend> | null = null
+/** PC 웹캠 분석 최소 간격. 환경 점검에서 이 PC 가 느리다고 나오면 늘린다 (setAnalysisIntervalMs) */
+let analysisIntervalMs = PC_MIN_ANALYZE_INTERVAL_MS
+/** Worker 분석을 쓰지 못해 메인으로 넘어간 이유 (진단용. 서버에는 보내지 않는다) */
+let visionFallbackReason: string | null = null
+/** stop() 할 때마다 올린다. 기다리는 사이 중지됐으면 늦게 만들어진 백엔드를 버리는 데 쓴다 */
+let visionEpoch = 0
+/** 감독(보정·감시) 시작 때마다 올린다. 이전 감독에서 날아가던 분석 결과를 버리는 데 쓴다 */
+let monitorGen = 0
 let opening: Promise<void> | null = null
 /** 응시 감독이 켜져 있는 동안만 휴대폰 영상을 분석한다 (환경 점검 중에는 분석하지 않는다) */
 let monitoringWanted = false
@@ -192,6 +205,72 @@ function set(patch: Partial<CamState>) {
   viewers?.sync() // 웹캠·휴대폰·화면 공유 원본이 바뀌었으면 감독관 연결을 새 영상으로 맺는다
 }
 
+let mainModels: Promise<MainModels> | null = null
+/** 메인 스레드 분석이 실제로 쓰일 때만 불러온다 (Worker 가 되면 메인에는 모델이 올라가지 않는다) */
+function loadMainModels(): Promise<MainModels> {
+  mainModels ??= import('./vision/models.ts')
+    .then(async (m) => {
+      const [face, pose, hand] = await Promise.all([m.createFaceLandmarker(), m.createPoseLandmarker(), m.createHandLandmarker()])
+      return { face, pose, hand }
+    })
+    .catch((e: unknown) => {
+      mainModels = null // 다음에 다시 시도할 수 있게 비운다
+      throw e
+    })
+  return mainModels
+}
+
+/** PC 웹캠 분석 백엔드를 준비한다. Worker 가 안 되면 메인 스레드 분석으로 넘어간다 (VISION_WORKER_ENABLED, 주소의 &vision=) */
+function getVision(): Promise<VisionBackend> {
+  if (vision) return Promise.resolve(vision)
+  if (visionLoading) return visionLoading
+  const epoch = visionEpoch
+  const loading: Promise<VisionBackend> = createPcBackend({
+    loadMainModels,
+    // Worker 안에서는 CPU 를 먼저 쓴다 (시험 화면과 GPU 를 다투지 않게). 실측 뒤 바꿀 수 있다
+    delegate: forcedDelegate() ?? 'CPU',
+    enabled: VISION_WORKER_ENABLED,
+    force: forcedVision(),
+    onFallback: (reason) => {
+      visionFallbackReason = reason instanceof Error ? reason.message : String(reason)
+      console.warn('Worker 분석을 쓸 수 없어 메인 스레드 분석으로 전환합니다:', reason)
+    },
+  })
+    .then((backend) => {
+      if (epoch !== visionEpoch) {
+        backend.dispose() // 기다리는 사이 시험이 끝났다
+        throw new Error('분석 준비 중에 중지되었습니다')
+      }
+      vision = backend
+      return backend
+    })
+    .finally(() => {
+      // 그 사이 stop() 후 새로 시작된 로딩을 지우지 않는다
+      if (visionLoading === loading) visionLoading = null
+    })
+  visionLoading = loading
+  return loading
+}
+
+/** 이 감독(gen)의 분석 한 번. 이전 감독 결과는 버리고(null), 연달아 실패하면 감독을 멈추고 알린다 */
+function analyzerFor(gen: number, backend: VisionBackend, video: HTMLVideoElement) {
+  return guardedAnalyzer({
+    isCurrent: () => gen === monitorGen,
+    analyze: (now) => backend.analyzePc(video, now),
+    maxFailures: MAX_ANALYSIS_FAILURES,
+    onFail: (e) => console.warn('PC 캠 분석 실패:', e),
+    onGiveUp: () => {
+      stopLoop?.()
+      // 망가진 백엔드를 버려서, 다시 시도(재보정·재연결)할 때 새 백엔드로 시작하게 한다
+      if (vision === backend) {
+        vision.dispose()
+        vision = null
+      }
+      set({ monitor: 'error', error: '카메라 분석이 반복해서 실패했습니다. 다시 시도해 주세요.' })
+    },
+  })
+}
+
 export const camHub = {
   subscribe(l: () => void) {
     listeners.add(l)
@@ -210,7 +289,11 @@ export const camHub = {
     return video
   },
   stream: () => stream,
-  models: () => models,
+  /** 분석 백엔드 (Worker 또는 메인). openCamera 가 끝난 뒤에만 쓴다 */
+  visionBackend(): VisionBackend {
+    if (!vision) throw new Error('분석 모델이 아직 준비되지 않았습니다')
+    return vision
+  },
 
   /** 이 응시자의 릴레이 연결 (폰 짝 코드 발급). 같은 초대 토큰이면 다시 열지 않는다 */
   connect(invite: string) {
@@ -316,6 +399,7 @@ export const camHub = {
   /** 카메라와 분석 모델 준비. 이미 준비됐으면 바로 끝난다 */
   openCamera(): Promise<void> {
     if (state.camera === 'ready') return Promise.resolve()
+    const epoch = visionEpoch
     opening ??= (async () => {
       set({ camera: 'loading', error: null })
       try {
@@ -325,14 +409,11 @@ export const camHub = {
           stream.getVideoTracks().forEach((t) => t.addEventListener('ended', () => set({ webcamLive: false })))
         }
         set({ webcamLive: true })
-        if (!models) {
-          // 무거운 모델은 실전 시험에서만 내려받는다 (자가진단 화면에는 영향 없음)
-          const m = await import('./vision/models.ts')
-          const [face, pose, hand] = await Promise.all([m.createFaceLandmarker(), m.createPoseLandmarker(), m.createHandLandmarker()])
-          models = { face, pose, hand }
-        }
+        // 무거운 모델은 실전 시험에서만 내려받는다 (자가진단 화면에는 영향 없음). 기본은 Worker 에서 불러온다
+        await getVision()
         set({ camera: 'ready' })
       } catch (e) {
+        if (epoch !== visionEpoch) throw e // 준비하는 사이 stop() 이 불렸다: 중지된 뒤에 오류 상태를 다시 띄우지 않는다
         set({ camera: 'error', error: e instanceof Error ? e.message : String(e) })
         throw e
       } finally {
@@ -375,27 +456,32 @@ export const camHub = {
     serverOffset = serverOffsetMs
     activeProfile = profile
     monitoringWanted = true
+    // 기다리는 동안(모델 내려받기 등) stop() 이나 다시 시작이 불리면 이 호출은 무효가 된다
+    const gen = ++monitorGen
     syncPhoneAnalysis()
     await camHub.openCamera()
+    if (gen !== monitorGen) return
     stopLoop?.()
     const v = camHub.video()
-    const m = models!
     set({ monitor: 'calibrating', calibProgress: 0, active: [] })
-    const samples: PcFeatures[] = []
-    const lastPose: { current?: PoseLandmarkerResult } = {}
-    const lastFace: { current?: FaceLandmarkerResult } = {}
-    let frame = 0
-    const begin = performance.now()
-    const analyze = (now: number) => {
-      // 한 번에 모델 하나만 돌린다: 얼굴 3번에 포즈 1번. 얼굴(약 30ms)과 포즈(약 20ms)를 같은 작업에서 연달아 돌리면
-      // 한 번에 50ms 넘게 메인 스레드를 막아 입력(채팅 타이핑 등)이 끊긴다. 몸통은 천천히 움직여 포즈는 드물어도 된다.
-      // 모델을 돌리지 않은 쪽은 직전 결과를 그대로 쓴다 (프레임 사이 간격은 100ms 라 규칙의 지속 시간·끊김 이어 붙이기에 영향이 없다)
-      if (frame++ % 4 === 3 && lastFace.current) lastPose.current = m.pose.detectForVideo(v, now)
-      else lastFace.current = m.face.detectForVideo(v, now)
-      return pcFeatures(lastFace.current, lastPose.current)
+    let backend: VisionBackend
+    try {
+      backend = await getVision()
+    } catch (e) {
+      if (gen === monitorGen) set({ monitor: 'error', error: e instanceof Error ? e.message : String(e) })
+      return
     }
-    stopLoop = frameLoop(v, (now) => {
-      samples.push(analyze(now))
+    if (gen !== monitorGen) return // 기다리는 사이 다시 시작했거나 중지됐다
+    backend.resetPc()
+    const analyze = analyzerFor(gen, backend, v)
+    const samples: PcFeatures[] = []
+    const begin = performance.now()
+    // 한 번에 모델 하나만 돌린다 (얼굴 3번에 포즈 1번, pcStepper.ts). Worker 에서 돌면 메인 스레드를 막지 않고,
+    // 메인 스레드 분석으로 넘어간 경우에는 예전처럼 한 번에 50ms 넘게 막지 않도록 이 교대 방식이 필요하다.
+    stopLoop = frameLoop(v, async (now) => {
+      const f = await analyze(now)
+      if (!f) return
+      samples.push(f)
       set({ calibProgress: Math.min(1, (now - begin) / CALIBRATION_MS) })
       if (now - begin < CALIBRATION_MS) return
       stopLoop?.()
@@ -405,8 +491,21 @@ export const camHub = {
         return
       }
       runMonitoring(baseline, analyze, serverOffsetMs, activeProfile)
-    }, { minIntervalMs: PC_MIN_ANALYZE_INTERVAL_MS })
+    }, { minIntervalMs: analysisIntervalMs })
   },
+
+  /**
+   * 느린 PC 에서 분석 간격을 늘린다(ms). 다음 감독(보정·감시) 시작부터 적용된다.
+   * 기본 간격보다 짧게는 못 하고, 규칙의 가장 짧은 지속 시간(1초)보다 길어지지 않게 막는다.
+   */
+  setAnalysisIntervalMs(ms: number) {
+    analysisIntervalMs = Math.min(500, Math.max(PC_MIN_ANALYZE_INTERVAL_MS, Math.round(ms)))
+  },
+
+  /** 지금 쓰는 PC 분석 방식 (Worker 인지 메인 스레드인지). 감독을 시작하기 전에는 null */
+  visionKind: (): 'worker' | 'main' | null => vision?.kind ?? null,
+  /** Worker 를 못 써서 메인으로 넘어갔다면 그 이유. 아니면 null (진단용) */
+  visionFallbackReason: (): string | null => visionFallbackReason,
 
   /**
    * 브라우저 이벤트(탭·창 이탈, 전체 화면 해제, 외부 붙여넣기)를 회차 감독 기록으로 보낸다.
@@ -447,6 +546,13 @@ export const camHub = {
     phoneAnalyzer.dispose()
     stopLoop?.()
     stopLoop = null
+    monitorGen++
+    visionEpoch++
+    vision?.dispose()
+    vision = null
+    visionLoading = null
+    visionFallbackReason = null
+    analysisIntervalMs = PC_MIN_ANALYZE_INTERVAL_MS
     // 상태는 먼저 비운다. 비동기로 기다리는 사이 새로 연결(connect)해도 그 연결을 닫지 않게 한다
     const closing = { outbox, relay, link, stream, video }
     viewers?.closeAll()
@@ -465,14 +571,15 @@ export const camHub = {
   },
 }
 
-function runMonitoring(baseline: PcBaseline, analyze: (now: number) => PcFeatures, serverOffsetMs: number, profileName: PcProfileName) {
+function runMonitoring(baseline: PcBaseline, analyze: (now: number) => Promise<PcFeatures | null>, serverOffsetMs: number, profileName: PcProfileName) {
   const v = camHub.video()
   const profile = pcProfile(profileName)
   const engine = new RuleEngine(profile.rules)
   let lastUi = 0
   set({ monitor: 'monitoring', monitoringSince: Date.now(), error: null })
-  stopLoop = frameLoop(v, (now) => {
-    const f = analyze(now)
+  stopLoop = frameLoop(v, async (now) => {
+    const f = await analyze(now)
+    if (!f) return
     for (const fired of engine.evaluate(pcConditions(f, baseline, profile.thresholds), now)) {
       const viol = toCamViolation(fired, 'PC_CAM', captureSnapshot(v), detailFor(f, baseline), serverOffsetMs)
       if (!viol) continue
@@ -483,7 +590,7 @@ function runMonitoring(baseline: PcBaseline, analyze: (now: number) => PcFeature
       lastUi = now
       set({ active: engine.active(now), bytesSent: (outbox?.bytesSent ?? 0) + (relay?.bytesSent ?? 0) })
     }
-  }, { minIntervalMs: PC_MIN_ANALYZE_INTERVAL_MS })
+  }, { minIntervalMs: analysisIntervalMs })
 }
 
 function pushLog(v: CamViolation) {

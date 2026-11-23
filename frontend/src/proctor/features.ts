@@ -11,3 +11,9 @@ export const PHONE_CAM_ENABLED = false
  * false 면 화면 공유 요청·안내를 보여 주지 않고 입장·시험 중 연결 조건에서도 뺀다. 나중에 쓰려면 true 로 바꾼다.
  */
 export const SCREEN_SHARE_ENABLED = true
+
+/**
+ * PC 웹캠 분석을 Web Worker 에서 돌릴지 (메인 스레드가 안 막혀 저사양 PC 에서도 시험 화면이 덜 끊긴다).
+ * Worker 가 안 되는 환경은 자동으로 메인 스레드 분석으로 넘어간다. 주소 끝에 &vision=main 을 붙이면 메인으로 고정한다.
+ */
+export const VISION_WORKER_ENABLED = true

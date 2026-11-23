@@ -74,8 +74,15 @@ export function captureSnapshot(video: HTMLVideoElement, width = 320, quality = 
  * 새 영상 프레임마다 onFrame을 부른다.
  * requestAnimationFrame은 탭이 가려지면 멈추므로(= 다른 탭으로 가면 감독도 멈춤),
  * 가려진 동안에는 타이머로 계속 돈다 (브라우저가 느리게 줄여도 분석은 이어진다).
+ *
+ * onFrame 이 Promise 를 돌려주면 끝날 때까지 기다린 뒤(걸린 시간을 쉬는 시간 계산에 쓴다) 다음 프레임을 예약한다.
+ * 그래서 비동기 분석(Web Worker)이 겹쳐서 쌓이지 않는다. 그 Promise 가 거절되면 onError 로 알리고 루프는 이어 간다.
  */
-export function frameLoop(video: HTMLVideoElement, onFrame: (now: number) => void, opts: { minIntervalMs?: number } = {}): () => void {
+export function frameLoop(
+  video: HTMLVideoElement,
+  onFrame: (now: number) => void | Promise<void>,
+  opts: { minIntervalMs?: number; onError?: (e: unknown) => void } = {},
+): () => void {
   let stopped = false
   let lastTime = -1
   let allowedAt = 0
@@ -102,7 +109,17 @@ export function frameLoop(video: HTMLVideoElement, onFrame: (now: number) => voi
     const started = performance.now()
     if (video.readyState >= 2 && video.currentTime !== lastTime && started >= allowedAt) {
       lastTime = video.currentTime
-      onFrame(started)
+      const result = onFrame(started)
+      if (result instanceof Promise) {
+        // 끝날 때까지 다음 프레임을 예약하지 않는다 (겹쳐 실행되지 않음)
+        result
+          .catch((e: unknown) => (opts.onError ?? ((err: unknown) => console.error('frameLoop 오류:', err)))(e))
+          .finally(() => {
+            if (minIntervalMs > 0) allowedAt = nextAllowedAt(started, performance.now() - started, minIntervalMs)
+            schedule()
+          })
+        return
+      }
       if (minIntervalMs > 0) allowedAt = nextAllowedAt(started, performance.now() - started, minIntervalMs)
     }
     schedule()

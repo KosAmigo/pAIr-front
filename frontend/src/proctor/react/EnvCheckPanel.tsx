@@ -1,7 +1,6 @@
 // 시험 전 환경 점검 (PC): 장치·모니터·조명·자세·귀·손목 → 휴대폰 영상으로 조명·책상 스캔 (분석은 PC 가 한다).
 // 통과하면 결과 JSON(휴대폰 결과 포함)을 onPassed 로 넘긴다. 호출하는 쪽이 동의 API 로 저장한다.
 import { useEffect, useRef, useState } from 'react'
-import type { FaceLandmarkerResult, HandLandmarkerResult, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import { RefreshCw, ScanFace } from 'lucide-react'
 import { Button } from '../../components/ui'
 import { camHub } from '../camHub.ts'
@@ -21,10 +20,11 @@ import {
   updateItem,
 } from '../check/envChecks.ts'
 import { audioProbe, grabPixels, isAutomated, isChromium, screenInfo, webglRenderer } from '../check/probes.ts'
-import type { Box } from '../core/phoneRules.ts'
+import { PERF, perfVerdict } from '../check/perfCheck.ts'
+import { measurePerf } from '../check/perfProbe.ts'
 import type { ScanStage } from '../relay/protocol.ts'
 import { attachHiddenVideo, captureSnapshot, frameLoop } from '../vision/camera.ts'
-import { headPoseFromMatrix, shouldersFromPose } from '../vision/features.ts'
+import type { EnvFrameInfo, EnvNeeds } from '../vision/envStepper.ts'
 import { CamPreview } from './CamPreview.tsx'
 import { CheckList } from './CheckList.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
@@ -43,6 +43,7 @@ const ALL_ITEMS: CheckItem[] = [
   { id: 'audio', label: '이어폰·헤드셋 연결 / 주변 소음', status: 'pending', detail: '' },
   { id: 'lighting', label: '조명', status: 'pending', detail: '' },
   { id: 'placement', label: '얼굴 위치 · 혼자 있는지', status: 'pending', detail: '' },
+  { id: 'performance', label: '이 PC의 분석 속도', status: 'pending', detail: '' },
   { id: 'ears', label: '양쪽 귀 (이어폰 착용 여부)', status: 'pending', detail: '' },
   { id: 'wrist', label: '양 손목 (스마트워치 · 손에 쓴 글씨)', status: 'pending', detail: '' },
   { id: 'phone', label: '휴대폰 캠: 조명·책상 위 스캔', status: 'pending', detail: '' },
@@ -52,13 +53,10 @@ const INITIAL = PHONE_CAM_ENABLED ? ALL_ITEMS : ALL_ITEMS.filter((i) => i.id !==
 
 const HOLD_MS = 1500
 const POSE_TIMEOUT_MS = 25000
-/** 점검 중 분석 간격(약 15fps). 얼굴·포즈·손 모델이 메인 스레드에서 동기로 돌아 매 프레임(30fps) 돌리면 화면이 버벅인다 */
+/** 점검 중 분석 간격(약 15fps). 분석이 메인 스레드에서 도는 환경(Worker 를 못 쓸 때)에서 매 프레임(30fps) 돌리면 화면이 버벅인다 */
 const MIN_ANALYSIS_GAP_MS = 66
-
-type Needs = { face?: boolean; pose?: boolean; hand?: boolean }
-const EMPTY_FACE = { faceLandmarks: [], facialTransformationMatrixes: undefined } as unknown as FaceLandmarkerResult
-const EMPTY_HANDS = { landmarks: [] } as unknown as HandLandmarkerResult
-type FrameInfo = { faceCount: number; box?: Box; yaw?: number; shouldersVisible: boolean; handCount: number }
+/** 분석이 이 횟수만큼 연달아 실패하면 그 단계를 실패로 끝낸다 */
+const MAX_ANALYSIS_FAILURES = 3
 
 /** 카메라 미리보기 + 휴대폰 연결 (EnvCheckPanel 옆이나, 입장 화면의 왼쪽 스포트라이트에 둔다) */
 export function EnvAside() {
@@ -141,43 +139,35 @@ export default function EnvCheckPanel({
       if (cancelled) return
       const video = camHub.video()
       const stream = camHub.stream()!
-      const models = camHub.models()!
+      const vision = camHub.visionBackend()
 
-      /** 매 프레임 분석하면서 check 가 true 를 돌려줄 때까지 기다린다 */
-      const waitFrames = (check: (f: FrameInfo, now: number) => boolean, timeoutMs = Infinity, needs: Needs = { face: true, pose: true }) =>
+      /** 매 프레임 분석하면서 check 가 true 를 돌려줄 때까지 기다린다. 분석이 연달아 실패하면 시간 초과처럼 false */
+      const waitFrames = (check: (f: EnvFrameInfo, now: number) => boolean, timeoutMs = Infinity, needs: EnvNeeds = { face: true, pose: true }) =>
         new Promise<boolean>((resolve) => {
-          let lastPose: PoseLandmarkerResult | undefined
-          let frame = 0
           let lastRun = -Infinity
+          let failures = 0
           const begin = performance.now()
-          stopLoop = frameLoop(video, (now) => {
+          vision.resetEnv() // 단계가 바뀌었으니 포즈 교대 순서와 직전 결과를 비운다
+          stopLoop = frameLoop(video, async (now) => {
             if (cancelled) return
             if (now - lastRun < MIN_ANALYSIS_GAP_MS) return
             lastRun = now
             // 이 단계에 필요한 모델만 돌린다 (조명·위치: 얼굴+포즈, 귀: 얼굴, 손목: 손)
-            const face = needs.face ? models.face.detectForVideo(video, now) : EMPTY_FACE
-            if (needs.pose && frame++ % 2 === 0) lastPose = models.pose.detectForVideo(video, now)
-            const hands = needs.hand ? models.hand.detectForVideo(video, now) : EMPTY_HANDS
-            const lm = face.faceLandmarks[0]
-            let box: Box | undefined
-            if (lm) {
-              const xs = lm.map((p) => p.x)
-              const ys = lm.map((p) => p.y)
-              const x = Math.min(...xs)
-              const y = Math.min(...ys)
-              box = { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }
+            let info: EnvFrameInfo
+            try {
+              info = await vision.analyzeEnv(video, now, needs)
+              failures = 0
+            } catch (e) {
+              if (cancelled) return
+              console.warn('환경 점검 분석 실패:', e)
+              if (++failures >= MAX_ANALYSIS_FAILURES) {
+                stopLoop?.()
+                resolve(false)
+              }
+              return
             }
-            const m = face.facialTransformationMatrixes?.[0]
-            const ok = check(
-              {
-                faceCount: face.faceLandmarks.length,
-                box,
-                yaw: m ? headPoseFromMatrix(m.data).yaw : undefined,
-                shouldersVisible: !!shouldersFromPose(lastPose),
-                handCount: hands.landmarks.length,
-              },
-              now,
-            )
+            if (cancelled) return
+            const ok = check(info, now)
             if (ok || now - begin > timeoutMs) {
               stopLoop?.()
               resolve(ok)
@@ -291,6 +281,24 @@ export default function EnvCheckPanel({
         })
         if (needLight) apply('lighting', lastLight)
         if (needPlace) apply('placement', lastPlace)
+      }
+      if (cancelled) return
+
+      // 2-2) 이 PC 의 분석 속도: 입장은 막지 않는다. 느리면 안내하고 분석 간격을 늘려 진행하며 점검 결과(감독 기록)에 남는다
+      if (todo('performance')) {
+        set('performance', { status: 'running', detail: '분석 속도를 재는 중입니다' })
+        setPrompt('화면을 정면으로 보고 가만히 앉아 주세요 (이 PC의 분석 속도를 재는 중입니다)')
+        try {
+          const verdict = perfVerdict(await measurePerf({ vision, video, isCancelled: () => cancelled }))
+          if (cancelled) return
+          camHub.setAnalysisIntervalMs(verdict.intervalMs)
+          apply('performance', verdict)
+        } catch (e) {
+          if (cancelled) return
+          console.warn('분석 속도 측정 실패:', e)
+          apply('performance', { status: 'warn', detail: '분석 속도를 재지 못했습니다. 느린 PC일 수 있어 분석 간격을 늘려 진행합니다.' })
+          camHub.setAnalysisIntervalMs(PERF.intervalMs.slow)
+        }
       }
       if (cancelled) return
 
