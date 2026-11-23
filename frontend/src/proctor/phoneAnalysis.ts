@@ -102,6 +102,21 @@ export class PhoneAnalysis {
     return this.backend?.kind ?? null
   }
 
+  /**
+   * 환경 점검용: 같은 프레임을 n 번 분석해 1회 시간(ms)을 잰다. 처음 한 번은 워밍업이라 뺀다.
+   * 감독(start)과 따로 쓰는 용도라 상태를 바꾸지 않는다.
+   */
+  async probe(jpeg: ArrayBuffer, n = 6): Promise<number[]> {
+    const backend = await this.ensureBackend()
+    const times: number[] = []
+    for (let i = 0; i <= n; i++) {
+      const started = this.now()
+      await backend.analyze(jpeg, started)
+      if (i > 0) times.push(this.now() - started)
+    }
+    return times
+  }
+
   /** 보정 → 감시를 (다시) 시작한다. 모델·Worker 는 처음 한 번만 준비한다 */
   start(): void {
     this.reset()

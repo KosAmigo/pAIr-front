@@ -157,3 +157,13 @@ describe('PhoneAnalysis', () => {
     expect(t.calls()).toBe(before)
   })
 })
+
+describe('PhoneAnalysis.probe', () => {
+  it('같은 프레임을 여러 번 분석해 워밍업을 뺀 시간 표본을 돌려주고 상태는 바꾸지 않는다', async () => {
+    const t = setup()
+    const times = await t.a.probe(jpeg(), 4)
+    expect(times).toHaveLength(4)
+    expect(t.calls()).toBe(5)
+    expect(t.states).toHaveLength(0)
+  })
+})

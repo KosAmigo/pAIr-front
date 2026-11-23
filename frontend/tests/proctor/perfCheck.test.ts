@@ -82,3 +82,23 @@ test('perfVerdict: 코어 수·메모리를 사유에 남겨 감독관이 볼 �
   expect(v.detail).toContain('4코어')
   expect(v.detail).toContain('8GB')
 })
+
+test('휴대폰 분석 비용을 더한다: 웹캠 25ms + 휴대폰 120ms 면 합쳐 느린 편이고 두 간격을 함께 늘린다', () => {
+  const v = perfVerdict(sample({ ms: 25, n: 40, phoneMs: Array.from({ length: 6 }, () => 120) }))
+  expect(v.level).toBe('slow')
+  expect(v.intervalMs).toBe(200)
+  expect(v.phoneIntervalMs).toBe(PERF.phoneIntervalMs.slow)
+  expect(v.detail).toContain('휴대폰')
+})
+
+test('휴대폰 분석이 가벼우면 웹캠만 쟀을 때와 같은 판정', () => {
+  const v = perfVerdict(sample({ ms: 25, n: 40, phoneMs: Array.from({ length: 6 }, () => 30) }))
+  expect(v.level).toBe('ok')
+  expect(v.phoneIntervalMs).toBe(PERF.phoneIntervalMs.ok)
+})
+
+test('휴대폰 표본이 없으면(휴대폰 안 씀·측정 실패) 웹캠 기준으로만 판정하고 휴대폰 간격은 기본', () => {
+  const v = perfVerdict(sample({ ms: 160, n: 24 }))
+  expect(v.level).toBe('slow')
+  expect(v.phoneIntervalMs).toBe(PERF.phoneIntervalMs.slow)
+})

@@ -289,15 +289,20 @@ export default function EnvCheckPanel({
         set('performance', { status: 'running', detail: '분석 속도를 재는 중입니다' })
         setPrompt('화면을 정면으로 보고 가만히 앉아 주세요 (이 PC의 분석 속도를 재는 중입니다)')
         try {
-          const verdict = perfVerdict(await measurePerf({ vision, video, isCancelled: () => cancelled }))
+          const pcSample = await measurePerf({ vision, video, isCancelled: () => cancelled })
+          // 휴대폰 분석 비용도 함께 재서 웹캠·휴대폰 분석 간격을 같이 늘린다
+          const phoneMs = cancelled ? undefined : await camHub.probePhoneAnalysis(video)
+          const verdict = perfVerdict({ ...pcSample, phoneMs })
           if (cancelled) return
           camHub.setAnalysisIntervalMs(verdict.intervalMs)
+          camHub.setPhoneAnalysisIntervalMs(verdict.phoneIntervalMs)
           apply('performance', verdict)
         } catch (e) {
           if (cancelled) return
           console.warn('분석 속도 측정 실패:', e)
           apply('performance', { status: 'warn', detail: '분석 속도를 재지 못했습니다. 느린 PC일 수 있어 분석 간격을 늘려 진행합니다.' })
           camHub.setAnalysisIntervalMs(PERF.intervalMs.slow)
+          camHub.setPhoneAnalysisIntervalMs(PERF.phoneIntervalMs.slow)
         }
       }
       if (cancelled) return

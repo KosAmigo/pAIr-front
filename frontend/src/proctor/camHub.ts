@@ -564,6 +564,21 @@ export const camHub = {
     analysisIntervalMs = Math.min(500, Math.max(PC_MIN_ANALYZE_INTERVAL_MS, Math.round(ms)))
   },
 
+  /**
+   * 이 PC 가 휴대폰 프레임 한 장을 분석하는 데 걸리는 시간(ms) 표본. 웹캠 사진 한 장을 휴대폰 분석 Worker 에 넣어 잰다.
+   * 웹캠 사진에는 손이 없어 손 모델이 실제보다 가볍게 나올 수 있다. 재지 못하면 undefined.
+   */
+  async probePhoneAnalysis(video: HTMLVideoElement): Promise<number[] | undefined> {
+    if (!PHONE_CAM_ENABLED) return undefined
+    const url = captureSnapshot(video, 512, 0.5)
+    if (!url) return undefined
+    try {
+      return await phoneAnalyzer.probe(await (await fetch(url)).arrayBuffer())
+    } catch (e) {
+      console.warn('휴대폰 분석 속도 측정 실패:', e)
+      return undefined
+    }
+  },
   /** 휴대폰 분석 간격(ms). setAnalysisIntervalMs 와 같은 규칙으로 늘린다 */
   setPhoneAnalysisIntervalMs(ms: number) {
     phoneIntervalMs = Math.min(1000, Math.max(PHONE_MIN_ANALYZE_INTERVAL_MS, Math.round(ms)))
