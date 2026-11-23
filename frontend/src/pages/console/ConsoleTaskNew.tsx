@@ -2,7 +2,7 @@
 // ① 위에서 아래로: 직군 → 주제(선택, 추천 방향) → 추천 받기 → 고른 내용 확인·수정 → 용도·제한 시간. 직무·난이도 칸은 없다(난이도는 AI가 정한다).
 // ② 요약 카드로 한 번 확인 → ③ 생성(2초마다 상태 조회, 화면을 떠나면 조회만 멈춤) → 결과에서 ④ 검수로 간다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, Check, CircleAlert, Pencil, Sparkles, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleAlert, Pencil, FilePlus2, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { GradientText } from '../../components/fx'
@@ -495,7 +495,7 @@ function ConfirmCard({
           <ArrowLeft size={16} aria-hidden /> <Pencil size={14} aria-hidden /> 고치기
         </Button>
         <Button variant="primary" size="lg" onClick={onStart} className="h-12 rounded-full px-6 text-[16px]">
-          <Sparkles size={18} aria-hidden /> 과제 만들기
+          <FilePlus2 size={18} aria-hidden /> 과제 만들기
         </Button>
       </div>
     </section>

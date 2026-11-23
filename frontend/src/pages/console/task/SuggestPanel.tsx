@@ -4,7 +4,7 @@
 // 받은 목록과 고른 카드는 부모(useSuggestions)가 직군별로 들고 있어서 직군을 바꿨다 돌아와도 그대로다.
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowRight, Check, ChevronDown, CircleAlert, Lightbulb, MessageCircleQuestion, RefreshCw, Sparkles, Wand2 } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, CircleAlert, Lightbulb, MessageCircleQuestion, RefreshCw } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { Button } from '../../../components/ui'
 import { choiceClass } from './choice'
@@ -33,7 +33,7 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
     <section aria-labelledby="suggest-title" className="relative overflow-hidden rounded-2xl border border-brand/20 bg-[linear-gradient(135deg,rgb(139_92_246/0.08),rgb(255_255_255/0.6)_45%,rgb(47_91_234/0.07))] p-5">
       <div className="flex flex-wrap items-center gap-3">
         <span className="bg-brand-gradient inline-flex size-10 items-center justify-center rounded-xl text-on-accent shadow-[0_8px_20px_-8px_rgb(108_71_255/0.8)]" aria-hidden>
-          <Wand2 size={20} />
+          <Lightbulb size={20} />
         </span>
         <div className="min-w-0 flex-1">
           <h2 id="suggest-title" className="text-[16px] font-bold text-text">
@@ -44,7 +44,7 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
           </p>
         </div>
         <Button variant={again ? 'secondary' : 'primary'} disabled={!track || loading} onClick={onAsk}>
-          {again ? <RefreshCw size={15} aria-hidden className={loading ? 'animate-spin' : undefined} /> : <Sparkles size={16} aria-hidden />}
+          {again && <RefreshCw size={15} aria-hidden className={loading ? 'animate-spin' : undefined} />}
           {loading ? '추천 만드는 중' : again ? '다시 추천' : '추천 받기'}
         </Button>
       </div>
