@@ -1,6 +1,7 @@
 // 테스트용 가짜 서버. page.route 로 /api 응답을 넣고, 관리자 로그인 상태를 만든다.
 // 앱 코드나 vite 설정에는 아무것도 넣지 않는다.
 import type { Page } from '@playwright/test'
+import type { AuthUser } from '../src/auth/auth'
 
 export type SentRequest = { method: string; path: string; body: any }
 
@@ -31,11 +32,11 @@ const suggestion = (n: number, competencies: string[]) => ({
 /** 오타 주제. 이 주제를 보내면 topicCheck.ok=false 로 답한다 */
 export const TYPO_TOPIC = '쿠뽕'
 
-export async function mockApi(page: Page) {
+export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admin@example.test', name: '관리자', role: 'ADMIN', companyId: null, companyName: null, emailVerified: true }) {
   const sent: SentRequest[] = []
-  await page.addInitScript(() => {
-    localStorage.setItem('pair.auth', JSON.stringify({ token: 't', user: { id: 1, email: 'admin@example.test', name: '관리자', role: 'ADMIN', emailVerified: true } }))
-  })
+  await page.addInitScript((authUser) => {
+    localStorage.setItem('pair.auth', JSON.stringify({ token: 't', user: authUser }))
+  }, user)
   let polls = 0
   await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
     const req = route.request()
@@ -43,7 +44,7 @@ export async function mockApi(page: Page) {
     const raw = req.postData()
     const body = raw ? JSON.parse(raw) : null
     const json = (data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) })
-    if (path === '/api/auth/me') return json({ id: 1, email: 'admin@example.test', name: '관리자', role: 'ADMIN', emailVerified: true })
+    if (path === '/api/auth/me') return json(user)
     if (path === '/api/console/tasks') return json(TASKS)
     // 과제 상세: 카드를 눌러 상세로 갈 때 화면이 터지지 않을 만큼만
     const detail = path.match(/^\/api\/console\/tasks\/([^/]+)$/)

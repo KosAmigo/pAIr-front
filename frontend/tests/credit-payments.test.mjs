@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 import { cancelReadyPurchase, confirmPurchase, creditsApi } from '../src/credits/creditsApi.ts'
-import { openPayment, parsePaymentReturn, paymentStatusMessage, requireTestClientKey } from '../src/credits/payment.ts'
+import { openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey } from '../src/credits/payment.ts'
 
 const originalFetch = globalThis.fetch
 const originalStorage = globalThis.localStorage
@@ -41,6 +41,22 @@ test('redirect parameters are parsed strictly and waiting states are never calle
   assert.equal(parsePaymentReturn('?payment=failure&message=취소').kind, 'failure')
   assert.match(paymentStatusMessage('WAITING_FOR_DEPOSIT'), /아직 지급되지/)
   assert.doesNotMatch(paymentStatusMessage('CONFIRMING'), /지급되었습니다/)
+})
+
+test('purchase status labels cover payment and refund states', () => {
+  const labels = {
+    READY: '결제 전',
+    PAID: '완료',
+    FAILED: '실패',
+    CANCELED: '취소',
+    REFUNDED: '환불',
+    CONFIRMING: '승인 확인 중',
+    WAITING_FOR_DEPOSIT: '입금 대기',
+  }
+  for (const [status, label] of Object.entries(labels)) {
+    assert.equal(paymentStatusLabel(status), label)
+  }
+  assert.equal(paymentStatusLabel('NEW_STATUS'), '알 수 없는 상태 (NEW_STATUS)')
 })
 
 test('payment SDK receives the server order amount and test callback URLs', async () => {

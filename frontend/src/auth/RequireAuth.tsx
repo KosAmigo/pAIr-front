@@ -2,7 +2,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { homeFor, useAuth, type Role } from './auth'
 
-export default function RequireAuth({ roles }: { roles?: Role[] }) {
+export default function RequireAuth({ roles, deniedRedirect, deniedMessage }: { roles?: Role[]; deniedRedirect?: string; deniedMessage?: string }) {
   const { user, loading } = useAuth()
   const loc = useLocation()
   if (loading) return <div className="min-h-full" role="status" aria-label="로그인 확인 중" />
@@ -11,7 +11,7 @@ export default function RequireAuth({ roles }: { roles?: Role[] }) {
     return <Navigate to={`/login?next=${next}`} replace />
   }
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={homeFor(user.role)} replace state={{ denied: true }} />
+    return <Navigate to={deniedRedirect ?? homeFor(user.role)} replace state={{ denied: true, deniedMessage }} />
   }
   return <Outlet />
 }

@@ -1,4 +1,4 @@
-// DESIGN.md §7-9-4 회차 목록 (ADMIN, MANAGER, PROCTOR). 회차 만들기는 ADMIN·MANAGER만
+// DESIGN.md §7-9-4 회차 목록 (ADMIN, MANAGER, PROCTOR). 회차 만들기는 MANAGER만
 // 2026-11-19 개편 "관제 보드": 위에 단계 카드 3장(진행 중 / 예정 / 종료)이 탭 역할을 한다.
 // 진행 중을 고르면 이 화면의 다크 무대에 진행 중 회차가 큰 카드로 뜬다(남은 시간, 진행 막대, 입장, 미확인 이벤트).
 // 예정·종료는 표 그대로(표 안쪽은 깨끗하게). 회차는 백엔드에서 불러오고 30초마다 다시 부른다(단계는 백엔드 phase).
@@ -15,7 +15,7 @@ import { consoleApi, type ConsoleTaskSummary, type SessionSummary } from '../../
 import { ErrorState } from '../../components/ErrorState'
 import { fmtHm, fmtLeft, fmtShort, useMyCompanyId, useNow } from './format'
 import { Loading } from './Loading'
-import { canManageSessions, useAuth } from '../../auth/auth'
+import { canCreateSessions, useAuth } from '../../auth/auth'
 
 type Tab = 'live' | 'upcoming' | 'ended'
 /** 취소한 회차는 종료 칸에 함께 보인다 */
@@ -28,7 +28,7 @@ export default function ConsoleSessions() {
   const now = useNow(1000)
   const nav = useNavigate()
   const mine = useMyCompanyId()
-  const canCreate = canManageSessions(useAuth().user?.role)
+  const canCreate = canCreateSessions(useAuth().user?.role)
   const companyIds = [...new Set(all.map((s) => s.companyId))].sort((a, b) => a - b)
   const [company, setCompany] = useState<number | 'ALL'>('ALL')
   const visible = all.filter((s) => mine != null || company === 'ALL' || s.companyId === company)

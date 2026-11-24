@@ -67,5 +67,5 @@ export const CHANNEL_TEXT: Record<ChannelPhase, string> = {
   connecting: '연결 중',
   live: '',
   unavailable: '이 채널은 지금 영상이 없습니다 (연결 안 됨)',
-  failed: '연결이 끊겼습니다',
+  failed: '영상 연결 안 됨 (네트워크 때문에 직접 연결하지 못했습니다)',
 }

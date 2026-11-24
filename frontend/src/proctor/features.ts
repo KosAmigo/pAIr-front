@@ -2,8 +2,10 @@
  * 휴대폰 보조 캠 사용 여부.
  * 영상(WebRTC·TURN) 대신 JPEG 프레임을 서버 중계로 응시자 PC 에 보내는 방식으로 다시 켠다 (2026-11-23 확정).
  * 분석은 응시자 PC 의 별도 Worker 에서 하고, 서버는 프레임을 그대로 넘기기만 한다.
+ * 기본은 켜짐이다. 개발 중 휴대폰 없이 확인할 때는 개발 서버를 `VITE_PHONE_CAM_ENABLED=false` 로 띄운다
+ * (휴대폰 캠이 입장·시험 중 연결 조건과 환경 점검 항목에서 빠진다).
  */
-export const PHONE_CAM_ENABLED = true
+export const PHONE_CAM_ENABLED = (import.meta.env?.VITE_PHONE_CAM_ENABLED as string | undefined) !== 'false'
 
 /**
  * PC 화면 공유 사용 여부.
@@ -17,3 +19,10 @@ export const SCREEN_SHARE_ENABLED = true
  * Worker 가 안 되는 환경은 자동으로 메인 스레드 분석으로 넘어간다. 주소 끝에 &vision=main 을 붙이면 메인으로 고정한다.
  */
 export const VISION_WORKER_ENABLED = true
+
+/**
+ * 감독관 실시간 영상 보기(웹캠·화면 공유) 사용 여부. 기본은 꺼짐이다 (2026-11-24 결정).
+ * 응시자가 휴대폰 핫스팟이면 영상 연결(ICE)이 실패하는 경우가 있어 TURN 없이는 쓰지 않는다. 이벤트 기록과 사진으로 감독한다.
+ * 코드·서버 시그널링은 그대로 두었다. 켜려면 개발 서버를 `VITE_LIVE_VIEW_ENABLED=true` 로 띄우고 백엔드는 `PAIR_LIVE_VIEW_ENABLED=true` 로 켠다.
+ */
+export const LIVE_VIEW_ENABLED = (import.meta.env?.VITE_LIVE_VIEW_ENABLED as string | undefined) === 'true'

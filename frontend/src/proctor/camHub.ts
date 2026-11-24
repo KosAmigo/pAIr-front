@@ -19,7 +19,7 @@ import { PHONE_ANALYSIS_IDLE, PhoneAnalysis, type PhoneAnalysisState } from './p
 import { EvidenceRecorder } from './evidenceRecorder.ts'
 import { PhoneQualityController } from './core/phoneQuality.ts'
 import { PHONE_DROP_MESSAGE, phoneDropEvent, phoneFramesFresh } from './core/phoneLink.ts'
-import { SCREEN_EVENTS_ACCEPTED, toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
+import { toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
 import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED, VISION_WORKER_ENABLED } from './features.ts'
 import { PC_MIN_ANALYZE_INTERVAL_MS, PHONE_MIN_ANALYZE_INTERVAL_MS } from './core/frameBudget.ts'
@@ -37,8 +37,6 @@ const MAX_ANALYSIS_FAILURES = 3
 const UI_INTERVAL_MS = 500
 const MAX_LOG = 50
 const GATE_TICK_MS = 1000
-/** 이벤트 순간 사진용으로 메모리에만 두는 흐린 화면을 이 간격으로 갱신한다 (저장·전송 아님) */
-const BLUR_REFRESH_MS = 10_000
 /** 시험 종료 때 남은 이벤트·구간 업로드를 기다리는 최대 시간 */
 const STOP_FLUSH_MAX_MS = 4000
 
@@ -152,8 +150,8 @@ let monitoringWanted = false
 let serverOffset = 0
 let activeProfile: PcProfileName = 'default'
 let screenHandle: ScreenHandle | null = null
-let lastBlur: string | undefined
-let lastBlurAt = 0
+/** 시험 중 화면 공유가 끊긴 채로 있는지. 다시 시작하면 SCREEN_RESTARTED 를 남기고 내린다 */
+let screenLost = false
 let gateTimer: number | null = null
 let gateState: GateState = GATE_INITIAL
 /** 휴대폰 분석 최소 간격. 환경 점검에서 이 PC 가 느리다고 나오면 늘린다 (setPhoneAnalysisIntervalMs) */
@@ -227,7 +225,6 @@ function onRelayBinary(buf: ArrayBuffer) {
   const at = Date.now()
   lastPhoneFrameAt = at
   if (!state.phoneLive) set({ phoneLive: true }) // 게이트가 안 도는 환경 점검·사전 테스트에서도 프레임이 오면 연결로 본다
-  evidence.pushPhone(at, new Blob([buf], { type: 'image/jpeg' }))
   if (phoneSurface) {
     phoneSurface.draw(buf)
     if (state.phoneStream !== phoneSurface.stream) set({ phoneStream: phoneSurface.stream, phoneVideo: 'live' })
@@ -279,21 +276,15 @@ function tickGate() {
   if (++gateTicks % OUTBOX_RETRY_TICKS === 0 && outbox && (outbox.pending > 0 || outbox.pendingClips > 0)) void outbox.flush()
   const { state: next, gate } = stepGate(gateState, channelUp(state), now)
   gateState = next
-  if (screenHandle && now - lastBlurAt > BLUR_REFRESH_MS) refreshBlur()
   const prev = state.gate
   if (prev.status !== gate.status || prev.graceLeftMs !== gate.graceLeftMs || prev.missing.join() !== gate.missing.join()) set({ gate })
 }
 
-function refreshBlur() {
-  lastBlurAt = Date.now()
-  if (SCREEN_EVENTS_ACCEPTED) lastBlur = screenHandle?.captureBlurred()
-}
-
-/** 화면 공유 이벤트 기록. 서버가 SCREEN 을 받기 전(SCREEN_EVENTS_ACCEPTED=false)에는 화면 로그에만 남긴다. 사전 테스트에서는 아무것도 남기지 않는다 */
+/** 화면 공유 이벤트 기록 (종류와 시각만, 사진 없음). 사전 테스트에서는 아무것도 남기지 않는다 */
 function recordScreen(type: ScreenEventType) {
   if (state.practice || !monitoringWanted) return
-  const v = toScreenViolation(type, Date.now() + serverOffset, lastBlur)
-  if (SCREEN_EVENTS_ACCEPTED) void outbox?.enqueue(v)
+  const v = toScreenViolation(type, Date.now() + serverOffset)
+  void outbox?.enqueue(v)
   pushLog(v)
 }
 
@@ -439,20 +430,23 @@ export const camHub = {
       const handle = await startScreenShare(() => {
         if (screenHandle !== handle) return
         screenHandle = null
-        lastBlur = undefined
         set({ screen: 'off', screenKind: null })
+        if (monitoringWanted && !state.practice) screenLost = true
         recordScreen('SCREEN_STOPPED')
       })
       if (handle.kind === 'partial') {
         handle.stop()
         set({ screen: 'error', screenKind: null, screenError: '전체 화면이 아닌 창·탭만 공유했습니다. 다시 시작해서 "전체 화면"을 선택해 주세요.' })
+        if (monitoringWanted && !state.practice) screenLost = true
         recordScreen('SCREEN_PARTIAL')
         return
       }
       screenHandle = handle
-      lastBlurAt = 0
       set({ screen: 'sharing', screenKind: handle.kind, screenError: null })
-      refreshBlur()
+      if (screenLost) {
+        screenLost = false
+        recordScreen('SCREEN_RESTARTED')
+      }
     } catch (e) {
       set({ screen: 'error', screenKind: null, screenError: e instanceof Error ? e.message : String(e) })
     }
@@ -661,7 +655,7 @@ export const camHub = {
     camHub.stopGate()
     screenHandle?.stop()
     screenHandle = null
-    lastBlur = undefined
+    screenLost = false
     phoneAnalysisOn = false
     phoneQuality.reset()
     phoneAnalyzer.dispose()

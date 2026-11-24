@@ -30,6 +30,27 @@ function harness(config = DEFAULT_ANTI_CHEATING_CONFIG) {
   return { manager, detector, documentTarget, windowTarget, incidents: () => incidents }
 }
 
+test('mouse leaving through the top or bottom edge is ignored, left and right are counted', () => {
+  const h = harness()
+  h.windowTarget.innerHeight = 800
+  const leave = (clientX, clientY) => {
+    const e = new Event('mouseleave')
+    Object.assign(e, { clientX, clientY, relatedTarget: null })
+    h.documentTarget.documentElement.dispatchEvent(e)
+  }
+  leave(400, 0) // 위쪽
+  leave(400, -3)
+  leave(400, 800) // 아래쪽
+  leave(400, 805)
+  assert.equal(h.manager.count, 0)
+  leave(0, 400) // 왼쪽
+  assert.equal(h.manager.count, 1)
+  h.manager.resume('pointer-return')
+  leave(1200, 400) // 오른쪽
+  assert.equal(h.manager.count, 2)
+  h.detector.stop()
+})
+
 test('movement inside the exam page creates no warning', () => {
   const h = harness()
   h.documentTarget.documentElement.dispatchEvent(new Event('pointermove'))

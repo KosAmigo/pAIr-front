@@ -8,13 +8,14 @@ const enc = encodeURIComponent
 
 export type Phase = 'UPCOMING' | 'LIVE' | 'ENDED' | 'CANCELED'
 export type InviteStatus = 'PENDING' | 'SENT' | 'FAILED'
-export type EventSource = 'BROWSER' | 'PC_CAM' | 'PHONE_CAM'
+export type EventSource = 'BROWSER' | 'PC_CAM' | 'PHONE_CAM' | 'SCREEN'
 export type EventReview = 'OK' | 'SUSPECT'
 export type EventType =
   | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'MOUSE_LEAVE' | 'PASTE' | 'FULLSCREEN_EXIT'
   | 'NO_FACE' | 'MULTI_FACE' | 'HEAD_TURN' | 'HEAD_DOWN' | 'GAZE_AWAY' | 'TORSO_SHIFT' | 'TORSO_TURN'
   | 'HAND_MISSING' | 'HAND_MOVED' | 'ARM_MOVE' | 'PHONE' | 'EXTRA_SCREEN' | 'BOOK' | 'PHONE_DISCONNECTED'
   | 'CONNECTION_LOST' | 'LINK_EXPIRED' | 'LINK_RESTORED'
+  | 'SCREEN_STOPPED' | 'SCREEN_PARTIAL' | 'SCREEN_RESTARTED'
 
 export type SessionSummary = {
   id: number
@@ -53,6 +54,16 @@ export type ParticipantView = {
 /** 환경 점검 결과의 출처: LIVE 입장 대기 중 진행 상태, SAVED 동의와 함께 저장된 결과 */
 export type EnvCheckSourceKind = 'LIVE' | 'SAVED'
 export type EnvCheckView = { source: EnvCheckSourceKind; updatedAt: string; result: unknown }
+/** 환경 점검에서 실패한 항목이 있는데도 입장한 응시자. noticeSent: 담당자가 안내 메시지를 한 번이라도 보냈는지 */
+export type EnvCheckFailureView = {
+  participantId: number
+  name: string
+  email: string
+  enteredAt: string
+  checkedAt: string
+  failed: { id: string; label: string; detail: string }[]
+  noticeSent: boolean
+}
 /** 응시자에게 보낸 안내 메시지. readAt 이 null 이면 아직 확인하지 않음 */
 export type NoticeView = { id: number; message: string; sentAt: string; readAt: string | null }
 
@@ -293,6 +304,8 @@ export const consoleApi = {
   envScanPhotos: (id: number, participantId: number) => call<EnvScanPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-scan`),
   /** 점검 결과: 진행 중이면 LIVE(실시간), 저장됐으면 SAVED. 아직 없으면 null */
   envCheck: (id: number, participantId: number) => call<EnvCheckView | null>('GET', `${S}/${id}/participants/${participantId}/env-check`),
+  /** 점검에 실패한 항목이 있는 채 입장한 응시자 모음 */
+  envCheckFailures: (id: number) => call<EnvCheckFailureView[]>('GET', `${S}/${id}/env-check-failures`),
   sendNotice: (id: number, participantId: number, message: string) =>
     call<NoticeView>('POST', `${S}/${id}/participants/${participantId}/notices`, { message }),
   notices: (id: number, participantId: number) => call<NoticeView[]>('GET', `${S}/${id}/participants/${participantId}/notices`),

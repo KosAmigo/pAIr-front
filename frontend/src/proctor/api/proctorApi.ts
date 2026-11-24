@@ -58,7 +58,7 @@ export type ProctorEventRequest = {
 }
 
 /** 이벤트 앞뒤 증거 구간의 사진 한 장 (POST .../proctor-events/{clientId}/clip). offsetMs: 이벤트 시각 기준 -8000~4000 */
-export type ClipFrameRequest = { source: 'PC_CAM' | 'PHONE_CAM'; offsetMs: number; image: string }
+export type ClipFrameRequest = { source: 'PC_CAM'; offsetMs: number; image: string }
 
 /** status: HTTP 상태 (네트워크 오류면 0). 아웃박스가 다시 보낼지 정할 때 쓴다 */
 export class ProctorApiError extends Error {

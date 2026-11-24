@@ -7,7 +7,7 @@ import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ErrorState } from '../components/ErrorState'
 import { useCredits } from '../data/credits'
 import { cancelReadyPurchase, confirmPurchase, creditsApi, type CreditProduct, type LedgerEntry, type Page, type Purchase } from '../credits/creditsApi'
-import { openPayment, parsePaymentReturn, paymentStatusMessage, requireTestClientKey, type PaymentReturn } from '../credits/payment'
+import { openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey, type PaymentReturn } from '../credits/payment'
 
 type SuccessReturn = Extract<PaymentReturn, { kind: 'success' }>
 const number = (value: number) => value.toLocaleString('ko-KR')
@@ -219,15 +219,14 @@ export default function Credits() {
             </section>
             <section className="rounded-xl border border-line bg-panel p-5">
               <h2 className="text-xl font-bold text-text">구매 내역</h2>
-              <p className="mt-2 text-sm text-text-muted">모의 환불은 토스 결제 취소 없이 서비스 내 크레딧만 회수되는 테스트용 기능입니다. 잔액이 부족하면 환불할 수 없습니다.</p>
-              <p className="mt-1 text-sm text-text-muted">입금 대기 또는 승인 확인 중인 주문은 크레딧이 지급된 것이 아닙니다. 자동 웹훅이 없으므로 재확인해 주세요.</p>
+              <p className="mt-2 text-sm text-text-muted">모의 환불 기능</p>
               {purchases.content.length === 0 ? <p className="py-6 text-text-muted">구매 내역이 없습니다.</p> : (
                 <ul className="mt-4 divide-y divide-line">
                   {purchases.content.map((order) => (
                     <li key={order.orderId} className="flex flex-wrap items-center justify-between gap-3 py-4">
                       <div>
                         <p className="tnum font-semibold text-text">{number(order.credits)} 크레딧 · {number(order.amountKrw)}원</p>
-                        <p className="mt-1 text-sm text-text-muted">{date(order.createdAt)} · {order.status} · 주문번호 {order.orderId}</p>
+                        <p className="mt-1 text-sm text-text-muted">{date(order.createdAt)} · {paymentStatusLabel(order.status)}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {(order.status === 'CONFIRMING' || order.status === 'WAITING_FOR_DEPOSIT') && <button className={button} disabled={busy} onClick={() => orderAction(order, 'recover')}>재확인</button>}

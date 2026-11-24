@@ -26,13 +26,19 @@ describe('마이페이지 비밀번호 검증', () => {
 
 describe('회원 정보 API', () => {
   it('bearer 토큰으로 프로필을 조회한다', async () => {
-    const profile = { id: 1, name: '회원', email: 'user@example.com', role: 'USER', companyId: null }
+    const profile = { id: 1, name: '회원', email: 'user@example.com', role: 'USER', companyId: null, companyName: null }
     globalThis.fetch = async (url, init) => {
       assert.equal(url, '/api/auth/me')
       assert.equal(init.method, 'GET')
       assert.equal(init.headers.Authorization, 'Bearer access-token')
       return Response.json(profile)
     }
+    assert.deepEqual(await authApi.me('access-token'), profile)
+  })
+
+  it('기업 소속 프로필의 식별자와 기업명을 그대로 반환한다', async () => {
+    const profile = { id: 42, name: '담당자', email: 'manager@example.com', role: 'MANAGER', companyId: 7, companyName: '테스트 기업' }
+    globalThis.fetch = async () => Response.json(profile)
     assert.deepEqual(await authApi.me('access-token'), profile)
   })
 

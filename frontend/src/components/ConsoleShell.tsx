@@ -31,13 +31,14 @@ export function ConsoleShell() {
   const { pathname, state, key } = useLocation()
   // 권한 없는 주소에서 넘어오면(RequireAuth 가 state.denied 를 붙임) 토스트를 잠깐 띄운다
   const [dismissed, setDismissed] = useState<string | null>(null)
-  const denied = (state as { denied?: boolean } | null)?.denied && dismissed !== key
+  const deniedState = state as { denied?: boolean; deniedMessage?: string } | null
+  const denied = deniedState?.denied && dismissed !== key
   useEffect(() => {
     if (!denied) return
     const t = window.setTimeout(() => setDismissed(key), 2600)
     return () => window.clearTimeout(t)
   }, [denied, key])
-  const toast = denied ? '접근 권한이 없습니다' : null
+  const toast = denied ? deniedState?.deniedMessage ?? '접근 권한이 없습니다' : null
 
   const [crumbs, setCrumbs] = useState<string[]>([])
   // 과제 목록은 관리자만 볼 수 있어 관리자일 때만 불러온다

@@ -27,10 +27,14 @@ export const EVENT_LABEL: Record<EventType, string> = {
   CONNECTION_LOST: '시험 화면 연결 끊김',
   LINK_EXPIRED: '유예 시간 초과(링크 만료)',
   LINK_RESTORED: '담당자가 링크 복구',
+  SCREEN_STOPPED: '화면 공유 중단',
+  SCREEN_PARTIAL: '창·탭만 공유',
+  SCREEN_RESTARTED: '화면 공유 재시작',
 }
-/** 카메라(PC·휴대폰)에서 나온 이벤트인지. 브라우저 이벤트는 사진이 없다 */
-export const isCameraEvent = (e: Pick<ProctorEventView, 'source'>) => e.source !== 'BROWSER'
-export const unreviewedOf = (events: ProctorEventView[], participantId: number) => events.filter((e) => e.participantId === participantId && !e.review).length
+/** 카메라(PC·휴대폰)에서 나온 이벤트인지. 브라우저·화면 공유 이벤트는 사진이 없다 */
+export const isCameraEvent = (e: Pick<ProctorEventView, 'source'>) => e.source === 'PC_CAM' || e.source === 'PHONE_CAM'
+/** 판정 대기 건수: 카메라 이벤트만 센다 (브라우저 이벤트는 이력만 보여 주고 판정하지 않는다) */
+export const unreviewedOf = (events: ProctorEventView[], participantId: number) => events.filter((e) => e.participantId === participantId && isCameraEvent(e) && !e.review).length
 export const suspectsOf = (events: ProctorEventView[], participantId: number) => events.filter((e) => e.participantId === participantId && e.review === 'SUSPECT').length
 
 // ── 응시 상태 (백엔드 ResultState 와 같은 네 가지) ──
