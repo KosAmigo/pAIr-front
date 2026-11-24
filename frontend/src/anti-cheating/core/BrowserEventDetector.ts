@@ -49,7 +49,15 @@ export class BrowserEventDetector {
   }
 
   private readonly onPointerLeave = (event: MouseEvent) => {
-    if (event.relatedTarget == null) this.emit('MOUSE_LEAVE')
+    if (event.relatedTarget != null) return
+    // 위·아래 가장자리로 나가는 것은 이탈로 세지 않는다 (전체 화면의 ESC 안내 버튼은 위쪽, 화면 공유 안내 막대는 위·아래쪽에 있다).
+    // 창을 벗어나는 것은 창 이탈(WINDOW_BLUR)이 따로 감지한다. 좌표가 없는 이벤트는 좌우로 본다
+    const y = event.clientY
+    if (typeof y === 'number') {
+      const bottom = this.windowTarget?.innerHeight
+      if (y <= 0 || (typeof bottom === 'number' && y >= bottom)) return
+    }
+    this.emit('MOUSE_LEAVE')
   }
   private readonly onPointerEnter = () => this.onResume('pointer-return')
   private readonly onBlur = () => this.emit('WINDOW_BLUR')

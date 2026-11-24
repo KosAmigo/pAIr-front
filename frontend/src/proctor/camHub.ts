@@ -225,7 +225,6 @@ function onRelayBinary(buf: ArrayBuffer) {
   const at = Date.now()
   lastPhoneFrameAt = at
   if (!state.phoneLive) set({ phoneLive: true }) // 게이트가 안 도는 환경 점검·사전 테스트에서도 프레임이 오면 연결로 본다
-  evidence.pushPhone(at, new Blob([buf], { type: 'image/jpeg' }))
   if (phoneSurface) {
     phoneSurface.draw(buf)
     if (state.phoneStream !== phoneSurface.stream) set({ phoneStream: phoneSurface.stream, phoneVideo: 'live' })

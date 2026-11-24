@@ -33,7 +33,8 @@ export const EVENT_LABEL: Record<EventType, string> = {
 }
 /** 카메라(PC·휴대폰)에서 나온 이벤트인지. 브라우저·화면 공유 이벤트는 사진이 없다 */
 export const isCameraEvent = (e: Pick<ProctorEventView, 'source'>) => e.source === 'PC_CAM' || e.source === 'PHONE_CAM'
-export const unreviewedOf = (events: ProctorEventView[], participantId: number) => events.filter((e) => e.participantId === participantId && !e.review).length
+/** 판정 대기 건수: 카메라 이벤트만 센다 (브라우저 이벤트는 이력만 보여 주고 판정하지 않는다) */
+export const unreviewedOf = (events: ProctorEventView[], participantId: number) => events.filter((e) => e.participantId === participantId && isCameraEvent(e) && !e.review).length
 export const suspectsOf = (events: ProctorEventView[], participantId: number) => events.filter((e) => e.participantId === participantId && e.review === 'SUSPECT').length
 
 // ── 응시 상태 (백엔드 ResultState 와 같은 네 가지) ──

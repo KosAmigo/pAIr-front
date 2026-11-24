@@ -1,33 +1,35 @@
 // 콘솔 "점검 미통과" 탭: 환경 점검에서 실패한 항목이 있는데도 입장한 응시자를 모아 보여 준다.
-// 진행 중(LIVE) 회차에서는 행을 누르면 실시간 현황의 감독 기록 서랍으로 이동하고, 그 밖의 단계에서는 아래에 점검 결과와 안내 보내기를 연다.
+// 환경 점검 내용(점검 결과·안내 보내기·점검 사진)은 응시자 서랍이 아니라 이 탭에서만 본다. 회차 단계와 상관없이 행을 누르면 아래에 연다.
 import { useState } from 'react'
 import { Eye, MailCheck } from 'lucide-react'
 import { ErrorState } from '../../components/ErrorState'
 import { consoleApi, type EnvCheckFailureView, type ParticipantView, type SessionSummary } from '../../consoleApi'
 import { useLoad } from '../../data/consoleSessions'
 import EnvCheckCard from './EnvCheckCard'
+import { EnvScanSection } from './EnvScanSection'
 import { fmtShort } from './format'
 import { Loading } from './Loading'
 
 const POLL_MS = 5000
 
-export default function EnvFailures({
-  s,
-  participants,
-  onOpenLive,
-}: {
-  s: SessionSummary
-  participants: ParticipantView[]
-  /** 진행 중인 회차에서 응시자의 감독 기록을 연다 */
-  onOpenLive: (participantId: number) => void
-}) {
+/** 점검 사진(방 360도·책상 위). 없으면 아무것도 그리지 않는다 */
+function ScanPhotos({ s, participantId }: { s: SessionSummary; participantId: number }) {
+  const scan = useLoad(`env-${s.id}-${participantId}`, () => consoleApi.envScanPhotos(s.id, participantId))
+  if (!scan.data || scan.data.length === 0) return null
+  return (
+    <section className="rounded-md border border-line bg-panel shadow-sm">
+      <EnvScanSection sessionId={s.id} photos={scan.data} />
+    </section>
+  )
+}
+
+export default function EnvFailures({ s, participants }: { s: SessionSummary; participants: ParticipantView[] }) {
   const list = useLoad(`envfail-${s.id}`, () => consoleApi.envCheckFailures(s.id), POLL_MS)
   const [selected, setSelected] = useState<number | null>(null)
-  const live = s.phase === 'LIVE'
   const rows = list.data ?? []
   const chosen = selected == null ? undefined : participants.find((p) => p.id === selected)
 
-  const open = (r: EnvCheckFailureView) => (live ? onOpenLive(r.participantId) : setSelected(selected === r.participantId ? null : r.participantId))
+  const open = (r: EnvCheckFailureView) => setSelected(selected === r.participantId ? null : r.participantId)
 
   if (list.error && !list.data) return <ErrorState compact message={list.error} onRetry={list.reload} />
   if (!list.data) return <Loading />
@@ -84,10 +86,10 @@ export default function EnvFailures({
                     <button
                       type="button"
                       onClick={() => open(r)}
-                      aria-label={`${r.name} ${live ? '감독 기록 열기' : '점검 결과 보기'}`}
+                      aria-label={`${r.name} 점검 결과 보기`}
                       className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-semibold text-brand hover:bg-panel-raised"
                     >
-                      <Eye size={14} aria-hidden /> {live ? '감독 기록' : '점검 결과'}
+                      <Eye size={14} aria-hidden /> 점검 결과
                     </button>
                   </td>
                 </tr>
@@ -96,7 +98,12 @@ export default function EnvFailures({
           </table>
         )}
       </section>
-      {!live && chosen && <EnvCheckCard session={s} p={chosen} pollMs={POLL_MS} />}
+      {chosen && (
+        <>
+          <EnvCheckCard session={s} p={chosen} pollMs={POLL_MS} />
+          <ScanPhotos s={s} participantId={chosen.id} />
+        </>
+      )}
     </div>
   )
 }

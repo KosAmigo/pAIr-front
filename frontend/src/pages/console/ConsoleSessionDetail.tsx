@@ -41,7 +41,6 @@ import { fmtHm, fmtLeft, fmtShort, fmtTime, useNow, useToast } from './format'
 import { Loading } from './Loading'
 import ProctorPanel from './ProctorPanel'
 import { RetentionBar } from './RetentionBar'
-import EnvCheckCard from './EnvCheckCard'
 import EnvFailures from './EnvFailures'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
@@ -193,7 +192,7 @@ function Detail({
         {tab === 'overview' && <Overview s={s} tasks={tasks.map} participants={d.participants.length} reload={reload} toast={toast.show} />}
         {tab === 'participants' && <Participants s={s} participants={d.participants} reload={reload} toast={toast.show} />}
         {tab === 'live' && <Live d={d} now={now} paused={paused} setPaused={setPaused} reload={reload} />}
-        {tab === 'envfail' && <EnvFailures s={s} participants={d.participants} onOpenLive={(pid) => setParams({ tab: 'live', p: String(pid) }, { replace: true })} />}
+        {tab === 'envfail' && <EnvFailures s={s} participants={d.participants} />}
         {tab === 'results' && <Results s={s} />}
       </div>
       {toast.node}
@@ -859,7 +858,6 @@ function Live({
               </button>
             </div>
             <div className="p-4">
-              {s.proctoring && <EnvCheckCard session={s} p={opened} pollMs={paused ? undefined : 5000} />}
               <ProctorPanel session={s} p={opened} pollMs={paused ? undefined : 5000} onRestored={reload} />
             </div>
           </aside>
