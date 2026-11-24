@@ -8,6 +8,7 @@ import { PageHeader, SelfShell } from '../components/SelfShell'
 import { Button, Panel } from '../components/ui'
 
 const inputClass = 'h-11 w-full rounded-sm border border-line-strong bg-panel px-3 text-[16px] text-text outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
+const roleLabels = { MANAGER: '담당자', PROCTOR: '감독관', ADMIN: '관리자' } as const
 
 function PasswordField({ id, label, value, onChange, autoComplete, describedBy, errorId, inputRef }: {
   id: string
@@ -127,9 +128,8 @@ export default function MyPage() {
               <dl className="grid gap-4 text-[15px] sm:grid-cols-2">
                 <div><dt className="text-text-muted">이름</dt><dd className="mt-1 font-semibold text-text">{profile.name}</dd></div>
                 <div><dt className="text-text-muted">이메일</dt><dd className="mt-1 break-all font-semibold text-text">{profile.email}</dd></div>
-                <div><dt className="text-text-muted">회원 번호</dt><dd className="mt-1 text-text">{profile.id}</dd></div>
-                <div><dt className="text-text-muted">역할</dt><dd className="mt-1 text-text">{profile.role}</dd></div>
-                <div><dt className="text-text-muted">기업 번호</dt><dd className="mt-1 text-text">{profile.companyId ?? '없음'}</dd></div>
+                {profile.role !== 'USER' && <div><dt className="text-text-muted">역할</dt><dd className="mt-1 text-text">{roleLabels[profile.role]}</dd></div>}
+                {profile.companyName != null && <div><dt className="text-text-muted">기업명</dt><dd className="mt-1 text-text">{profile.companyName}</dd></div>}
               </dl>
               <p className="mt-4 text-[13px] text-text-muted">이름과 이메일은 변경할 수 없습니다.</p>
             </Panel>

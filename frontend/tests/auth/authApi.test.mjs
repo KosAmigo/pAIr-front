@@ -27,7 +27,7 @@ describe('이메일 인증 API', () => {
 
   it('가입 요청에 인증 코드를 포함한다', async () => {
     let request
-    const session = { token: 'bearer-token', user: { id: 1, email: 'user@example.com', name: '사용자', role: 'USER' } }
+    const session = { token: 'bearer-token', user: { id: 1, email: 'user@example.com', name: '사용자', role: 'USER', companyId: null, companyName: null } }
     globalThis.fetch = async (url, init) => {
       request = { url, init }
       return Response.json(session, { status: 201 })
@@ -43,6 +43,12 @@ describe('이메일 인증 API', () => {
       code: '012345',
     })
     assert.deepEqual(result, session)
+  })
+
+  it('로그인 응답의 기업명과 기존 식별자 및 역할을 보존한다', async () => {
+    const session = { token: 'bearer-token', user: { id: 2, email: 'manager@example.com', name: '담당자', role: 'MANAGER', companyId: 7, companyName: '테스트 기업' } }
+    globalThis.fetch = async () => Response.json(session)
+    assert.deepEqual(await authApi.login('manager@example.com', 'password123'), session)
   })
 
   it('오류 메시지와 재시도 제한 응답 헤더를 전달한다', async () => {

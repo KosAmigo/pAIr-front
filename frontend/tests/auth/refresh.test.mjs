@@ -6,7 +6,7 @@ import { authApi, AuthRequestError, AuthSessionExpiredError, logoutSession, read
 
 const originalFetch = globalThis.fetch
 const originalStorage = globalThis.localStorage
-const user = { id: 1, name: 'User', email: 'user@example.com', role: 'USER' }
+const user = { id: 1, name: 'User', email: 'user@example.com', role: 'USER', companyId: null, companyName: null }
 const initial = { token: 'old-access', refreshToken: 'old-refresh', sessionKey: 'session-1', user }
 const renewed = { token: 'new-access', refreshToken: 'new-refresh', expiresIn: 900, user }
 
