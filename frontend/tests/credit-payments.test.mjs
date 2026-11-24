@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
-import { cancelReadyPurchase, confirmPurchase, creditsApi } from '../src/credits/creditsApi.ts'
+import { cancelReadyPurchase, confirmPurchase, creditsApi, isFailedPurchase } from '../src/credits/creditsApi.ts'
 import { openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey } from '../src/credits/payment.ts'
 
 const originalFetch = globalThis.fetch
@@ -157,4 +157,15 @@ test('backend refund errors and network errors remain visible', async () => {
   await assert.rejects(creditsApi.refund('order-1'), /잔액이 부족/)
   globalThis.fetch = async () => { throw new Error('offline') }
   await assert.rejects(confirmPurchase('order-1', 'pk', 4990), /백엔드에 연결/)
+})
+
+test('failed purchase check only reports confirmed failures', async () => {
+  session()
+  for (const status of ['FAILED', 'CONFIRMING', 'READY', 'PAID']) {
+    globalThis.fetch = async () => Response.json(page([purchase(status)]))
+    assert.equal(await isFailedPurchase('order-1'), status === 'FAILED')
+  }
+  globalThis.fetch = async () => { throw new Error('offline') }
+  assert.equal(await isFailedPurchase('order-1'), false)
+  assert.match(paymentStatusMessage('FAILED'), /지급되지 않았습니다/)
 })
