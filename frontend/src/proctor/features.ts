@@ -2,17 +2,17 @@
  * 휴대폰 보조 캠 사용 여부.
  * 영상(WebRTC·TURN) 대신 JPEG 프레임을 서버 중계로 응시자 PC 에 보내는 방식으로 다시 켠다 (2026-11-23 확정).
  * 분석은 응시자 PC 의 별도 Worker 에서 하고, 서버는 프레임을 그대로 넘기기만 한다.
- * 기본은 켜짐이다. 개발 중 휴대폰 없이 확인할 때는 개발 서버를 `VITE_PHONE_CAM_ENABLED=false` 로 띄운다
+ * 2026-11-24 결정: 사용 안 함이 기본이다(꺼짐). 켜려면 개발 서버를 `VITE_PHONE_CAM_ENABLED=true` 로 띄운다
  * (휴대폰 캠이 입장·시험 중 연결 조건과 환경 점검 항목에서 빠진다).
  */
-export const PHONE_CAM_ENABLED = (import.meta.env?.VITE_PHONE_CAM_ENABLED as string | undefined) !== 'false'
+export const PHONE_CAM_ENABLED = (import.meta.env?.VITE_PHONE_CAM_ENABLED as string | undefined) === 'true'
 
 /**
- * PC 화면 공유 사용 여부.
+ * PC 화면 공유 사용 여부. 2026-11-24 결정: 사용 안 함(꺼짐).
  * 지금은 웹캠(MediaPipe 몸·고개 분석)과 브라우저 이벤트(탭·창·마우스 이탈), 이벤트 스냅샷만으로 감독한다.
  * false 면 화면 공유 요청·안내를 보여 주지 않고 입장·시험 중 연결 조건에서도 뺀다. 나중에 쓰려면 true 로 바꾼다.
  */
-export const SCREEN_SHARE_ENABLED = true
+export const SCREEN_SHARE_ENABLED = false
 
 /**
  * PC 웹캠 분석을 Web Worker 에서 돌릴지 (메인 스레드가 안 막혀 저사양 PC 에서도 시험 화면이 덜 끊긴다).
