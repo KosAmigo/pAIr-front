@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { LayoutDashboard } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useAuth } from '../auth/auth'
+import { canUseSelfDiagnosis, useAuth } from '../auth/auth'
 import { springs } from '../lib/motion'
 import { cx } from './cx'
 import { Aurora, PageTransition, Reveal, ScrambleText } from './fx'
@@ -22,15 +22,17 @@ const tabs = [
 export function SelfShell({ children, header }: { children: ReactNode; header?: ReactNode }) {
   const { pathname } = useLocation()
   const { user } = useAuth()
+  // 기업 계정은 마이페이지 같은 계정 화면만 이 셸을 쓴다. 자가진단 메뉴와 크레딧·충전은 보이지 않는다
+  const selfUse = canUseSelfDiagnosis(user?.role)
   return (
     <div className="relative isolate flex h-full flex-col overflow-hidden">
       <Aurora variant="band" className="h-[360px]" />
       <header className="glass relative z-20 flex h-14 shrink-0 items-stretch rounded-none border-0 border-b border-line/70 px-8 shadow-none">
         <div className="flex items-center gap-3">
           <Logo />
-          <ModeBadge mode="self" />
+          {selfUse && <ModeBadge mode="self" />}
         </div>
-        <nav aria-label="자가진단 메뉴" className="ml-10 flex items-stretch gap-6">
+        {selfUse && <nav aria-label="자가진단 메뉴" className="ml-10 flex items-stretch gap-6">
           {tabs.map((t) => {
             const active = t.match.some((m) => pathname.startsWith(m))
             return (
@@ -55,12 +57,12 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
               </NavLink>
             )
           })}
-        </nav>
+        </nav>}
         <div className="ml-auto flex items-center">
-          <div className="mr-3"><CreditPill /></div>
-          <Link to="/credits" className="mr-3 inline-flex h-8 items-center rounded-md border border-line px-3 text-[14px] font-medium text-brand hover:bg-panel-raised">
+          {selfUse && <div className="mr-3"><CreditPill /></div>}
+          {selfUse && <Link to="/credits" className="mr-3 inline-flex h-8 items-center rounded-md border border-line px-3 text-[14px] font-medium text-brand hover:bg-panel-raised">
             충전
-          </Link>
+          </Link>}
           {user && user.role !== 'USER' && (
             <Link
               to="/console"
