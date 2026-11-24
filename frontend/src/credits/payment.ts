@@ -18,6 +18,19 @@ export function parsePaymentReturn(search: string): PaymentReturn {
   return { kind: 'success', orderId, paymentKey, amount }
 }
 
+export function paymentStatusLabel(status: string): string {
+  switch (status) {
+    case 'READY': return '결제 전'
+    case 'PAID': return '완료'
+    case 'FAILED': return '실패'
+    case 'CANCELED': return '취소'
+    case 'REFUNDED': return '환불'
+    case 'CONFIRMING': return '승인 확인 중'
+    case 'WAITING_FOR_DEPOSIT': return '입금 대기'
+    default: return `알 수 없는 상태 (${status})`
+  }
+}
+
 export function paymentStatusMessage(status: string): string {
   switch (status) {
     case 'PAID': return '결제가 승인되어 크레딧이 지급되었습니다.'
