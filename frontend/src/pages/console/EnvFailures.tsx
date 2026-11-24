@@ -1,0 +1,102 @@
+// 콘솔 "점검 미통과" 탭: 환경 점검에서 실패한 항목이 있는데도 입장한 응시자를 모아 보여 준다.
+// 진행 중(LIVE) 회차에서는 행을 누르면 실시간 현황의 감독 기록 서랍으로 이동하고, 그 밖의 단계에서는 아래에 점검 결과와 안내 보내기를 연다.
+import { useState } from 'react'
+import { Eye, MailCheck } from 'lucide-react'
+import { ErrorState } from '../../components/ErrorState'
+import { consoleApi, type EnvCheckFailureView, type ParticipantView, type SessionSummary } from '../../consoleApi'
+import { useLoad } from '../../data/consoleSessions'
+import EnvCheckCard from './EnvCheckCard'
+import { fmtShort } from './format'
+import { Loading } from './Loading'
+
+const POLL_MS = 5000
+
+export default function EnvFailures({
+  s,
+  participants,
+  onOpenLive,
+}: {
+  s: SessionSummary
+  participants: ParticipantView[]
+  /** 진행 중인 회차에서 응시자의 감독 기록을 연다 */
+  onOpenLive: (participantId: number) => void
+}) {
+  const list = useLoad(`envfail-${s.id}`, () => consoleApi.envCheckFailures(s.id), POLL_MS)
+  const [selected, setSelected] = useState<number | null>(null)
+  const live = s.phase === 'LIVE'
+  const rows = list.data ?? []
+  const chosen = selected == null ? undefined : participants.find((p) => p.id === selected)
+
+  const open = (r: EnvCheckFailureView) => (live ? onOpenLive(r.participantId) : setSelected(selected === r.participantId ? null : r.participantId))
+
+  if (list.error && !list.data) return <ErrorState compact message={list.error} onRetry={list.reload} />
+  if (!list.data) return <Loading />
+
+  return (
+    <div className="flex flex-col gap-4">
+      <section className="rounded-md border border-line bg-panel shadow-sm">
+        <header className="flex items-center gap-2 border-b border-line px-4 py-3">
+          <h2 className="text-[15px] font-semibold text-text">점검 미통과 입장자</h2>
+          <span className="tnum font-mono text-[13px] text-text-muted">{rows.length}명</span>
+          <span className="ml-auto text-[12px] text-text-faint">점검에서 실패한 항목이 있는데도 입장한 응시자입니다</span>
+        </header>
+        {rows.length === 0 ? (
+          <p className="py-16 text-center text-[14px] text-text-muted">점검에 실패한 채 입장한 응시자가 없습니다.</p>
+        ) : (
+          <table className="w-full text-[14px]">
+            <thead>
+              <tr className="h-9 border-b border-line text-left">
+                {['응시자', '실패한 항목', '입장', '안내', ''].map((h) => (
+                  <th key={h} className="px-4 text-[13px] font-semibold text-text-muted">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.participantId} className="border-b border-line align-top last:border-0">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-text">{r.name}</p>
+                    <p className="font-mono text-[12px] text-text-muted">{r.email}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <ul className="flex flex-col gap-1">
+                      {r.failed.map((f) => (
+                        <li key={f.id} className="text-[13px]">
+                          <span className="font-semibold text-alert">{f.label}</span>
+                          {f.detail && <span className="text-text-muted"> · {f.detail}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                  <td className="tnum px-4 py-3 font-mono text-[13px] text-text">{fmtShort(r.enteredAt)}</td>
+                  <td className="px-4 py-3 text-[13px]">
+                    {r.noticeSent ? (
+                      <span className="inline-flex items-center gap-1 text-signal">
+                        <MailCheck size={14} aria-hidden /> 보냄
+                      </span>
+                    ) : (
+                      <span className="text-text-faint">안 보냄</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => open(r)}
+                      aria-label={`${r.name} ${live ? '감독 기록 열기' : '점검 결과 보기'}`}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-semibold text-brand hover:bg-panel-raised"
+                    >
+                      <Eye size={14} aria-hidden /> {live ? '감독 기록' : '점검 결과'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+      {!live && chosen && <EnvCheckCard session={s} p={chosen} pollMs={POLL_MS} />}
+    </div>
+  )
+}
