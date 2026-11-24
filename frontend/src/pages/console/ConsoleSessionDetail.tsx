@@ -2,8 +2,6 @@
 // 데이터는 모두 백엔드(consoleApi)에서 온다. 회차 상세는 진행 중이면 5초, 아니면 30초마다 다시 부른다.
 // 남은 시간은 백엔드 serverNow 와 브라우저 시계의 차이를 보정해 센다.
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
-import { duration, easing } from '../../lib/motion'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowDownUp, Camera, CircleAlert, Download, FileUp, Loader2, Pause, Play, RotateCw, UserPlus, X } from 'lucide-react'
 import { cx } from '../../components/cx'
@@ -13,8 +11,6 @@ import { Button, ScoreChip } from '../../components/ui'
 import { ConsoleHero, HeroSep, PillTabs } from './ConsoleHero'
 import {
   companyLabel,
-  EVENT_LABEL,
-  isCameraEvent,
   PSTATE_LABEL,
   stateOf,
   suspectsOf,
@@ -40,6 +36,7 @@ import { ConfirmModal, Modal, RowMenu } from './common'
 import { fmtHm, fmtLeft, fmtShort, fmtTime, useNow, useToast } from './format'
 import { Loading } from './Loading'
 import ProctorPanel from './ProctorPanel'
+import { EventDot } from './EventDot'
 import { RetentionBar } from './RetentionBar'
 import EnvFailures from './EnvFailures'
 import { canManageSessions, useAuth } from '../../auth/auth'
@@ -711,8 +708,12 @@ function Live({
   const events = useMemo(() => ev.data?.list ?? [], [ev.data])
   const [liveParams] = useSearchParams()
   const [open, setOpen] = useState<number | null>(() => Number(liveParams.get('p')) || null) // 점검 미통과 탭에서 넘어온 응시자
-  const names = useMemo(() => new Map(d.participants.map((p) => [p.id, p.name])), [d.participants])
-  const feed = useMemo(() => [...events].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)), [events])
+  // 응시자별 이벤트: 표의 빨간 점이 자기 응시자 기록만 보여 준다
+  const byParticipant = useMemo(() => {
+    const m = new Map<number, ProctorEventView[]>()
+    for (const e of events) m.set(e.participantId, [...(m.get(e.participantId) ?? []), e])
+    return m
+  }, [events])
 
   // 새로 생긴 이벤트는 위에서 밀려 들어오고 잠깐 강조한다 (DESIGN.md §7-9). 처음 불러온 것들은 강조하지 않는다
   const [seen, setSeen] = useState<{ ids: Set<number>; fresh: Set<number> } | null>(null)
@@ -726,7 +727,6 @@ function Live({
   const total = Date.parse(s.endsAt) - Date.parse(s.startsAt)
   const counts = (st: ResultState) => d.participants.filter((p) => stateOf(p) === st).length
   const opened = d.participants.find((p) => p.id === open)
-  const evCount = (pid: number) => events.filter((e) => e.participantId === pid).length
 
   return (
     <div className="flex flex-col gap-6">
@@ -756,10 +756,15 @@ function Live({
       </section>
       {ev.error && <ErrorState compact message={ev.error} onRetry={ev.reload} />}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div>
         <section className="overflow-hidden rounded-md border border-line bg-panel shadow-sm">
           <header className="flex h-10 items-center border-b border-line px-4">
             <span className="label">PARTICIPANTS</span>
+            {s.proctoring && (
+              <span className="ml-auto inline-flex items-center gap-1.5 text-[12px] text-text-muted">
+                <i className="size-2 rounded-full bg-alert" aria-hidden /> 빨간 점을 누르면 이벤트 기록
+              </span>
+            )}
           </header>
           {d.participants.length === 0 ? (
             <p className="py-16 text-center text-[14px] text-text-muted">대상자가 없습니다.</p>
@@ -787,11 +792,7 @@ function Live({
                     <td className="tnum px-4 font-mono text-[13px] text-text-muted">{p.enteredAt ? fmtHm(p.enteredAt) : '—'}</td>
                     <td className="tnum px-4 font-mono text-[13px] text-text-muted">{p.startedAt ? fmtHm(p.startedAt) : '—'}</td>
                     <td className="px-4 text-right">
-                      {evCount(p.id) ? (
-                        <span className="tnum rounded-sm bg-caution/12 px-1.5 py-0.5 font-mono text-[12px] font-semibold text-caution">{evCount(p.id)}</span>
-                      ) : (
-                        <span className="text-text-faint">0</span>
-                      )}
+                      <EventDot name={p.name} events={byParticipant.get(p.id) ?? []} freshIds={fresh} onOpenAll={() => setOpen(p.id)} />
                     </td>
                     <td className="tnum px-4 font-mono text-[13px] text-text-muted">
                       {p.submittedAt ? fmtHm(p.submittedAt) : '—'}
@@ -801,43 +802,6 @@ function Live({
               </tbody>
             </table>
           )}
-        </section>
-
-        <section className="flex max-h-[560px] flex-col overflow-hidden rounded-md border border-line bg-panel shadow-sm" aria-live="polite">
-          <header className="flex h-10 shrink-0 items-center border-b border-line px-4">
-            <span className="label">EVENT FEED</span>
-            <span className="tnum ml-auto font-mono text-[12px] text-text-muted">{feed.length}건</span>
-          </header>
-          <ol className="min-h-0 flex-1 overflow-auto">
-            {ev.loading && (
-              <li>
-                <Loading text="감독 이벤트를 불러오는 중" className="py-12" />
-              </li>
-            )}
-            {ev.data && feed.length === 0 && <li className="py-12 text-center text-[14px] text-text-muted">{s.proctoring ? '아직 감독 이벤트가 없습니다.' : '감독을 쓰지 않는 회차입니다.'}</li>}
-            <AnimatePresence initial={false}>
-              {feed.map((e) => (
-                <motion.li key={e.id} initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: duration.normal, ease: easing.expo }}>
-                  <button
-                    type="button"
-                    onClick={() => setOpen(e.participantId)}
-                    className={cx('flex w-full items-start gap-3 border-b border-line px-4 py-3 text-left transition-colors duration-500 hover:bg-panel-raised', fresh.has(e.id) && 'bg-brand-dim')}
-                  >
-                    <i className={cx('mt-1.5 size-2 shrink-0', isCameraEvent(e) ? 'rounded-full bg-alert' : 'rotate-45 bg-caution')} aria-hidden />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[14px] text-text">
-                        <b className="font-semibold">{names.get(e.participantId) ?? `#${e.participantId}`}</b> {EVENT_LABEL[e.type] ?? e.type}
-                      </span>
-                      <span className="tnum font-mono text-[12px] text-text-muted">
-                        {fmtTime(e.startedAt).slice(11)}
-                        {e.confidence != null && ` │ 확신도 ${e.confidence.toFixed(2)}`}
-                      </span>
-                    </span>
-                  </button>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ol>
         </section>
       </div>
 
