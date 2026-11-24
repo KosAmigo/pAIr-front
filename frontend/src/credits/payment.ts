@@ -39,6 +39,7 @@ export function paymentStatusMessage(status: string): string {
     case 'READY': return '아직 결제가 완료되지 않았습니다.'
     case 'REFUNDED': return '테스트 환불 처리된 주문입니다.'
     case 'CANCELED': return '취소된 주문입니다.'
+    case 'FAILED': return '결제가 승인되지 않아 크레딧이 지급되지 않았습니다. 충전 상품에서 새로 결제해 주세요.'
     default: return `주문 상태: ${status}. 크레딧 지급 여부를 구매 내역에서 확인해 주세요.`
   }
 }

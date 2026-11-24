@@ -82,6 +82,15 @@ async function confirmPurchaseOnce(orderId: string, paymentKey: string, amount: 
   return creditsApi.confirm(orderId, paymentKey, amount)
 }
 
+/** 승인 요청이 오류로 끝났을 때 실패가 확정된 주문인지 확인한다. 조회도 안 되면 결과를 모르는 것이므로 false */
+export async function isFailedPurchase(orderId: string): Promise<boolean> {
+  try {
+    return (await findPurchase(orderId)).status === 'FAILED'
+  } catch {
+    return false
+  }
+}
+
 export async function cancelReadyPurchase(orderId: string): Promise<Purchase> {
   const order = await findPurchase(orderId)
   return order.status === 'READY' ? creditsApi.cancel(orderId) : order

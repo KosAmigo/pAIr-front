@@ -6,7 +6,7 @@ import { AuthRequestError } from '../auth/authApi'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ErrorState } from '../components/ErrorState'
 import { useCredits } from '../data/credits'
-import { cancelReadyPurchase, confirmPurchase, creditsApi, type CreditProduct, type LedgerEntry, type Page, type Purchase } from '../credits/creditsApi'
+import { cancelReadyPurchase, confirmPurchase, creditsApi, isFailedPurchase, type CreditProduct, type LedgerEntry, type Page, type Purchase } from '../credits/creditsApi'
 import { openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey, type PaymentReturn } from '../credits/payment'
 
 type SuccessReturn = Extract<PaymentReturn, { kind: 'success' }>
@@ -87,11 +87,17 @@ export default function Credits() {
     setBusy(true)
     try {
       const order = await confirmPurchase(result.orderId, result.paymentKey, result.amount)
-      setNotice(paymentStatusMessage(order.status))
+      if (order.status === 'FAILED') setActionError(paymentStatusMessage(order.status))
+      else setNotice(paymentStatusMessage(order.status))
       if (order.status !== 'READY') clearPending()
       refresh()
     } catch (error) {
-      setActionError(`승인 결과를 확인하지 못했습니다: ${message(error)} 구매 내역에서 주문 상태를 확인하거나 재확인해 주세요.`)
+      if (await isFailedPurchase(result.orderId)) {
+        setActionError(paymentStatusMessage('FAILED'))
+        clearPending()
+      } else {
+        setActionError(`승인 결과를 확인하지 못했습니다: ${message(error)} 구매 내역에서 주문 상태를 확인하거나 재확인해 주세요.`)
+      }
       refresh()
     } finally {
       setBusy(false)
@@ -172,6 +178,10 @@ export default function Credits() {
         const updated = await creditsApi[action](order.orderId)
         setNotice(paymentStatusMessage(updated.status))
         if (pending?.orderId === order.orderId && updated.status !== 'READY') clearPending()
+      } catch (error) {
+        if (action !== 'recover' || !(await isFailedPurchase(order.orderId))) throw error
+        if (pending?.orderId === order.orderId) clearPending()
+        throw new Error(paymentStatusMessage('FAILED'), { cause: error })
       } finally {
         refresh()
       }
