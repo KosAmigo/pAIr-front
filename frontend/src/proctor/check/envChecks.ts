@@ -119,7 +119,7 @@ export function audioVerdict(labels: string[] | null): Verdict {
   if (labels === null) return { status: 'warn', detail: '마이크 권한이 없어 이어폰 연결을 확인하지 못했습니다.' }
   const found = [...new Set(labels.filter((l) => EARBUD.some((p) => p.test(l))))]
   if (found.length) return { status: 'fail', detail: `이어폰·헤드셋이 연결되어 있습니다: ${found.join(', ')}. 연결을 끊어 주세요.` }
-  return { status: 'pass', detail: labels.length ? `${labels.length}개 장치, 이어폰 없음` : '오디오 장치 없음' }
+  return { status: 'pass', detail: labels.length ? '이어폰 없음' : '오디오 장치 없음' }
 }
 
 export function screensVerdict(count: number | null, isExtended: boolean | undefined): Verdict {

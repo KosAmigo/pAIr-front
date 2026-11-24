@@ -58,13 +58,32 @@ const MIN_ANALYSIS_GAP_MS = 66
 /** 분석이 이 횟수만큼 연달아 실패하면 그 단계를 실패로 끝낸다 */
 const MAX_ANALYSIS_FAILURES = 3
 
+/** 이 PC 의 분석이 느릴 때 영상 밑에 띄우는 경고: 성능이 더 좋은 다른 PC 로 응시하라고 안내한다 (입장은 막지 않는다) */
+function SlowPcNotice({ level }: { level: Exclude<PerfLevel, 'ok'> }) {
+  const unfit = level === 'unfit'
+  return (
+    <div
+      role="alert"
+      data-testid="slow-pc-notice"
+      className={`flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-[13px] leading-5 ${unfit ? 'border-alert/40 bg-alert/10 text-alert' : 'border-caution/40 bg-caution/5 text-caution'}`}
+    >
+      <strong className="font-semibold">{unfit ? '이 PC 로는 시험 감독이 멈출 수 있습니다' : '이 PC 는 분석이 느린 편입니다'}</strong>
+      <span className="break-keep">
+        성능이 더 좋은 다른 PC 에서 시험을 봐 주세요. 다른 프로그램·탭을 닫고 다시 점검해 볼 수도 있습니다. 이 안내만으로 입장이 막히지는 않지만, 감독이 끊기면 시험 기록에 남습니다.
+      </span>
+    </div>
+  )
+}
+
 /** 카메라 미리보기 + 휴대폰 연결 (EnvCheckPanel 옆이나, 입장 화면의 왼쪽 스포트라이트에 둔다) */
 export function EnvAside() {
+  const { perfLevel } = useCamHub()
   return (
     <div className="flex flex-col gap-3">
       <div className="aspect-[4/3] overflow-hidden rounded-xl border border-line bg-panel-raised">
         <CamPreview />
       </div>
+      {perfLevel && perfLevel !== 'ok' && <SlowPcNotice level={perfLevel} />}
       {PHONE_CAM_ENABLED && <PhonePairCard />}
     </div>
   )
@@ -75,8 +94,14 @@ export default function EnvCheckPanel({
   onPassed,
   onProgress,
   withAside = true,
+  finishLabel = '점검 결과 저장',
+  allowSkip = true,
 }: {
+  /** false 면 테스트용 "점검 건너뛰기"를 보여 주지 않는다 (사전 테스트는 건너뛸 이유가 없다) */
+  allowSkip?: boolean
   onPassed: (r: EnvCheckResult) => void
+  /** 점검이 끝난 뒤 누르는 버튼 문구 (사전 테스트는 저장하지 않으므로 "연습 끝내기"로 바꾼다) */
+  finishLabel?: string
   /** 점검 상태가 바뀔 때마다 (콘솔이 실시간으로 보게 서버로 올리는 용도. 호출하는 쪽이 간격을 조절한다) */
   onProgress?: (r: EnvCheckResult) => void
   withAside?: boolean
@@ -87,8 +112,6 @@ export default function EnvCheckPanel({
   const [result, setResult] = useState<EnvCheckResult | null>(null)
   const [run, setRun] = useState(0)
   const [skipPhone, setSkipPhone] = useState(false)
-  /** 이 PC 의 분석 속도 판정 등급. 'unfit' 이면 다른 PC 를 쓰라는 안내를 크게 보여 준다 (입장은 막지 않는다) */
-  const [perfLevel, setPerfLevel] = useState<PerfLevel | null>(null)
   /** 휴대폰으로 감지된 장면: 응시자가 맞는지 확인할 때까지 스캔이 기다린다 */
   const [found, setFound] = useState<string[]>([])
 
@@ -234,8 +257,35 @@ export default function EnvCheckPanel({
         }
       }
 
-      // 1) 브라우저·장치 (즉시)
-      setPrompt('')
+      // 이 PC 의 분석 속도: 목록에서 기다리지 않고 장치 점검과 동시에 백그라운드로 잰다.
+      // 조명·얼굴 위치 점검과는 같은 분석 모델을 쓰므로 겹치지 않게, 그 점검을 시작하기 전에 끝낸다.
+      // 느리면 영상 밑에 경고를 띄운다 (입장은 막지 않는다. 결과는 감독 기록에 남는다)
+      const measurePc = async () => {
+        camHub.setPerfLevel(null)
+        set('performance', { status: 'running', detail: '분석 속도를 재는 중입니다' })
+        try {
+          const pcSample = await measurePerf({ vision, video, isCancelled: () => cancelled })
+          // 휴대폰 분석 비용도 함께 재서 웹캠·휴대폰 분석 간격을 같이 늘린다
+          const phoneMs = cancelled ? undefined : await camHub.probePhoneAnalysis(video)
+          const verdict = perfVerdict({ ...pcSample, phoneMs })
+          if (cancelled) return
+          camHub.setAnalysisIntervalMs(verdict.intervalMs)
+          camHub.setPhoneAnalysisIntervalMs(verdict.phoneIntervalMs)
+          camHub.setPerfLevel(verdict.level)
+          apply('performance', verdict)
+        } catch (e) {
+          if (cancelled) return
+          console.warn('분석 속도 측정 실패:', e)
+          apply('performance', { status: 'warn', detail: '분석 속도를 재지 못했습니다. 느린 PC일 수 있어 분석 간격을 늘려 진행합니다.' })
+          camHub.setAnalysisIntervalMs(PERF.intervalMs.slow)
+          camHub.setPhoneAnalysisIntervalMs(PERF.phoneIntervalMs.slow)
+          camHub.setPerfLevel('slow')
+        }
+      }
+      const perfTask = todo('performance') ? measurePc() : null
+
+      // 1) 브라우저·장치 (즉시). 속도 측정 동안 얼굴이 보이도록 바르게 앉아 있으라고 안내한다
+      setPrompt(perfTask ? '화면을 정면으로 보고 가만히 앉아 주세요' : '')
       if (todo('browser')) {
         if (isAutomated()) apply('browser', { status: 'fail', detail: '자동화 도구로 제어되는 브라우저입니다.' })
         else apply('browser', isChromium() ? { status: 'pass', detail: 'Chromium 계열' } : { status: 'warn', detail: 'Chrome·Edge 를 권장합니다 (모니터 확인 기능).' })
@@ -255,6 +305,8 @@ export default function EnvCheckPanel({
         const noise = audio.noiseDb === null ? '' : ` · 소음 ${audio.noiseDb.toFixed(0)} dBFS${noisy ? ' (시끄러움)' : ''}`
         apply('audio', { status: av.status === 'pass' && noisy ? 'warn' : av.status, detail: av.detail + noise })
       }
+      // 속도 측정이 아직 도는 중이면 끝날 때까지만 기다린다 (같은 분석 모델을 겹쳐 쓰면 서로 느려져 측정이 틀어진다)
+      await perfTask
       if (cancelled) return
 
       // 2) 조명·자세: 좋은 상태가 1.5초 이어지면 통과 (둘 중 통과하지 못한 것만 다시 본다)
@@ -283,31 +335,6 @@ export default function EnvCheckPanel({
         })
         if (needLight) apply('lighting', lastLight)
         if (needPlace) apply('placement', lastPlace)
-      }
-      if (cancelled) return
-
-      // 2-2) 이 PC 의 분석 속도: 입장은 막지 않는다. 느리면 안내하고 분석 간격을 늘려 진행하며 점검 결과(감독 기록)에 남는다
-      if (todo('performance')) {
-        setPerfLevel(null)
-        set('performance', { status: 'running', detail: '분석 속도를 재는 중입니다' })
-        setPrompt('화면을 정면으로 보고 가만히 앉아 주세요 (이 PC의 분석 속도를 재는 중입니다)')
-        try {
-          const pcSample = await measurePerf({ vision, video, isCancelled: () => cancelled })
-          // 휴대폰 분석 비용도 함께 재서 웹캠·휴대폰 분석 간격을 같이 늘린다
-          const phoneMs = cancelled ? undefined : await camHub.probePhoneAnalysis(video)
-          const verdict = perfVerdict({ ...pcSample, phoneMs })
-          if (cancelled) return
-          camHub.setAnalysisIntervalMs(verdict.intervalMs)
-          camHub.setPhoneAnalysisIntervalMs(verdict.phoneIntervalMs)
-          setPerfLevel(verdict.level)
-          apply('performance', verdict)
-        } catch (e) {
-          if (cancelled) return
-          console.warn('분석 속도 측정 실패:', e)
-          apply('performance', { status: 'warn', detail: '분석 속도를 재지 못했습니다. 느린 PC일 수 있어 분석 간격을 늘려 진행합니다.' })
-          camHub.setAnalysisIntervalMs(PERF.intervalMs.slow)
-          camHub.setPhoneAnalysisIntervalMs(PERF.phoneIntervalMs.slow)
-        }
       }
       if (cancelled) return
 
@@ -395,14 +422,15 @@ export default function EnvCheckPanel({
 
   const passed = result?.pc.passed && (result.phone?.passed ?? true)
   // 테스트용: 모든 점검을 통과한 것으로 보고 넘어간다. 개발 서버이거나 VITE_ALLOW_CHECK_SKIP=true 로 빌드했을 때만 보인다
-  const canSkipChecks = CAN_SKIP_CHECKS
+  const canSkipChecks = CAN_SKIP_CHECKS && allowSkip
   const skipAllChecks = () => {
     const skipped = items.map((i) => ({ ...i, status: 'pass' as const, detail: '테스트용으로 건너뜀' }))
     markChecksSkipped()
     onPassed({ pc: makeReport(skipped), phone: null })
   }
   /** 통과(pass)가 아닌 항목 수. 실패·주의·미완료 모두 다시 본다 */
-  const redoCount = items.filter((i) => i.status !== 'pass').length
+  const visibleItems = items.filter((i) => i.id !== 'performance')
+  const redoCount = visibleItems.filter((i) => i.status !== 'pass').length
   const rerun = (all: boolean) => {
     fullRerunRef.current = all
     setSkipPhone(false)
@@ -427,13 +455,8 @@ export default function EnvCheckPanel({
           </div>
         )}
         {found.length > 0 && !result && <p className="text-[13px] text-text-muted">방금 찾은 것: {found.join(', ')}</p>}
-        {perfLevel === 'unfit' && (
-          <div role="alert" data-testid="slow-pc-notice" className="flex flex-col gap-1 rounded-lg border border-alert/40 bg-alert/10 px-3 py-2.5 text-[14px] leading-6 text-alert">
-            <strong className="font-semibold">이 PC 로는 시험 감독이 멈출 수 있습니다</strong>
-            <span className="break-keep">사양이 더 좋은 다른 PC 로 응시해 주세요. 다른 프로그램·탭을 모두 닫고 다시 점검해 볼 수도 있습니다. 이 안내만으로 입장이 막히지는 않지만, 감독이 끊기면 시험 기록에 남습니다.</span>
-          </div>
-        )}
-        <CheckList items={items} />
+        {/* 분석 속도는 백그라운드로 재고 결과는 영상 밑 경고(EnvAside)로만 보여 준다. 감독 기록에는 그대로 남는다 */}
+        <CheckList items={visibleItems} />
         {canSkipChecks && (
           <div className="flex items-center gap-3 rounded-lg border border-dashed border-line-strong px-3 py-2">
             <span className="text-[13px] text-text-muted">테스트용: 모든 점검을 통과한 것으로 처리합니다. 감독 기록에는 건너뜀으로 남습니다.</span>
@@ -467,7 +490,7 @@ export default function EnvCheckPanel({
                 onPassed(result)
               }}
             >
-              점검 결과 저장
+              {finishLabel}
             </Button>
             {redoCount > 0 && (
               <Button variant="ghost" size="sm" onClick={() => rerun(false)}>

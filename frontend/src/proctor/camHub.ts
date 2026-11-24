@@ -23,6 +23,7 @@ import { toScreenViolation, type ScreenEventType } from './screen/screenContract
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
 import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED, VISION_WORKER_ENABLED } from './features.ts'
 import { PC_MIN_ANALYZE_INTERVAL_MS, PHONE_MIN_ANALYZE_INTERVAL_MS } from './core/frameBudget.ts'
+import type { PerfLevel } from './check/perfCheck.ts'
 import { captureSnapshot, frameLoop, openCamera, stopCamera } from './vision/camera.ts'
 import { forcedDelegate } from './vision/delegate.ts'
 import { guardedAnalyzer } from './vision/guardedAnalyzer.ts'
@@ -81,6 +82,8 @@ export type CamState = {
   gate: Gate
   /** 사전 테스트(연습): 서버에 아무것도 보내지 않는다 */
   practice: boolean
+  /** 환경 점검이 백그라운드로 잰 이 PC 의 분석 속도 등급. 아직 못 쟀으면 null (느리면 영상 밑에 경고를 띄운다) */
+  perfLevel: PerfLevel | null
   monitor: 'idle' | 'calibrating' | 'monitoring' | 'error'
   calibProgress: number
   active: ActiveRule[]
@@ -114,6 +117,7 @@ const INITIAL: CamState = {
   screenError: null,
   gate: { status: 'ok', missing: [], graceLeftMs: GRACE_MS, newlyExpired: [] },
   practice: false,
+  perfLevel: null,
   monitor: 'idle',
   calibProgress: 0,
   active: [],
@@ -385,6 +389,13 @@ export const camHub = {
       Object.assign(video.style, { position: 'fixed', width: '2px', height: '2px', opacity: '0', pointerEvents: 'none', left: '0', top: '0' })
       document.body.appendChild(video)
     }
+    // stop() 이 video 를 버린 뒤(개발 모드 StrictMode 의 이중 마운트 등) 새로 만들어진 video 에도 열려 있는 스트림을 다시 붙인다
+    if (stream?.active && video.srcObject !== stream) {
+      video.srcObject = stream
+      video.muted = true
+      video.playsInline = true
+      void video.play().catch(() => undefined)
+    }
     return video
   },
   stream: () => stream,
@@ -402,7 +413,7 @@ export const camHub = {
     viewers = newViewerSender()
     outbox = new CamOutbox(invite)
     resetPhoneSide()
-    set({ ...INITIAL, invite, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind })
+    set({ ...INITIAL, invite, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind, perfLevel: state.perfLevel })
     relay = new RelaySocket(() => ({ type: 'hello-pc', invite }), onRelayMessage, onRelayOpenChange, onRelayBinary)
     void outbox.flush()
   },
@@ -417,7 +428,7 @@ export const camHub = {
     outbox = null
     resetPhoneSide()
     const key = `practice-${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`
-    set({ ...INITIAL, practice: true, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind })
+    set({ ...INITIAL, practice: true, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind, perfLevel: state.perfLevel })
     relay = new RelaySocket(() => ({ type: 'hello-pc', invite: key, practice: true }), onRelayMessage, onRelayOpenChange, onRelayBinary)
   },
 
@@ -491,6 +502,7 @@ export const camHub = {
           stream = await openCamera(v, 'user')
           stream.getVideoTracks().forEach((t) => t.addEventListener('ended', () => set({ webcamLive: false })))
         }
+        camHub.video() // 열리는 사이 video 가 바뀌었으면 현재 video 에 스트림을 붙인다
         set({ webcamLive: true })
         // 무거운 모델은 실전 시험에서만 내려받는다 (자가진단 화면에는 영향 없음). 기본은 Worker 에서 불러온다
         await getVision()
@@ -592,6 +604,10 @@ export const camHub = {
    */
   setAnalysisIntervalMs(ms: number) {
     analysisIntervalMs = Math.min(500, Math.max(PC_MIN_ANALYZE_INTERVAL_MS, Math.round(ms)))
+  },
+  /** 환경 점검이 잰 분석 속도 등급을 알린다 (영상 밑 경고용) */
+  setPerfLevel(level: PerfLevel | null) {
+    set({ perfLevel: level })
   },
 
   /**
