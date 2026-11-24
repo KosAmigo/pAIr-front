@@ -11,6 +11,8 @@ import {
   Film,
   Hand,
   Link2,
+  ScreenShare,
+  ScreenShareOff,
   Loader2,
   Maximize2,
   Monitor,
@@ -67,6 +69,9 @@ const ICON: Record<EventType, LucideIcon> = {
   CONNECTION_LOST: WifiOff,
   LINK_EXPIRED: WifiOff,
   LINK_RESTORED: Link2,
+  SCREEN_STOPPED: ScreenShareOff,
+  SCREEN_PARTIAL: ScreenShare,
+  SCREEN_RESTARTED: ScreenShare,
 }
 const LOW = 0.8
 

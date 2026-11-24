@@ -42,9 +42,10 @@ import { Loading } from './Loading'
 import ProctorPanel from './ProctorPanel'
 import { RetentionBar } from './RetentionBar'
 import EnvCheckCard from './EnvCheckCard'
+import EnvFailures from './EnvFailures'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
-type Tab = 'overview' | 'participants' | 'live' | 'results'
+type Tab = 'overview' | 'participants' | 'live' | 'envfail' | 'results'
 /** 채점 항목 (이름 → 배점·색). 결과의 items 는 항목 이름을 키로 쓴다 */
 const ITEM_KEYS = [
   ['usage', 'AI 활용력', 20, 'var(--color-branch-2)'],
@@ -134,6 +135,7 @@ function Detail({
   const fallback: Tab = phase === 'LIVE' ? 'live' : phase === 'ENDED' ? 'results' : 'overview'
   let tab = (params.get('tab') as Tab) || fallback
   if ((tab === 'live' && phase !== 'LIVE') || (tab === 'results' && phase !== 'ENDED')) tab = fallback
+  if (tab === 'envfail' && !s.proctoring) tab = fallback
   const setTab = (t: Tab) => setParams({ tab: t }, { replace: true })
   const toast = useToast()
 
@@ -182,6 +184,7 @@ function Detail({
             { value: 'overview', label: '개요' },
             { value: 'participants', label: <>대상자 <span className="tnum font-mono text-[13px] opacity-80">{d.participants.length}</span></> },
             { value: 'live', label: '실시간 현황', disabled: phase !== 'LIVE', hint: phase !== 'LIVE' ? '진행 중일 때만 볼 수 있습니다' : undefined },
+            ...(s.proctoring ? [{ value: 'envfail' as const, label: '점검 미통과' }] : []),
             { value: 'results', label: '결과', disabled: phase !== 'ENDED', hint: phase !== 'ENDED' ? '회차가 끝나면 볼 수 있습니다' : undefined },
           ]}
         />
@@ -190,6 +193,7 @@ function Detail({
         {tab === 'overview' && <Overview s={s} tasks={tasks.map} participants={d.participants.length} reload={reload} toast={toast.show} />}
         {tab === 'participants' && <Participants s={s} participants={d.participants} reload={reload} toast={toast.show} />}
         {tab === 'live' && <Live d={d} now={now} paused={paused} setPaused={setPaused} reload={reload} />}
+        {tab === 'envfail' && <EnvFailures s={s} participants={d.participants} onOpenLive={(pid) => setParams({ tab: 'live', p: String(pid) }, { replace: true })} />}
         {tab === 'results' && <Results s={s} />}
       </div>
       {toast.node}
@@ -706,7 +710,8 @@ function Live({
     paused ? undefined : 5000,
   )
   const events = useMemo(() => ev.data?.list ?? [], [ev.data])
-  const [open, setOpen] = useState<number | null>(null)
+  const [liveParams] = useSearchParams()
+  const [open, setOpen] = useState<number | null>(() => Number(liveParams.get('p')) || null) // 점검 미통과 탭에서 넘어온 응시자
   const names = useMemo(() => new Map(d.participants.map((p) => [p.id, p.name])), [d.participants])
   const feed = useMemo(() => [...events].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)), [events])
 
