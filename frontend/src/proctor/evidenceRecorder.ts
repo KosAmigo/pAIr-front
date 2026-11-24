@@ -1,8 +1,7 @@
 // 이벤트 앞뒤 증거 구간 보관·업로드 예약.
-// 웹캠·휴대폰 프레임을 시간 기준 링 버퍼(core/frameRing.ts)에 두었다가, 이벤트가 나면 약 5초 뒤(뒤 4초 수집이 끝난 직후)
-// 앞 8초·뒤 4초를 골라 한 번 올린다. 연속 업로드는 없다. 프레임은 브라우저 메모리에만 있다.
+// 웹캠 프레임만 시간 기준 링 버퍼(core/frameRing.ts)에 두었다가, 이벤트가 나면 약 5초 뒤(뒤 4초 수집이 끝난 직후)
+// 앞 8초·뒤 4초를 골라 한 번 올린다. 휴대폰 프레임은 모으지도 올리지도 않는다 (2026-11-24 결정). 연속 업로드는 없다. 프레임은 브라우저 메모리에만 있다.
 import type { ClipFrameRequest } from './api/proctorApi.ts'
-import { blobToDataUrl } from './core/jpegData.ts'
 import { CLIP_UPLOAD_DELAY_MS, FrameRing } from './core/frameRing.ts'
 
 type Attach = (clientId: string, frames: ClipFrameRequest[]) => unknown
@@ -17,7 +16,6 @@ type Options = {
 
 export class EvidenceRecorder {
   private readonly pc = new FrameRing<string>()
-  private readonly phone = new FrameRing<Blob>()
   private jobs = new Map<string, Job>()
   private readonly delayMs: number
   private readonly setTimer: (fn: () => void, ms: number) => unknown
@@ -32,11 +30,6 @@ export class EvidenceRecorder {
   /** 웹캠 사진 한 장 (JPEG data URL). at: epoch ms */
   pushPc(at: number, image: string): void {
     this.pc.push(at, image)
-  }
-
-  /** 휴대폰이 보낸 JPEG 한 장 */
-  pushPhone(at: number, jpeg: Blob): void {
-    this.phone.push(at, jpeg)
   }
 
   /** 이 이벤트(anchor: epoch ms)의 증거 구간을 delayMs 뒤에 attach 로 넘긴다 */
@@ -56,11 +49,10 @@ export class EvidenceRecorder {
     this.jobs.forEach((j) => this.clearTimer(j.timer))
     this.jobs = new Map()
     this.pc.clear()
-    this.phone.clear()
   }
 
-  sizes(): { pc: number; phone: number } {
-    return { pc: this.pc.size, phone: this.phone.size }
+  sizes(): { pc: number } {
+    return { pc: this.pc.size }
   }
 
   private async run(clientId: string): Promise<void> {
@@ -69,7 +61,7 @@ export class EvidenceRecorder {
     this.jobs.delete(clientId)
     this.clearTimer(job.timer)
     try {
-      const frames = await this.collect(job.anchor)
+      const frames = this.collect(job.anchor)
       if (frames.length > 0) await job.attach(clientId, frames)
     } catch (e) {
       // 사진 변환·업로드 예약이 실패해도 시험은 계속된다. 이 구간만 버려진다
@@ -77,12 +69,7 @@ export class EvidenceRecorder {
     }
   }
 
-  private async collect(anchor: number): Promise<ClipFrameRequest[]> {
-    const pc: ClipFrameRequest[] = this.pc.select(anchor).map((p) => ({ source: 'PC_CAM', offsetMs: p.offsetMs, image: p.data }))
-    const phonePicks = this.phone.select(anchor)
-    const phone = await Promise.all(
-      phonePicks.map(async (p): Promise<ClipFrameRequest> => ({ source: 'PHONE_CAM', offsetMs: p.offsetMs, image: await blobToDataUrl(p.data) })),
-    )
-    return [...pc, ...phone]
+  private collect(anchor: number): ClipFrameRequest[] {
+    return this.pc.select(anchor).map((p) => ({ source: 'PC_CAM', offsetMs: p.offsetMs, image: p.data }))
   }
 }

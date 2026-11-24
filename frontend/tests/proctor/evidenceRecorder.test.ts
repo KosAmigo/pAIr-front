@@ -2,7 +2,6 @@ import { describe, expect, it } from './expect.ts'
 import type { ClipFrameRequest } from '../../src/proctor/api/proctorApi.ts'
 import { EvidenceRecorder } from '../../src/proctor/evidenceRecorder.ts'
 
-const jpegBlob = (n: number) => new Blob([new Uint8Array([0xff, 0xd8, n, 0xff, 0xd9])], { type: 'image/jpeg' })
 const tick = () => new Promise((r) => setTimeout(r, 0))
 
 function setup() {
@@ -26,10 +25,9 @@ function setup() {
 }
 
 describe('EvidenceRecorder', () => {
-  it('이벤트 약 5초 뒤에 앞 8초·뒤 4초 구간을 웹캠·휴대폰 순으로 묶어 올린다', async () => {
+  it('이벤트 약 5초 뒤에 앞 8초·뒤 4초 웹캠 구간을 묶어 올린다 (휴대폰 사진은 없다)', async () => {
     const t = setup()
     for (let s = 0; s <= 14; s++) t.rec.pushPc(1000 * s, `data:image/jpeg;base64,pc${s}`)
-    for (let s = 0; s <= 14; s++) t.rec.pushPhone(1000 * s, jpegBlob(s))
     t.rec.schedule('evt-1', 9000, t.attach)
     expect(t.timers).toHaveLength(1)
     expect(t.timers[0].ms).toBe(5000)
@@ -38,13 +36,9 @@ describe('EvidenceRecorder', () => {
     await tick()
     expect(t.attached).toHaveLength(1)
     const frames = t.attached[0].frames
-    const pc = frames.filter((f) => f.source === 'PC_CAM')
-    const phone = frames.filter((f) => f.source === 'PHONE_CAM')
-    expect(pc.length > 0 && pc.length <= 12).toBe(true)
-    expect(phone.length > 0 && phone.length <= 12).toBe(true)
-    expect(frames.length <= 24).toBe(true)
+    expect(frames.length > 0 && frames.length <= 12).toBe(true)
+    expect(frames.every((f) => f.source === 'PC_CAM')).toBe(true)
     expect(frames.every((f) => f.offsetMs >= -8000 && f.offsetMs <= 4000)).toBe(true)
-    expect(phone[0].image.startsWith('data:image/jpeg;base64,')).toBe(true)
   })
 
   it('이벤트 시각 이후 4초를 넘는 프레임은 넣지 않는다 (업로드 지연 동안 쌓인 것 포함)', async () => {
@@ -57,7 +51,7 @@ describe('EvidenceRecorder', () => {
     expect(t.attached[0].frames.every((f) => f.offsetMs <= 4000)).toBe(true)
   })
 
-  it('휴대폰이 없어도(프레임이 없어도) 웹캠 프레임만으로 올린다', async () => {
+  it('웹캠 프레임만으로 올린다', async () => {
     const t = setup()
     t.rec.pushPc(1000, 'data:image/jpeg;base64,pc')
     t.rec.schedule('evt-1', 2000, t.attach)
@@ -92,6 +86,6 @@ describe('EvidenceRecorder', () => {
     t.rec.schedule('a', 2000, t.attach)
     t.rec.clear()
     expect(t.timers).toHaveLength(0)
-    expect(t.rec.sizes()).toEqual({ pc: 0, phone: 0 })
+    expect(t.rec.sizes()).toEqual({ pc: 0 })
   })
 })

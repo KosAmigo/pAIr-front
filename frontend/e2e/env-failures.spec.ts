@@ -15,12 +15,12 @@ const failure = {
   failed: [{ id: 'light', label: '밝기', detail: '너무 어둡습니다' }, { id: 'desk', label: '책상 위', detail: '스캔 실패' }], noticeSent: false,
 }
 
-async function setup(page: Page, failures: unknown[]) {
+async function setup(page: Page, failures: unknown[], phase = 'ENDED') {
   await mockApi(page)
   await page.route((url) => url.pathname.startsWith('/api/console/sessions/9'), async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/console/sessions/9', '')
     const json = (data: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) })
-    if (path === '') return json({ session, serverNow: '2026-11-21T00:00:00Z', closedAt: null, participants: [participant] })
+    if (path === '') return json({ session: { ...session, phase }, serverNow: '2026-11-21T00:00:00Z', closedAt: null, participants: [participant] })
     if (path === '/env-check-failures') return json(failures)
     if (path === '/participants/31/env-check') return json({ source: 'SAVED', updatedAt: '2026-11-20T00:54:00Z', result: { pc: { items: [{ id: 'light', label: '밝기', status: 'fail', detail: '너무 어둡습니다' }] } } })
     return json([])
@@ -41,6 +41,13 @@ test('진행 중이 아닌 회차에서는 행을 누르면 점검 결과와 안
   await setup(page, [failure])
   await page.getByRole('button', { name: '박응시 점검 결과 보기' }).click()
   await expect(page.getByRole('region', { name: '환경 점검과 안내' })).toBeVisible()
+})
+
+test('진행 중인 회차에서도 행을 누르면 탭 안에서 점검 결과가 열린다 (응시자 서랍으로 가지 않는다)', async ({ page }) => {
+  await setup(page, [failure], 'LIVE')
+  await page.getByRole('button', { name: '박응시 점검 결과 보기' }).click()
+  await expect(page.getByRole('region', { name: '환경 점검과 안내' })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: '박응시 감독 기록' })).toHaveCount(0)
 })
 
 test('실패 입장자가 없으면 빈 상태를 보여 준다', async ({ page }) => {

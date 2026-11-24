@@ -1,5 +1,5 @@
-// 이벤트 앞뒤 증거 구간 타임라인: 웹캠·휴대폰 사진을 시간순으로 훑어보고 크게 본다.
-// 사진은 로그인 헤더가 필요해 blob URL 로 받는다 (모달을 열면 구간 사진을 모두 받는다. 최대 24장, 장당 약 14KB).
+// 이벤트 앞뒤 증거 구간 타임라인: 웹캠 사진을 시간순으로 훑어보고 크게 본다 (예전 기록에 휴대폰 사진이 있으면 함께 보인다).
+// 사진은 로그인 헤더가 필요해 blob URL 로 받는다 (모달을 열면 구간 사진을 모두 받는다. 웹캠 최대 12장, 장당 약 14KB).
 import { useEffect, useState } from 'react'
 import { ImageOff, Loader2 } from 'lucide-react'
 import { cx } from '../../components/cx'
@@ -99,7 +99,8 @@ export function EvidenceClipModal({ sessionId, eventId, title, onClose }: { sess
           {current && !current.deleted && <Big sessionId={sessionId} eventId={eventId} frame={current} />}
           <p className="text-[12px] text-text-muted">0초가 이벤트가 감지된 시각이고, 붉은 글씨가 그 시각에 가장 가까운 사진입니다. 앞 8초·뒤 4초 안의 사진만 보관합니다.</p>
           <Row title="웹캠" frames={pc} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} nearestId={nearest?.id ?? null} onPick={setPicked} />
-          <Row title="휴대폰" frames={phone} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} nearestId={nearest?.id ?? null} onPick={setPicked} />
+          {/* 휴대폰 사진은 더 이상 모으지 않는다. 예전에 저장된 구간에만 있을 때 보여 준다 */}
+          {phone.length > 0 && <Row title="휴대폰 (이전 기록)" frames={phone} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} nearestId={nearest?.id ?? null} onPick={setPicked} />}
         </div>
       )}
     </Modal>
