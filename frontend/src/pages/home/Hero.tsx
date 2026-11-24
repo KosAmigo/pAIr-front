@@ -100,11 +100,6 @@ export default function Hero() {
               </Link>
             </Magnetic>
             <Magnetic>
-              <Link to="/entry" className={pillSecondary}>
-                테스트 응시
-              </Link>
-            </Magnetic>
-            <Magnetic>
               {/* 로그인 없이 웹캠·휴대폰 캠 연결과 PC 속도를 미리 점검한다 (서버에 기록이 남지 않는다) */}
               <Link to="/practice" className={pillSecondary}>
                 응시 환경 테스트

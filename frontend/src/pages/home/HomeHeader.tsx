@@ -38,12 +38,6 @@ export default function HomeHeader() {
           >
             <LayoutDashboard size={16} aria-hidden /> 콘솔
           </Link>
-          <Link
-            to="/entry"
-            className="hidden h-9 items-center rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel sm:inline-flex"
-          >
-            테스트 응시
-          </Link>
           <Magnetic>
             <Link
               to="/tasks"
