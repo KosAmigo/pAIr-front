@@ -5,6 +5,7 @@ export type Role = 'USER' | 'MANAGER' | 'PROCTOR' | 'ADMIN'
 export type CompanyRole = 'MANAGER' | 'PROCTOR'
 export const isCompanyRole = (r: Role | undefined): r is CompanyRole => r === 'MANAGER' || r === 'PROCTOR'
 export const canManageSessions = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER'
+export const canCreateSessions = (r: Role | undefined) => r === 'MANAGER'
 export const canReviewProctor = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER' || r === 'PROCTOR'
 export type AuthUser = { id: number; email: string; name: string; role: Role; companyName: string | null; companyId?: number | null; emailVerified?: boolean; passwordChangeRequired?: boolean }
 

@@ -131,7 +131,7 @@ export default function App() {
             <Route path="/console" element={<ConsoleShell />}>
               <Route index element={<ConsoleHome />} />
               <Route path="sessions" element={<ConsoleSessions />} />
-              <Route element={<RequireAuth roles={['ADMIN', 'MANAGER']} />}>
+              <Route element={<RequireAuth roles={['MANAGER']} deniedRedirect="/console/sessions" deniedMessage="회차 생성 권한이 없습니다" />}>
                 <Route path="sessions/new" element={<ConsoleSessionNew />} />
               </Route>
               <Route element={<RequireAuth roles={['MANAGER']} />}>
