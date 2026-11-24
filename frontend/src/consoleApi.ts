@@ -169,7 +169,7 @@ export type ConsoleTaskSummary = {
   // ── 2026-11-20 목록 개편으로 백엔드에 더해지는 칸. 예전 서버에는 없을 수 있어 모두 옵셔널 ──
   /** DEV | BIZ (없으면 type 으로 판단) */
   track?: 'DEV' | 'BIZ' | null
-  /** 초급 | 중급 | 고급 */
+  /** 쉬움 | 보통 | 어려움 */
   difficulty?: string | null
   /** 과제 형태 키 (incident, planning …) 또는 직무 이름 */
   category?: string | null

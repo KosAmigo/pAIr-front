@@ -81,7 +81,7 @@ export default function CreateSection() {
             </div>
             <div className="flex items-center gap-3 border-b border-line px-6 py-4">
               <span className="font-mono text-[12px] font-semibold tracking-[0.08em] text-text-muted">NEW TASK</span>
-              <span className="text-[15px] font-semibold text-text">장애 분석 │ 개발 │ 중급 │ 60분</span>
+              <span className="text-[15px] font-semibold text-text">장애 분석 │ 개발 │ 보통 │ 60분</span>
               <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-brand-dim px-3 py-1 text-[13px] font-semibold text-brand">
                 <Sparkles size={14} aria-hidden /> AI 초안
               </span>

@@ -106,7 +106,7 @@ test('suggest errors 429/503/404 become plain sentences', async () => {
 test('generation request has no jobRole/difficulty and minutes is 20, 40 or 60', async () => {
   assert.deepEqual(GEN_MINUTES, [20, 40, 60])
   for (const m of GEN_MINUTES) {
-    const body = buildGenRequest({ track: 'BIZ', topic: ' 요금제 ', trap: ' 중복 ', usage: 'LIVE', minutes: m, jobRole: '무시', difficulty: '고급' })
+    const body = buildGenRequest({ track: 'BIZ', topic: ' 요금제 ', trap: ' 중복 ', usage: 'LIVE', minutes: m, jobRole: '무시', difficulty: '어려움' })
     assert.deepEqual(body, { track: 'BIZ', topic: '요금제', trap: '중복', usage: 'LIVE', minutes: m })
     assert.equal('jobRole' in body || 'difficulty' in body, false)
     globalThis.fetch = async (url, o) => {

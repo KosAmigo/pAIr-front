@@ -7,7 +7,7 @@ export type SentRequest = { method: string; path: string; body: any }
 type Task = Record<string, unknown>
 const task = (id: string, o: Task): Task => ({
   id, type: 'dev', title: id, minutes: 40, usage: 'SELF', parentId: null, status: 'OPEN', publishedAt: null,
-  updatedAt: '2026-11-20T00:00:00Z', createdAt: `2026-11-${10 + id.length}T00:00:00Z`, generated: true, checksOk: true, difficulty: '중급', ...o,
+  updatedAt: '2026-11-20T00:00:00Z', createdAt: `2026-11-${10 + id.length}T00:00:00Z`, generated: true, checksOk: true, difficulty: '보통', ...o,
 })
 
 /** 목록 화면용 과제: 자가진단 3(개발 2, 비개발 1), 실전 1, 검수 전 2(개발 1, 비개발 1) */

@@ -4,8 +4,20 @@ import { KIND_ICON } from './taskKindIcons'
 import { cx } from './cx'
 
 
-export type Level = '초급' | '중급' | '고급'
-const LEVEL_PIPS: Record<Level, number> = { 초급: 1, 중급: 2, 고급: 3 }
+export type Level = '쉬움' | '보통' | '어려움'
+const LEVELS: string[] = ['쉬움', '보통', '어려움']
+const LEVEL_PIPS: Record<Level, number> = { 쉬움: 1, 보통: 2, 어려움: 3 }
+
+// 마이그레이션 전 DB·옛 기록은 예전 이름(초급/중급/고급)을 줄 수 있어, 표시할 때 새 이름으로 바꾼다
+const OLD_LEVEL: Record<string, Level> = { 초급: '쉬움', 중급: '보통', 고급: '어려움' }
+/** 서버가 준 난이도 문자열 → 새 이름. 모르는 값이면 null */
+export function normalizeLevel(v?: string | null): Level | null {
+  if (!v) return null
+  const x = OLD_LEVEL[v] ?? v
+  return LEVELS.includes(x) ? (x as Level) : null
+}
+/** 난이도 글자 표시용: 옛 이름은 새 이름으로, 모르는 값은 그대로 */
+export const levelLabel = (v?: string | null) => normalizeLevel(v) ?? v ?? ''
 
 export function LevelPips({ level, stage }: { level: Level; stage?: boolean }) {
   const n = LEVEL_PIPS[level]

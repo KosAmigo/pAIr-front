@@ -25,9 +25,9 @@ export const fmtTime = (iso: string) => {
 }
 
 export const LEVEL_CLS: Record<string, string> = {
-  초급: 'bg-signal/10 text-signal',
-  중급: 'bg-info/10 text-info',
-  고급: 'bg-branch-5/10 text-branch-5',
+  쉬움: 'bg-signal/10 text-signal',
+  보통: 'bg-info/10 text-info',
+  어려움: 'bg-branch-5/10 text-branch-5',
 }
 
 /** 지금 시각 (ms). every 밀리초마다 다시 그린다 */

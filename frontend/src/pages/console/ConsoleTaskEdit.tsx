@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, Loader2, Rocket } from 'lucide-react'
+import { levelLabel } from '../../components/taskKind'
 import { ErrorState } from '../../components/ErrorState'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { Glass, Magnetic } from '../../components/fx'
@@ -124,7 +125,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
               {s.difficulty && (
                 <>
                   <HeroSep />
-                  <span>{s.difficulty}</span>
+                  <span>{levelLabel(s.difficulty)}</span>
                 </>
               )}
               {madeAt(s) && (

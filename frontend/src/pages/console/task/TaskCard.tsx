@@ -4,12 +4,11 @@ import { Link } from 'react-router-dom'
 import { CircleMinus } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { Spotlight } from '../../../components/fx'
-import { LevelPips, type Level } from '../../../components/taskKind'
+import { LevelPips, normalizeLevel } from '../../../components/taskKind'
 import type { ConsoleTaskSummary } from '../../../consoleApi'
 import { checkBadge, isClosed, tabOf, trackOf } from '../../../data/taskBoard'
 import { CheckFailNote, CompetencyBadges, MinutesChip, TrackTile } from './badges'
 
-const LEVELS = ['초급', '중급', '고급']
 
 export function TaskCard({ task: t }: { task: ConsoleTaskSummary }) {
   const track = trackOf(t)
@@ -29,7 +28,7 @@ export function TaskCard({ task: t }: { task: ConsoleTaskSummary }) {
       {/* 윗줄: 직군 아이콘 · 난이도(가운데) · 제한 시간(오른쪽) */}
       <div className="relative z-10 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <TrackTile track={track} size={36} />
-        <span className="justify-self-center">{t.difficulty && LEVELS.includes(t.difficulty) && <LevelPips level={t.difficulty as Level} />}</span>
+        <span className="justify-self-center">{normalizeLevel(t.difficulty) && <LevelPips level={normalizeLevel(t.difficulty)!} />}</span>
         <span className="justify-self-end">
           <MinutesChip minutes={t.minutes} />
         </span>
