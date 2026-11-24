@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { BookOpenCheck, Bot, Check, CircleAlert, Clock, Coins, EyeOff, FileCode2, FileText, Hammer, Loader2, Lock, Repeat } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { ErrorState } from '../../../components/ErrorState'
+import { levelLabel } from '../../../components/taskKind'
 import type { ConsoleTaskDetail } from '../../../consoleApi'
 import { useGenReport, useTaskFiles, useTaskQuestions, type Load } from '../../../data/taskReview'
 import { questionTypeLabel } from '../../../data/questions'
@@ -296,7 +297,7 @@ export function GenReportTab({ code }: { code: string }) {
                       ['직무', r.form.jobRole],
                       ['주제', r.form.topic],
                       ['함정', r.form.trap],
-                      ['난이도', r.form.difficulty],
+                      ['난이도', levelLabel(r.form.difficulty)],
                     ] as const
                   )
                     .filter(([, v]) => v)

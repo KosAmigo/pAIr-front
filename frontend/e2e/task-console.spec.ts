@@ -32,7 +32,7 @@ test.describe('목록', () => {
   test('카드는 윗줄(직군·난이도·시간)과 역량 배지를 보여 주고 자가진단·실전·AI 생성 배지는 없다', async ({ page }) => {
     await page.getByRole('tab', { name: /^자가진단/ }).click()
     const card = page.locator('ul li').filter({ has: page.getByRole('heading', { name: '쿠폰 할인 계산' }) })
-    await expect(card.getByText('중급')).toBeVisible()
+    await expect(card.getByText('보통')).toBeVisible()
     await expect(card.getByText('40', { exact: true })).toBeVisible()
     const comps = card.getByRole('list', { name: '이 과제가 보는 역량' }).getByRole('listitem')
     await expect(comps).toHaveText(['AI 통제력', 'AI 활용력'])
