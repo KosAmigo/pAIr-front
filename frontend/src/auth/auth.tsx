@@ -4,6 +4,8 @@ import { createContext, useContext } from 'react'
 export type Role = 'USER' | 'MANAGER' | 'PROCTOR' | 'ADMIN'
 export type CompanyRole = 'MANAGER' | 'PROCTOR'
 export const isCompanyRole = (r: Role | undefined): r is CompanyRole => r === 'MANAGER' || r === 'PROCTOR'
+/** 자가진단·크레딧은 일반 회원과 관리자만 쓴다. 기업 계정(매니저·감독관)은 서버도 막는다 */
+export const canUseSelfDiagnosis = (r: Role | undefined) => r === 'USER' || r === 'ADMIN'
 export const canManageSessions = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER'
 export const canCreateSessions = (r: Role | undefined) => r === 'MANAGER'
 export const canReviewProctor = (r: Role | undefined) => r === 'ADMIN' || r === 'MANAGER' || r === 'PROCTOR'
