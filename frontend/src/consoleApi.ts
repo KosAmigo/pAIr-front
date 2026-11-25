@@ -112,22 +112,6 @@ export type ProctorEventView = {
   serverCheckedAt?: string | null
 }
 
-/** 환경 점검 사진 (책상 위. ROOM 은 예전 기록용) */
-export type EnvScanPhotoView = {
-  id: number
-  participantId: number
-  stage: 'ROOM' | 'DESK'
-  /** 방 스캔에서 찍은 방향(도). 책상은 null */
-  angle: number | null
-  objects: string[]
-  /** 휴대폰으로 감지된 장면 */
-  phoneSuspect: boolean
-  sizeBytes: number
-  capturedAt: string
-  /** 보관 기간이 지나 파일을 지움 */
-  deleted: boolean
-}
-
 export type ResultState = 'NOT_ENTERED' | 'WAITING' | 'SOLVING' | 'SUBMITTED'
 export type ResultRow = {
   rank: number
@@ -301,7 +285,6 @@ export const consoleApi = {
   clips: (id: number) => call<Record<string, number>>('GET', `${S}/${id}/clips`),
   retention: (id: number) => call<RetentionView>('GET', `${S}/${id}/retention`),
   extendRetention: (id: number) => call<RetentionView>('POST', `${S}/${id}/retention/extend`),
-  envScanPhotos: (id: number, participantId: number) => call<EnvScanPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-scan`),
   /** 점검 결과: 진행 중이면 LIVE(실시간), 저장됐으면 SAVED. 아직 없으면 null */
   envCheck: (id: number, participantId: number) => call<EnvCheckView | null>('GET', `${S}/${id}/participants/${participantId}/env-check`),
   /** 점검에 실패한 항목이 있는 채 입장한 응시자 모음 */
@@ -309,7 +292,6 @@ export const consoleApi = {
   sendNotice: (id: number, participantId: number, message: string) =>
     call<NoticeView>('POST', `${S}/${id}/participants/${participantId}/notices`, { message }),
   notices: (id: number, participantId: number) => call<NoticeView[]>('GET', `${S}/${id}/participants/${participantId}/notices`),
-  envScanImageUrl: (id: number, photoId: number) => blobUrl(`${S}/${id}/env-scan/${photoId}/image`),
 
   // 결과
   results: (id: number) => call<SessionResult>('GET', `${S}/${id}/results`),

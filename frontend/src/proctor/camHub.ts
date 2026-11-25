@@ -3,7 +3,6 @@
 // React 는 useSyncExternalStore 로 이 상태를 읽는다 (react/useCamHub.ts).
 import QRCode from 'qrcode'
 import { CamOutbox } from './api/camOutbox.ts'
-import { proctorApi } from './api/proctorApi.ts'
 import { GATE_INITIAL, GRACE_MS, stepGate, type ChannelUp, type Gate, type GateState } from './core/connectionPolicy.ts'
 import { toCamViolation, type CamViolation } from './core/events.ts'
 import { buildPcBaseline, pcConditions, pcProfile, type PcBaseline, type PcFeatures, type PcProfileName } from './core/pcRules.ts'
@@ -540,13 +539,9 @@ export const camHub = {
     return () => void phoneFrameListeners.delete(listener)
   },
 
-  /** 책상 스캔 사진 1장: 화면용으로 보관하고 파일 서버(백엔드 env-scan)에 올린다. 업로드가 실패해도 점검은 계속된다 */
+  /** 책상 스캔 사진 1장: 화면용으로 보관한다 */
   recordDeskPhoto(image: string, objects: string[]) {
     set({ scanFrames: [...state.scanFrames, { source: 'phone', stage: 'desk', image, objects, at: Date.now() }] })
-    if (!state.invite) return
-    proctorApi.uploadEnvScan(state.invite, { stage: 'DESK', objects: objects.slice(0, 12), image }).catch((e: unknown) => {
-      console.warn('점검 사진 업로드 실패:', e instanceof Error ? e.message : e)
-    })
   },
 
   /** 점검 사진을 비운다. stages 를 주면 그 단계의 사진만 비우고 나머지(이미 통과한 항목의 사진)는 남긴다 */
