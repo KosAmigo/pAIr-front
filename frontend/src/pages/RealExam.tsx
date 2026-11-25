@@ -6,6 +6,7 @@ import { SendKey } from '../components/SendKey'
 import { cx } from '../components/cx'
 import { Button, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
+import { ResizeHandle } from '../components/ResizeHandle'
 import { QuestionPanel } from '../components/questions/QuestionPanel'
 import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
@@ -648,6 +649,41 @@ function DocChecks({ task, doc }: { task: Task & { requiredHeadings?: string[] }
   )
 }
 
+// ── 패널 폭 ─────────────────────────────
+// 과제·파일 / 문항 / AI 채팅 폭(px). 사용자가 바꾼 값은 이 브라우저에 남긴다.
+const WIDTHS_KEY = 'exam-panel-widths'
+const DEFAULT_WIDTHS = { side: 280, questions: 360, chat: 380 }
+const MIN_WIDTHS = { side: 220, questions: 280, chat: 300 }
+const RAIL_WIDTH = 48
+const CENTER_MIN = 360
+
+function usePanelWidths() {
+  const [widths, setWidths] = useState<typeof DEFAULT_WIDTHS>(() => {
+    try {
+      return { ...DEFAULT_WIDTHS, ...JSON.parse(localStorage.getItem(WIDTHS_KEY) ?? '{}') }
+    } catch {
+      return DEFAULT_WIDTHS
+    }
+  })
+  const setWidth = (key: keyof typeof DEFAULT_WIDTHS, width: number) => {
+    const next = { ...widths, [key]: width }
+    setWidths(next)
+    try {
+      localStorage.setItem(WIDTHS_KEY, JSON.stringify(next))
+    } catch {
+      // 저장이 막힌 브라우저에서는 이번 화면에서만 유지한다
+    }
+  }
+  return [widths, setWidth] as const
+}
+
+// 가운데 칸의 최소 폭을 남기고 이 패널이 가질 수 있는 최대 폭
+const maxPanelWidth = (panel: HTMLElement) => {
+  const grid = panel.parentElement!
+  const center = grid.querySelector<HTMLElement>(':scope > [data-tour="editor"]')!
+  return panel.getBoundingClientRect().width + center.getBoundingClientRect().width - CENTER_MIN
+}
+
 // ── 응시 화면 ───────────────────────────
 export default function RealExam() {
   const { sessionId = '' } = useParams()
@@ -664,6 +700,8 @@ export default function RealExam() {
   const [side, setSide] = useState<SidePanel>('task')
   const [showOutput, setShowOutput] = useState(true)
   const [showChat, setShowChat] = useState(true)
+  const [widths, setWidth] = usePanelWidths()
+  const sideKey = side === 'questions' ? 'questions' : 'side'
   const [stage, setStage] = useState<'solve' | 'followup'>('solve')
   const [elapsed, setElapsed] = useState(0)
   const [turns, setTurns] = useState<Turn[]>([])
@@ -1117,7 +1155,16 @@ export default function RealExam() {
 
       <div
         className="grid min-h-0 flex-1"
-        style={{ gridTemplateColumns: `48px ${side ? (side === 'questions' ? '360px ' : '280px ') : ''}minmax(0,1fr)${showChat ? ' 380px' : ''}${live?.proctoring ? ' auto' : ''}` }}
+        // 창이 좁아지면 양옆 칸이 최소 폭까지 먼저 줄고, 가운데 칸은 CENTER_MIN 을 지킨다
+        style={{
+          gridTemplateColumns: [
+            `${RAIL_WIDTH}px`,
+            side && `minmax(${MIN_WIDTHS[sideKey]}px, ${widths[sideKey]}px)`,
+            `minmax(${CENTER_MIN}px, 1fr)`,
+            showChat && `minmax(${MIN_WIDTHS.chat}px, ${widths.chat}px)`,
+            live?.proctoring && 'auto', // 카메라 감독 열
+          ].filter(Boolean).join(' '),
+        }}
       >
         <ActivityRail
           side={side}
@@ -1131,7 +1178,16 @@ export default function RealExam() {
         />
         {/* 사이드 패널: 과제 / 파일 */}
         {side && (
-        <aside className="flex min-h-0 flex-col border-r border-line bg-panel">
+        <aside className="relative flex min-h-0 min-w-0 flex-col border-r border-line bg-panel">
+          <ResizeHandle
+            label="왼쪽 패널 크기 조절"
+            edge="right"
+            value={widths[sideKey]}
+            min={MIN_WIDTHS[sideKey]}
+            maxWidth={maxPanelWidth}
+            onResize={(w) => setWidth(sideKey, w)}
+            onReset={() => setWidth(sideKey, DEFAULT_WIDTHS[sideKey])}
+          />
           <header className="flex h-10 shrink-0 items-center border-b border-line px-4">
             <span className="label">{side === 'task' ? 'TASK' : side === 'questions' ? 'QUESTIONS' : 'EXPLORER'}</span>
           </header>
@@ -1396,7 +1452,16 @@ export default function RealExam() {
 
         {/* 오른쪽: AI */}
         {showChat && (
-        <div className="relative min-h-0" data-tour="chat">
+        <div className="relative min-h-0 min-w-0" data-tour="chat">
+          <ResizeHandle
+            label="AI 채팅 창 크기 조절"
+            edge="left"
+            value={widths.chat}
+            min={MIN_WIDTHS.chat}
+            maxWidth={maxPanelWidth}
+            onResize={(w) => setWidth('chat', w)}
+            onReset={() => setWidth('chat', DEFAULT_WIDTHS.chat)}
+          />
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
               <ChatPanel turns={turns} streaming={streaming} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000}
