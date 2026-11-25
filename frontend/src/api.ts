@@ -435,7 +435,16 @@ export const grader = {
   run: (id: string) => call<{ meta: GraderRun; results: GraderResult[] }>('GET', `/api/grader/runs/${enc(id)}`),
   cancel: (id: string) => call<GraderRun>('POST', `/api/grader/runs/${enc(id)}/cancel`),
   result: (id: string, file: string) => call<Report>('GET', `/api/grader/runs/${enc(id)}/results/${enc(file)}`),
-  exportUrl: (id: string) => `/api/grader/runs/${enc(id)}/export`,
+  /** 결과 파일을 내려받는다. 관리자 로그인 헤더가 필요해 링크(<a href>) 대신 fetch 로 받는다 */
+  downloadExport: async (id: string) => {
+    const data = await call<unknown>('GET', `/api/grader/runs/${enc(id)}/export`)
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `grader-run-${id}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  },
 }
 
 /** 응시 PDF 자료를 로그인 헤더로 받아 브라우저 URL 로 바꾼다 (쓴 뒤 URL.revokeObjectURL) */
