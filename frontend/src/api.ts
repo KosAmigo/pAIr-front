@@ -251,8 +251,6 @@ export const api = {
   compareAttempts: (a: string, b: string) => call<AttemptCompare>('GET', `/api/attempts/${enc(a)}/compare?with=${enc(b)}`),
   /** 체크포인트에서 갈라진 새 응시를 만든다 (크레딧 차감, 부족하면 402). 새 응시 ID 를 돌려준다 */
   rollback: (checkpointId: number) => call<{ attemptId: string }>('POST', `/api/checkpoints/${checkpointId}/rollback`),
-  /** 체크포인트 이름 붙이기. 빈 문자열이면 이름을 지운다 */
-  renameCheckpoint: (checkpointId: number, label: string) => call<Checkpoint>('PATCH', `/api/checkpoints/${checkpointId}`, { label }),
   /** 자가진단 과제 목록 (응시자용). 직군을 주면 그 직군만 */
   taskList: (track?: TaskType) => call<TaskSummary[]>('GET', `/api/tasks${track ? `?track=${track}` : ''}`),
   /** 과제 정의 (설명·요구사항 등 상세) */
