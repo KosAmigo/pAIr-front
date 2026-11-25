@@ -17,6 +17,10 @@ export type LiveExam = {
 }
 
 const KEY = 'pair:live-exam'
+/** 응시 ID → 초대 토큰. 시험이 끝나 실전 맥락을 지운 뒤에도 제출 완료 화면이 응시를 조회하므로 따로 둔다(탭을 닫으면 사라진다) */
+const INVITES_KEY = 'pair:live-invites'
+// sessionStorage 를 못 쓰는 브라우저에서도 이번 화면 동안은 요청을 보낼 수 있게 메모리에도 둔다
+const memoryInvites: Record<string, string> = {}
 
 function storage(): Storage | null {
   try {
@@ -26,7 +30,29 @@ function storage(): Storage | null {
   }
 }
 
+function readInvites(): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(storage()?.getItem(INVITES_KEY) ?? '{}')
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** 이 응시의 초대 토큰. 실전 응시 API 는 이 토큰으로 응시자를 확인한다. 자가진단이면 null */
+export function inviteForAttempt(attemptId: string): string | null {
+  const saved = readInvites()[attemptId] ?? memoryInvites[attemptId] ?? readLiveExam(attemptId)?.invite
+  return typeof saved === 'string' ? saved : null
+}
+
 export function saveLiveExam(live: LiveExam) {
+  const invites = Object.fromEntries(Object.values(live.attempts).map((id) => [id, live.invite]))
+  Object.assign(memoryInvites, invites)
+  try {
+    storage()?.setItem(INVITES_KEY, JSON.stringify({ ...readInvites(), ...invites }))
+  } catch {
+    /* 메모리 값으로 동작한다 */
+  }
   try {
     storage()?.setItem(KEY, JSON.stringify(live))
   } catch {
