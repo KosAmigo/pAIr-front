@@ -1,0 +1,53 @@
+name: Frontend CI
+
+# 모든 브랜치 push 마다 린트, 빌드, 단위 테스트를 돌린다. 비밀값은 필요 없다.
+# 화면 동작 검사(Playwright e2e)는 브라우저 설치와 백엔드가 필요해 여기서는 돌리지 않는다.
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # Dockerfile(node:22)과 같은 버전. 테스트가 쓰는 --experimental-strip-types 는 22.6 이상에서 동작한다
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (타입 검사 + 번들)
+        run: npm run build
+
+      - name: Unit tests
+        run: |
+          npm run test:auth
+          npm run test:credits
+          npm run test:task-gen
+          npm run test:review
+          npm run test:replay
+          npm run test:live-diagnostics
+          npm run test:chat-attach
+          npm run test:anti-cheating
+          npm run test:proctor
+          npm run test:scripts
+          npm run test:questions

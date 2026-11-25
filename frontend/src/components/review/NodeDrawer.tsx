@@ -5,12 +5,11 @@ import { FileBarChart2, Loader2, X } from 'lucide-react'
 import { api, ApiError, type Turn } from '../../api'
 import { ButtonLink, IconButton } from '../ui'
 import { ErrorState } from '../ErrorState'
-import { CheckpointPanel } from '../replay/CheckpointPanel'
 import { TurnItem } from '../replay/TurnItem'
 import type { TreeLane } from '../../lib/reviewTree'
 import { shortDate, turnTag } from './shared'
 
-/** 노드 서랍 (DESIGN.md §7-5): 한 갈래의 AI 대화 기록, 체크포인트("여기서 다시 풀기"), 리포트 링크 */
+/** 노드 서랍 (DESIGN.md §7-5): 한 갈래의 AI 대화 기록, 리포트 링크 */
 export function NodeDrawer({ lane, onClose }: { lane: TreeLane; onClose: () => void }) {
   const reduce = useReducedMotion()
   const [tick, setTick] = useState(0)
@@ -77,11 +76,6 @@ export function NodeDrawer({ lane, onClose }: { lane: TreeLane; onClose: () => v
             ))}
           </ol>
         )}
-        <div className="mt-6 border-t border-line pt-4">
-          <p className="label">CHECKPOINTS</p>
-          <h3 className="mb-2 text-[15px] font-semibold text-text">질문 시점 (체크포인트)</h3>
-          <CheckpointPanel attemptId={lane.attemptId} />
-        </div>
       </div>
     </motion.aside>,
     document.body,
