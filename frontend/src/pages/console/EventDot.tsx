@@ -94,7 +94,7 @@ export function EventDot({
         aria-expanded={open}
         aria-label={`${name} 감독 이벤트 ${count}건${unreviewed ? `, 미확인 ${unreviewed}건` : ''} 보기`}
         title="이벤트 기록 보기"
-        className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 hover:bg-panel-raised focus-visible:outline-2 focus-visible:outline-brand"
+        className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-md px-2 hover:bg-panel-raised focus-visible:outline-2 focus-visible:outline-brand"
       >
         <i className={cx('size-2.5 rounded-full bg-alert', hasFresh && 'animate-pulse')} aria-hidden />
         <span className="tnum font-mono text-[12px] font-semibold text-text-muted">{count}</span>

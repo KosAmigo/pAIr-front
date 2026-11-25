@@ -1117,7 +1117,7 @@ export default function RealExam() {
 
       <div
         className="grid min-h-0 flex-1"
-        style={{ gridTemplateColumns: `48px ${side ? (side === 'questions' ? '360px ' : '280px ') : ''}minmax(0,1fr)${showChat ? ' 380px' : ''}` }}
+        style={{ gridTemplateColumns: `48px ${side ? (side === 'questions' ? '360px ' : '280px ') : ''}minmax(0,1fr)${showChat ? ' 380px' : ''}${live?.proctoring ? ' auto' : ''}` }}
       >
         <ActivityRail
           side={side}
@@ -1419,9 +1419,16 @@ export default function RealExam() {
           )}
         </div>
         )}
+
+        {/* 카메라 감독: 응시 UI 와 겹치지 않게 맨 오른쪽 전용 열 */}
+        {live?.proctoring && (
+          <Suspense fallback={<aside className="w-12 border-l border-line bg-panel" aria-hidden />}>
+            <CamMonitor live={live} />
+          </Suspense>
+        )}
       </div>
 
-      {tourOpen && <CoachTour steps={examGuideSteps({ proctoring: Boolean(live?.proctoring) })} storageKey="exam-guide-v2" onClose={() => setTourOpen(false)} />}
+      {tourOpen &&<CoachTour steps={examGuideSteps({ proctoring: Boolean(live?.proctoring) })} storageKey="exam-guide-v3" onClose={() => setTourOpen(false)} />}
       {linkExpired && (
         <div role="alertdialog" aria-modal="true" aria-label="입장 링크 만료" className="fixed inset-0 z-[95] flex items-center justify-center bg-bg/95 p-4">
           <section className="w-full max-w-[460px] rounded-lg border border-alert/50 bg-panel p-6 text-center shadow-modal">
@@ -1451,11 +1458,6 @@ export default function RealExam() {
         </div>
       )}
       <WarningModal violation={antiCheating.warning} count={antiCheating.count} onClose={antiCheating.dismissWarning} />
-      {live?.proctoring && (
-        <Suspense fallback={null}>
-          <CamMonitor live={live} />
-        </Suspense>
-      )}
       {confirm && <ConfirmModal busy={busy} onCancel={() => setConfirm(false)} onConfirm={() => void doSubmit()} />}
       {viewing && viewingEdit && (
         <EditModal

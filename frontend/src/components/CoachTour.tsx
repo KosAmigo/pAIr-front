@@ -179,6 +179,13 @@ export function examGuideSteps(opts: { proctoring: boolean }): TourStep[] {
     { target: 'chat', title: 'AI와 함께 풀기', body: '오른쪽 AI에게 질문하며 풀 수 있어요. AI와 나눈 대화는 기록돼 평가에 참고돼요.' },
     { target: 'submit', title: '제출하기', body: '다 풀면 제출을 누르세요. 제출하면 파일과 AI 대화가 잠기고, 이어서 후속 질문 3개에 답해요.' },
   ]
+  if (opts.proctoring) {
+    steps.push({
+      target: 'camera',
+      title: '카메라 감독',
+      body: '시험 내내 노트북 카메라로 얼굴과 자세를 확인해요. 얼굴이 화면에서 벗어나거나, 여러 사람이 보이거나, 고개를 돌리거나, 시선이 5초 넘게 화면 밖을 향하면 기록돼요. 카메라를 가리지 말고 화면 정면을 봐 주세요. 영상은 저장하지 않고, 이상이 감지된 순간의 사진만 감독 기록에 남아요. 기록만으로 부정행위가 확정되지는 않아요.',
+    })
+  }
   const rules = opts.proctoring
     ? '전체 화면을 유지해 주세요. 다른 창이나 탭으로 이동하거나 창 전환 키(Alt+Tab, Win 키)를 누르면 기록돼요. 외부에서 복사한 내용을 붙여 넣는 것도 기록돼요. 기록만으로 부정행위가 확정되지는 않아요. '
     : ''

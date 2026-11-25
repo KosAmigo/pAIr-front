@@ -5,6 +5,7 @@ import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'r
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowDownUp, Camera, CircleAlert, Download, FileUp, Loader2, Pause, Play, RotateCw, UserPlus, X } from 'lucide-react'
 import { cx } from '../../components/cx'
+import { DateField, TimeField } from '../../components/PickerFields'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { ErrorState } from '../../components/ErrorState'
 import { Button, ScoreChip } from '../../components/ui'
@@ -317,6 +318,20 @@ function toLocalInput(iso: string): string {
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`
 }
 
+/** 'YYYY-MM-DDTHH:mm' 값을 날짜·시각 선택기 한 쌍으로 편집 */
+function DateTimeRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [d = '', t = ''] = value.split('T')
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[14px] font-semibold text-text">{label}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <DateField label={`${label} 날짜`} value={d} onChange={(v) => onChange(`${v}T${t || '00:00'}`)} />
+        <TimeField label={`${label} 시각`} value={t} onChange={(v) => onChange(`${d}T${v}`)} />
+      </div>
+    </div>
+  )
+}
+
 function EditModal({ s, onClose, onSaved }: { s: SessionSummary; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(s.title)
   const [proctoring, setProctoring] = useState(s.proctoring)
@@ -361,15 +376,9 @@ function EditModal({ s, onClose, onSaved }: { s: SessionSummary; onClose: () => 
         <input type="checkbox" checked={proctoring} onChange={(e) => setProctoring(e.target.checked)} className="size-4 accent-[var(--color-brand)]" />
         감독 사용
       </label>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1.5 text-[14px] font-semibold text-text">
-          시작 일시
-          <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="h-10 rounded-sm border border-line-strong bg-panel px-3 text-[15px] font-normal outline-none focus:border-brand" />
-        </label>
-        <label className="flex flex-col gap-1.5 text-[14px] font-semibold text-text">
-          종료 일시
-          <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 rounded-sm border border-line-strong bg-panel px-3 text-[15px] font-normal outline-none focus:border-brand" />
-        </label>
+      <div className="mt-4 flex flex-col gap-3">
+        <DateTimeRow label="시작 일시" value={start} onChange={setStart} />
+        <DateTimeRow label="종료 일시" value={end} onChange={setEnd} />
       </div>
       {timeError && <p className="mt-2 text-[13px] text-alert">{timeError}</p>}
       {rescheduled && <p className="mt-3 text-[13px] text-text-muted">일시를 바꾸면 대상자 전원에게 바뀐 일시로 초대 메일이 다시 나가고, 이전 입장 링크는 쓸 수 없게 됩니다.</p>}
@@ -772,8 +781,8 @@ function Live({
             <table className="w-full text-[14px]">
               <thead>
                 <tr className="h-9 border-b border-line text-left">
-                  {['이름', '상태', '입장', '시작', '감독 이벤트', '제출'].map((h, i) => (
-                    <th key={h} className={cx('px-4 text-[13px] font-semibold text-text-muted', i === 4 && 'text-right')}>
+                  {['이름', '상태', '입장', '시작', '감독 이벤트', '제출'].map((h) => (
+                    <th key={h} className="px-4 text-[13px] font-semibold text-text-muted">
                       {h}
                     </th>
                   ))}
@@ -791,7 +800,7 @@ function Live({
                     </td>
                     <td className="tnum px-4 font-mono text-[13px] text-text-muted">{p.enteredAt ? fmtHm(p.enteredAt) : '—'}</td>
                     <td className="tnum px-4 font-mono text-[13px] text-text-muted">{p.startedAt ? fmtHm(p.startedAt) : '—'}</td>
-                    <td className="px-4 text-right">
+                    <td className="px-4">
                       <EventDot name={p.name} events={byParticipant.get(p.id) ?? []} freshIds={fresh} onOpenAll={() => setOpen(p.id)} />
                     </td>
                     <td className="tnum px-4 font-mono text-[13px] text-text-muted">

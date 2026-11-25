@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { StageSection } from "../../components/fx";
 import { cx } from "../../components/cx";
+import { DateField, TimeField } from "../../components/PickerFields";
 import { useConsoleCrumbs } from "../../components/consoleCrumbs";
 import { PageHeader } from "../../components/SelfShell";
 import { Button } from "../../components/ui";
@@ -316,28 +317,10 @@ export default function ConsoleSessionNew() {
 
             <Section n={3} title="일시" error={tried ? errors.time : null}>
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  aria-label="날짜"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className={cx(input, "tnum font-mono")}
-                />
-                <input
-                  aria-label="시작 시각"
-                  type="time"
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                  className={cx(input, "tnum font-mono")}
-                />
+                <DateField label="날짜" value={date} onChange={setDate} />
+                <TimeField label="시작 시각" value={start} onChange={setStart} />
                 <span className="text-text-muted">–</span>
-                <input
-                  aria-label="종료 시각"
-                  type="time"
-                  value={endStr}
-                  onChange={(e) => setEnd(e.target.value)}
-                  className={cx(input, "tnum font-mono")}
-                />
+                <TimeField label="종료 시각" value={endStr} onChange={setEnd} />
                 {spanMin > 0 && (
                   <span className="tnum font-mono text-[13px] text-text-muted">
                     {spanMin}분
