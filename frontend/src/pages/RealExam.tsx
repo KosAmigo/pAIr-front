@@ -26,7 +26,7 @@ import { toBrowserViolation } from '../proctor/core/events.ts'
 import { proctorApi } from '../proctor/api/proctorApi.ts'
 import NoticeBanner from '../proctor/react/NoticeBanner.tsx'
 import { camHub } from '../proctor/camHub.ts'
-import { clearLiveExam, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
+import { clearLiveExam, inviteForAttempt, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
 import { useCredits } from '../data/credits'
 import { CreditPill } from '../components/CreditPill'
 
@@ -830,7 +830,7 @@ export default function RealExam() {
         if (!alive) return
         if (v.attempt.status === 'SCORING' || v.attempt.status === 'DONE' || v.attempt.status === 'ERROR') {
           // 실전 응시는 리포트를 보여 주지 않는다 (기획: 실전은 리포트·복기 차단)
-          navigate(readLiveExam(sessionId) ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`, { replace: true })
+          navigate(inviteForAttempt(sessionId) ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`, { replace: true })
           return
         }
         setView(v)

@@ -187,6 +187,24 @@ describe('실전 맥락 (자가진단과 구분)', () => {
     assert.equal(readLiveExam('att-1'), null)
   })
 
+  it('초대 토큰은 시험이 끝나도 그 응시에만 남고, 응시 API 요청에만 붙는다', async () => {
+    const { inviteForAttempt, saveLiveExam, clearLiveExam } = await import('../../src/proctor/liveExam.ts')
+    const { inviteHeaders } = await import('../../src/api.ts')
+    const base = { title: 't', startsAt: '2026-12-01T06:00:00Z', endsAt: '2026-12-01T07:00:00Z', proctoring: false, serverOffsetMs: 0 }
+    saveLiveExam({ ...base, invite: 'B'.repeat(43), attempts: { a: '101', b: '102' } })
+    saveLiveExam({ ...base, invite: 'C'.repeat(43), attempts: { a: '201' } })
+    clearLiveExam()
+    assert.equal(inviteForAttempt('102'), 'B'.repeat(43))
+    assert.equal(inviteForAttempt('201'), 'C'.repeat(43))
+    assert.equal(inviteForAttempt('999'), null)
+    assert.deepEqual(inviteHeaders('/api/attempts/101/file?path=x'), { 'X-Pair-Invite': 'B'.repeat(43) })
+    assert.deepEqual(inviteHeaders('/api/attempts/201'), { 'X-Pair-Invite': 'C'.repeat(43) })
+    assert.deepEqual(inviteHeaders('/api/attempts/999'), {})
+    assert.deepEqual(inviteHeaders('/api/attempts'), {})
+    assert.deepEqual(inviteHeaders('/api/console/sessions/101'), {})
+    assert.deepEqual(inviteHeaders('https://evil.example/api/attempts/101'), {})
+  })
+
   it('저장된 값이 깨져 있으면 실전으로 보지 않는다', async () => {
     const { readLiveExam } = await import('../../src/proctor/liveExam.ts')
     globalThis.sessionStorage.setItem('pair:live-exam', '{"invite":1}')
