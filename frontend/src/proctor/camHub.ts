@@ -3,6 +3,7 @@
 // React 는 useSyncExternalStore 로 이 상태를 읽는다 (react/useCamHub.ts).
 import QRCode from 'qrcode'
 import { CamOutbox } from './api/camOutbox.ts'
+import { proctorApi, type EnvCheckPhotoStage } from './api/proctorApi.ts'
 import { GATE_INITIAL, GRACE_MS, stepGate, type ChannelUp, type Gate, type GateState } from './core/connectionPolicy.ts'
 import { toCamViolation, type CamViolation } from './core/events.ts'
 import { buildPcBaseline, pcConditions, pcProfile, type PcBaseline, type PcFeatures, type PcProfileName } from './core/pcRules.ts'
@@ -49,7 +50,10 @@ const PC_CLIP_FRAME_MS = 1000
 const PC_CLIP_WIDTH = 400
 const PC_CLIP_QUALITY = 0.55
 
-export type ScanFrame = { source: 'pc' | 'phone'; stage: ScanStage; image: string; objects: string[]; at: number }
+/** 서버에 올리는 점검 사진 단계 (방·책상 사진은 올리지 않는다) */
+const ENV_PHOTO_STAGE: Partial<Record<ScanStage, EnvCheckPhotoStage>> = { 'ear-left': 'EAR_LEFT', 'ear-right': 'EAR_RIGHT', wrist: 'WRIST' }
+
+export type ScanFrame ={ source: 'pc' | 'phone'; stage: ScanStage; image: string; objects: string[]; at: number }
 export type ActiveRule = { kind: string; message: string; heldMs: number; durationMs: number }
 
 export type CamState = {
@@ -519,6 +523,9 @@ export const camHub = {
 
   addPcFrame(stage: ScanStage, image: string) {
     set({ scanFrames: [...state.scanFrames, { source: 'pc', stage, image, objects: [], at: Date.now() }] })
+    // 귀·손목 사진은 감독관이 보게 서버에 올린다 (사전 테스트는 서버에 아무것도 보내지 않는다). 실패해도 점검은 계속된다
+    const photoStage = ENV_PHOTO_STAGE[stage]
+    if (photoStage && state.invite && !state.practice) proctorApi.uploadEnvCheckPhoto(state.invite, photoStage, image).catch(() => {})
   },
 
   /** 휴대폰 송신 화질 전환 (책상 스캔 동안만 'scan') */

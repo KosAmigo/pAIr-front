@@ -8,6 +8,7 @@ import { Button } from '../../components/ui'
 import { consoleApi, type ParticipantView, type SessionSummary } from '../../consoleApi'
 import { useLoad } from '../../data/consoleSessions'
 import { summarizeEnvCheck, type SummaryStatus } from '../../proctor/check/envCheckSummary'
+import EnvCheckPhotos from './EnvCheckPhotos'
 import { fmtTime } from './format'
 import { Loading } from './Loading'
 
@@ -89,6 +90,8 @@ export default function EnvCheckCard({ session, p, pollMs }: { session: SessionS
           </ul>
         </>
       )}
+
+      <EnvCheckPhotos sessionId={session.id} participantId={p.id} pollMs={pollMs} />
 
       <div className="mt-4 border-t border-line pt-3">
         <label htmlFor={`notice-${p.id}`} className="text-[13px] font-semibold text-text">
