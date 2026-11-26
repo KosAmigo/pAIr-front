@@ -12,11 +12,14 @@ export function CountUp({
   value,
   decimals = 0,
   from = 0,
+  grouping = false,
   className,
 }: {
   value: number
   decimals?: number
   from?: number
+  /** 천 단위 쉼표(1,240). 기본은 쓰지 않는다 */
+  grouping?: boolean
   className?: string
 }) {
   const ref = useRef<HTMLSpanElement>(null)
@@ -34,7 +37,9 @@ export function CountUp({
     const t = window.setTimeout(() => setSettled(true), ms(duration.count) + 600)
     return () => window.clearTimeout(t)
   }, [value])
-  const fmt = (n: number) => n.toFixed(decimals)
+  const fmt = (n: number) => grouping
+    ? n.toLocaleString('ko-KR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : n.toFixed(decimals)
   const display = !run || settled ? value : shown
   return (
     <span ref={ref} className={className}>
