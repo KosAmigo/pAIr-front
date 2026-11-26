@@ -25,7 +25,10 @@ export type GenCheck = { name: string; ok: boolean; detail: string; level?: 'fai
 export type CheckState = 'pass' | 'warn' | 'fail'
 export type TaskGenJob = {
   status: 'RUNNING' | 'DONE' | 'FAILED'
-  step: GenStep | null
+  /** 백엔드가 보내는 날 것의 단계 글 (예: '설계도 작성 중'). 화면에는 toGenStep / genDetail 을 거쳐 쓴다 */
+  step: string | null
+  /** DONE 이어도 false 면 확인에 실패한 채 저장된 것 */
+  passed?: boolean | null
   taskCode: string | null
   checks: GenCheck[]
   error: string | null
@@ -171,6 +174,36 @@ export function suggestErrorMessage(e: unknown): string {
 
 // ── 생성 진행 연출 ──────────────────────────
 
+const BUILD_STEPS = new Set(['대기 중', '생성 중', '설계도 작성 중', '글 작성 중', '시작 코드 작성 중', '문항 글 작성 중', '정답 쪽 작성 중', '관련 적은 자료 작성 중'])
+
+/**
+ * 백엔드 단계 글 → 화면 4단계. 생성 단계(설계도·글·코드…)는 다시 만드는 중이면 '다시 생성 중', 아니면 '생성 중'.
+ * 모르는 글은 직전 단계(prev)를 유지하고, 없으면 '생성 중'.
+ */
+export function toGenStep(raw: string | null, retried: boolean, prev: GenStep | null = null): GenStep {
+  if (raw === null) return prev ?? '생성 중'
+  if (raw === '다시 생성 중') return '다시 생성 중'
+  if (BUILD_STEPS.has(raw)) return retried ? '다시 생성 중' : '생성 중'
+  if (raw === '확인 중' || raw === '관문 검사 중') return '확인 중'
+  if (raw === '저장 중' || raw === '완료') return '저장 중'
+  return prev ?? '생성 중'
+}
+
+/** 화면에 작게 보여 줄 세부 단계 글 (생성기 내부 말을 사람 말로). 보여 줄 게 없으면 null */
+export function genDetail(raw: string | null, track: GenTrack): string | null {
+  if (!raw || raw === '완료' || raw === '다시 생성 중') return null
+  switch (raw) {
+    case '관련 적은 자료 작성 중':
+      return '함께 둘 업무 자료 작성 중'
+    case '관문 검사 중':
+      return '품질 검사 중'
+    case '정답 쪽 작성 중':
+      return track === 'DEV' ? '정답과 숨은 테스트 작성 중' : '정답 작성 중'
+    default:
+      return raw
+  }
+}
+
 /** 단계마다 지금 무엇을 하는지 쉬운 문장 */
 export function stepNarration(step: GenStep | null, track: GenTrack): string {
   switch (step) {
@@ -203,6 +236,9 @@ export function progressOf(step: GenStep | null, retried: boolean, stepElapsed: 
   const inStep = len * 0.9 * (1 - Math.exp(-Math.max(0, stepElapsed) / len))
   return Math.min(0.97, (before + inStep) / total)
 }
+
+/** 진행 막대 값은 줄어들지 않는다 (다시 생성 단계가 끼어 전체 길이가 늘어도 뒤로 가지 않는다) */
+export const advanceProgress = (old: number, next: number): number => Math.max(old, next)
 
 /** 경과 시간 0:42 */
 export const fmtElapsed = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.max(0, sec) % 60).padStart(2, '0')}`

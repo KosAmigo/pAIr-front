@@ -19,12 +19,15 @@ import {
   overwriteConflicts,
   pollJob,
   progressOf,
+  advanceProgress,
   startErrorMessage,
   taskGenApi,
   validateForm,
   type FillField,
   type GenMinutes,
   type GenStep,
+  toGenStep,
+  genDetail,
   type GenTrack,
   type GenUsage,
   type Suggestion,
@@ -96,7 +99,7 @@ export default function ConsoleTaskNew() {
       const now = Date.now()
       setElapsed(Math.floor((now - t0.current) / 1000))
       const p = progressOf(lastStep.current ?? '생성 중', retriedRef.current, (now - stepT0.current) / 1000)
-      setProgress((old) => Math.max(old, p))
+      setProgress((old) => advanceProgress(old, p))
     }, 500)
     return () => clearInterval(t)
   }, [running])
@@ -176,13 +179,14 @@ export default function ConsoleTaskNew() {
         jobId,
         (j) => {
           setJob(j)
-          if (j.step !== lastStep.current) {
-            lastStep.current = j.step
-            stepT0.current = Date.now()
-          }
           if (j.step === '다시 생성 중') {
             retriedRef.current = true
             setRetried(true)
+          }
+          const next = toGenStep(j.step, retriedRef.current, lastStep.current)
+          if (next !== lastStep.current) {
+            lastStep.current = next
+            stepT0.current = Date.now()
           }
         },
         { signal: ac.signal },
@@ -349,7 +353,7 @@ export default function ConsoleTaskNew() {
 
         {phase === 'running' && form.track && (
           <div className="mx-auto max-w-[860px]">
-            <GenProgress step={job?.step ?? '생성 중'} retried={retried} elapsed={elapsed} progress={progress} track={form.track} topic={form.topic.trim()} />
+            <GenProgress step={toGenStep(job?.step ?? null, retried)} detail={genDetail(job?.step ?? null, form.track)} retried={retried} elapsed={elapsed} progress={progress} track={form.track} topic={form.topic.trim()} />
           </div>
         )}
 

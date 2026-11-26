@@ -12,6 +12,7 @@ const SUB: Record<GenStep, string> = { '생성 중': 'AI가 초안을 써요', '
 
 export function GenProgress({
   step,
+  detail,
   retried,
   elapsed,
   progress,
@@ -19,6 +20,8 @@ export function GenProgress({
   topic,
 }: {
   step: GenStep | null
+  /** 백엔드 세부 단계 글을 사람 말로 바꾼 것 (예: 설계도 작성 중) */
+  detail?: string | null
   retried: boolean
   elapsed: number
   progress: number
@@ -113,6 +116,11 @@ export function GenProgress({
               </motion.p>
             </AnimatePresence>
           </div>
+          {detail && (
+            <p className="-mt-3 pl-9 text-[13px] font-medium text-stage-muted" data-testid="gen-detail">
+              {detail}
+            </p>
+          )}
           <p className="text-[13px] text-stage-muted">이 화면을 떠나면 진행 확인이 멈춰요. 만들기는 서버에서 계속되고, 끝나면 과제 목록의 검수 전에 나와요.</p>
         </div>
       </GlowBorder>

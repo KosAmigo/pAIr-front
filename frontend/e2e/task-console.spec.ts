@@ -165,6 +165,28 @@ test.describe('과제 만들기', () => {
   })
 })
 
+test('만드는 동안 새 단계 글이 와도 활성 단계와 세부 글이 보인다', async ({ page }) => {
+  await mockApi(page)
+  await page.goto('/console/tasks/new')
+  await page.getByRole('button', { name: /^개발/ }).click()
+  await page.getByLabel('상황', { exact: true }).fill('주문 취소 재고 복구')
+  await page.getByLabel('함정').fill('취소가 두 번 오면 재고가 두 번 늘어남')
+  await page.getByRole('button', { name: /^다음/ }).click()
+  await page.getByRole('button', { name: '과제 만들기' }).click()
+  await expect(page.getByTestId('gen-detail')).toHaveText('설계도 작성 중')
+  await expect(page.getByText('(진행 중)')).toHaveCount(1)
+  // 진행 값(%)은 줄지 않는다
+  const read = async () => parseInt((await page.getByText(/^\d+%$/).first().textContent()) ?? '0', 10)
+  let last = await read()
+  for (let i = 0; i < 4; i++) {
+    await page.waitForTimeout(400)
+    if (await page.getByText(/^\d+%$/).count() === 0) break
+    const now = await read()
+    expect(now).toBeGreaterThanOrEqual(last)
+    last = now
+  }
+})
+
 test('추천 카드를 골라 만들면 그 카드의 역량을 같이 보낸다', async ({ page }) => {
   const api = await mockApi(page)
   await page.goto('/console/tasks/new')
