@@ -150,7 +150,8 @@
   }
   /* 로그인, 휴대폰 보조 캠처럼 작은 화면에서 열리는 페이지는 데스크톱 최소 폭(1280px)을 적용하지 않는다 */
   body:has(.auth-layout),
-  body:has(.mobile-layout) {
+  body:has(.mobile-layout),
+  body:has(.self-shell) {
     min-width: 320px;
   }
   :focus-visible {
@@ -334,10 +335,6 @@
   /* 로그인 쇼케이스: 유리 칩이 천천히 위아래로 떠다닌다 */
   .auth-float {
     animation: auth-float 6s ease-in-out infinite;
-  }
-  /* 입장 환경 점검: 카메라 미리보기 자리를 훑는 빛 */
-  .env-scan {
-    animation: env-scan 2.4s ease-in-out infinite alternate;
   }
   /* 집중 무대(응시 화면): 버튼의 빛 쓸림 같은 꾸밈 연출을 끄고 호버 색 변화만 남긴다 */
   .focus-stage .btn-shimmer::after {
@@ -607,14 +604,6 @@
 @keyframes auth-float {
   50% {
     transform: translateY(-10px);
-  }
-}
-@keyframes env-scan {
-  from {
-    transform: translateY(-64px);
-  }
-  to {
-    transform: translateY(calc(var(--scan-h, 360px)));
   }
 }
 @keyframes fx-row-in {

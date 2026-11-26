@@ -8,6 +8,14 @@ export function validateNewPassword(password: string, confirmation: string): str
   return null
 }
 
+/** 이름은 앞뒤 공백을 빼고 1~50자 (서버 SignupRequest·ProfileUpdateRequest 와 같은 기준) */
+export function validateName(name: string): string | null {
+  const trimmed = name.trim()
+  if (trimmed.length === 0) return '이름을 입력해 주세요.'
+  if (trimmed.length > 50) return '이름은 50자 이하여야 합니다.'
+  return null
+}
+
 export function accountErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) return '요청을 처리하지 못했습니다. 다시 시도해 주세요.'
   if (!(error instanceof AuthRequestError) || error.message !== `요청 실패 (${error.status})`) return error.message

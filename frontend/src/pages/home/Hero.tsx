@@ -5,6 +5,8 @@ import { ArrowRight, BarChart3, Bug, ClipboardCheck, FileText, FlaskConical, Mes
 import DemoWindow from './DemoWindow'
 import { GlowBorder, Magnetic } from '../../components/fx'
 import { MOTION_OK, SplitText, gsap, useGSAP } from './motion'
+import { useAuth } from '../../auth/auth'
+import { homeButtons } from './homeButtons'
 
 const KINDS = [
   { label: '장애 분석', icon: Bug },
@@ -30,6 +32,8 @@ export const pillSecondary =
 
 export default function Hero() {
   const root = useRef<HTMLElement>(null)
+  const { signedIn, user } = useAuth()
+  const { showSelf } = homeButtons(signedIn, user?.role)
 
   useGSAP(
     () => {
@@ -94,16 +98,14 @@ export default function Hero() {
             실전 시험 전에 같은 환경에서 먼저 연습해 보세요.
           </p>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
-            <Magnetic>
-              <Link to="/tasks" className={`btn-shimmer ${pillPrimary}`}>
-                자가진단 시작 <ArrowRight size={18} aria-hidden />
-              </Link>
-            </Magnetic>
-            <Magnetic>
-              <Link to="/entry" className={pillSecondary}>
-                테스트 응시
-              </Link>
-            </Magnetic>
+            {/* 기업 계정(매니저·감독관)은 자가진단을 쓰지 않으므로 보이지 않는다 */}
+            {showSelf && (
+              <Magnetic>
+                <Link to="/tasks" className={`btn-shimmer ${pillPrimary}`}>
+                  자가진단 시작 <ArrowRight size={18} aria-hidden />
+                </Link>
+              </Magnetic>
+            )}
             <Magnetic>
               {/* 로그인 없이 웹캠·휴대폰 캠 연결과 PC 속도를 미리 점검한다 (서버에 기록이 남지 않는다) */}
               <Link to="/practice" className={pillSecondary}>

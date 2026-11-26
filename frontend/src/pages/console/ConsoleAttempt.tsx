@@ -9,6 +9,7 @@ import { ErrorState } from '../../components/ErrorState'
 import { Glass } from '../../components/fx'
 import { cx } from '../../components/cx'
 import { api } from '../../api'
+import { useAuth } from '../../auth/auth'
 import { consoleApi } from '../../consoleApi'
 import { PSTATE_LABEL, stateOf, taskTitle, useLoad, useTaskMap } from '../../data/consoleSessions'
 import { ReportView } from '../RealReport'
@@ -17,6 +18,9 @@ import ProctorPanel from './ProctorPanel'
 
 export default function ConsoleAttempt() {
   const { sessionId, attemptId } = useParams()
+  // 감독관은 감독 업무만 한다. 리포트는 매니저와 관리자만 볼 수 있다(서버도 403)
+  const { user } = useAuth()
+  const canViewReport = user?.role !== 'PROCTOR'
   const sid = Number(sessionId)
   const pid = Number(attemptId)
   const detail = useLoad(Number.isFinite(sid) ? `session-${sid}` : null, () => consoleApi.session(sid))
@@ -28,7 +32,7 @@ export default function ConsoleAttempt() {
   const [picked, setPicked] = useState<string | null>(null)
   const taskId = picked && taskIds.includes(picked) ? picked : (taskIds[0] ?? null)
   const attempt = p && taskId ? p.attempts[taskId] : null
-  const report = useLoad(attempt ? `report-${attempt}` : null, () => api.report(attempt!))
+  const report = useLoad(attempt && canViewReport ? `report-${attempt}` : null, () => api.report(attempt!))
 
   if (detail.error && !detail.data) {
     return (
@@ -89,6 +93,8 @@ export default function ConsoleAttempt() {
         )}
         {!attempt ? (
           <p className="rounded-xl border border-line bg-panel py-16 text-center text-[14px] text-text-muted shadow-sm">아직 응시 기록이 없습니다.</p>
+        ) : !canViewReport ? (
+          <p className="rounded-xl border border-line bg-panel py-16 text-center text-[14px] text-text-muted shadow-sm">결과 리포트는 매니저만 볼 수 있습니다.</p>
         ) : report.error ? (
           <ErrorState message={report.error} onRetry={report.reload} />
         ) : !rr ? (

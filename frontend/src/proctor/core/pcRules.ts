@@ -52,7 +52,7 @@ export const PC_RULES: RuleSpec[] = [
   { kind: 'multi_face', message: '여러 사람이 감지되었습니다', durationMs: 1000, cooldownMs: 8000 },
   { kind: 'head_turn', message: '고개를 화면 밖으로 돌렸습니다', durationMs: 1500, cooldownMs: 6000 },
   { kind: 'head_down', message: '고개를 오래 숙이고 있습니다', durationMs: 5000, cooldownMs: 10000 },
-  { kind: 'gaze_away', message: '시선이 화면 밖을 향하고 있습니다', durationMs: 2500, cooldownMs: 6000 },
+  { kind: 'gaze_away', message: '시선이 화면 밖을 향하고 있습니다', durationMs: 5000, cooldownMs: 6000 },
   { kind: 'torso_shift', message: '자리에서 크게 움직였습니다', durationMs: 2000, cooldownMs: 8000 },
   { kind: 'torso_turn', message: '몸을 돌리거나 화면에서 멀어졌습니다', durationMs: 2000, cooldownMs: 8000 },
 ]

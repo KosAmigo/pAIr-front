@@ -6,7 +6,6 @@ const GROUPS = [
     title: '시작하기',
     links: [
       { label: '자가진단', to: '/tasks' },
-      { label: '테스트 응시', to: '/entry' },
       { label: '복기', to: '/review' },
       { label: '회원가입', to: '/signup' },
       { label: '기업 도입 문의', to: '/signup?type=company' },

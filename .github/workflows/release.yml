@@ -1,0 +1,164 @@
+name: Release
+
+# main 에 푸시되면 테스트 → 이미지 빌드·푸시 → 서버 배포 순서로 이어서 돈다.
+# 앞 단계가 실패하면 뒤 단계는 실행하지 않는다 (테스트가 깨진 커밋은 이미지도 만들지 않고 서버에도 가지 않는다).
+# 배포는 서버(~/pair)의 frontend 컨테이너만 새 이미지로 바꾼다. 백엔드·모니터링은 pAIr-back 저장소의 배포가 맡고,
+# 두 배포는 서버의 잠금(flock)으로 한 번에 하나씩 돈다. 서버에 docker-compose.yml 이 없으면(백엔드를 한 번도 배포하지 않았으면) 실패한다.
+# 손으로 다시 돌리려면 Actions 탭 > Release > Run workflow (main 에서만 배포까지 간다).
+#
+# 이미지 Dockerfile 은 pAIr-back 저장소의 docker/frontend.Dockerfile 을 그대로 쓴다 (docker-compose.yml 의 frontend 서비스와 같은 파일).
+#
+# 번들에 박히는 값(VITE_*)은 저장소 변수(Settings > Secrets and variables > Actions > Variables)에서 읽는다.
+#   VITE_TOSS_CLIENT_KEY  토스 테스트 클라이언트 키 (없으면 결제 화면이 키 오류를 낸다)
+#   VITE_API_BASE, VITE_PROCTOR_RELAY_URL  백엔드가 다른 호스트일 때만. 비우면 같은 호스트의 /api, /ws (nginx 가 백엔드로 넘긴다)
+#
+# 필요한 설정 (이 저장소 Settings):
+#   Environments > production 을 만들고 Deployment branches 를 main 만 허용한다. 승인자(Required reviewers)는 선택이다.
+#   production 환경의 Secrets (pAIr-back 의 production 환경과 같은 값):
+#     EC2_HOST, EC2_USER, EC2_SSH_KEY, EC2_KNOWN_HOSTS
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 배포가 겹쳐 서버가 꼬이지 않게 한 번에 하나만 돌린다. 진행 중인 배포는 취소하지 않고 다음 것이 기다린다.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # Dockerfile 을 가져올 pAIr-back 의 브랜치. pAIr-back 의 main 에 docker/ 가 들어간 지금은 main 으로 바꿔도 된다
+  BACK_REF: develop
+
+jobs:
+  test:
+    uses: ./.github/workflows/frontend-ci.yml
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: KosAmigo/pAIr-back
+          ref: ${{ env.BACK_REF }}
+          path: back
+
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/pair-front" >> "$GITHUB_ENV"
+
+      # Vite 는 .env.production 을 빌드 때 읽는다. 값은 저장소 변수에서만 가져오고 저장소에는 두지 않는다
+      - name: Build-time env
+        env:
+          VITE_TOSS_CLIENT_KEY: ${{ vars.VITE_TOSS_CLIENT_KEY }}
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+          VITE_PROCTOR_RELAY_URL: ${{ vars.VITE_PROCTOR_RELAY_URL }}
+        run: |
+          {
+            [ -n "$VITE_TOSS_CLIENT_KEY" ] && echo "VITE_TOSS_CLIENT_KEY=$VITE_TOSS_CLIENT_KEY"
+            [ -n "$VITE_API_BASE" ] && echo "VITE_API_BASE=$VITE_API_BASE"
+            [ -n "$VITE_PROCTOR_RELAY_URL" ] && echo "VITE_PROCTOR_RELAY_URL=$VITE_PROCTOR_RELAY_URL"
+            true
+          } > frontend/.env.production
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: back/docker/frontend.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
+    # 다른 브랜치에서 손으로 실행했을 때는 이미지까지만 만들고 배포하지 않는다
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      # Windows 에서 붙여 넣은 값에 섞이는 \r(CRLF)을 지운다. known hosts 는 EC2_HOST 이름으로 다시 쓴다 (이름이 달라서 못 찾는 일을 막는다)
+      - name: SSH setup
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$EC2_KNOWN_HOSTS" | tr -d '\r' | grep -v '^#' \
+            | awk -v h="$EC2_HOST" 'NF>=3 {print h, $2, $3}' > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts || { echo "::error::EC2_KNOWN_HOSTS 에서 호스트 키 줄을 찾지 못했습니다"; exit 1; }
+
+      - name: Update frontend on server
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SSH="ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes $EC2_USER@$EC2_HOST"
+          # 이 실행이 끝나면 만료되는 토큰. 서버에서 GHCR 로그인에만 쓰고 바로 지운다
+          printf '%s' "$GHCR_TOKEN" | $SSH 'umask 077 && cat > ~/pair/.ghcr_token_front'
+          # 백엔드 배포와 겹치지 않게 서버에서 잠금(flock)을 잡고 실행한다 (최대 15분 기다림)
+          $SSH "GHCR_USER='$GHCR_USER' flock -w 900 \$HOME/pair/.deploy.lock bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd ~/pair
+          [ -f docker-compose.yml ] || { echo "docker-compose.yml 이 없습니다. pAIr-back 의 Deploy 를 먼저 한 번 실행하세요"; exit 1; }
+          docker login ghcr.io -u "$GHCR_USER" --password-stdin < .ghcr_token_front
+          rm -f .ghcr_token_front
+          docker compose pull frontend
+          # frontend 만 새로 만든다 (backend 는 건드리지 않는다)
+          docker compose up -d --no-deps frontend
+          docker logout ghcr.io || true
+          docker image prune -f > /dev/null
+          REMOTE
+
+      - name: Health check
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          SSH="ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes $EC2_USER@$EC2_HOST"
+          for i in $(seq 1 12); do
+            if $SSH 'curl -fsS -o /dev/null http://127.0.0.1/'; then
+              echo "프론트가 응답합니다"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::프론트가 1분 안에 응답하지 않았습니다. 서버에서 'cd ~/pair && docker compose logs --tail 50 frontend' 로 확인하세요"
+          $SSH 'cd ~/pair && docker compose ps frontend && docker compose logs --tail 40 frontend' || true
+          exit 1

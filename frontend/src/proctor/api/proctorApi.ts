@@ -42,9 +42,6 @@ export type TaskStatus = {
 /** 콘솔이 응시자에게 보낸 안내 메시지. readAt 이 null 이면 아직 확인하지 않음 */
 export type InviteNotice = { id: number; message: string; sentAt: string; readAt: string | null }
 
-/** 환경 점검 사진 (책상 위). 방 360도 스캔은 없어져 DESK 만 올린다 */
-export type EnvScanRequest = { stage: 'DESK'; objects: string[]; image: string }
-
 export type ProctorEventRequest = {
   type: ProctorEventType
   source: EventSource
@@ -59,6 +56,9 @@ export type ProctorEventRequest = {
 
 /** 이벤트 앞뒤 증거 구간의 사진 한 장 (POST .../proctor-events/{clientId}/clip). offsetMs: 이벤트 시각 기준 -8000~4000 */
 export type ClipFrameRequest = { source: 'PC_CAM'; offsetMs: number; image: string }
+
+/** 점검 사진 단계 (POST .../env-check/photos). 백엔드 EnvCheckPhoto.Stage 와 같은 값 */
+export type EnvCheckPhotoStage = 'EAR_LEFT' | 'EAR_RIGHT' | 'WRIST'
 
 /** status: HTTP 상태 (네트워크 오류면 0). 아웃박스가 다시 보낼지 정할 때 쓴다 */
 export class ProctorApiError extends Error {
@@ -116,8 +116,9 @@ export const proctorApi = {
     call<EntryInfo>('POST', `/api/entry/${enc(invite)}/tasks/${enc(taskId)}/submit`),
   /** 남은 과제 모두 제출 (시험 끝내기) */
   submit: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/submit`),
-  /** 점검 사진 업로드. 실패해도 점검은 계속되므로 호출하는 쪽에서 오류를 삼킨다 */
-  uploadEnvScan: (invite: string, photo: EnvScanRequest) => call<unknown>('POST', `/api/entry/${enc(invite)}/env-scan`, photo),
+  /** 점검 사진(귀 왼쪽·오른쪽, 손목) 업로드. 단계마다 한 장이고 다시 올리면 덮어쓴다. 실패해도 점검은 계속되므로 호출하는 쪽에서 오류를 삼킨다 */
+  uploadEnvCheckPhoto: (invite: string, stage: EnvCheckPhotoStage, image: string) =>
+    call<null>('POST', `/api/entry/${enc(invite)}/env-check/photos`, { stage, image }),
   /** 점검 진행 상태 (콘솔이 실시간으로 본다). 실패해도 점검은 계속되므로 호출하는 쪽에서 오류를 삼킨다 */
   sendEnvProgress: (invite: string, result: unknown) => call<null>('POST', `/api/entry/${enc(invite)}/env-progress`, { result }),
   /** 콘솔이 보낸 안내 메시지 (읽음 여부 포함) */

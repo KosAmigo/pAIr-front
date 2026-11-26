@@ -7,7 +7,7 @@ import { Button, ButtonLink, Panel } from '../components/ui'
 import { ScoreHero, StageSep } from '../components/report/ScoreHero'
 import { CompetencyCards } from '../components/report/CompetencyCards'
 import { QuestionScoreCard } from '../components/report/QuestionScoreCard'
-import { api, ApiError, type CheckResult, type Report, type ReportResponse, type Turn } from '../api'
+import { api, ApiError, type CheckResult, type JudgeView, type Report, type ReportResponse, type Turn } from '../api'
 
 // 실제 응시 결과 리포트. 감점식 채점(pAIr-docs/평가/채점_기준표.md): 6개 항목, 총점 100점.
 
@@ -58,9 +58,29 @@ const statusView: Record<CheckResult['status'], { text: string; cls: string }> =
   SPLIT: { text: '판정 엇갈림', cls: 'text-caution' },
 }
 
+/** 같은 모델을 여러 번 부른 판정(openai, openai#2 …)을 모델당 한 줄로 합친다. 이유는 걸렸다고 한 호출의 것을 먼저 쓴다 */
+function byModel(judges: JudgeView[]) {
+  const groups = new Map<string, JudgeView[]>()
+  for (const j of judges) {
+    const key = j.judge.split('#')[0]
+    groups.set(key, [...(groups.get(key) ?? []), j])
+  }
+  return [...groups.values()].map((calls) => {
+    const yes = calls.filter((j) => j.violated)
+    return {
+      model: calls[0].model,
+      yes: yes.length,
+      all: calls.length,
+      reason: (yes.find((j) => j.evidence.length > 0) ?? yes[0] ?? calls[0]).reason,
+    }
+  })
+}
+
 function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number) => void }) {
   const s = statusView[c.status]
   const deducted = c.status === 'DEDUCTED'
+  // 모델별 판정은 엇갈린 항목에서만 나눠 보여 준다. 모델별 기록이 없는 예전 리포트는 합친 이유를 그대로 쓴다
+  const split = c.status === 'SPLIT' && !!c.judges?.length
   return (
     <tr className="border-t border-line align-top">
       <td className="py-2.5 pr-3 pl-7 font-mono text-[12px] text-text-muted">{c.code}</td>
@@ -78,7 +98,7 @@ function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number
         )}
       </td>
       <td className="py-2.5 pr-4">
-        {c.reason && <p className="text-[14px] leading-6 text-text-muted">{c.reason}</p>}
+        {!split && c.reason && <p className="text-[14px] leading-6 text-text-muted">{c.reason}</p>}
         {c.evidence.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {c.evidence.map((e) => {
@@ -100,12 +120,14 @@ function CheckRow({ c, onEvidence }: { c: CheckResult; onEvidence: (turn: number
             })}
           </div>
         )}
-        {c.judges && c.judges.length > 1 && (c.status === 'SPLIT' || c.status === 'DEDUCTED' || c.status === 'NO_EVIDENCE') && (
+        {split && (
           <ul className="mt-1.5 space-y-0.5 border-l border-line pl-2.5">
-            {c.judges.map((j) => (
-              <li key={j.judge} className="text-[13px] leading-5 text-text-faint">
+            {byModel(c.judges!).map((j) => (
+              <li key={j.model} className="text-[13px] leading-5 text-text-faint">
                 <span className="font-mono">{j.model}</span>{' '}
-                <span className={j.violated ? 'text-alert' : 'text-signal'}>{j.violated ? '걸림' : '안 걸림'}</span>
+                <span className={j.yes === 0 ? 'text-signal' : j.yes === j.all ? 'text-alert' : 'text-caution'}>
+                  {j.yes === 0 ? '안 걸림' : j.yes === j.all ? '걸림' : `${j.all}번 중 ${j.yes}번 걸림`}
+                </span>
                 {j.reason && <> │ {j.reason}</>}
               </li>
             ))}
@@ -236,36 +258,27 @@ export function ReportView({ r, bare }: { r: Report; bare?: boolean }) {
           </Panel>
         )}
 
-        <Panel reveal label="NOTES" title="채점 메모">
-          <ul className="space-y-2">
-            {r.notes.map((n) => (
-              <li key={n} className="border-l-2 border-line-strong pl-3 text-[14px] leading-5 text-text-muted">
-                {n}
-              </li>
-            ))}
-          </ul>
-          {tokens.length > 0 && (
-            <>
-              <h3 className="label mt-4">TOKENS</h3>
-              <table className="mt-2 w-full font-mono text-[13px]">
-                <tbody>
-                  {tokens.map(([k, v]) => (
-                    <tr key={k} className="text-text-muted">
-                      <td className="py-0.5">
-                        {k === 'assistant' ? '어시스턴트' : k === 'r2Replay' ? '다시 실행(R1)' : v.model ? `채점 ${v.model}` : '채점'}
-                      </td>
-                      <td className="tnum text-right">
-                        in {v.input.toLocaleString()}
-                        {v.cachedInput ? <span className="text-text-faint"> (캐시 {v.cachedInput.toLocaleString()})</span> : null}
-                      </td>
-                      <td className="tnum text-right">out {v.output.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </Panel>
+        {tokens.length > 0 && (
+          <Panel reveal label="NOTES" title="채점 메모">
+            <h3 className="label">TOKENS</h3>
+            <table className="mt-2 w-full font-mono text-[13px]">
+              <tbody>
+                {tokens.map(([k, v]) => (
+                  <tr key={k} className="text-text-muted">
+                    <td className="py-0.5">
+                      {k === 'assistant' ? '어시스턴트' : k === 'r2Replay' ? '다시 실행(R1)' : v.model ? `채점 ${v.model}` : '채점'}
+                    </td>
+                    <td className="tnum text-right">
+                      in {v.input.toLocaleString()}
+                      {v.cachedInput ? <span className="text-text-faint"> (캐시 {v.cachedInput.toLocaleString()})</span> : null}
+                    </td>
+                    <td className="tnum text-right">out {v.output.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        )}
       </div>
     </div>
     </div>

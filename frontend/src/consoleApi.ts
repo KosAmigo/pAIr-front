@@ -54,6 +54,8 @@ export type ParticipantView = {
 /** 환경 점검 결과의 출처: LIVE 입장 대기 중 진행 상태, SAVED 동의와 함께 저장된 결과 */
 export type EnvCheckSourceKind = 'LIVE' | 'SAVED'
 export type EnvCheckView = { source: EnvCheckSourceKind; updatedAt: string; result: unknown }
+/** 환경 점검 사진 한 장 (귀 왼쪽·오른쪽, 손목). deleted: 보관 기간이 지나 파일을 지움 */
+export type EnvCheckPhotoView = { id: number; participantId: number; stage: 'EAR_LEFT' | 'EAR_RIGHT' | 'WRIST'; sizeBytes: number; capturedAt: string; deleted: boolean }
 /** 환경 점검에서 실패한 항목이 있는데도 입장한 응시자. noticeSent: 담당자가 안내 메시지를 한 번이라도 보냈는지 */
 export type EnvCheckFailureView = {
   participantId: number
@@ -110,22 +112,6 @@ export type ProctorEventView = {
   /** 서버 재확인 상태. 영상 이벤트(PC_CAM·PHONE_CAM)에만 오고, 백엔드가 구현하기 전에는 없다 */
   serverCheck?: ServerCheck | null
   serverCheckedAt?: string | null
-}
-
-/** 환경 점검 사진 (책상 위. ROOM 은 예전 기록용) */
-export type EnvScanPhotoView = {
-  id: number
-  participantId: number
-  stage: 'ROOM' | 'DESK'
-  /** 방 스캔에서 찍은 방향(도). 책상은 null */
-  angle: number | null
-  objects: string[]
-  /** 휴대폰으로 감지된 장면 */
-  phoneSuspect: boolean
-  sizeBytes: number
-  capturedAt: string
-  /** 보관 기간이 지나 파일을 지움 */
-  deleted: boolean
 }
 
 export type ResultState = 'NOT_ENTERED' | 'WAITING' | 'SOLVING' | 'SUBMITTED'
@@ -262,6 +248,19 @@ export type RetentionView = {
   history: { seq: number; extendedBy: number; extendedAt: string; days: number; expiresBefore: string; expiresAfter: string }[]
 }
 
+/** 회차 AI 비용 (GET .../ai-cost, 관리자 전용). 금액은 설정 단가로 계산한 추정치(USD), 캐시 할인 미반영(상한) */
+export type AiCostModelLine = { model: string; calls: number; inputTokens: number; outputTokens: number; cachedTokens: number; usd: number | null }
+export type AiCostPart = { calls: number; inputTokens: number; outputTokens: number; cachedTokens: number; usd: number; models: AiCostModelLine[] }
+export type SessionAiCost = {
+  sessionId: number
+  attempts: number
+  totalUsd: number
+  perAttemptUsd: number | null
+  chat: AiCostPart
+  scoring: AiCostPart
+  unpricedModels: string[]
+}
+
 const S = '/api/console/sessions'
 
 export const consoleApi = {
@@ -301,18 +300,20 @@ export const consoleApi = {
   clips: (id: number) => call<Record<string, number>>('GET', `${S}/${id}/clips`),
   retention: (id: number) => call<RetentionView>('GET', `${S}/${id}/retention`),
   extendRetention: (id: number) => call<RetentionView>('POST', `${S}/${id}/retention/extend`),
-  envScanPhotos: (id: number, participantId: number) => call<EnvScanPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-scan`),
   /** 점검 결과: 진행 중이면 LIVE(실시간), 저장됐으면 SAVED. 아직 없으면 null */
   envCheck: (id: number, participantId: number) => call<EnvCheckView | null>('GET', `${S}/${id}/participants/${participantId}/env-check`),
+  /** 점검 사진(귀 왼쪽·오른쪽, 손목) 목록. 이어폰·스마트워치는 감독관이 이 사진으로 확인한다 */
+  envCheckPhotos: (id: number, participantId: number) => call<EnvCheckPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-check/photos`),
+  envCheckPhotoUrl: (id: number, photoId: number) => blobUrl(`${S}/${id}/env-check/photos/${photoId}/image`),
   /** 점검에 실패한 항목이 있는 채 입장한 응시자 모음 */
   envCheckFailures: (id: number) => call<EnvCheckFailureView[]>('GET', `${S}/${id}/env-check-failures`),
   sendNotice: (id: number, participantId: number, message: string) =>
     call<NoticeView>('POST', `${S}/${id}/participants/${participantId}/notices`, { message }),
   notices: (id: number, participantId: number) => call<NoticeView[]>('GET', `${S}/${id}/participants/${participantId}/notices`),
-  envScanImageUrl: (id: number, photoId: number) => blobUrl(`${S}/${id}/env-scan/${photoId}/image`),
 
   // 결과
   results: (id: number) => call<SessionResult>('GET', `${S}/${id}/results`),
+  aiCost: (id: number) => call<SessionAiCost>('GET', `${S}/${id}/ai-cost`),
   /** 종료된 회차에서 채점으로 넘어가지 못한 응시를 다시 넘긴다 (pending: 멈춘 응시 수, failed: 이번에도 못 넘긴 수) */
   rescueSession: (id: number) => call<{ pending: number; failed: number }>('POST', `${S}/${id}/rescue`),
   resultsCsvUrl: (id: number) => blobUrl(`${S}/${id}/results.csv`),

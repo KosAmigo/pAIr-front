@@ -1,7 +1,7 @@
-// 실전 응시 화면의 카메라 감독 패널 (왼쪽 아래 고정).
+// 실전 응시 화면의 카메라 감독 패널 (오른쪽 끝 전용 열. 응시 UI 와 겹치지 않는다. 접으면 48px 띠).
 // 3초 보정 → 감시. 경고가 확정되면 이벤트 1건 + 사진 1장만 서버로 보낸다 (영상은 보내지 않음).
 import { useEffect, useState } from 'react'
-import { Camera, ChevronDown, ChevronUp, RefreshCw, TriangleAlert } from 'lucide-react'
+import { Camera, ChevronLeft, ChevronRight, RefreshCw, TriangleAlert } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { Button, StatusDot } from '../../components/ui'
 import { camHub } from '../camHub.ts'
@@ -69,24 +69,42 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
       <ConnectionGate />
       <section
         aria-label="카메라 감독"
-        className="fixed bottom-4 left-4 z-40 w-[280px] overflow-hidden rounded-xl border border-line bg-panel shadow-modal"
+        data-tour="camera"
+        className={cx('flex min-h-0 flex-col overflow-y-auto border-l border-line bg-panel', open ? 'w-[280px]' : 'w-12')}
       >
-        <header className="flex h-10 items-center gap-2 border-b border-line px-3">
-          <Camera size={16} className="text-brand" aria-hidden />
-          <span className="text-[13px] font-semibold">카메라 감독</span>
-          <span className="ml-auto">
-            <StatusDot status={hub.monitor === 'monitoring' ? 'ok' : failed ? 'down' : 'check'} label={statusText} />
-          </span>
-          <button
-            type="button"
-            className="ml-1 inline-flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-raised"
-            aria-label={open ? '감독 패널 접기' : '감독 패널 펼치기'}
-            aria-expanded={open}
-            onClick={() => setOpen((o) => !o)}
-          >
-            {open ? <ChevronDown size={16} aria-hidden /> : <ChevronUp size={16} aria-hidden />}
-          </button>
-        </header>
+        {open ? (
+          <header className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
+            <Camera size={16} className="text-brand" aria-hidden />
+            <span className="text-[13px] font-semibold">카메라 감독</span>
+            <span className="ml-auto">
+              <StatusDot status={hub.monitor === 'monitoring' ? 'ok' : failed ? 'down' : 'check'} label={statusText} />
+            </span>
+            <button
+              type="button"
+              className="ml-1 inline-flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-raised"
+              aria-label="감독 패널 접기"
+              aria-expanded
+              onClick={() => setOpen(false)}
+            >
+              <ChevronRight size={16} aria-hidden />
+            </button>
+          </header>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-2">
+            <button
+              type="button"
+              className="inline-flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-raised"
+              aria-label={`감독 패널 펼치기 (${statusText})`}
+              aria-expanded={false}
+              title={`카메라 감독 · ${statusText}`}
+              onClick={() => setOpen(true)}
+            >
+              <ChevronLeft size={16} aria-hidden />
+            </button>
+            <Camera size={18} className="text-brand" aria-hidden />
+            <StatusDot status={hub.monitor === 'monitoring' ? 'ok' : failed ? 'down' : 'check'} label="" />
+          </div>
+        )}
         {open && (
           <div className="flex flex-col gap-2 p-3">
             <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-panel-raised">

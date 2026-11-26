@@ -24,6 +24,9 @@ function unlockKeys() {
   kb?.unlock?.()
 }
 
+/** 전체 화면 진입 뒤 브라우저의 ESC 안내가 떠 있는 시간(보통 1~2초)보다 넉넉하게 잡는다 */
+const FULLSCREEN_NOTICE_GRACE_MS = 4000
+
 type EventSurfaces = { documentTarget?: Document; windowTarget?: Window }
 
 export class BrowserEventDetector {
@@ -31,6 +34,7 @@ export class BrowserEventDetector {
   private readonly windowTarget?: Window
   private started = false
   private wasFullscreen = false
+  private fullscreenEnteredAt = Number.NEGATIVE_INFINITY
   private readonly onSignal: (type: SignalType) => void
   private readonly onResume: (reason: ResumeReason) => void
   private readonly config: AntiCheatingConfig
@@ -50,6 +54,9 @@ export class BrowserEventDetector {
 
   private readonly onPointerLeave = (event: MouseEvent) => {
     if (event.relatedTarget != null) return
+    // 전체 화면에 막 들어가면 브라우저가 "Esc를 길게 눌러 전체 화면 종료" 안내를 잠깐 띄운다.
+    // 이 안내는 브라우저 UI라 화면 가장자리가 아닌 안쪽에 있어, 마우스가 올라가면 문서 이탈로 잡힌다. 그동안은 세지 않는다
+    if (Date.now() - this.fullscreenEnteredAt < FULLSCREEN_NOTICE_GRACE_MS) return
     // 위·아래 가장자리로 나가는 것은 이탈로 세지 않는다 (전체 화면의 ESC 안내 버튼은 위쪽, 화면 공유 안내 막대는 위·아래쪽에 있다).
     // 창을 벗어나는 것은 창 이탈(WINDOW_BLUR)이 따로 감지한다. 좌표가 없는 이벤트는 좌우로 본다
     const y = event.clientY
@@ -70,6 +77,7 @@ export class BrowserEventDetector {
     const isFullscreen = Boolean(this.documentTarget?.fullscreenElement)
     if (isFullscreen) {
       this.wasFullscreen = true
+      this.fullscreenEnteredAt = Date.now()
       lockKeys()
       this.onResume('fullscreen-enter')
     } else if (this.wasFullscreen) {

@@ -103,17 +103,21 @@ export default function App() {
           <Route path="/exam/:sessionId" element={<ExamRoute />} />
           <Route path="/exam/:sessionId/submitted" element={<Submitted />} />
 
-          {/* 자가진단: 로그인한 누구나 */}
+          {/* 계정 화면과 예전 기록(리포트·복기)은 로그인한 누구나 */}
           <Route element={<RequireAuth />}>
             <Route path="/mypage" element={<MyPage />} />
+            <Route path="/exam/new" element={<NewExam />} />
+            <Route path="/report/:attemptId" element={<Report />} />
+            <Route path="/replay/:attemptId" element={<ReplayRedirect />} />
+          </Route>
+
+          {/* 자가진단·크레딧: 일반 회원과 관리자만. 기업 계정은 콘솔로 보낸다 */}
+          <Route element={<RequireAuth roles={['USER', 'ADMIN']} deniedMessage="기업 계정은 자가진단과 크레딧을 이용할 수 없습니다" />}>
             <Route path="/credits" element={<Credits />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/review" element={<Review />} />
             <Route path="/history" element={<Navigate to="/review" replace />} />
-            <Route path="/exam/new" element={<NewExam />} />
-            <Route path="/report/:attemptId" element={<Report />} />
-            <Route path="/replay/:attemptId" element={<ReplayRedirect />} />
           </Route>
 
           {/* 채점 툴: 관리자 */}

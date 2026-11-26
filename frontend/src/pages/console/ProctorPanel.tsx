@@ -44,6 +44,7 @@ import { describeEvent } from './eventDetail'
 import LiveWatch from './LiveWatch'
 import { EvidenceClipModal } from './EvidenceClip'
 import { Loading } from './Loading'
+import NoticeSender from './NoticeSender'
 import { RetentionBar } from './RetentionBar'
 import { loadSoundPref, playAlertSound, saveSoundPref } from './alertSound'
 import { useNewEvents } from './useNewEvents'
@@ -226,6 +227,7 @@ export default function ProctorPanel({
           </div>
         )}
       </header>
+      {session.proctoring && session.phase === 'LIVE' && p.enteredAt && !p.submittedAt && <NoticeSender key={p.id} sessionId={session.id} participantId={p.id} />}
       {restoreError && <ErrorState compact className="mx-4 mt-3" message={`링크를 되살리지 못했습니다: ${restoreError}`} />}
 
       {/* 실시간 영상: 스위치(LIVE_VIEW_ENABLED)가 켜져 있을 때만. 응시 중인 응시자만, 열었을 때만 응시자 PC 가 영상을 보낸다 */}

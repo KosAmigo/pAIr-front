@@ -835,7 +835,20 @@ function groupBy(results: GraderResult[]) {
 }
 
 function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: GraderResult[] }; onCancel: () => void }) {
+  const [exporting, setExporting] = useState(false)
+  const [exportErr, setExportErr] = useState<string | null>(null)
   const m = data.meta
+  const download = async () => {
+    setExporting(true)
+    setExportErr(null)
+    try {
+      await grader.downloadExport(m.id)
+    } catch (e) {
+      setExportErr((e as ApiError).message)
+    } finally {
+      setExporting(false)
+    }
+  }
   const finished = m.done + m.failed
   return (
     <Box
@@ -848,12 +861,13 @@ function RunHeader({ data, onCancel }: { data: { meta: GraderRun; results: Grade
               <Square size={14} aria-hidden /> 중지
             </Button>
           )}
-          <a href={grader.exportUrl(m.id)} download className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[14px] text-text-muted hover:bg-panel-raised hover:text-text">
-            <Download size={14} aria-hidden /> 결과 파일 내보내기
-          </a>
+          <button type="button" onClick={download} disabled={exporting} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[14px] text-text-muted hover:bg-panel-raised hover:text-text disabled:opacity-50">
+            <Download size={14} aria-hidden /> {exporting ? '내려받는 중' : '결과 파일 내보내기'}
+          </button>
         </>
       }
     >
+      {exportErr && <ErrorState compact message={exportErr} onRetry={download} />}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-[14px]">
         <span className={cx('font-semibold', runStatus[m.status].cls)}>
           {m.status === 'DONE' && <CheckCircle2 size={14} className="mr-1 inline" aria-hidden />}

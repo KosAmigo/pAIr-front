@@ -3,7 +3,7 @@
 // React 는 useSyncExternalStore 로 이 상태를 읽는다 (react/useCamHub.ts).
 import QRCode from 'qrcode'
 import { CamOutbox } from './api/camOutbox.ts'
-import { proctorApi } from './api/proctorApi.ts'
+import { proctorApi, type EnvCheckPhotoStage } from './api/proctorApi.ts'
 import { GATE_INITIAL, GRACE_MS, stepGate, type ChannelUp, type Gate, type GateState } from './core/connectionPolicy.ts'
 import { toCamViolation, type CamViolation } from './core/events.ts'
 import { buildPcBaseline, pcConditions, pcProfile, type PcBaseline, type PcFeatures, type PcProfileName } from './core/pcRules.ts'
@@ -23,6 +23,7 @@ import { toScreenViolation, type ScreenEventType } from './screen/screenContract
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
 import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED, VISION_WORKER_ENABLED } from './features.ts'
 import { PC_MIN_ANALYZE_INTERVAL_MS, PHONE_MIN_ANALYZE_INTERVAL_MS } from './core/frameBudget.ts'
+import type { PerfLevel } from './check/perfCheck.ts'
 import { captureSnapshot, frameLoop, openCamera, stopCamera } from './vision/camera.ts'
 import { forcedDelegate } from './vision/delegate.ts'
 import { guardedAnalyzer } from './vision/guardedAnalyzer.ts'
@@ -49,7 +50,10 @@ const PC_CLIP_FRAME_MS = 1000
 const PC_CLIP_WIDTH = 400
 const PC_CLIP_QUALITY = 0.55
 
-export type ScanFrame = { source: 'pc' | 'phone'; stage: ScanStage; image: string; objects: string[]; at: number }
+/** 서버에 올리는 점검 사진 단계 (방·책상 사진은 올리지 않는다) */
+const ENV_PHOTO_STAGE: Partial<Record<ScanStage, EnvCheckPhotoStage>> = { 'ear-left': 'EAR_LEFT', 'ear-right': 'EAR_RIGHT', wrist: 'WRIST' }
+
+export type ScanFrame ={ source: 'pc' | 'phone'; stage: ScanStage; image: string; objects: string[]; at: number }
 export type ActiveRule = { kind: string; message: string; heldMs: number; durationMs: number }
 
 export type CamState = {
@@ -81,6 +85,8 @@ export type CamState = {
   gate: Gate
   /** 사전 테스트(연습): 서버에 아무것도 보내지 않는다 */
   practice: boolean
+  /** 환경 점검이 백그라운드로 잰 이 PC 의 분석 속도 등급. 아직 못 쟀으면 null (느리면 영상 밑에 경고를 띄운다) */
+  perfLevel: PerfLevel | null
   monitor: 'idle' | 'calibrating' | 'monitoring' | 'error'
   calibProgress: number
   active: ActiveRule[]
@@ -114,6 +120,7 @@ const INITIAL: CamState = {
   screenError: null,
   gate: { status: 'ok', missing: [], graceLeftMs: GRACE_MS, newlyExpired: [] },
   practice: false,
+  perfLevel: null,
   monitor: 'idle',
   calibProgress: 0,
   active: [],
@@ -385,6 +392,13 @@ export const camHub = {
       Object.assign(video.style, { position: 'fixed', width: '2px', height: '2px', opacity: '0', pointerEvents: 'none', left: '0', top: '0' })
       document.body.appendChild(video)
     }
+    // stop() 이 video 를 버린 뒤(개발 모드 StrictMode 의 이중 마운트 등) 새로 만들어진 video 에도 열려 있는 스트림을 다시 붙인다
+    if (stream?.active && video.srcObject !== stream) {
+      video.srcObject = stream
+      video.muted = true
+      video.playsInline = true
+      void video.play().catch(() => undefined)
+    }
     return video
   },
   stream: () => stream,
@@ -402,7 +416,7 @@ export const camHub = {
     viewers = newViewerSender()
     outbox = new CamOutbox(invite)
     resetPhoneSide()
-    set({ ...INITIAL, invite, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind })
+    set({ ...INITIAL, invite, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind, perfLevel: state.perfLevel })
     relay = new RelaySocket(() => ({ type: 'hello-pc', invite }), onRelayMessage, onRelayOpenChange, onRelayBinary)
     void outbox.flush()
   },
@@ -417,7 +431,7 @@ export const camHub = {
     outbox = null
     resetPhoneSide()
     const key = `practice-${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`
-    set({ ...INITIAL, practice: true, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind })
+    set({ ...INITIAL, practice: true, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind, perfLevel: state.perfLevel })
     relay = new RelaySocket(() => ({ type: 'hello-pc', invite: key, practice: true }), onRelayMessage, onRelayOpenChange, onRelayBinary)
   },
 
@@ -491,6 +505,7 @@ export const camHub = {
           stream = await openCamera(v, 'user')
           stream.getVideoTracks().forEach((t) => t.addEventListener('ended', () => set({ webcamLive: false })))
         }
+        camHub.video() // 열리는 사이 video 가 바뀌었으면 현재 video 에 스트림을 붙인다
         set({ webcamLive: true })
         // 무거운 모델은 실전 시험에서만 내려받는다 (자가진단 화면에는 영향 없음). 기본은 Worker 에서 불러온다
         await getVision()
@@ -508,6 +523,9 @@ export const camHub = {
 
   addPcFrame(stage: ScanStage, image: string) {
     set({ scanFrames: [...state.scanFrames, { source: 'pc', stage, image, objects: [], at: Date.now() }] })
+    // 귀·손목 사진은 감독관이 보게 서버에 올린다 (사전 테스트는 서버에 아무것도 보내지 않는다). 실패해도 점검은 계속된다
+    const photoStage = ENV_PHOTO_STAGE[stage]
+    if (photoStage && state.invite && !state.practice) proctorApi.uploadEnvCheckPhoto(state.invite, photoStage, image).catch(() => {})
   },
 
   /** 휴대폰 송신 화질 전환 (책상 스캔 동안만 'scan') */
@@ -528,13 +546,9 @@ export const camHub = {
     return () => void phoneFrameListeners.delete(listener)
   },
 
-  /** 책상 스캔 사진 1장: 화면용으로 보관하고 파일 서버(백엔드 env-scan)에 올린다. 업로드가 실패해도 점검은 계속된다 */
+  /** 책상 스캔 사진 1장: 화면용으로 보관한다 */
   recordDeskPhoto(image: string, objects: string[]) {
     set({ scanFrames: [...state.scanFrames, { source: 'phone', stage: 'desk', image, objects, at: Date.now() }] })
-    if (!state.invite) return
-    proctorApi.uploadEnvScan(state.invite, { stage: 'DESK', objects: objects.slice(0, 12), image }).catch((e: unknown) => {
-      console.warn('점검 사진 업로드 실패:', e instanceof Error ? e.message : e)
-    })
   },
 
   /** 점검 사진을 비운다. stages 를 주면 그 단계의 사진만 비우고 나머지(이미 통과한 항목의 사진)는 남긴다 */
@@ -592,6 +606,10 @@ export const camHub = {
    */
   setAnalysisIntervalMs(ms: number) {
     analysisIntervalMs = Math.min(500, Math.max(PC_MIN_ANALYZE_INTERVAL_MS, Math.round(ms)))
+  },
+  /** 환경 점검이 잰 분석 속도 등급을 알린다 (영상 밑 경고용) */
+  setPerfLevel(level: PerfLevel | null) {
+    set({ perfLevel: level })
   },
 
   /**

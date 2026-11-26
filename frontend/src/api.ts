@@ -1,5 +1,6 @@
 // 백엔드 API를 호출하고 로그인 중에는 bearer 토큰을 전달한다. Vite가 /api 요청을 Spring Boot로 넘긴다.
 import { authenticatedFetch, AuthRequestError, readAuthSession } from './auth/authApi.ts'
+import { inviteForAttempt } from './proctor/liveExam.ts'
 import type { QuestionResults } from './data/questions.ts'
 import type { CompletionItem, DefinitionTarget } from './lib/liveDiagnostics.ts'
 
@@ -185,12 +186,19 @@ export function getAuthHeaders(): Record<string, string> {
   return token ? { ...authHeaders, Authorization: `Bearer ${token}` } : authHeaders
 }
 
+/** 실전 응시 요청에 붙이는 초대 토큰. 응시자는 로그인하지 않으므로 서버가 이 값으로 응시의 주인을 확인한다 */
+export function inviteHeaders(url: string): Record<string, string> {
+  const id = /^\/api\/attempts\/([^/?]+)/.exec(url)?.[1]
+  const invite = id ? inviteForAttempt(decodeURIComponent(id)) : null
+  return invite ? { 'X-Pair-Invite': invite } : {}
+}
+
 export async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response
   try {
     res = await authenticatedFetch(url, {
       method,
-      headers: { ...getAuthHeaders(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: { ...getAuthHeaders(), ...inviteHeaders(url), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch (error) {
@@ -255,8 +263,6 @@ export const api = {
   compareAttempts: (a: string, b: string) => call<AttemptCompare>('GET', `/api/attempts/${enc(a)}/compare?with=${enc(b)}`),
   /** 체크포인트에서 갈라진 새 응시를 만든다 (크레딧 차감, 부족하면 402). 새 응시 ID 를 돌려준다 */
   rollback: (checkpointId: number) => call<{ attemptId: string }>('POST', `/api/checkpoints/${checkpointId}/rollback`),
-  /** 체크포인트 이름 붙이기. 빈 문자열이면 이름을 지운다 */
-  renameCheckpoint: (checkpointId: number, label: string) => call<Checkpoint>('PATCH', `/api/checkpoints/${checkpointId}`, { label }),
   /** 자가진단 과제 목록 (응시자용). 직군을 주면 그 직군만 */
   taskList: (track?: TaskType) => call<TaskSummary[]>('GET', `/api/tasks${track ? `?track=${track}` : ''}`),
   /** 과제 정의 (설명·요구사항 등 상세) */
@@ -275,9 +281,10 @@ export async function chatStream(
 ): Promise<Turn[]> {
   let res: Response
   try {
-    res = await authenticatedFetch(`/api/attempts/${enc(id)}/chat/stream`, {
+    const url = `/api/attempts/${enc(id)}/chat/stream`
+    res = await authenticatedFetch(url, {
       method: 'POST',
-      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: { ...getAuthHeaders(), ...inviteHeaders(url), 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ message, attachments }),
     })
   } catch (error) {
@@ -441,12 +448,22 @@ export const grader = {
   run: (id: string) => call<{ meta: GraderRun; results: GraderResult[] }>('GET', `/api/grader/runs/${enc(id)}`),
   cancel: (id: string) => call<GraderRun>('POST', `/api/grader/runs/${enc(id)}/cancel`),
   result: (id: string, file: string) => call<Report>('GET', `/api/grader/runs/${enc(id)}/results/${enc(file)}`),
-  exportUrl: (id: string) => `/api/grader/runs/${enc(id)}/export`,
+  /** 결과 파일을 내려받는다. 관리자 로그인 헤더가 필요해 링크(<a href>) 대신 fetch 로 받는다 */
+  downloadExport: async (id: string) => {
+    const data = await call<unknown>('GET', `/api/grader/runs/${enc(id)}/export`)
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `grader-run-${id}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  },
 }
 
 /** 응시 PDF 자료를 로그인 헤더로 받아 브라우저 URL 로 바꾼다 (쓴 뒤 URL.revokeObjectURL) */
 export async function materialBlobUrl(id: string, path: string): Promise<string> {
-  const res = await authenticatedFetch(`/api/attempts/${enc(id)}/materials/file?path=${encodeURIComponent(path)}`, { headers: getAuthHeaders() })
+  const url = `/api/attempts/${enc(id)}/materials/file?path=${encodeURIComponent(path)}`
+  const res = await authenticatedFetch(url, { headers: { ...getAuthHeaders(), ...inviteHeaders(url) } })
   if (!res.ok) throw new ApiError(`자료 파일을 받지 못했습니다 (${res.status})`)
   return URL.createObjectURL(await res.blob())
 }
