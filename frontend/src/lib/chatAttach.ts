@@ -31,14 +31,14 @@ export function decodeDrop(raw: string): AttachRef | null {
 
 export type AddResult = { ok: true; list: AttachRef[] } | { ok: false; reason: 'full' | 'duplicate'; message: string }
 
-/** 첨부를 목록에 더한다. 같은 파일(PDF 는 같은 쪽 범위까지)이 이미 있거나 5개가 찼으면 이유를 돌려준다 */
-export function addAttachment(list: AttachRef[], ref: AttachRef): AddResult {
+/** 첨부를 목록에 더한다. 같은 파일(PDF 는 같은 쪽 범위까지)이 이미 있거나 max(과제별 제한, 기본 5)개가 찼으면 이유를 돌려준다 */
+export function addAttachment(list: AttachRef[], ref: AttachRef, max: number = MAX_ATTACH): AddResult {
   // 같은 작업 파일은 한 번만, PDF 는 파일이 같으면 쪽 범위를 고쳐 쓰게 하므로 한 번만
   if (list.some((a) => a.source === ref.source && a.path === ref.path)) {
     return { ok: false, reason: 'duplicate', message: '이미 붙인 파일입니다.' }
   }
-  if (list.length >= MAX_ATTACH) {
-    return { ok: false, reason: 'full', message: `첨부는 한 번에 ${MAX_ATTACH}개까지 붙일 수 있습니다.` }
+  if (list.length >= max) {
+    return { ok: false, reason: 'full', message: `첨부는 한 번에 ${max}개까지 붙일 수 있습니다.` }
   }
   return { ok: true, list: [...list, ref] }
 }
@@ -75,3 +75,9 @@ export const sendable = (list: AttachRef[]) => list.every((a) => a.source !== 'T
 export const attachCost = (list: AttachRef[]) => list.length * ATTACH_CREDIT
 
 export const attachLabel = (r: AttachRef) => (r.source === 'TASK_FILE' && r.pages ? `${r.path.split('/').pop()} ${r.pages}쪽` : r.path.split('/').pop() ?? r.path)
+
+/** 남은 질문 수. 사용한 질문은 사용자 턴 수다. 0 이하로 내려가지 않는다 */
+export const turnsLeft = (limit: number, turns: { role: string }[]) => Math.max(0, limit - turns.filter((t) => t.role === 'user').length)
+
+/** 글자 수를 "8,000자" 꼴로 */
+export const charsLabel = (n: number) => `${n.toLocaleString('ko-KR')}자`

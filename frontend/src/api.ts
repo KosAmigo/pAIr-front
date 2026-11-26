@@ -93,7 +93,11 @@ export type AttemptView = {
   turns: Turn[]
   elapsedSeconds: number
   chatMaxChars?: number
+  /** 과제별 AI 제한(E6). 질문 수, 한 번에 붙일 파일 수, 한 번에 붙인 글자 합계. 서버가 과제에 제한이 없으면 전역 설정 값을 준다 */
+  aiLimits?: AiLimits
 }
+
+export type AiLimits = { turns: number; maxAttach: number; contextChars: number }
 
 export type CompileDiagnostic = { file: string; line: number; column: number; severity: 'error' | 'warning'; message: string }
 

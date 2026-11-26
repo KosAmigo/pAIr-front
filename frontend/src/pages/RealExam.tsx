@@ -10,10 +10,10 @@ import { QuestionPanel } from '../components/questions/QuestionPanel'
 import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
 import { DIAGNOSTICS_DELAY_MS, isJavaSource, javaSources, marksFor, type DefinitionTarget } from '../lib/liveDiagnostics'
-import { api, ApiError, chatStream, type AttemptView, type CompileDiagnostic, type EditProposal, type Material, type Task, type Turn } from '../api'
+import { api, ApiError, chatStream, type AiLimits, type AttemptView, type CompileDiagnostic, type EditProposal, type Material, type Task, type Turn } from '../api'
 import { AttemptPdf } from '../components/AttemptPdf'
 import {
-  ATTACH_CREDIT, ATTACH_MIME, MAX_ATTACH, addAttachment, attachCost, attachLabel, decodeDrop, defaultPages, encodeDrag, removeAttachment,
+  ATTACH_CREDIT, ATTACH_MIME, MAX_ATTACH, addAttachment, attachCost, attachLabel, charsLabel, decodeDrop, defaultPages, encodeDrag, removeAttachment, turnsLeft,
   sendable, setPages, validPages, type AttachRef,
 } from '../lib/chatAttach'
 import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
@@ -202,6 +202,7 @@ function ChatPanel({
   onSend,
   model,
   maxChars,
+  limits,
   editBusy,
   onEdit,
   onViewEdit,
@@ -221,6 +222,8 @@ function ChatPanel({
   onSend: (t: string) => Promise<boolean>
   model: string
   maxChars: number
+  /** 과제별 AI 제한(질문 수, 한 번에 첨부, 첨부 글자 합계). 서버가 알려 주기 전에는 기본값 */
+  limits: AiLimits
   editBusy: boolean
   onEdit: (turn: number, e: EditProposal, a: EditAction) => void
   onViewEdit: (turn: number, e: EditProposal) => void
@@ -261,12 +264,14 @@ function ChatPanel({
   }, [turns.length, busy, streaming?.answer.length])
   const send = async () => {
     const text = draft.trim()
-    if (!text || busy || disabled || over || !sendable(attachments)) return
+    if (!text || busy || disabled || over || noTurnsLeft || !sendable(attachments)) return
     stick.current = true
     setDraft('') // 보낸 질문은 대화창으로 옮기고, 실패하면 입력창에 되돌린다
     if (!(await onSend(text))) setDraft(text)
   }
   const nextTurn = turns.length + 1
+  const left = turnsLeft(limits.turns, turns)
+  const noTurnsLeft = left === 0
   return (
     <section
       className={cx('relative flex h-full min-h-0 flex-col border-l border-line bg-panel', disabled && 'opacity-50')}
@@ -290,13 +295,18 @@ function ChatPanel({
     >
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-brand bg-brand-dim text-[15px] font-semibold text-text">
-          <Paperclip size={18} className="mr-2" aria-hidden /> 여기에 놓으면 질문에 첨부됩니다 ({attachments.length}/{MAX_ATTACH})
+          <Paperclip size={18} className="mr-2" aria-hidden /> 여기에 놓으면 질문에 첨부됩니다 ({attachments.length}/{limits.maxAttach})
         </div>
       )}
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-4">
         <Bot size={18} strokeWidth={1.75} className="text-info" aria-hidden />
         <span className="label">AI ASSISTANT</span>
-        <span className="ml-auto font-mono text-[12px] text-text-faint">{turns.length} TURNS</span>
+        <span
+          className={cx('tnum ml-auto font-mono text-[12px]', left <= 2 ? 'text-alert' : 'text-text-faint')}
+          title={`질문 ${limits.turns}번까지 · 한 번에 첨부 ${limits.maxAttach}개 · 첨부 합계 ${charsLabel(limits.contextChars)}`}
+        >
+          남은 질문 {left}/{limits.turns}
+        </span>
       </header>
       <ol
         ref={listRef}
@@ -438,7 +448,7 @@ function ChatPanel({
                 ))}
               </ul>
               <p className="tnum mt-1 font-mono text-[11px] text-text-faint">
-                첨부 {attachments.length}/{MAX_ATTACH}
+                첨부 {attachments.length}/{limits.maxAttach} · 합계 {charsLabel(limits.contextChars)} 이하
                 {showCost && ` · 크레딧 +${attachCost(attachments)} (파일당 ${ATTACH_CREDIT})`}
                 {!sendable(attachments) && <span className="ml-1 text-alert">PDF 쪽 범위를 확인하세요 (예: 1-2)</span>}
               </p>
@@ -474,7 +484,7 @@ function ChatPanel({
                 void send()
               }
             }}
-            placeholder="맥락을 충분히 담아 질문하세요. 파일 탐색기의 파일을 이 창으로 끌어 놓으면 AI에게 함께 보여 줍니다"
+            placeholder={noTurnsLeft ? `질문 ${limits.turns}번을 모두 썼습니다. 지금까지의 답을 바탕으로 마무리하세요` : '맥락을 충분히 담아 질문하세요. 파일 탐색기의 파일을 이 창으로 끌어 놓으면 AI에게 함께 보여 줍니다'}
             aria-describedby="chat-limit"
             className="block w-full resize-none bg-transparent px-3 pt-2 font-sans text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
           />
@@ -497,7 +507,7 @@ function ChatPanel({
               {over && '초과 '}
               {count.toLocaleString()}/{maxChars.toLocaleString()}
             </span>
-            <SendKey ready={draft.trim().length > 0 && sendable(attachments)} disabled={disabled || busy || over || !sendable(attachments)} onClick={() => void send()} />
+            <SendKey ready={draft.trim().length > 0 && sendable(attachments)} disabled={disabled || busy || over || noTurnsLeft || !sendable(attachments)} onClick={() => void send()} />
           </div>
         </div>
       </div>
@@ -893,6 +903,8 @@ export default function RealExam() {
   if (!view) return <CenterMessage text="응시 화면을 불러오고 있습니다" />
 
   const task = view.task as Task & { requiredHeadings?: string[] }
+  // 과제별 AI 제한(E6). 서버가 주지 않으면(옛 서버) 화면 기본값
+  const aiLimits: AiLimits = view.aiLimits ?? { turns: 40, maxAttach: MAX_ATTACH, contextChars: 30000 }
   const dev = task.type === 'dev'
   // 실전은 서버 기준 종료 시각까지, 자가진단은 과제 제한 시간에서 지난 시간을 뺀다
   const left = liveLeft ?? task.minutes * 60 - elapsed
@@ -964,7 +976,7 @@ export default function RealExam() {
     pdfInfo[path] ? { source: 'TASK_FILE', path, pages: defaultPages(pdfInfo[path].pages) } : { source: 'ATTEMPT_FILE', path }
   /** 끌어다 놓거나 첨부 버튼을 누르면 호출된다. 못 붙이는 이유가 있으면 안내 문구를 돌려준다 */
   const attach = (ref: AttachRef): string | null => {
-    const r = addAttachment(attachedRef.current, ref)
+    const r = addAttachment(attachedRef.current, ref, aiLimits.maxAttach)
     if (!r.ok) return r.message
     updateAttached(() => r.list)
     return null
@@ -1399,7 +1411,7 @@ export default function RealExam() {
         <div className="relative min-h-0" data-tour="chat">
           <div className="absolute inset-0 flex">
             <div className="flex min-w-0 flex-1 flex-col">
-              <ChatPanel turns={turns} streaming={streaming} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000}
+              <ChatPanel turns={turns} streaming={streaming} disabled={locked} busy={chatBusy} error={chatError} onSend={sendChat} model={view.attempt.model} maxChars={view.chatMaxChars ?? 1000} limits={aiLimits}
                 editBusy={editBusy}
                 onEdit={(t, e, a) => void decideEdit(t, e, a)}
                 onViewEdit={(t, e) => setViewing({ turn: t, index: e.index })}
