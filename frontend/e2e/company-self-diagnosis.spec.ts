@@ -43,7 +43,10 @@ for (const role of ['USER', 'ADMIN'] as const) {
     await setup(page, role)
     await page.goto('/mypage')
     await expect(page.getByRole('navigation', { name: '자가진단 메뉴' })).toBeVisible()
-    await expect(page.getByRole('link', { name: '충전' })).toBeVisible()
+    // 관리자는 크레딧 제한 없이 쓰므로 머리에 충전 버튼과 잔액이 없다
+    const banner = page.getByRole('banner').first()
+    await expect(banner.getByRole('link', { name: '충전' })).toHaveCount(role === 'ADMIN' ? 0 : 1)
+    await expect(banner.getByText('크레딧', { exact: true })).toHaveCount(role === 'ADMIN' ? 0 : 1)
     await page.goto('/tasks')
     await expect(page).toHaveURL(/\/tasks$/)
     await page.goto('/credits')
