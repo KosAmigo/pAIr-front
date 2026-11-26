@@ -34,12 +34,12 @@ const TrackIcon = ({ t, ...rest }: { t: Row; size: number; strokeWidth?: number;
 function Featured({ t }: { t: Row }) {
   return (
     <StageSection aria-label="추천 과제">
-      <div className="grid grid-cols-[minmax(0,1fr)_320px] items-center gap-10 px-12 py-10">
+      <div className="grid items-center gap-10 px-6 py-8 md:grid-cols-[minmax(0,1fr)_320px] md:px-12 md:py-10">
         <div>
           <span className="inline-flex items-center gap-2 font-mono text-[12px] font-semibold tracking-[0.12em] text-stage-brand">
             <Sparkles size={14} aria-hidden /> RECOMMENDED │ {trackName(t)}
           </span>
-          <h2 className="mt-3 text-[44px] leading-[52px] font-extrabold tracking-[-0.03em] text-stage-text">
+          <h2 className="mt-3 break-keep text-[28px] leading-9 font-extrabold md:text-[44px] md:leading-[52px] tracking-[-0.03em] text-stage-text">
             {t.title.split(' ').slice(0, -2).join(' ')} <GradientText>{t.title.split(' ').slice(-2).join(' ')}</GradientText>
           </h2>
           <p className="mt-3 max-w-[560px] text-[17px] leading-7 text-stage-muted">{t.description[0]}</p>
@@ -61,7 +61,7 @@ function Featured({ t }: { t: Row }) {
         </div>
 
         {/* 오른쪽: 과제 형태 아이콘이 빛나는 고리 안에서 떠 있다 */}
-        <div className="relative mx-auto size-[280px]" aria-hidden>
+        <div className="relative mx-auto hidden size-[280px] md:block" aria-hidden>
           <div className="quest-ring absolute inset-0 rounded-full border border-dashed border-stage-line-strong" />
           <div className="quest-ring-rev absolute inset-8 rounded-full border border-stage-line" />
           <div className="absolute inset-16 rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--color-stage-brand)_45%,transparent),transparent_70%)] blur-xl" />
@@ -182,7 +182,7 @@ export default function Tasks() {
         </PageHeader>
       }
     >
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-8 px-8 py-6">
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-8 px-4 py-6 md:px-8">
         {/* 직군 스위치: 활성 칸 뒤로 그라데이션 알약이 미끄러진다. 오른쪽에 난이도·시간 필터 */}
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
         <div role="tablist" aria-label="직군" className="glass flex w-fit gap-1 rounded-full p-1.5">
@@ -228,7 +228,7 @@ export default function Tasks() {
             {tasks.length === 0 ? (
               <p className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center text-[15px] text-text-muted">조건에 맞는 과제가 없습니다. 직군이나 시간 필터를 바꿔 보세요.</p>
             ) : (
-              <RevealGroup className="grid grid-cols-2 gap-4">
+              <RevealGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {tasks.map((t) => (
                   <RevealItem key={t.id} className="flex">
                     <TaskCard t={t} />
