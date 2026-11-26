@@ -26,6 +26,7 @@ export type AuthApi = {
   getProfile: () => Promise<AuthUser>
   refreshProfile: () => Promise<AuthUser>
   acceptInvitation: (token: string, name: string, password: string, code: string) => Promise<AuthUser>
+  updateName: (name: string) => Promise<AuthUser>
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   withdraw: (currentPassword: string) => Promise<void>
 }

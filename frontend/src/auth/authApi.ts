@@ -225,6 +225,8 @@ export const authApi = {
     request<AuthSession>('/api/auth/signup', 'POST', { name, email, password, code }),
   /** 저장된 bearer 토큰의 유효성과 최신 회원 정보를 서버에서 확인한다. */
   me: (token: string) => request<AuthUser>('/api/auth/me', 'GET', undefined, token),
+  /** 내 정보 수정: 이름만 바꾼다. 바뀐 회원 정보를 돌려받는다. */
+  updateName: (token: string, name: string) => request<AuthUser>('/api/auth/me', 'PATCH', { name }, token),
   changePassword: (token: string, currentPassword: string, newPassword: string) =>
     request<void>('/api/auth/password', 'PATCH', { currentPassword, newPassword }, token),
   withdraw: (token: string, currentPassword: string) =>
