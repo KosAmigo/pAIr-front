@@ -39,6 +39,7 @@ import { Loading } from './Loading'
 import ProctorPanel from './ProctorPanel'
 import { EventDot } from './EventDot'
 import { RetentionBar } from './RetentionBar'
+import { AiCostCard } from './AiCostCard'
 import EnvFailures from './EnvFailures'
 import { canManageSessions, useAuth } from '../../auth/auth'
 
@@ -253,6 +254,7 @@ function Overview({
   ]
   return (
     <div className="flex flex-col gap-6">
+      <AiCostCard sessionId={s.id} />
       <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
         <header className="flex h-10 items-center border-b border-line px-4">
           <span className="label">SETTINGS</span>
@@ -923,6 +925,7 @@ function Results({ s }: { s: SessionSummary }) {
     <div className="flex flex-col gap-6">
       {ev.error && <ErrorState compact message={`감독 이벤트: ${ev.error}`} onRetry={ev.reload} />}
       {s.proctoring && <RetentionBar sessionId={s.id} />}
+      <AiCostCard sessionId={s.id} />
       <Distribution rows={r.rows.filter((x) => x.items)} cols={cols} maxOf={maxOf} average={r.average} />
       <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
         <header className="flex h-12 items-center gap-3 border-b border-line px-4">
