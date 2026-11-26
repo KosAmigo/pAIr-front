@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type Ref } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, type AuthUser } from '../auth/auth'
-import { accountErrorMessage, validateNewPassword } from '../auth/account'
+import { accountErrorMessage, validateName, validateNewPassword } from '../auth/account'
 import { AuthSessionExpiredError } from '../auth/authApi'
 import { ErrorState } from '../components/ErrorState'
 import { PageHeader, SelfShell } from '../components/SelfShell'
@@ -31,7 +31,7 @@ function PasswordField({ id, label, value, onChange, autoComplete, describedBy, 
 }
 
 export default function MyPage() {
-  const { getProfile, changePassword, withdraw } = useAuth()
+  const { getProfile, updateName, changePassword, withdraw } = useAuth()
   const navigate = useNavigate()
   const [profile, setProfile] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,7 +44,12 @@ export default function MyPage() {
   const [confirmWithdrawal, setConfirmWithdrawal] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [withdrawalError, setWithdrawalError] = useState<string | null>(null)
-  const [pending, setPending] = useState<'password' | 'withdrawal' | null>(null)
+  const [pending, setPending] = useState<'name' | 'password' | 'withdrawal' | null>(null)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [nameSaved, setNameSaved] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
   const withdrawalInputRef = useRef<HTMLInputElement>(null)
   const withdrawalButtonRef = useRef<HTMLButtonElement>(null)
   const openedWithdrawalRef = useRef(false)
@@ -81,6 +86,42 @@ export default function MyPage() {
       navigate('/login', { replace: true, state: { authMessage: error.message } })
     } else {
       setError(accountErrorMessage(error))
+    }
+  }
+
+  useEffect(() => {
+    if (editingName) nameInputRef.current?.focus()
+  }, [editingName])
+
+  const startNameEdit = () => {
+    setNameDraft(profile?.name ?? '')
+    setNameError(null)
+    setNameSaved(false)
+    setEditingName(true)
+  }
+
+  const submitName = async (event: FormEvent) => {
+    event.preventDefault()
+    const error = validateName(nameDraft)
+    if (error) {
+      setNameError(error)
+      return
+    }
+    if (nameDraft.trim() === profile?.name) {
+      setEditingName(false)
+      return
+    }
+    setNameError(null)
+    setPending('name')
+    try {
+      const user = await updateName(nameDraft)
+      setProfile(user)
+      setEditingName(false)
+      setNameSaved(true)
+    } catch (error) {
+      handleError(error, setNameError)
+    } finally {
+      setPending(null)
     }
   }
 
@@ -126,12 +167,35 @@ export default function MyPage() {
           <>
             <Panel label="PROFILE" title="기본 정보">
               <dl className="grid gap-4 text-[15px] sm:grid-cols-2">
-                <div><dt className="text-text-muted">이름</dt><dd className="mt-1 font-semibold text-text">{profile.name}</dd></div>
+                <div>
+                  <dt className="text-text-muted">{editingName ? <label htmlFor="profile-name">이름</label> : '이름'}</dt>
+                  <dd className="mt-1">
+                    {editingName ? (
+                      <form onSubmit={submitName} className="flex flex-col gap-2">
+                        <input ref={nameInputRef} id="profile-name" value={nameDraft} maxLength={50} autoComplete="name"
+                          onChange={(event) => setNameDraft(event.target.value)}
+                          aria-invalid={nameError ? true : undefined} aria-describedby={nameError ? 'name-error' : undefined}
+                          className={inputClass} />
+                        {nameError && <p id="name-error" role="alert" className="text-[14px] text-alert">{nameError}</p>}
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="submit" variant="primary" disabled={pending !== null}>{pending === 'name' ? '저장 중…' : '저장'}</Button>
+                          <Button disabled={pending !== null} onClick={() => { setEditingName(false); setNameError(null) }}>취소</Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-text">{profile.name}</span>
+                        <Button size="sm" disabled={pending !== null} onClick={startNameEdit}>이름 변경</Button>
+                      </div>
+                    )}
+                  </dd>
+                </div>
                 <div><dt className="text-text-muted">이메일</dt><dd className="mt-1 break-all font-semibold text-text">{profile.email}</dd></div>
                 {profile.role !== 'USER' && <div><dt className="text-text-muted">역할</dt><dd className="mt-1 text-text">{roleLabels[profile.role]}</dd></div>}
                 {profile.companyName != null && <div><dt className="text-text-muted">기업명</dt><dd className="mt-1 text-text">{profile.companyName}</dd></div>}
               </dl>
-              <p className="mt-4 text-[13px] text-text-muted">이름과 이메일은 변경할 수 없습니다.</p>
+              {nameSaved && <p role="status" className="mt-4 text-[14px] text-text">이름을 변경했습니다.</p>}
+              <p className="mt-4 text-[13px] text-text-muted">이메일은 로그인 아이디라 변경할 수 없습니다.</p>
             </Panel>
 
             <Panel label="SECURITY" title="비밀번호 변경">

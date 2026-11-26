@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
-import { accountErrorMessage, accountMutation, validateNewPassword } from '../../src/auth/account.ts'
+import { accountErrorMessage, accountMutation, validateName, validateNewPassword } from '../../src/auth/account.ts'
 import { authApi, AuthRequestError, AuthSessionExpiredError, readAuthSession, saveAuthSession } from '../../src/auth/authApi.ts'
 
 const originalFetch = globalThis.fetch
@@ -24,7 +24,30 @@ describe('마이페이지 비밀번호 검증', () => {
   })
 })
 
+describe('마이페이지 이름 검증', () => {
+  it('앞뒤 공백을 빼고 1~50자만 허용한다', () => {
+    assert.ok(validateName(''))
+    assert.ok(validateName('   '))
+    assert.equal(validateName(' 김 '), null)
+    assert.equal(validateName('가'.repeat(50)), null)
+    assert.ok(validateName('가'.repeat(51)))
+    assert.equal(validateName('  ' + '가'.repeat(50) + '  '), null)
+  })
+})
+
 describe('회원 정보 API', () => {
+  it('이름 변경은 PATCH /api/auth/me 로 보내고 바뀐 프로필을 받는다', async () => {
+    const profile = { id: 1, name: '새 이름', email: 'user@example.com', role: 'USER', companyId: null, companyName: null }
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, '/api/auth/me')
+      assert.equal(init.method, 'PATCH')
+      assert.equal(init.headers.Authorization, 'Bearer access-token')
+      assert.deepEqual(JSON.parse(init.body), { name: '새 이름' })
+      return Response.json(profile)
+    }
+    assert.deepEqual(await authApi.updateName('access-token', '새 이름'), profile)
+  })
+
   it('bearer 토큰으로 프로필을 조회한다', async () => {
     const profile = { id: 1, name: '회원', email: 'user@example.com', role: 'USER', companyId: null, companyName: null }
     globalThis.fetch = async (url, init) => {

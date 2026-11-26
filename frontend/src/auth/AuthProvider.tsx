@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { setAuthHeaders } from '../api'
-import { AuthContext, type AuthApi } from './auth'
+import { AuthContext, type AuthApi, type AuthUser } from './auth'
 import { authApi, ensureAuthSessionKey, logoutSession, newAuthSession, readAuthSession, saveAuthSession, subscribeAuthSession, type AuthSession, AuthRequestError, AuthSessionExpiredError } from './authApi'
 import { accountMutation } from './account'
 import { CreditProvider } from '../data/CreditProvider'
@@ -107,6 +107,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         set(newAuthSession(response))
         return response.user
       },
+      updateName: async (name) => {
+        const expected = sessionRef.current
+        if (!expected) throw new AuthSessionExpiredError()
+        let user: AuthUser
+        try {
+          user = await authApi.updateName(expected.token, name.trim())
+        } catch (error) {
+          if (error instanceof AuthRequestError && error.status === 401) {
+            clearToken(expected.token)
+            throw new AuthSessionExpiredError()
+          }
+          throw error
+        }
+        // 요청 중 토큰이 갱신됐을 수 있으므로 지금 세션에 회원 정보만 바꿔 넣는다
+        const current = sessionRef.current
+        if (current && (expected.sessionKey ? current.sessionKey === expected.sessionKey : current.token === expected.token)) set({ ...current, user })
+        return user
+      },
       changePassword: async (currentPassword, newPassword) => {
         if (!token) throw new AuthSessionExpiredError()
         const expected = await ensureAuthSessionKey()
@@ -131,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return response.user
       },
     }),
-    [session, loading, logout, set, token, clearAccountSession, getProfile],
+    [session, loading, logout, set, token, clearAccountSession, getProfile, clearToken],
   )
 
   return (

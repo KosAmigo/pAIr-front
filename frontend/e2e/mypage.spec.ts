@@ -48,3 +48,37 @@ for (const { role, label, companyName } of cases) {
     expect(storedUser).toMatchObject(user)
   })
 }
+
+test('마이페이지 이름 변경: 저장하면 화면과 저장된 로그인 정보가 바뀌고, 빈 이름은 막는다', async ({ page }) => {
+  const user: AuthUser = {
+    id: 1, email: 'rename@example.test', name: '예전 이름', role: 'USER',
+    companyId: null, companyName: null, emailVerified: true, passwordChangeRequired: false,
+  }
+  await mockApi(page, user)
+  await page.route('**/api/credits', (route) => route.fulfill({ json: { balance: 0 } }))
+  const patches: unknown[] = []
+  await page.route('**/api/auth/me', async (route) => {
+    if (route.request().method() !== 'PATCH') return route.fallback()
+    const body = route.request().postDataJSON()
+    patches.push(body)
+    return route.fulfill({ json: { ...user, name: body.name } })
+  })
+  await page.goto('/mypage')
+
+  const profile = page.locator('section').filter({ has: page.getByRole('heading', { name: '기본 정보' }) })
+  await profile.getByRole('button', { name: '이름 변경' }).click()
+  const input = profile.getByLabel('이름')
+  await expect(input).toBeFocused()
+  await input.fill('   ')
+  await profile.getByRole('button', { name: '저장' }).click()
+  await expect(profile.getByRole('alert')).toHaveText('이름을 입력해 주세요.')
+  expect(patches).toHaveLength(0)
+
+  await input.fill('  새 이름  ')
+  await profile.getByRole('button', { name: '저장' }).click()
+  await expect(profile.getByText('새 이름', { exact: true })).toBeVisible()
+  await expect(profile.getByRole('status')).toHaveText('이름을 변경했습니다.')
+  expect(patches).toEqual([{ name: '새 이름' }])
+  const storedUser = await page.evaluate(() => JSON.parse(localStorage.getItem('pair.auth')!).user)
+  expect(storedUser.name).toBe('새 이름')
+})
