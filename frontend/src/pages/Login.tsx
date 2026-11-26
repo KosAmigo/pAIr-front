@@ -426,7 +426,10 @@ function CompanyInquiry({ onBack }: { onBack: () => void }) {
       }
     >
       <p className="mt-2 text-[14px] leading-6 text-text-muted">사업자 번호는 필수이며 진위 확인은 하지 않습니다. 매니저는 정확히 1명이어야 합니다. 감독관은 선택 사항입니다.</p>
-      <a href="/api/company-inquiries/members-template.csv" download className="mt-3 inline-block text-sm font-semibold text-brand underline">회원 명단 CSV 양식 다운로드</a>
+      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <a href="/api/company-inquiries/members-template.xlsx" download className="font-semibold text-brand underline">회원 명단 엑셀 양식 내려받기</a>
+        <a href="/api/company-inquiries/members-template.csv" download className="text-text-muted underline">CSV 양식</a>
+      </p>
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {done ? <p role="status" className="mt-6 text-text">문의가 접수되었습니다. 관리자 확인 후 안내해 드립니다.</p> : (
         <form className="mt-5 flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
@@ -434,8 +437,8 @@ function CompanyInquiry({ onBack }: { onBack: () => void }) {
           <Field id="businessNo" label="사업자 번호"><input id="businessNo" name="businessNo" required className={inputCls} /></Field>
           <Field id="contactName" label="담당자 이름"><input id="contactName" name="contactName" required className={inputCls} /></Field>
           <Field id="contactEmail" label="담당자 이메일"><input id="contactEmail" name="contactEmail" type="email" required className={inputCls} /></Field>
-          <Field id="members" label="회원 명단 CSV" hint="열: 회원명,회원이메일,역할 (MANAGER 또는 PROCTOR)">
-            <input id="members" name="members" type="file" accept=".csv,text/csv" required className="text-sm text-text" />
+          <Field id="members" label="회원 명단 (엑셀 또는 CSV)" hint="엑셀 양식에 적어 올리세요. CSV 는 열: 회원명,회원이메일,역할 (MANAGER 또는 PROCTOR)">
+            <input id="members" name="members" type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required className="text-sm text-text" />
           </Field>
           <Field id="inquiryMessage" label="문의 내용 (선택)"><textarea id="inquiryMessage" name="message" rows={3} className={`${inputCls} h-auto py-2`} /></Field>
           <Button type="submit" variant="primary" size="lg" disabled={busy}>{busy ? '제출 중…' : '문의 제출'}</Button>

@@ -7,9 +7,11 @@ import { Logo } from '../../components/ui'
 import { UserMenu } from '../../components/UserMenu'
 import { useAuth } from '../../auth/auth'
 import { Magnetic } from '../../components/fx'
+import { homeButtons } from './homeButtons'
 
 export default function HomeHeader() {
-  const { signedIn } = useAuth()
+  const { signedIn, user } = useAuth()
+  const { showConsole, showSelf } = homeButtons(signedIn, user?.role)
   const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
@@ -30,22 +32,27 @@ export default function HomeHeader() {
       <div className="mx-auto flex h-16 max-w-[1264px] items-center gap-6 px-8">
         <Logo className="text-[18px]" />
         <div className="ml-auto flex items-center gap-2">
-          {/* 콘솔: 관리자는 과제(문제) 만들기, 기업 담당자는 회차와 감독 */}
-          <Link
-            to="/console"
-            title="콘솔: 과제 만들기, 시험 회차와 감독"
-            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel"
-          >
-            <LayoutDashboard size={16} aria-hidden /> 콘솔
-          </Link>
-          <Magnetic>
+          {/* 콘솔: 관리자는 과제(문제) 만들기, 기업 담당자는 회차와 감독. 일반 회원에게는 보이지 않는다 */}
+          {showConsole && (
             <Link
-              to="/tasks"
-              className="btn-shimmer bg-brand-gradient inline-flex h-9 items-center rounded-full px-4 text-[15px] font-semibold text-on-accent hover:shadow-[0_8px_24px_-6px_rgb(108_71_255/0.45)]"
+              to="/console"
+              title="콘솔: 과제 만들기, 시험 회차와 감독"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line-strong bg-panel/80 px-4 text-[15px] font-semibold text-text transition-colors duration-150 hover:border-text-muted hover:bg-panel"
             >
-              자가진단 시작
+              <LayoutDashboard size={16} aria-hidden /> 콘솔
             </Link>
-          </Magnetic>
+          )}
+          {/* 자가진단: 기업 계정(매니저·감독관)에게는 보이지 않는다 */}
+          {showSelf && (
+            <Magnetic>
+              <Link
+                to="/tasks"
+                className="btn-shimmer bg-brand-gradient inline-flex h-9 items-center rounded-full px-4 text-[15px] font-semibold text-on-accent hover:shadow-[0_8px_24px_-6px_rgb(108_71_255/0.45)]"
+              >
+                자가진단 시작
+              </Link>
+            </Magnetic>
+          )}
           {/* 계정: 직접 로그인하지 않았으면 로그인·회원가입, 했으면 아바타 메뉴 */}
           {signedIn ? (
             <span className="ml-1">
