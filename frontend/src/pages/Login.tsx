@@ -426,10 +426,7 @@ function CompanyInquiry({ onBack }: { onBack: () => void }) {
       }
     >
       <p className="mt-2 text-[14px] leading-6 text-text-muted">사업자 번호는 필수이며 진위 확인은 하지 않습니다. 매니저는 정확히 1명이어야 합니다. 감독관은 선택 사항입니다.</p>
-      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <a href="/api/company-inquiries/members-template.xlsx" download className="font-semibold text-brand underline">회원 명단 엑셀 양식 내려받기</a>
-        <a href="/api/company-inquiries/members-template.csv" download className="text-text-muted underline">CSV 양식</a>
-      </p>
+      <a href="/api/company-inquiries/members-template.xlsx" download className="mt-3 inline-block text-sm font-semibold text-brand underline">회원 명단 엑셀 양식 내려받기</a>
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {done ? <p role="status" className="mt-6 text-text">문의가 접수되었습니다. 관리자 확인 후 안내해 드립니다.</p> : (
         <form className="mt-5 flex flex-col gap-4" onSubmit={(event) => void submit(event)}>

@@ -7,7 +7,7 @@ import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ErrorState } from '../components/ErrorState'
 import { useCredits } from '../data/credits'
 import { cancelReadyPurchase, confirmPurchase, creditsApi, isFailedPurchase, type CreditProduct, type LedgerEntry, type Page, type Purchase } from '../credits/creditsApi'
-import { openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey, type PaymentReturn } from '../credits/payment'
+import { ledgerReasonLabel, openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey, type PaymentReturn } from '../credits/payment'
 
 type SuccessReturn = Extract<PaymentReturn, { kind: 'success' }>
 const number = (value: number) => value.toLocaleString('ko-KR')
@@ -221,7 +221,7 @@ export default function Credits() {
                     <div key={product.credits} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5">
                       <h3 className="tnum text-lg font-bold text-text">{number(product.credits)} 크레딧</h3>
                       <p className="tnum text-text-muted">{number(product.amountKrw)}원</p>
-                      <button className={primary} disabled={busy} onClick={() => buy(product)}>테스트 결제</button>
+                      <button className={primary} disabled={busy} onClick={() => buy(product)}>결제</button>
                     </div>
                   ))}
                 </div>
@@ -255,7 +255,7 @@ export default function Credits() {
                 <ul className="mt-4 divide-y divide-line">
                   {ledger.content.map((entry) => (
                     <li key={entry.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                      <div><p className="font-semibold text-text">{entry.reason}</p><p className="mt-1 text-sm text-text-muted">{date(entry.createdAt)}</p></div>
+                      <div><p className="font-semibold text-text">{ledgerReasonLabel(entry.reason)}</p><p className="mt-1 text-sm text-text-muted">{date(entry.createdAt)}</p></div>
                       <div className="tnum text-right"><p className="font-semibold text-text">{entry.amount > 0 ? '+' : ''}{number(entry.amount)}</p><p className="text-sm text-text-muted">잔액 {number(entry.balanceAfter)}</p></div>
                     </li>
                   ))}

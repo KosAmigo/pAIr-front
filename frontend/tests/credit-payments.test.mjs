@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 import { cancelReadyPurchase, confirmPurchase, creditsApi, isFailedPurchase } from '../src/credits/creditsApi.ts'
-import { openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey } from '../src/credits/payment.ts'
+import { ledgerReasonLabel, openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey } from '../src/credits/payment.ts'
 
 const originalFetch = globalThis.fetch
 const originalStorage = globalThis.localStorage
@@ -168,4 +168,14 @@ test('failed purchase check only reports confirmed failures', async () => {
   globalThis.fetch = async () => { throw new Error('offline') }
   assert.equal(await isFailedPurchase('order-1'), false)
   assert.match(paymentStatusMessage('FAILED'), /지급되지 않았습니다/)
+})
+
+test('크레딧 내역 사유를 한글로 보여 주고, 모르는 사유는 그대로 둔다', () => {
+  assert.equal(ledgerReasonLabel('SIGNUP'), '가입 축하 지급')
+  assert.equal(ledgerReasonLabel('PURCHASE'), '크레딧 충전')
+  assert.equal(ledgerReasonLabel('PURCHASE_REFUND'), '충전 환불')
+  assert.equal(ledgerReasonLabel('ATTEMPT_START'), '자가진단 응시 시작')
+  assert.equal(ledgerReasonLabel('CHAT_TURN'), 'AI 채팅')
+  assert.equal(ledgerReasonLabel('ROLLBACK'), '복기 롤백')
+  assert.equal(ledgerReasonLabel('NEW_REASON'), 'NEW_REASON')
 })
