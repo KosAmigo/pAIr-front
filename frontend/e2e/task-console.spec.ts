@@ -89,7 +89,7 @@ test.describe('목록', () => {
 test.describe('과제 만들기', () => {
   test('주제 → 추천 → 직군을 바꿔도 유지 → 주제 확인 → 용도·시간 → 생성 요청 본문', async ({ page }) => {
     const api = await mockApi(page)
-    await page.goto('/console/tasks/new')
+    await page.goto('/console/tasks/new?tab=manual')
     await expect(page.getByRole('heading', { name: '과제 만들기', level: 1 })).toBeVisible()
     // 직무·난이도 칸은 없다
     await expect(page.getByLabel('직무')).toHaveCount(0)
@@ -159,15 +159,37 @@ test.describe('과제 만들기', () => {
     await expect(page.getByText(/과제를 만들었어요/)).toBeVisible({ timeout: 15_000 })
 
     const gen = api.sent.find((r) => r.path === '/api/admin/task-gen')!
-    expect(gen.body).toEqual({ track: 'DEV', topic: '주문 취소 재고 복구', trap: '취소가 두 번 오면 재고가 두 번 늘어남', usage: 'LIVE', minutes: 20 })
+    expect(gen.body).toEqual({ track: 'DEV', topic: '주문 취소 재고 복구', trap: '취소가 두 번 오면 재고가 두 번 늘어남', usage: 'LIVE', minutes: 20, mode: 'NOW' })
     expect(gen.body).not.toHaveProperty('jobRole')
     expect(gen.body).not.toHaveProperty('difficulty')
   })
 })
 
+test('만드는 동안 새 단계 글이 와도 활성 단계와 세부 글이 보인다', async ({ page }) => {
+  await mockApi(page)
+  await page.goto('/console/tasks/new?tab=manual')
+  await page.getByRole('button', { name: /^개발/ }).click()
+  await page.getByLabel('상황', { exact: true }).fill('주문 취소 재고 복구')
+  await page.getByLabel('함정').fill('취소가 두 번 오면 재고가 두 번 늘어남')
+  await page.getByRole('button', { name: /^다음/ }).click()
+  await page.getByRole('button', { name: '과제 만들기' }).click()
+  await expect(page.getByTestId('gen-detail')).toHaveText('설계도 작성 중')
+  await expect(page.getByText('(진행 중)')).toHaveCount(1)
+  // 진행 값(%)은 줄지 않는다
+  const read = async () => parseInt((await page.getByText(/^\d+%$/).first().textContent()) ?? '0', 10)
+  let last = await read()
+  for (let i = 0; i < 4; i++) {
+    await page.waitForTimeout(400)
+    if (await page.getByText(/^\d+%$/).count() === 0) break
+    const now = await read()
+    expect(now).toBeGreaterThanOrEqual(last)
+    last = now
+  }
+})
+
 test('추천 카드를 골라 만들면 그 카드의 역량을 같이 보낸다', async ({ page }) => {
   const api = await mockApi(page)
-  await page.goto('/console/tasks/new')
+  await page.goto('/console/tasks/new?tab=manual')
   await page.getByRole('button', { name: /^개발/ }).click()
   await page.getByRole('button', { name: /추천 받기/ }).click()
   await page.getByRole('button', { name: /^.*상황 \d/ }).nth(1).click()
@@ -180,7 +202,7 @@ test('추천 카드를 골라 만들면 그 카드의 역량을 같이 보낸다
 
 test('경고만 있으면 축하는 그대로, 경고 안내와 경고 줄이 위에 보인다', async ({ page }) => {
   await mockApi(page)
-  await page.goto('/console/tasks/new')
+  await page.goto('/console/tasks/new?tab=manual')
   await page.getByRole('button', { name: /^개발/ }).click()
   await page.getByRole('button', { name: /추천 받기/ }).click()
   await page.getByRole('button', { name: /^.*상황 \d/ }).first().click()
@@ -213,7 +235,7 @@ test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
   await expect.poll(async () => (await titles(page)).length).toBe(1)
   await shot(page, '03-list-search', p)
 
-  await page.goto('/console/tasks/new')
+  await page.goto('/console/tasks/new?tab=manual')
   await shot(page, '10-new-empty', p)
   await page.getByLabel('주제', { exact: true }).fill(TYPO_TOPIC)
   await page.getByRole('button', { name: /^개발/ }).click()

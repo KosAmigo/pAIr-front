@@ -37,11 +37,17 @@ export function BranchLine({
     return () => ro.disconnect()
   }, [])
   const branchColors = ['var(--color-branch-2)', 'var(--color-branch-3)', 'var(--color-branch-4)', 'var(--color-branch-5)']
-  const t = { duration: run ? duration.crawl : 0, ease: easing.expo }
+  // progress 를 줄 때(진행 막대)는 조회 주기(약 0.5초)보다 조금 길게 선형으로 잇는다.
+  // expo 곡선이면 값이 갱신될 때마다 빠르게 출발했다 멈춰서 끊겨 보인다
+  const t = progress !== undefined ? { duration: run ? 0.6 : 0, ease: 'linear' as const } : { duration: run ? duration.crawl : 0, ease: easing.expo }
   return (
     <svg ref={ref} viewBox={`0 0 ${W} 24`} aria-hidden className={cx('h-6 w-full overflow-visible', className)}>
       <defs>
         {/* 높이 0 인 가로선은 objectBoundingBox 그라데이션이 칠해지지 않으므로 userSpaceOnUse 로 */}
+        {/* 빛이 채워진 구간 밖으로 나가지 않게 자른다. 폭은 progress 를 따라 부드럽게 늘어난다 */}
+        <clipPath id={`${id}-c`}>
+          <motion.rect x="0" y="0" height="12" initial={{ width: 0 }} animate={{ width: target * W }} transition={t} />
+        </clipPath>
         <linearGradient id={`${id}-g`} gradientUnits="userSpaceOnUse" x1="0" x2={W} y1="0" y2="0">
           <stop offset="0" style={{ stopColor: 'var(--color-branch-3)' }} />
           <stop offset="0.45" style={{ stopColor: 'var(--color-brand)' }} />
@@ -80,6 +86,7 @@ export function BranchLine({
         )
       })}
       {loading && run && (
+        <g clipPath={progress !== undefined ? `url(#${id}-c)` : undefined}>
         <motion.rect
           y="4"
           height="4"
@@ -91,6 +98,7 @@ export function BranchLine({
           animate={{ x: W }}
           transition={{ duration: duration.pulse, ease: easing.standard, repeat: Infinity }}
         />
+        </g>
       )}
     </svg>
   )

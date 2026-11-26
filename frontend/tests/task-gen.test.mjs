@@ -211,3 +211,54 @@ test('competencies are sent only when a picked card is left unchanged', () => {
   assert.equal('competencies' in buildGenRequest(f), false)
   assert.equal(pickedCompetencies({ ...f, trap: '직접 고침' }, st.DEV), undefined)
 })
+
+// ── 백엔드 단계 글 → 화면 4단계 ──
+import { toGenStep, genDetail } from '../src/data/taskGen.ts'
+
+test('toGenStep maps every backend step text to the 4 screen steps', () => {
+  const build = ['대기 중', '생성 중', '설계도 작성 중', '글 작성 중', '시작 코드 작성 중', '문항 글 작성 중', '정답 쪽 작성 중', '관련 적은 자료 작성 중']
+  for (const raw of build) {
+    assert.equal(toGenStep(raw, false), '생성 중', raw)
+    assert.equal(toGenStep(raw, true), '다시 생성 중', raw)
+  }
+  assert.equal(toGenStep('확인 중', false), '확인 중')
+  assert.equal(toGenStep('관문 검사 중', true), '확인 중')
+  assert.equal(toGenStep('다시 생성 중', false), '다시 생성 중')
+  assert.equal(toGenStep('저장 중', true), '저장 중')
+  assert.equal(toGenStep('완료', false), '저장 중')
+})
+
+test('toGenStep keeps the previous step for unknown text and null', () => {
+  assert.equal(toGenStep('처음 보는 글', false, '확인 중'), '확인 중')
+  assert.equal(toGenStep(null, false, '저장 중'), '저장 중')
+  assert.equal(toGenStep('처음 보는 글', false), '생성 중')
+  assert.equal(toGenStep(null, true), '생성 중')
+})
+
+test('genDetail turns internal words into plain Korean', () => {
+  assert.equal(genDetail('설계도 작성 중', 'DEV'), '설계도 작성 중')
+  assert.equal(genDetail('관련 적은 자료 작성 중', 'BIZ'), '함께 둘 업무 자료 작성 중')
+  assert.equal(genDetail('관문 검사 중', 'DEV'), '품질 검사 중')
+  assert.equal(genDetail('정답 쪽 작성 중', 'DEV'), '정답과 숨은 테스트 작성 중')
+  assert.equal(genDetail('정답 쪽 작성 중', 'BIZ'), '정답 작성 중')
+  assert.equal(genDetail('완료', 'DEV'), null)
+  assert.equal(genDetail(null, 'DEV'), null)
+})
+
+import { advanceProgress } from '../src/data/taskGen.ts'
+
+test('progress never goes backwards, even when the retry step lengthens the total', () => {
+  let p = 0
+  let prev = 0
+  const timeline = []
+  // 생성 → 확인 → (다시 생성이 끼어듦) → 확인 → 저장, 단계가 바뀔 때마다 단계 경과 시간은 0 부터
+  const seq = [['생성 중', false, 40], ['확인 중', false, 20], ['다시 생성 중', true, 40], ['확인 중', true, 20], ['저장 중', true, 10]]
+  for (const [step, retried, secs] of seq) for (let t = 0; t <= secs; t += 0.5) timeline.push(progressOf(step, retried, t))
+  for (const v of timeline) {
+    p = advanceProgress(p, v)
+    assert.ok(p >= prev)
+    assert.ok(p <= 0.97)
+    prev = p
+  }
+  assert.equal(advanceProgress(0.5, 0.3), 0.5)
+})

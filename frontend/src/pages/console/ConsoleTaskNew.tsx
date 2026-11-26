@@ -1,13 +1,15 @@
-// DESIGN.md §7-9-2 과제 만들기 (ADMIN). 2026-11-23 개편: ① 아이디어 → ② 확인 → ③ 생성 → ④ 검수.
+// DESIGN.md §7-9-2 과제 만들기 (ADMIN). 2026-11-26: 탭 두 개 = 자동 생성(기본, 여러 개 한 번에) / 직접 만들기(아래 흐름). 탭은 주소(?tab=manual)에 남는다.
+// 직접 만들기 2026-11-23 개편: ① 아이디어 → ② 확인 → ③ 생성 → ④ 검수.
 // ① 위에서 아래로: 직군 → 주제(선택, 추천 방향) → 추천 받기 → 고른 내용 확인·수정 → 용도·제한 시간. 직무·난이도 칸은 없다(난이도는 AI가 정한다).
 // ② 요약 카드로 한 번 확인 → ③ 생성(2초마다 상태 조회, 화면을 떠나면 조회만 멈춤) → 결과에서 ④ 검수로 간다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, Check, CircleAlert, Pencil, FilePlus2, type LucideIcon } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, CircleAlert, FilePlus2, Pencil } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { GradientText } from '../../components/fx'
 import { PageHeader } from '../../components/SelfShell'
-import { Button } from '../../components/ui'
+import { Button, Tabs } from '../../components/ui'
 import { prefersReduced } from '../../lib/motion'
 import {
   applySuggestion,
@@ -15,16 +17,21 @@ import {
   pickedCompetencies,
   FILL_FIELDS,
   FILL_LABEL,
-  GEN_MINUTES,
+  DEFAULT_BATCH_HOURS,
   overwriteConflicts,
   pollJob,
   progressOf,
+  advanceProgress,
   startErrorMessage,
   taskGenApi,
   validateForm,
   type FillField,
+  type BatchHours,
   type GenMinutes,
+  type GenMode,
   type GenStep,
+  toGenStep,
+  genDetail,
   type GenTrack,
   type GenUsage,
   type Suggestion,
@@ -35,30 +42,24 @@ import { FlowSteps } from './task/FlowSteps'
 import { GenProgress } from './task/GenProgress'
 import { GenResult } from './task/GenResult'
 import { TRACK_ICON, USAGE_ICON } from '../../components/domainIcons'
-import { choiceClass } from './task/choice'
+import { AutoGenPanel } from './task/AutoGenPanel'
+import { inputCls, TRACKS } from './task/formConsts'
+import { Field, MinutesPicker, ModePicker, TrackPicker, UsagePicker } from './task/formParts'
+import { GenJobList } from './task/GenJobList'
 import { SuggestPanel } from './task/SuggestPanel'
-import { TRACK_TONE } from './task/trackTone'
+import { useGenJobs } from './task/useGenJobs'
 import { useSuggestions } from './task/useSuggestions'
 
 /** topicHint = ②에 적는 추천 방향(주제, 선택), topic = ④의 상황(생성 요청의 topic) */
-type Form = { track: GenTrack | null; topicHint: string; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes }
-const EMPTY: Form = { track: null, topicHint: '', topic: '', trap: '', usage: 'SELF', minutes: 40 }
+type Form = { track: GenTrack | null; topicHint: string; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes; mode: GenMode; batchDeadlineHours: BatchHours }
+const EMPTY: Form = { track: null, topicHint: '', topic: '', trap: '', usage: 'SELF', minutes: 40, mode: 'NOW', batchDeadlineHours: DEFAULT_BATCH_HOURS }
 type Phase = 'idea' | 'confirm' | 'running' | 'result'
 const FLOW_AT: Record<Phase, number> = { idea: 0, confirm: 1, running: 2, result: 3 }
 
-const input =
-  'w-full rounded-lg border border-line-strong bg-panel px-3.5 text-[15px] text-text outline-none transition-[border-color,box-shadow] focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]'
-const TRACKS: { value: GenTrack; title: string; desc: string }[] = [
-  { value: 'DEV', title: '개발', desc: '시작 코드와 공개·숨은 테스트를 만들어요' },
-  { value: 'BIZ', title: '비개발', desc: 'PDF 자료, CSV와 객관식·단답형 문항을 만들어요' },
-]
-const USAGES: { value: GenUsage; title: string; desc: string; icon: LucideIcon }[] = [
-  { value: 'SELF', title: '자가진단', desc: '누구나 자가진단에서 풀어요', icon: USAGE_ICON.SELF },
-  { value: 'LIVE', title: '실전', desc: '기업 회차에만 써요', icon: USAGE_ICON.LIVE },
-]
+const input = inputCls
 
-export default function ConsoleTaskNew() {
-  useConsoleCrumbs(['과제 만들기'])
+/** 직접 만들기 탭 */
+function ManualGen({ onStarted }: { onStarted: () => void }) {
   const [form, setForm] = useState<Form>(EMPTY)
   const [tried, setTried] = useState(false)
   const [phase, setPhase] = useState<Phase>('idea')
@@ -96,7 +97,7 @@ export default function ConsoleTaskNew() {
       const now = Date.now()
       setElapsed(Math.floor((now - t0.current) / 1000))
       const p = progressOf(lastStep.current ?? '생성 중', retriedRef.current, (now - stepT0.current) / 1000)
-      setProgress((old) => Math.max(old, p))
+      setProgress((old) => advanceProgress(old, p))
     }, 500)
     return () => clearInterval(t)
   }, [running])
@@ -172,21 +173,29 @@ export default function ConsoleTaskNew() {
     try {
       const { jobId } = await taskGenApi.start(buildGenRequest({ ...form, track: form.track }, pickedCompetencies(form, sug.store[form.track])))
       if (ac.signal.aborted) return
+      onStarted()
       const done = await pollJob(
         jobId,
         (j) => {
           setJob(j)
-          if (j.step !== lastStep.current) {
-            lastStep.current = j.step
-            stepT0.current = Date.now()
-          }
           if (j.step === '다시 생성 중') {
             retriedRef.current = true
             setRetried(true)
           }
+          const next = toGenStep(j.step, retriedRef.current, lastStep.current)
+          if (next !== lastStep.current) {
+            lastStep.current = next
+            stepT0.current = Date.now()
+          }
         },
         { signal: ac.signal },
       )
+      onStarted()
+      if (done.status === 'CANCELED') {
+        setStartError('이 작업은 취소됐어요. 다시 만들려면 아래 버튼을 눌러 주세요.')
+        setPhase('confirm')
+        return
+      }
       setElapsed(Math.floor((Date.now() - t0.current) / 1000))
       setJob(done)
       setPhase('result')
@@ -211,11 +220,11 @@ export default function ConsoleTaskNew() {
 
   return (
     <>
-      <PageHeader label="NEW TASK" title="과제 만들기">
+      <div className="mx-auto mb-5 w-full max-w-[960px]">
         <FlowSteps at={phase === 'result' && job?.status === 'FAILED' ? FLOW_AT.running : FLOW_AT[phase]} />
-      </PageHeader>
+      </div>
 
-      <div className="mx-auto w-full max-w-[960px] px-8 pt-6 pb-12">
+      <div className="mx-auto w-full max-w-[960px]">
         {phase === 'idea' && (
           <form
             noValidate
@@ -226,30 +235,7 @@ export default function ConsoleTaskNew() {
             className="glass step-in flex flex-col gap-7 rounded-2xl bg-white/90! p-7 shadow-md!"
           >
             <Field n={1} title="직군" error={tried ? errors.track : null}>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {TRACKS.map((t) => {
-                  const on = form.track === t.value
-                  const Icon = TRACK_ICON[t.value]
-                  return (
-                    <button
-                      key={t.value}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => set('track', t.value)}
-                      className={cx('flex items-center gap-3 rounded-xl p-4 text-left', choiceClass(on))}
-                    >
-                      <span className={cx('inline-flex size-11 shrink-0 items-center justify-center rounded-xl', TRACK_TONE[t.value].tile)} aria-hidden>
-                        <Icon size={22} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className={cx('block text-[16px] font-bold', on ? 'text-brand' : 'text-text')}>{t.title}</span>
-                        <span className="block text-[13px] break-keep text-text-muted">{t.desc}</span>
-                      </span>
-                      {on && <Check size={18} strokeWidth={3} className="ml-auto shrink-0 text-brand" aria-hidden />}
-                    </button>
-                  )
-                })}
-              </div>
+              <TrackPicker value={form.track} onChange={(v) => set('track', v)} />
             </Field>
 
             <Field n={2} title="주제 (선택)" hint="비워 두면 AI가 다양하게 추천해요">
@@ -308,30 +294,12 @@ export default function ConsoleTaskNew() {
             <Field n={5} title="용도와 제한 시간">
               <div className="flex flex-wrap items-start gap-x-10 gap-y-5">
                 <UsagePicker value={form.usage} onChange={(v) => set('usage', v)} />
-                <div className="flex flex-col gap-2">
-                  <span className="text-[14px] font-bold text-text">제한 시간</span>
-                  <div role="radiogroup" aria-label="제한 시간" className="flex gap-2">
-                    {GEN_MINUTES.map((m) => {
-                      const on = form.minutes === m
-                      return (
-                        <button
-                          key={m}
-                          type="button"
-                          role="radio"
-                          aria-checked={on}
-                          onClick={() => set('minutes', m)}
-                          className={cx('inline-flex h-14 w-24 items-center justify-center gap-1.5 rounded-xl px-4 text-[16px] font-bold', choiceClass(on))}
-                        >
-                          {on && <Check size={16} strokeWidth={3} aria-hidden />}
-                          <span>
-                            <span className="tnum font-mono">{m}</span>분
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                <MinutesPicker value={form.minutes} onChange={(v) => set('minutes', v)} />
               </div>
+            </Field>
+
+            <Field n={6} title="방식">
+              <ModePicker mode={form.mode} hours={form.batchDeadlineHours} onMode={(m) => set('mode', m)} onHours={(h) => set('batchDeadlineHours', h)} />
             </Field>
 
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
@@ -349,7 +317,7 @@ export default function ConsoleTaskNew() {
 
         {phase === 'running' && form.track && (
           <div className="mx-auto max-w-[860px]">
-            <GenProgress step={job?.step ?? '생성 중'} retried={retried} elapsed={elapsed} progress={progress} track={form.track} topic={form.topic.trim()} />
+            <GenProgress step={toGenStep(job?.step ?? null, retried)} detail={job?.status === 'QUEUED' ? (job.queuePosition ? `대기 ${job.queuePosition}번째` : '대기 중') : genDetail(job?.step ?? null, form.track)} retried={retried} elapsed={elapsed} progress={progress} track={form.track} topic={form.topic.trim()} />
           </div>
         )}
 
@@ -377,57 +345,6 @@ export default function ConsoleTaskNew() {
   )
 }
 
-function Field({ n, title, hint, error, children }: { n: number; title: string; hint?: string; error?: string | null; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2.5">
-      <h2 className="flex items-center gap-2 text-[16px] font-bold text-text">
-        <span className="tnum inline-flex size-6 items-center justify-center rounded-full bg-panel-raised font-mono text-[12px] text-text-muted" aria-hidden>
-          {n}
-        </span>
-        {title}
-      </h2>
-      {hint && <p className="-mt-1 text-[13px] text-text-muted">{hint}</p>}
-      {children}
-      {error && (
-        <p role="alert" className="flex items-center gap-1.5 text-[13px] font-medium text-alert">
-          <CircleAlert size={14} aria-hidden /> {error}
-        </p>
-      )}
-    </section>
-  )
-}
-
-/** 용도: 가로로 놓인 큰 선택 칸 두 개(아이콘 + 이름 + 한 줄 설명) */
-function UsagePicker({ value, onChange }: { value: GenUsage; onChange: (v: GenUsage) => void }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-[14px] font-bold text-text">용도</span>
-      <div role="radiogroup" aria-label="용도" className="flex flex-wrap gap-2">
-        {USAGES.map((u) => {
-          const on = value === u.value
-          return (
-            <button
-              key={u.value}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => onChange(u.value)}
-              className={cx('flex h-14 w-[240px] items-center gap-3 rounded-xl px-4 text-left', choiceClass(on))}
-            >
-              <u.icon size={20} aria-hidden className="shrink-0" />
-              <span className="min-w-0">
-                <span className="block text-[16px] leading-5 font-bold">{u.title}</span>
-                <span className={cx('block text-[12px] leading-4 font-semibold break-keep', on ? 'text-brand' : 'text-text-muted')}>{u.desc}</span>
-              </span>
-              {on && <Check size={16} strokeWidth={3} className="ml-auto shrink-0" aria-hidden />}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 /** ② 확인: 만들기 전에 한 번 보는 요약 카드 (주제·함정·직군·용도·시간) */
 function ConfirmCard({
   form,
@@ -449,6 +366,7 @@ function ConfirmCard({
       </span>,
     ],
     ['제한 시간', <span key="m"><span className="tnum font-mono">{form.minutes}</span>분</span>],
+    ['방식', <span key="mo">{form.mode === 'BATCH' ? <>배치 · 마감 <span className="tnum font-mono">{form.batchDeadlineHours}</span>시간</> : '바로 만들기'}</span>],
     [
       '용도',
       form.usage === 'LIVE' ? (
@@ -500,5 +418,44 @@ function ConfirmCard({
         </Button>
       </div>
     </section>
+  )
+}
+
+type Tab = 'auto' | 'manual'
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'auto', label: '자동 생성' },
+  { value: 'manual', label: '직접 만들기' },
+]
+
+/** 과제 만들기: 탭(자동 생성 / 직접 만들기) + 진행 목록. 탭은 ?tab=manual 로 주소에 남는다(자동 생성은 주소에 안 적는다) */
+export default function ConsoleTaskNew() {
+  useConsoleCrumbs(['과제 만들기'])
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = params.get('tab') === 'manual' ? 'manual' : 'auto'
+  const jobs = useGenJobs()
+  const setTab = (v: Tab) =>
+    setParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        if (v === 'manual') n.set('tab', 'manual')
+        else n.delete('tab')
+        return n
+      },
+      { replace: true },
+    )
+
+  return (
+    <>
+      <PageHeader label="NEW TASK" title="과제 만들기" />
+      <div className="mx-auto w-full max-w-[960px] px-8 pt-4">
+        <Tabs tabs={TABS} value={tab} onChange={setTab} />
+      </div>
+      <div className="px-8 pt-6 pb-12">
+        <div role="tabpanel" aria-label={TABS.find((t) => t.value === tab)?.label}>
+          {tab === 'auto' ? <AutoGenPanel onStarted={jobs.refresh} /> : <ManualGen onStarted={jobs.refresh} />}
+        </div>
+        <GenJobList rows={jobs.rows} error={jobs.error} onChanged={jobs.refresh} />
+      </div>
+    </>
   )
 }

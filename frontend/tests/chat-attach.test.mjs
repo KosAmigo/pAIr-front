@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  addAttachment, attachCost, attachLabel, decodeDrop, defaultPages, encodeDrag, removeAttachment, sendable, setPages, validPages,
+  addAttachment, attachCost, attachLabel, charsLabel, decodeDrop, defaultPages, encodeDrag, removeAttachment, sendable, setPages, turnsLeft, validPages,
 } from '../src/lib/chatAttach.ts'
 
 const file = (path) => ({ source: 'ATTEMPT_FILE', path })
@@ -72,4 +72,24 @@ test('each new attachment adds 5 credits and chips show a short label', () => {
   assert.equal(attachCost([file('a'), file('b'), pdf('자료/표.pdf', '1')]), 15)
   assert.equal(attachLabel(file('src/shop/OrderService.java')), 'OrderService.java')
   assert.equal(attachLabel(pdf('자료/요금 안내.pdf', '1-2')), '요금 안내.pdf 1-2쪽')
+})
+
+test('per-task attach limit: the third file is refused when the task allows two', () => {
+  let list = []
+  for (const p of ['a', 'b']) list = addAttachment(list, file(p), 2).list
+  const full = addAttachment(list, file('c'), 2)
+  assert.equal(full.ok, false)
+  assert.equal(full.reason, 'full')
+  assert.match(full.message, /2개/)
+})
+
+test('turns left counts only user turns and never goes below zero', () => {
+  const turns = [{ role: 'user' }, { role: 'ai' }, { role: 'user' }, { role: 'ai' }]
+  assert.equal(turnsLeft(10, turns), 8)
+  assert.equal(turnsLeft(2, turns), 0)
+  assert.equal(turnsLeft(1, turns), 0)
+})
+
+test('chars label uses thousands separators', () => {
+  assert.equal(charsLabel(8000), '8,000자')
 })

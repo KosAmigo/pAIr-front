@@ -29,6 +29,14 @@ const suggestion = (n: number, competencies: string[]) => ({
   why: `왜 좋은 문제인가 ${n}: AI가 흔히 놓치는 지점이라 통제력을 보기 좋아요.`,
 })
 
+/** 자동 생성 미리보기 주제 하나 */
+const autoTopic = (n: number) => ({
+  situation: `자동 주제 ${n}: 환불 금액이 소수점에서 틀어진다`,
+  trap: `자동 함정 ${n}: 반올림 순서가 바뀌면 합계가 달라짐`,
+  trapType: `R${(n % 6) + 1} 반올림`,
+  competencies: ['control', 'usage'],
+})
+
 /** 오타 주제. 이 주제를 보내면 topicCheck.ok=false 로 답한다 */
 export const TYPO_TOPIC = '쿠뽕'
 
@@ -38,6 +46,8 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     localStorage.setItem('pair.auth', JSON.stringify({ token: 't', user: authUser }))
   }, user)
   let polls = 0
+  // 자동 생성으로 만든 작업 목록 (GET /jobs 가 이걸 돌려준다)
+  let autoJobs: Record<string, unknown>[] = []
   await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
     const req = route.request()
     const path = new URL(req.url()).pathname
@@ -60,13 +70,44 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
         suggestions: [suggestion(base + 1, ['control']), suggestion(base + 2, ['usage', 'delegation']), suggestion(base + 3, ['decomposition', 'delivery'])],
       })
     }
+    if (path === '/api/admin/task-gen/auto/preview') {
+      sent.push({ method: req.method(), path, body })
+      const seen = body.exclude?.length ?? 0
+      return json(Array.from({ length: body.count }, (_, i) => autoTopic(seen + i + 1)))
+    }
+    if (path === '/api/admin/task-gen/auto' && req.method() === 'POST') {
+      sent.push({ method: req.method(), path, body })
+      const n: number = body.topics?.length ?? body.count
+      const at = Date.now()
+      // 첫 작업은 진행 중, 마지막(3개 이상일 때)은 완료, 나머지는 대기 1, 2, …
+      let queued = 0
+      autoJobs = Array.from({ length: n }, (_, i) => {
+        const state = i === 0 ? 'RUNNING' : i === n - 1 && n > 2 ? 'DONE' : 'QUEUED'
+        return {
+          jobId: `a${i + 1}`, batchId: 'b1', status: state, step: state === 'RUNNING' ? '설계도 작성 중' : null,
+          taskCode: state === 'DONE' ? 'N7' : null, passed: state === 'DONE' ? true : null,
+          checks: state === 'DONE' ? [{ name: '컴파일', ok: true, detail: '' }, { name: '분량 대비 시간', ok: false, level: 'warn', detail: '' }] : [],
+          error: null, mode: body.mode, deadlineAt: body.mode === 'BATCH' ? new Date(2026, 10, 26, 15, 5).toISOString() : null,
+          queuePosition: state === 'QUEUED' ? ++queued : null,
+          topic: body.topics?.[i]?.situation ?? `서버가 고른 주제 ${i + 1}`, track: body.track, minutes: body.minutes, createdAt: new Date(at + i).toISOString(),
+        }
+      })
+      return json({ batchId: 'b1', jobIds: autoJobs.map((j) => j.jobId) }, 202)
+    }
+    if (path === '/api/admin/task-gen/jobs') return json(autoJobs)
+    const cancel = path.match(/^\/api\/admin\/task-gen\/(a\d+)\/cancel$/)
+    if (cancel && req.method() === 'POST') {
+      sent.push({ method: req.method(), path, body })
+      autoJobs = autoJobs.map((j) => (j.jobId === cancel[1] ? { ...j, status: 'CANCELED', queuePosition: null } : j))
+      return json(autoJobs.find((j) => j.jobId === cancel[1]))
+    }
     if (path === '/api/admin/task-gen' && req.method() === 'POST') {
       sent.push({ method: req.method(), path, body })
       return json({ jobId: 'j1' })
     }
     if (path.startsWith('/api/admin/task-gen/j1')) {
       polls++
-      return json({ status: polls > 1 ? 'DONE' : 'RUNNING', step: '확인 중', taskCode: 'N1', checks: [{ name: '컴파일', ok: true, detail: '' }, { name: '분량 대비 시간', ok: false, level: 'warn', detail: '40분 치고 분량이 적어요' }], error: null })
+      return json({ status: polls > 1 ? 'DONE' : 'RUNNING', step: polls > 1 ? '완료' : '설계도 작성 중', taskCode: 'N1', checks: [{ name: '컴파일', ok: true, detail: '' }, { name: '분량 대비 시간', ok: false, level: 'warn', detail: '40분 치고 분량이 적어요' }], error: null })
     }
     return json([])
   })

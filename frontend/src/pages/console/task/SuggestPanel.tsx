@@ -114,7 +114,7 @@ export function SuggestPanel({ track, topic, state, loading, error, onAsk, onPic
 }
 
 /** 역량 칩: STATS 의 이름과 색을 옅게. 한 줄에 두고 넘치면 말줄임 */
-function CompetencyChips({ keys }: { keys: string[] }) {
+export function CompetencyChips({ keys }: { keys: string[] }) {
   const list = keys.map((k) => STATS.find((s) => s.key === k)).filter((s): s is (typeof STATS)[number] => !!s).slice(0, 2)
   return (
     <span className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
