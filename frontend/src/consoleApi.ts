@@ -248,6 +248,19 @@ export type RetentionView = {
   history: { seq: number; extendedBy: number; extendedAt: string; days: number; expiresBefore: string; expiresAfter: string }[]
 }
 
+/** 회차 AI 비용 (GET .../ai-cost, 관리자 전용). 금액은 설정 단가로 계산한 추정치(USD), 캐시 할인 미반영(상한) */
+export type AiCostModelLine = { model: string; calls: number; inputTokens: number; outputTokens: number; cachedTokens: number; usd: number | null }
+export type AiCostPart = { calls: number; inputTokens: number; outputTokens: number; cachedTokens: number; usd: number; models: AiCostModelLine[] }
+export type SessionAiCost = {
+  sessionId: number
+  attempts: number
+  totalUsd: number
+  perAttemptUsd: number | null
+  chat: AiCostPart
+  scoring: AiCostPart
+  unpricedModels: string[]
+}
+
 const S = '/api/console/sessions'
 
 export const consoleApi = {
@@ -300,6 +313,7 @@ export const consoleApi = {
 
   // 결과
   results: (id: number) => call<SessionResult>('GET', `${S}/${id}/results`),
+  aiCost: (id: number) => call<SessionAiCost>('GET', `${S}/${id}/ai-cost`),
   /** 종료된 회차에서 채점으로 넘어가지 못한 응시를 다시 넘긴다 (pending: 멈춘 응시 수, failed: 이번에도 못 넘긴 수) */
   rescueSession: (id: number) => call<{ pending: number; failed: number }>('POST', `${S}/${id}/rescue`),
   resultsCsvUrl: (id: number) => blobUrl(`${S}/${id}/results.csv`),
