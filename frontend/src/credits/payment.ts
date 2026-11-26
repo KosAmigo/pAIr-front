@@ -18,6 +18,21 @@ export function parsePaymentReturn(search: string): PaymentReturn {
   return { kind: 'success', orderId, paymentKey, amount }
 }
 
+/** 크레딧 적립·사용 내역의 사유(credit_ledger.reason)를 화면용 한글로. 모르는 값은 그대로 보여 준다 */
+export function ledgerReasonLabel(reason: string): string {
+  switch (reason) {
+    case 'SIGNUP': return '가입 축하 지급'
+    case 'PURCHASE': return '크레딧 충전'
+    case 'PURCHASE_REFUND': return '충전 환불'
+    case 'REFUND': return '크레딧 반환'
+    case 'ADJUST': return '관리자 조정'
+    case 'ATTEMPT_START': return '자가진단 응시 시작'
+    case 'CHAT_TURN': return 'AI 채팅'
+    case 'ROLLBACK': return '복기 롤백'
+    default: return reason
+  }
+}
+
 export function paymentStatusLabel(status: string): string {
   switch (status) {
     case 'READY': return '결제 전'
