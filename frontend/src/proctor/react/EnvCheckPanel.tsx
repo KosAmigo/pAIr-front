@@ -45,7 +45,7 @@ const ALL_ITEMS: CheckItem[] = [
   { id: 'placement', label: '얼굴 위치 · 혼자 있는지', status: 'pending', detail: '' },
   { id: 'performance', label: '이 PC의 분석 속도', status: 'pending', detail: '' },
   { id: 'ears', label: '양쪽 귀 (이어폰 착용 여부)', status: 'pending', detail: '' },
-  { id: 'wrist', label: '양 손목 (스마트워치 · 손에 쓴 글씨)', status: 'pending', detail: '' },
+  { id: 'wrist', label: '양 손목 사진 촬영 (소매를 걷고 손목·손바닥 보이기)', status: 'pending', detail: '' },
   { id: 'phone', label: '휴대폰 캠: 조명·책상 위 스캔', status: 'pending', detail: '' },
 ]
 // 휴대폰 캠을 쓰지 않으면 휴대폰 점검 항목은 목록에서 뺀다
