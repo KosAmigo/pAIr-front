@@ -56,6 +56,14 @@ const practice = (
   </Suspense>
 )
 
+// 방 360도 스캔 개발 페이지 (개발 모드에서만 라우트를 둔다)
+const RoomScanDevPage = lazy(() => import('./proctor/react/RoomScanDevPage.tsx'))
+const roomScanDev = (
+  <Suspense fallback={<div className="min-h-full bg-bg" />}>
+    <RoomScanDevPage />
+  </Suspense>
+)
+
 // 감독 오탐률 측정 (관리자). 분석 모델이 무거워 따로 불러온다
 const FalsePositiveLab = lazy(() => import('./proctor/react/FalsePositiveLab.tsx'))
 const proctorLab = (
@@ -100,6 +108,7 @@ export default function App() {
           <Route path="/entry" element={<Entry />} />
           <Route path="/proctor/phone" element={phoneCam} />
           <Route path="/practice" element={practice} />
+          {import.meta.env.DEV && <Route path="/dev/room-scan" element={roomScanDev} />}
           <Route path="/exam/:sessionId" element={<ExamRoute />} />
           <Route path="/exam/:sessionId/submitted" element={<Submitted />} />
 

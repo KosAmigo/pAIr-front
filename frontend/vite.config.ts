@@ -21,6 +21,17 @@ export default defineConfig(({ mode }) => {
       // 백엔드(Spring Boot, pAIr-back)로 API 요청을 넘긴다
       proxy: {
         '/api': 'http://localhost:8180',
+        // 방 스캔 개발 페이지 → 추론 서버 pAIr-vision. Bearer 키는 여기(서버 환경 변수 VISION_DEV_KEY)에서만 붙인다. 브라우저 코드에는 없다
+        '/vision-dev': {
+          target: process.env.VISION_DEV_URL ?? 'http://localhost:8000',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/vision-dev/, ''),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              if (process.env.VISION_DEV_KEY) proxyReq.setHeader('Authorization', `Bearer ${process.env.VISION_DEV_KEY}`)
+            })
+          },
+        },
         // 백엔드 릴레이를 쓸 때만: 브라우저는 이 개발 서버(https)로 붙고, 서버가 백엔드(ws)로 이어 준다 (https 페이지는 ws:// 로 직접 못 붙는다)
         ...(backendRelay ? { '/ws/proctor': { target: 'ws://localhost:8180', ws: true } } : {}),
       },
