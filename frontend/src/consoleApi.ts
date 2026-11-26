@@ -54,6 +54,8 @@ export type ParticipantView = {
 /** 환경 점검 결과의 출처: LIVE 입장 대기 중 진행 상태, SAVED 동의와 함께 저장된 결과 */
 export type EnvCheckSourceKind = 'LIVE' | 'SAVED'
 export type EnvCheckView = { source: EnvCheckSourceKind; updatedAt: string; result: unknown }
+/** 환경 점검 사진 한 장 (귀 왼쪽·오른쪽, 손목). deleted: 보관 기간이 지나 파일을 지움 */
+export type EnvCheckPhotoView = { id: number; participantId: number; stage: 'EAR_LEFT' | 'EAR_RIGHT' | 'WRIST'; sizeBytes: number; capturedAt: string; deleted: boolean }
 /** 환경 점검에서 실패한 항목이 있는데도 입장한 응시자. noticeSent: 담당자가 안내 메시지를 한 번이라도 보냈는지 */
 export type EnvCheckFailureView = {
   participantId: number
@@ -287,6 +289,9 @@ export const consoleApi = {
   extendRetention: (id: number) => call<RetentionView>('POST', `${S}/${id}/retention/extend`),
   /** 점검 결과: 진행 중이면 LIVE(실시간), 저장됐으면 SAVED. 아직 없으면 null */
   envCheck: (id: number, participantId: number) => call<EnvCheckView | null>('GET', `${S}/${id}/participants/${participantId}/env-check`),
+  /** 점검 사진(귀 왼쪽·오른쪽, 손목) 목록. 이어폰·스마트워치는 감독관이 이 사진으로 확인한다 */
+  envCheckPhotos: (id: number, participantId: number) => call<EnvCheckPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-check/photos`),
+  envCheckPhotoUrl: (id: number, photoId: number) => blobUrl(`${S}/${id}/env-check/photos/${photoId}/image`),
   /** 점검에 실패한 항목이 있는 채 입장한 응시자 모음 */
   envCheckFailures: (id: number) => call<EnvCheckFailureView[]>('GET', `${S}/${id}/env-check-failures`),
   sendNotice: (id: number, participantId: number, message: string) =>
