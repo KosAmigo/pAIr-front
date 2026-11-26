@@ -39,8 +39,8 @@ function InquiryRow({ inquiry, busy, act }: { inquiry: Inquiry; busy: boolean; a
       <Button disabled={busy} variant="primary" onClick={() => { if (window.confirm('이 문의를 승인하시겠습니까?')) void act(() => companyApi.approve(inquiry.id)) }}>승인</Button>
       <Button disabled={busy} onClick={() => { if (window.confirm('이 문의를 거절하시겠습니까?')) void act(() => companyApi.reject(inquiry.id)) }}>거절</Button>
       <label htmlFor={`inquiry-file-${inquiry.id}`} className="text-sm text-text">명단 교체</label>
-      <input id={`inquiry-file-${inquiry.id}`} type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-56 text-sm" />
-      <Button disabled={busy || !file} onClick={() => { if (file) void act(() => companyApi.replaceMembers(inquiry.id, file)) }}>CSV 교체</Button>
+      <input id={`inquiry-file-${inquiry.id}`} type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-56 text-sm" />
+      <Button disabled={busy || !file} onClick={() => { if (file) void act(() => companyApi.replaceMembers(inquiry.id, file)) }}>명단 교체</Button>
     </div>}
   </li>
 }

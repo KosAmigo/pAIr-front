@@ -185,6 +185,7 @@ export default function Dashboard() {
 
 function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: number }) {
   const { state: credits } = useCredits()
+  const unlimited = useAuth().user?.role === 'ADMIN'
   const [active, setActive] = useState<string | null>(null)
   const latest = history[history.length - 1]
   const previous = history.length > 1 ? history[history.length - 2] : undefined
@@ -227,8 +228,9 @@ function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: 
                   </p>
                 )}
               </div>
-              <dl className="grid grid-cols-2 gap-2">
-                <div className="glass-stage rounded-lg px-3 py-2.5">
+              <dl className={cx('grid gap-2', unlimited ? 'grid-cols-1' : 'grid-cols-2')}>
+                {/* 관리자는 크레딧 제한 없이 쓰므로 잔액을 보여 주지 않는다 */}
+                {!unlimited && <div className="glass-stage rounded-lg px-3 py-2.5">
                   <dt className="label text-stage-muted">CREDITS</dt>
                   <dd className="mt-0.5 flex items-center gap-1.5 text-[15px] text-stage-text">
                     <Coins size={16} className="text-stage-caution" aria-hidden />
@@ -236,7 +238,7 @@ function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: 
                       {credits.status === 'loading' ? '조회 중' : credits.status === 'error' ? '조회 실패' : credits.balance.toLocaleString()}
                     </span>
                   </dd>
-                </div>
+                </div>}
                 <div className="glass-stage rounded-lg px-3 py-2.5">
                   <dt className="label text-stage-muted">ATTEMPTS</dt>
                   <dd className="mt-0.5 flex items-center gap-1.5 text-[15px] text-stage-text">
@@ -276,7 +278,7 @@ function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: 
             label="GROWTH"
             title="성장 곡선"
             className="col-span-8"
-            actions={<span className="text-[13px] text-text-muted">{active ? `${STATS.find((s) => s.key === active)?.name} 선을 겹쳐 보는 중` : '위 스탯에 마우스를 올리면 항목 선이 겹쳐집니다'}</span>}
+            actions={active ? <span className="text-[13px] text-text-muted">{`${STATS.find((s) => s.key === active)?.name} 선을 겹쳐 보는 중`}</span> : undefined}
           >
             <GrowthChart focus={active} history={history} />
           </Panel>
