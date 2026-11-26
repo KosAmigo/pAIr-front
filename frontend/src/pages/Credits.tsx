@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { ArrowDownLeft, ArrowUpRight, Coins } from 'lucide-react'
+import { cx } from '../components/cx'
+import { CountUp, GlowBorder, RevealGroup, RevealItem } from '../components/fx'
 import { ApiError } from '../api'
 import { useAuth } from '../auth/auth'
 import { AuthRequestError } from '../auth/authApi'
@@ -188,18 +191,43 @@ export default function Credits() {
     })
   }
 
+  // 상품마다 1크레딧 값. 가장 싼 상품에 "가장 알뜰" 표시
+  const unitPrices = (products ?? []).map((p) => p.amountKrw / p.credits)
+  const bestUnit = unitPrices.length > 1 ? Math.min(...unitPrices) : null
+
   return (
     <SelfShell header={<PageHeader label="CREDITS" title="크레딧 충전" />}>
-      <div className="mx-auto flex max-w-[1200px] flex-col gap-6 px-6 py-8">
-        <section className="rounded-2xl border border-line bg-panel p-6">
-          <p className="label">MY CREDITS</p>
-          <h2 className="mt-2 text-lg font-bold text-text">현재 잔액</h2>
-          <p className="tnum mt-2 text-3xl font-bold text-brand" role="status">
-            {balance.status === 'ready' ? `${number(balance.balance)} 크레딧` : balance.status === 'loading' ? '조회 중' : '조회 실패'}
-          </p>
-          {balance.status === 'error' && <button className={`${button} mt-3`} onClick={() => void refreshBalance()}>잔액 다시 조회</button>}
-          <p className="mt-3 text-sm text-text-muted">테스트 결제만 지원하며 실제 금전 결제는 발생하지 않습니다.</p>
-        </section>
+      <div className="mx-auto flex max-w-[1200px] flex-col gap-8 px-6 py-8">
+        {/* 잔액: 이 화면의 주인공 카드 */}
+        <GlowBorder className="rounded-2xl">
+          <section className="relative overflow-hidden rounded-2xl border border-line bg-panel p-7 shadow-sm">
+            <div aria-hidden className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full bg-brand/10 blur-3xl" />
+            <div className="relative flex flex-wrap items-end justify-between gap-6">
+              <div>
+                <p className="label">MY CREDITS</p>
+                <h2 className="mt-1 text-[15px] font-semibold text-text-muted">현재 잔액</h2>
+                <p className="mt-2 flex items-baseline gap-2" role="status">
+                  {balance.status === 'ready' ? (
+                    <>
+                      <CountUp value={balance.balance} grouping className="tnum font-mono text-[44px] leading-none font-bold text-brand" />
+                      <span className="text-[18px] font-semibold text-text">크레딧</span>
+                    </>
+                  ) : (
+                    <span className="text-[22px] font-semibold text-text-muted">{balance.status === 'loading' ? '조회 중' : '조회 실패'}</span>
+                  )}
+                </p>
+                {balance.status === 'error' && <button className={`${button} mt-3`} onClick={() => void refreshBalance()}>잔액 다시 조회</button>}
+              </div>
+              <ul className="flex flex-wrap gap-2 text-[13px] text-text-muted" aria-label="크레딧을 쓰는 곳">
+                {['자가진단 응시 시작', 'AI 채팅', '복기 롤백'].map((use) => (
+                  <li key={use} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-panel-raised/60 px-3">
+                    <Coins size={14} className="text-text-faint" aria-hidden />{use}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        </GlowBorder>
 
         {notice && <p role="status" className="rounded-lg border border-brand/30 bg-brand-dim p-4 text-text">{notice}</p>}
         {actionError && <p role="alert" className="rounded-lg border border-alert/30 bg-alert/8 p-4 text-text">{actionError}</p>}
@@ -214,55 +242,94 @@ export default function Credits() {
         ) : (
           <>
             <section>
-              <h2 className="mb-3 text-xl font-bold text-text">충전 상품</h2>
+              <p className="label">TOP UP</p>
+              <h2 className="mt-1 mb-4 text-xl font-bold text-text">충전 상품</h2>
               {products.length === 0 ? <p className="text-text-muted">구매 가능한 상품이 없습니다.</p> : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {products.map((product) => (
-                    <div key={product.credits} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5">
-                      <h3 className="tnum text-lg font-bold text-text">{number(product.credits)} 크레딧</h3>
-                      <p className="tnum text-text-muted">{number(product.amountKrw)}원</p>
-                      <button className={primary} disabled={busy} onClick={() => buy(product)}>결제</button>
-                    </div>
-                  ))}
-                </div>
+                <RevealGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {products.map((product) => {
+                    const unit = product.amountKrw / product.credits
+                    const best = bestUnit != null && unit === bestUnit
+                    return (
+                      <RevealItem key={product.credits}>
+                        <div className={cx(
+                          'relative flex h-full flex-col gap-4 rounded-xl border bg-panel p-5 shadow-sm transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                          best ? 'border-brand/40' : 'border-line',
+                        )}>
+                          {best && <span className="absolute top-4 right-4 rounded-sm bg-brand-dim px-2 py-0.5 text-[12px] font-semibold text-brand">가장 알뜰</span>}
+                          <div>
+                            <p className="tnum font-mono text-[28px] leading-none font-bold text-text">{number(product.credits)}</p>
+                            <p className="mt-1 text-[13px] text-text-muted">크레딧</p>
+                          </div>
+                          <div className="mt-auto">
+                            <p className="tnum text-[18px] font-semibold text-text">{number(product.amountKrw)}원</p>
+                            <p className="tnum text-[12px] text-text-muted">1크레딧당 {unit.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}원</p>
+                          </div>
+                          <button className={primary} disabled={busy} onClick={() => buy(product)}>결제</button>
+                        </div>
+                      </RevealItem>
+                    )
+                  })}
+                </RevealGroup>
               )}
             </section>
-            <section className="rounded-xl border border-line bg-panel p-5">
-              <h2 className="text-xl font-bold text-text">구매 내역</h2>
-              <p className="mt-2 text-sm text-text-muted">모의 환불 기능</p>
-              {purchases.content.length === 0 ? <p className="py-6 text-text-muted">구매 내역이 없습니다.</p> : (
-                <ul className="mt-4 divide-y divide-line">
-                  {purchases.content.map((order) => (
-                    <li key={order.orderId} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                      <div>
-                        <p className="tnum font-semibold text-text">{number(order.credits)} 크레딧 · {number(order.amountKrw)}원</p>
-                        <p className="mt-1 text-sm text-text-muted">{date(order.createdAt)} · {paymentStatusLabel(order.status)}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(order.status === 'CONFIRMING' || order.status === 'WAITING_FOR_DEPOSIT') && <button className={button} disabled={busy} onClick={() => orderAction(order, 'recover')}>재확인</button>}
-                        {order.status === 'READY' && <button className={button} disabled={busy} onClick={() => orderAction(order, 'cancel')}>주문 취소</button>}
-                        {order.status === 'PAID' && <button className={button} disabled={busy} onClick={() => orderAction(order, 'refund')}>모의 환불</button>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Pager page={purchasePage} last={purchases.last} onChange={setPurchasePage} label="구매 내역" />
-            </section>
-            <section className="rounded-xl border border-line bg-panel p-5">
-              <h2 className="text-xl font-bold text-text">크레딧 적립·사용 내역</h2>
-              {ledger.content.length === 0 ? <p className="py-6 text-text-muted">크레딧 내역이 없습니다.</p> : (
-                <ul className="mt-4 divide-y divide-line">
-                  {ledger.content.map((entry) => (
-                    <li key={entry.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                      <div><p className="font-semibold text-text">{ledgerReasonLabel(entry.reason)}</p><p className="mt-1 text-sm text-text-muted">{date(entry.createdAt)}</p></div>
-                      <div className="tnum text-right"><p className="font-semibold text-text">{entry.amount > 0 ? '+' : ''}{number(entry.amount)}</p><p className="text-sm text-text-muted">잔액 {number(entry.balanceAfter)}</p></div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Pager page={ledgerPage} last={ledger.last} onChange={setLedgerPage} label="크레딧 내역" />
-            </section>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="rounded-xl border border-line bg-panel p-5 shadow-sm">
+                <p className="label">PURCHASES</p>
+                <h2 className="mt-1 text-xl font-bold text-text">구매 내역</h2>
+                <p className="mt-1 text-sm text-text-muted">모의 환불 기능</p>
+                {purchases.content.length === 0 ? <p className="py-6 text-text-muted">구매 내역이 없습니다.</p> : (
+                  <ul className="mt-3 divide-y divide-line">
+                    {purchases.content.map((order) => (
+                      <li key={order.orderId} className="flex flex-wrap items-center justify-between gap-3 py-3.5">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span aria-hidden className={cx('h-2.5 w-2.5 shrink-0 rounded-full', statusDot(order.status))} />
+                          <div className="min-w-0">
+                            <p className="tnum font-semibold text-text">{number(order.credits)} 크레딧 · {number(order.amountKrw)}원</p>
+                            <p className="mt-0.5 text-sm text-text-muted">{date(order.createdAt)} · {paymentStatusLabel(order.status)}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(order.status === 'CONFIRMING' || order.status === 'WAITING_FOR_DEPOSIT') && <button className={button} disabled={busy} onClick={() => orderAction(order, 'recover')}>재확인</button>}
+                          {order.status === 'READY' && <button className={button} disabled={busy} onClick={() => orderAction(order, 'cancel')}>주문 취소</button>}
+                          {order.status === 'PAID' && <button className={button} disabled={busy} onClick={() => orderAction(order, 'refund')}>모의 환불</button>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Pager page={purchasePage} last={purchases.last} onChange={setPurchasePage} label="구매 내역" />
+              </section>
+              <section className="rounded-xl border border-line bg-panel p-5 shadow-sm">
+                <p className="label">HISTORY</p>
+                <h2 className="mt-1 text-xl font-bold text-text">크레딧 적립·사용 내역</h2>
+                {ledger.content.length === 0 ? <p className="py-6 text-text-muted">크레딧 내역이 없습니다.</p> : (
+                  <ul className="mt-3 divide-y divide-line">
+                    {ledger.content.map((entry) => {
+                      const gain = entry.amount > 0
+                      return (
+                        <li key={entry.id} className="flex items-center justify-between gap-3 py-3.5">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span aria-hidden className={cx('grid h-8 w-8 shrink-0 place-items-center rounded-full', gain ? 'bg-signal/12 text-signal' : 'bg-panel-raised text-text-muted')}>
+                              {gain ? <ArrowDownLeft size={15} /> : <ArrowUpRight size={15} />}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-text">{ledgerReasonLabel(entry.reason)}</p>
+                              <p className="mt-0.5 text-sm text-text-muted">{date(entry.createdAt)}</p>
+                            </div>
+                          </div>
+                          <div className="tnum shrink-0 text-right">
+                            <p className={cx('font-mono font-semibold', gain ? 'text-signal' : 'text-text')}>{gain ? '+' : ''}{number(entry.amount)}</p>
+                            <p className="text-[12px] text-text-muted">잔액 {number(entry.balanceAfter)}</p>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                <Pager page={ledgerPage} last={ledger.last} onChange={setLedgerPage} label="크레딧 내역" />
+              </section>
+            </div>
           </>
         )}
       </div>
@@ -270,7 +337,16 @@ export default function Credits() {
   )
 }
 
+/** 구매 상태 점 색: 완료 = 성공색, 실패 = 경고색, 진행 중 = 주의색, 나머지 = 흐린 회색 */
+function statusDot(status: string) {
+  if (status === 'PAID') return 'bg-signal'
+  if (status === 'FAILED') return 'bg-alert'
+  if (status === 'READY' || status === 'CONFIRMING' || status === 'WAITING_FOR_DEPOSIT') return 'bg-caution'
+  return 'bg-text-faint'
+}
+
 function Pager({ page, last, onChange, label }: { page: number; last: boolean; onChange: (page: number) => void; label: string }) {
+  if (page === 0 && last) return null // 한 쪽뿐이면 페이지 넘김을 보여 주지 않는다
   return <nav aria-label={`${label} 페이지`} className="mt-3 flex items-center gap-3">
     <button className={button} disabled={page === 0} onClick={() => onChange(page - 1)}>이전</button>
     <span className="tnum text-sm text-text-muted">{page + 1}</span>
