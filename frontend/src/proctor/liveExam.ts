@@ -12,6 +12,8 @@ export type LiveExam = {
   attempts: Record<string, string>
   /** 감독 기준값 묶음. 개발(코딩) 과제 회차면 'coding' (서버가 아직 내려주지 않으면 비어 있고 기본값을 쓴다) */
   proctorProfile?: 'default' | 'coding'
+  /** 서버 추론 감독 회차 (프론트 스위치와 회차 플래그가 모두 켜졌을 때만 true) */
+  serverVision?: boolean
   /** 서버 시각 - 내 시각 (ms) */
   serverOffsetMs: number
 }

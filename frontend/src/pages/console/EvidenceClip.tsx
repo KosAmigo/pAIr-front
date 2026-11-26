@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { ImageOff, Loader2 } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
-import { consoleApi, type ClipFrameView } from '../../consoleApi'
+import { consoleApi, type ClipFrameView, type ClipStatus } from '../../consoleApi'
 import { useLoad } from '../../data/consoleSessions'
+import { Button } from '../../components/ui'
 import { Modal } from './common'
 import { nearestToEvent, offsetLabel, splitBySource } from './evidenceView'
 import { Loading } from './Loading'
@@ -79,6 +80,13 @@ function Big({ sessionId, eventId, frame }: { sessionId: number; eventId: number
   )
 }
 
+/** 사진이 없을 때 이유. 서버 추론 회차는 이벤트 뒤 몇 초가 지나야 사진이 만들어진다 (status) */
+export function emptyClipText(status: ClipStatus | undefined, availableAt?: string | null): string {
+  if (status === 'PENDING') return `사진을 준비하는 중입니다.${availableAt ? ` ${new Date(availableAt).toLocaleTimeString('ko-KR', { hour12: false })} 이후에 다시 열어 주세요.` : ' 잠시 뒤에 다시 열어 주세요.'}`
+  if (status === 'EXPIRED') return '보관 기간이 지나 사진이 삭제되었습니다.'
+  return '저장된 증거 구간이 없습니다.'
+}
+
 /** 증거 구간 보기 (이벤트 앞 8초·뒤 4초). 확정/기각은 이벤트 카드에서 한다 */
 export function EvidenceClipModal({ sessionId, eventId, title, onClose }: { sessionId: number; eventId: number; title: string; onClose: () => void }) {
   const clip = useLoad(`clip-${sessionId}-${eventId}`, () => consoleApi.eventClip(sessionId, eventId))
@@ -92,15 +100,20 @@ export function EvidenceClipModal({ sessionId, eventId, title, onClose }: { sess
     <Modal title={`${title} 증거 구간`} onClose={onClose} actions={null}>
       {clip.error && <ErrorState compact message={clip.error} onRetry={clip.reload} />}
       {clip.loading && <Loading text="증거 구간을 불러오는 중" className="py-8" />}
-      {clip.data && frames.length === 0 && <p className="py-6 text-center text-[14px]">저장된 증거 구간이 없습니다.</p>}
+      {clip.data && frames.length === 0 && <p className="py-6 text-center text-[14px]">{emptyClipText(clip.data.status, clip.data.availableAt)}</p>}
+      {clip.data?.status === 'PENDING' && (
+        <Button size="sm" variant="secondary" onClick={clip.reload}>
+          다시 불러오기
+        </Button>
+      )}
       {allDeleted && <p className="rounded-sm bg-panel-raised px-3 py-2 text-[13px]">보관 기간이 지나 사진이 삭제되었습니다.</p>}
       {frames.length > 0 && (
         <div className="flex flex-col gap-3">
           {current && !current.deleted && <Big sessionId={sessionId} eventId={eventId} frame={current} />}
           <p className="text-[12px] text-text-muted">0초가 이벤트가 감지된 시각이고, 붉은 글씨가 그 시각에 가장 가까운 사진입니다. 앞 8초·뒤 4초 안의 사진만 보관합니다.</p>
           <Row title="웹캠" frames={pc} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} nearestId={nearest?.id ?? null} onPick={setPicked} />
-          {/* 휴대폰 사진은 더 이상 모으지 않는다. 예전에 저장된 구간에만 있을 때 보여 준다 */}
-          {phone.length > 0 && <Row title="휴대폰 (이전 기록)" frames={phone} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} nearestId={nearest?.id ?? null} onPick={setPicked} />}
+          {/* 서버 추론 회차는 휴대폰 사진도 이벤트 구간에 함께 보관한다. 영상이 아니라 이벤트 앞뒤 사진만 볼 수 있다 */}
+          {phone.length > 0 && <Row title="휴대폰" frames={phone} sessionId={sessionId} eventId={eventId} selectedId={current?.id ?? null} nearestId={nearest?.id ?? null} onPick={setPicked} />}
         </div>
       )}
     </Modal>

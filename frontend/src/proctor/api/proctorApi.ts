@@ -5,8 +5,9 @@ import type { EventSource, ProctorEventType } from '../core/events.ts'
 /** 백엔드가 다른 호스트면 VITE_API_BASE (예: https://api.pair.test). 비우면 같은 호스트의 /api (Vite 프록시) */
 const BASE = ((import.meta.env?.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '')
 
-/** 동의 문구 버전. 문구를 바꿀 때마다 올린다 (백엔드는 값을 그대로 저장만 한다: proctor_consents.consent_version, 최대 20자) */
-export const CONSENT_VERSION = 'v2'
+/** 동의 문구 버전은 consentText.ts 가 정한다 (서버 추론 회차 v3, 그 외 v2). 서버 모드가 아니면 기존 v2 로 저장한다 */
+export { CONSENT_VERSION } from '../consentText.ts'
+import { CONSENT_VERSION_LEGACY } from '../consentText.ts'
 
 export type Phase = 'UPCOMING' | 'LIVE' | 'ENDED'
 
@@ -30,6 +31,10 @@ export type EntryInfo = {
   tasks: TaskStatus[]
   /** 시험 중 연결이 끊긴 뒤 유예(5분) 안에 돌아오지 않아 입장 링크가 만료됨 */
   linkExpired: boolean
+  /** 이 회차를 서버 추론 감독으로 진행하는지 (회차별 플래그, 없으면 꺼짐). 프론트 스위치도 켜져 있어야 서버 모드가 된다 */
+  serverVision?: boolean
+  /** 이 회차가 요구하는 동의 문구 버전 (서버 추론이면 v3). 없으면 v2 */
+  consentVersionRequired?: 'v2' | 'v3'
 }
 
 export type TaskStatus = {
@@ -102,7 +107,7 @@ const enc = encodeURIComponent
 export const proctorApi = {
   serverTime: () => call<{ serverNow: string }>('GET', '/api/time'),
   entry: (invite: string) => call<EntryInfo>('GET', `/api/entry/${enc(invite)}`),
-  consent: (invite: string, envCheck: unknown, consentVersion = CONSENT_VERSION) =>
+  consent: (invite: string, envCheck: unknown, consentVersion = CONSENT_VERSION_LEGACY) =>
     call<EntryInfo>('POST', `/api/entry/${enc(invite)}/consent`, { consentVersion, envCheck }),
   enter: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/enter`),
   start: (invite: string) => call<EntryInfo>('POST', `/api/entry/${enc(invite)}/start`),

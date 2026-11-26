@@ -21,6 +21,9 @@ import { PHONE_DROP_MESSAGE, phoneDropEvent, phoneFramesFresh } from './core/pho
 import { toScreenViolation, type ScreenEventType } from './screen/screenContract.ts'
 import { startScreenShare, type ScreenHandle, type ShareKind } from './screen/screenShare.ts'
 import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED, VISION_WORKER_ENABLED } from './features.ts'
+import { VisionSocket } from './relay/visionSocket.ts'
+import { WebcamVisionSender } from './relay/webcamVisionSender.ts'
+import type { LinkProbe, VisionCheck, VisionServerMsg, VisionState } from './core/visionContract.ts'
 import { PC_MIN_ANALYZE_INTERVAL_MS, PHONE_MIN_ANALYZE_INTERVAL_MS } from './core/frameBudget.ts'
 import type { PerfLevel } from './check/perfCheck.ts'
 import { captureSnapshot, frameLoop, openCamera, stopCamera } from './vision/camera.ts'
@@ -83,6 +86,12 @@ export type CamState = {
   practice: boolean
   /** 환경 점검이 백그라운드로 잰 이 PC 의 분석 속도 등급. 아직 못 쟀으면 null (느리면 영상 밑에 경고를 띄운다) */
   perfLevel: PerfLevel | null
+  /** 서버 추론 감독 모드 (프론트 스위치 + 회차 플래그). 켜지면 이 PC 는 분석하지 않고 사진만 서버로 보낸다 */
+  serverMode: boolean
+  /** 서버 추론 상태 (서버 모드에서만 의미 있다). down 이면 "감독이 일시 중단" 배너를 띄운다 */
+  vision: VisionState
+  /** 서버가 돌려준 입장 점검 판정 (영상 없음) */
+  visionCheck: VisionCheck | null
   monitor: 'idle' | 'calibrating' | 'monitoring' | 'error'
   calibProgress: number
   active: ActiveRule[]
@@ -117,6 +126,9 @@ const INITIAL: CamState = {
   gate: { status: 'ok', missing: [], graceLeftMs: GRACE_MS, newlyExpired: [] },
   practice: false,
   perfLevel: null,
+  serverMode: false,
+  vision: 'unknown',
+  visionCheck: null,
   monitor: 'idle',
   calibProgress: 0,
   active: [],
@@ -132,6 +144,11 @@ const listeners = new Set<() => void>()
 let video: HTMLVideoElement | null = null
 let stream: MediaStream | null = null
 let relay: RelaySocket | null = null
+/** 서버 모드의 /ws/vision 연결(웹캠)과 웹캠 사진 송신. 서버 모드가 아니면 null */
+let visionSock: VisionSocket | null = null
+let webcamSender: WebcamVisionSender | null = null
+/** 입장 점검의 지연 측정: 보낸 ping 의 pong 을 기다리는 중인 것 (한 번에 하나) */
+let pendingPong: { sentAt: number; resolve: (rttMs: number) => void } | null = null
 let outbox: CamOutbox | null = null
 /** 감독관 실시간 영상 송신. 감독관이 열었을 때만 연결이 생긴다 */
 let viewers: ViewerSender | null = null
@@ -242,7 +259,8 @@ function submitViolation(v: CamViolation) {
   pushLog(v)
   if (!box) return
   const { clientId } = box.record(v)
-  if (v.source === 'PC_CAM' || v.source === 'PHONE_CAM') evidence.schedule(clientId, Date.now(), (id, frames) => box.attachClip(id, frames))
+  // 서버 모드에서는 사진을 서버가 상시 저장하므로 PC 증거 링을 쓰지 않는다
+  if (!state.serverMode && (v.source === 'PC_CAM' || v.source === 'PHONE_CAM')) evidence.schedule(clientId, Date.now(), (id, frames) => box.attachClip(id, frames))
 }
 
 /** 세 채널이 지금 연결돼 있는지. 화면 공유는 전체 화면이 아니면(창·탭) 연결로 치지 않는다 */
@@ -251,7 +269,7 @@ export function channelUp(st: CamState): ChannelUp {
     // 모델 로딩 시간과 무관하게 웹캠 트랙이 살아 있는지만 본다
     webcam: st.webcamLive,
     // 휴대폰 캠을 쓰지 않으면 이 채널은 항상 연결된 것으로 본다 (입장·시험 중 차단 조건에서 빠진다)
-    phone: !PHONE_CAM_ENABLED || (st.phone === 'connected' && st.phoneLive),
+    phone: !(PHONE_CAM_ENABLED || st.serverMode) || (st.phone === 'connected' && st.phoneLive),
     screen: !SCREEN_SHARE_ENABLED || (st.screen === 'sharing' && st.screenKind !== 'partial'),
   }
 }
@@ -275,7 +293,7 @@ function checkPhoneLive(now: number) {
 
 function tickGate() {
   const now = Date.now()
-  if (PHONE_CAM_ENABLED) checkPhoneLive(now)
+  if (PHONE_CAM_ENABLED && !state.serverMode) checkPhoneLive(now)
   if (++gateTicks % OUTBOX_RETRY_TICKS === 0 && outbox && (outbox.pending > 0 || outbox.pendingClips > 0)) void outbox.flush()
   const { state: next, gate } = stepGate(gateState, channelUp(state), now)
   gateState = next
@@ -405,15 +423,37 @@ export const camHub = {
   },
 
   /** 이 응시자의 릴레이 연결 (폰 짝 코드 발급). 같은 초대 토큰이면 다시 열지 않는다 */
-  connect(invite: string) {
-    if (state.invite === invite && relay) return
+  connect(invite: string, opts: { serverVision?: boolean } = {}) {
+    const serverMode = opts.serverVision === true
+    if (state.invite === invite && (relay || visionSock) && state.serverMode === serverMode) return
     relay?.close()
+    relay = null
+    closeVisionSide()
     viewers?.closeAll()
     viewers = newViewerSender()
     outbox = new CamOutbox(invite)
     resetPhoneSide()
-    set({ ...INITIAL, invite, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind, perfLevel: state.perfLevel })
-    relay = new RelaySocket(() => ({ type: 'hello-pc', invite }), onRelayMessage, onRelayOpenChange, onRelayBinary)
+    set({ ...INITIAL, invite, serverMode, camera: state.camera, error: state.error, webcamLive: state.webcamLive, screen: state.screen, screenKind: state.screenKind, perfLevel: state.perfLevel })
+    if (serverMode) {
+      // 서버 모드: 휴대폰 사진도 서버로 가므로 /ws/proctor 중계는 열지 않는다
+      visionSock = new VisionSocket({
+        hello: () => ({ type: 'hello', role: 'webcam', invite }),
+        onMessage: onVisionMessage,
+        onOpenChange: (open) => set({ relayOpen: open }),
+        onStop: (action, _code, errorCode) => {
+          if (action === 'fallback-legacy') {
+            // 서버 쪽 스위치가 꺼져 있다 (4403 VISION_DISABLED): 서버 모드를 쓰지 않고 PC 분석 경로로 돌아간다
+            camHub.connect(invite)
+          } else if (action === 'consent') {
+            set({ error: '카메라 감독 동의를 다시 진행해 주세요.' })
+          } else {
+            set({ error: errorCode === 'UNAUTHORIZED' ? '입장 정보가 올바르지 않습니다. 입장 링크를 다시 열어 주세요.' : '서버 연결이 끊겼습니다. 이 화면을 새로 고쳐 주세요.' })
+          }
+        },
+      })
+    } else {
+      relay = new RelaySocket(() => ({ type: 'hello-pc', invite }), onRelayMessage, onRelayOpenChange, onRelayBinary)
+    }
     void outbox.flush()
   },
 
@@ -424,6 +464,7 @@ export const camHub = {
   connectPractice() {
     if (state.practice && relay) return
     relay?.close()
+    closeVisionSide()
     outbox = null
     resetPhoneSide()
     const key = `practice-${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`
@@ -504,7 +545,7 @@ export const camHub = {
         camHub.video() // 열리는 사이 video 가 바뀌었으면 현재 video 에 스트림을 붙인다
         set({ webcamLive: true })
         // 무거운 모델은 실전 시험에서만 내려받는다 (자가진단 화면에는 영향 없음). 기본은 Worker 에서 불러온다
-        await getVision()
+        if (!state.serverMode) await getVision() // 서버 모드는 PC 에서 분석하지 않으므로 모델을 내려받지 않는다
         set({ camera: 'ready' })
       } catch (e) {
         if (epoch !== visionEpoch) throw e // 준비하는 사이 stop() 이 불렸다: 중지된 뒤에 오류 상태를 다시 띄우지 않는다
@@ -554,6 +595,7 @@ export const camHub = {
     serverOffset = serverOffsetMs
     activeProfile = profile
     monitoringWanted = true
+    if (state.serverMode) return startServerMonitoring()
     syncPhoneSurface() // 감독이 시작되면 책상 스캔용 화면은 필요 없다 (감독 중 프레임은 분석 Worker 로 바로 간다)
     // 기다리는 동안(모델 내려받기 등) stop() 이나 다시 시작이 불리면 이 호출은 무효가 된다
     const gen = ++monitorGen
@@ -642,7 +684,7 @@ export const camHub = {
    * 3초 보정을 처음부터 다시 하고, 진행 중이던 이상 구간과 경고 간격은 새 기준으로 초기화된다.
    */
   async recalibratePc() {
-    if (!monitoringWanted || state.monitor === 'calibrating') return
+    if (state.serverMode || !monitoringWanted || state.monitor === 'calibrating') return
     await camHub.startMonitoring(serverOffset, activeProfile)
   },
 
@@ -651,6 +693,41 @@ export const camHub = {
     if (!monitoringWanted || state.phone !== 'connected') return
     phoneAnalysisOn = true
     phoneAnalyzer.start()
+  },
+
+  /**
+   * 입장 점검의 업로드 지연·손실 측정 (서버 모드). 서버에 ping 을 보내 pong 이 오는 시간을 잰다.
+   * 서버에 연결되지 않았으면 모두 손실로 센다.
+   */
+  async probeLink(count = 10, intervalMs = 200, timeoutMs = 3000): Promise<LinkProbe> {
+    const rtt: number[] = []
+    let lost = 0
+    for (let i = 0; i < count; i++) {
+      const sock = visionSock
+      if (!sock?.isOpen()) {
+        lost++
+      } else {
+        const sentAt = performance.now()
+        const got = await new Promise<number | null>((resolve) => {
+          const t = setTimeout(() => {
+            pendingPong = null
+            resolve(null)
+          }, timeoutMs)
+          pendingPong = {
+            sentAt,
+            resolve: (r) => {
+              clearTimeout(t)
+              resolve(Number.isFinite(r) ? r : null)
+            },
+          }
+          sock.sendIfOpen({ type: 'ping' })
+        })
+        if (got === null) lost++
+        else rtt.push(got)
+      }
+      await new Promise((r) => setTimeout(r, intervalMs))
+    }
+    return { rttMs: rtt, sent: count, lost }
   },
 
   recordBrowser(v: CamViolation) {
@@ -689,6 +766,7 @@ export const camHub = {
       phoneSurface.close()
       phoneSurface = null
     }
+    closeVisionSide()
     const closing = { outbox, relay, stream, video }
     viewers?.closeAll()
     viewers = null
@@ -704,6 +782,73 @@ export const camHub = {
     stopCamera(closing.stream)
     closing.video?.remove()
   },
+}
+
+/** 서버 모드 감독 시작: 분석·보정 없이 웹캠 사진만 서버가 지시한 간격으로 보낸다 (보정은 서버가 한다) */
+async function startServerMonitoring() {
+  const gen = ++monitorGen
+  await camHub.openCamera()
+  if (gen !== monitorGen || !visionSock) return
+  webcamSender?.stop()
+  webcamSender = new WebcamVisionSender(camHub.video(), visionSock)
+  webcamSender.start()
+  set({ monitor: 'monitoring', monitoringSince: Date.now(), error: null, active: [] })
+}
+
+/** 서버 모드 연결·송신을 모두 닫는다 */
+function closeVisionSide() {
+  webcamSender?.stop()
+  webcamSender = null
+  visionSock?.close()
+  visionSock = null
+  pendingPong?.resolve(Number.NaN)
+  pendingPong = null
+}
+
+/** 서버 → PC 메시지 (/ws/vision, 계약 §3-1) */
+function onVisionMessage(msg: VisionServerMsg) {
+  switch (msg.type) {
+    case 'paired': {
+      // 휴대폰 페이지가 서버 모드로 열리도록 표시를 붙인다 (PhoneCamPage 가 sv=1 이면 /ws/vision 을 쓴다)
+      const phoneUrl = msg.phoneUrl + (msg.phoneUrl.includes('?') ? '&' : '?') + 'sv=1'
+      set({ phoneUrl })
+      QRCode.toDataURL(phoneUrl, { width: 220, margin: 1 })
+        .then((phoneQr) => set({ phoneQr }))
+        .catch(() => set({ phoneQr: null }))
+      break
+    }
+    case 'ready':
+      // hello 수락: 처음 전송 값과 서버 추론 상태를 받는다
+      if (msg.rate) webcamSender?.setRate(msg.rate)
+      set({ vision: msg.vision, error: null })
+      break
+    case 'rate':
+      webcamSender?.setRate(msg)
+      break
+    case 'peer':
+    case 'status': {
+      const patch: Partial<CamState> = {}
+      if (msg.type === 'status' && msg.vision) patch.vision = msg.vision
+      if (msg.phone === 'connected' || msg.phone === 'disconnected' || msg.phone === 'stale') {
+        patch.phone = msg.phone
+        patch.phoneLive = msg.phone === 'connected'
+      }
+      set(patch)
+      break
+    }
+    case 'check':
+      set({ visionCheck: msg.check })
+      break
+    case 'pong':
+      pendingPong?.resolve(performance.now() - pendingPong.sentAt)
+      pendingPong = null
+      break
+    case 'error':
+      // 프레임 거절(FRAME_TOO_LARGE·BAD_FRAME)은 소켓이 유지되고 다음 프레임부터 정상이다. 그 밖의 오류는 닫기 코드로 처리한다
+      break
+    default:
+      break
+  }
 }
 
 function runMonitoring(baseline: PcBaseline, analyze: (now: number) => Promise<PcFeatures | null>, serverOffsetMs: number, profileName: PcProfileName) {

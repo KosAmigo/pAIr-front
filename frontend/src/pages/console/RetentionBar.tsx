@@ -11,7 +11,7 @@ import { ConfirmModal } from './common'
 import { retentionNotice } from './evidenceView'
 import { fmtTime } from './format'
 
-export function RetentionBar({ sessionId, className }: { sessionId: number; className?: string }) {
+export function RetentionBar({ sessionId, serverVision = false, className }: { sessionId: number; serverVision?: boolean; className?: string }) {
   const { user } = useAuth()
   const r = useLoad(`retention-${sessionId}`, () => consoleApi.retention(sessionId))
   const [confirm, setConfirm] = useState(false)
@@ -20,7 +20,7 @@ export function RetentionBar({ sessionId, className }: { sessionId: number; clas
   if (r.error && !r.data) return <ErrorState compact className={className} message={`보관 기간: ${r.error}`} onRetry={r.reload} />
   if (!r.data) return null
   const d = r.data
-  const n = retentionNotice(d, Date.now())
+  const n = retentionNotice(d, Date.now(), d.extendableFromDaysBefore)
   const allowed = canReviewProctor(user?.role)
   const disabledReason = !allowed ? '감독관·매니저만 연장할 수 있습니다' : n.extendHint
   const extend = () => {
@@ -53,6 +53,11 @@ export function RetentionBar({ sessionId, className }: { sessionId: number; clas
           {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null} {d.extensionDays}일 연장
         </Button>
       </div>
+      {serverVision && (
+        <p className="text-[12px] text-text-muted" data-testid="server-retention-note">
+          서버 추론 감독 회차: 이상 구간 사진은 시험 종료 후 {d.baseDays ?? 3}일 보관되고, 삭제 {d.extendableFromDaysBefore ?? 1}일 전부터 {d.extensionDays}일씩 최대 {d.maxExtensions}번 연장할 수 있습니다. 웹캠·휴대폰 상시 저장 사진은 시험 종료 3일 뒤 삭제되며 연장되지 않습니다.
+        </p>
+      )}
       {disabledReason && !n.expired && <p className="text-[12px] text-text-muted">{disabledReason}</p>}
       {d.history.length > 0 && (
         <ul className="text-[12px] text-text-muted">
