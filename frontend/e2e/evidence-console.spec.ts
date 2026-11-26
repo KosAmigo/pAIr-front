@@ -11,7 +11,7 @@ const JPEG = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP////////////////////
 
 type Retention = { expiresAt: string; extensionsUsed: number; maxExtensions: number; extensionDays: number; canExtend: boolean; history: unknown[] }
 
-async function setup(page: Page, retention: Retention) {
+async function setup(page: Page, retention: Retention, withPhone = true) {
   await mockApi(page)
   const calls: string[] = []
   const session = {
@@ -30,7 +30,7 @@ async function setup(page: Page, retention: Retention) {
     { id: 1, source: 'PC_CAM', offsetMs: -3000, sizeBytes: 900, deleted: false },
     { id: 2, source: 'PC_CAM', offsetMs: 0, sizeBytes: 900, deleted: false },
     { id: 3, source: 'PHONE_CAM', offsetMs: 1000, sizeBytes: 900, deleted: false },
-  ]
+  ].filter((f) => withPhone || f.source === 'PC_CAM')
   let current = retention
   await page.route((url) => url.pathname.startsWith('/api/console/sessions/7'), async (route) => {
     const req = route.request()
@@ -56,13 +56,14 @@ async function setup(page: Page, retention: Retention) {
 
 const soon = (): Retention => ({ expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(), extensionsUsed: 0, maxExtensions: 2, extensionDays: 7, canExtend: true, history: [] })
 
+// 휴대폰 사진은 더 이상 모으지 않는다. 예전 기록에 있을 때만 "휴대폰 (이전 기록)" 줄로 보인다
 test('완료된 회차에서 증거 구간을 타임라인으로 본다', async ({ page }, info) => {
   await setup(page, soon())
   await expect(page.getByRole('button', { name: /증거 구간 보기 \(3장\)/ })).toBeVisible()
   await page.getByRole('button', { name: /증거 구간 보기/ }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByText(/^웹캠\s*\d+장/)).toBeVisible()
-  await expect(dialog.getByText(/^휴대폰\s*\d+장/)).toBeVisible()
+  await expect(dialog.getByText(/^휴대폰 \(이전 기록\)\s*\d+장/)).toBeVisible()
   await expect(dialog.getByRole('button', { name: '웹캠 -3.0초 사진' })).toBeVisible()
   await expect(dialog.getByRole('button', { name: '웹캠 0.0초 사진' })).toBeVisible()
   await expect(dialog.getByRole('button', { name: '휴대폰 +1.0초 사진' })).toBeVisible()
@@ -70,6 +71,15 @@ test('완료된 회차에서 증거 구간을 타임라인으로 본다', async 
   await dialog.getByRole('button', { name: '휴대폰 +1.0초 사진' }).click()
   await expect(dialog.getByRole('img', { name: '+1.0초 사진' })).toBeVisible()
   await shot(page, 'clip-timeline', info.project.name)
+})
+
+test('휴대폰 사진이 없는 구간에는 휴대폰 줄이 없다', async ({ page }) => {
+  await setup(page, soon(), false)
+  await page.getByRole('button', { name: /증거 구간 보기/ }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByText(/^웹캠\s*\d+장/)).toBeVisible()
+  await expect(dialog.getByText(/^휴대폰 \(이전 기록\)/)).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: /^휴대폰 .*사진$/ })).toHaveCount(0)
 })
 
 test('완료된 회차에서도 이벤트를 확정/기각할 수 있다', async ({ page }) => {
