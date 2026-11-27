@@ -6,6 +6,8 @@ import { accountMutation } from './account'
 import { CreditProvider } from '../data/CreditProvider'
 import { companyApi } from '../company/companyApi'
 import { needsOnboarding } from '../company/policy'
+import { queryClient } from '../queryClient'
+import { userChanged } from './sessionChange'
 
 // 토큰을 브라우저에 보관하고 서버에서 세션을 재검증해 로그인 상태를 앱 전체에 제공한다.
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -13,6 +15,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef(session)
   const [loading, setLoading] = useState(session !== null)
   const token = session?.token
+  const userId = session?.user.id ?? null
   // 백엔드가 헤더 방식(pair.auth.mode=header)일 때 쓰는 X-Pair-* 헤더도 함께 맞춘다. 렌더 중에 넣어야 자식 화면 첫 요청부터 실린다
   setAuthHeaders(session?.user ?? null)
 
@@ -25,6 +28,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearToken = useCallback((token: string) => {
     if (sessionRef.current?.token === token) set(null)
   }, [set])
+
+  // 로그인한 사용자가 바뀌거나 없어지면(로그아웃·탈퇴·토큰 만료·다른 탭의 로그아웃/계정 전환) 이전 계정의 서버 데이터를 모두 비운다.
+  // 효과는 자식보다 나중에 돌아 이전 화면의 정리가 끝난 뒤 비우고, 이후 새 화면은 새 세션 헤더로 요청한다.
+  const lastUserId = useRef(userId)
+  useEffect(() => {
+    if (userChanged(lastUserId.current, userId)) queryClient.clear()
+    lastUserId.current = userId
+  }, [userId])
 
   useEffect(() => {
     const sync = () => {
