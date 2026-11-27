@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowDownLeft, ArrowUpRight, Coins } from 'lucide-react'
 import { cx } from '../components/cx'
@@ -9,7 +10,8 @@ import { AuthRequestError } from '../auth/authApi'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ErrorState } from '../components/ErrorState'
 import { useCredits } from '../data/credits'
-import { cancelReadyPurchase, confirmPurchase, creditsApi, isFailedPurchase, type CreditProduct, type LedgerEntry, type Page, type Purchase } from '../credits/creditsApi'
+import { freshOnMount, queryKeys } from '../data/queryKeys'
+import { cancelReadyPurchase, confirmPurchase, creditsApi, isFailedPurchase, type CreditProduct, type Purchase } from '../credits/creditsApi'
 import { ledgerReasonLabel, openPayment, parsePaymentReturn, paymentStatusLabel, paymentStatusMessage, requireTestClientKey, type PaymentReturn } from '../credits/payment'
 
 type SuccessReturn = Extract<PaymentReturn, { kind: 'success' }>
@@ -44,42 +46,34 @@ export default function Credits() {
   const { user } = useAuth()
   const userId = user!.id
   const { state: balance, refresh: refreshBalance } = useCredits()
+  const queryClient = useQueryClient()
   const location = useLocation()
   const navigate = useNavigate()
-  const [products, setProducts] = useState<CreditProduct[] | null>(null)
-  const [purchases, setPurchases] = useState<Page<Purchase> | null>(null)
-  const [ledger, setLedger] = useState<Page<LedgerEntry> | null>(null)
   const [purchasePage, setPurchasePage] = useState(0)
   const [ledgerPage, setLedgerPage] = useState(0)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // 상품·구매 내역·사용 내역을 한 번에 받는다. 쪽을 넘기는 동안은 이전 쪽을 그대로 보여 준다
+  const historyQ = useQuery({
+    queryKey: queryKeys.creditsHistory(userId, purchasePage, ledgerPage),
+    queryFn: async () => {
+      const [products, purchases, ledger] = await Promise.all([creditsApi.products(), creditsApi.purchases(purchasePage), creditsApi.ledger(ledgerPage)])
+      return { products, purchases, ledger }
+    },
+    placeholderData: keepPreviousData,
+    ...freshOnMount,
+  })
+  const { products, purchases, ledger } = historyQ.data ?? { products: null, purchases: null, ledger: null }
+  const loadError = historyQ.error ? message(historyQ.error) : null
   const [notice, setNotice] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const callbackRef = useRef(false)
   const [pending, setPending] = useState<SuccessReturn | null>(() => storedReturn(userId))
-  const [revision, setRevision] = useState(0)
 
   const refresh = useCallback(() => {
     void refreshBalance()
-    setRevision((value) => value + 1)
-  }, [refreshBalance])
-
-  useEffect(() => {
-    let active = true
-    Promise.all([creditsApi.products(), creditsApi.purchases(purchasePage), creditsApi.ledger(ledgerPage)])
-      .then(([nextProducts, nextPurchases, nextLedger]) => {
-        if (!active) return
-        setProducts(nextProducts)
-        setPurchases(nextPurchases)
-        setLedger(nextLedger)
-        setLoadError(null)
-      })
-      .catch((error: unknown) => {
-        if (active) setLoadError(message(error))
-      })
-    return () => { active = false }
-  }, [purchasePage, ledgerPage, revision])
+    void queryClient.invalidateQueries({ queryKey: ['credits-history', userId] })
+  }, [refreshBalance, queryClient, userId])
 
   const clearPending = useCallback(() => {
     sessionStorage.removeItem(storageKey(userId))

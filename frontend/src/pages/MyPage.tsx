@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent, type Ref } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, type AuthUser } from '../auth/auth'
 import { accountErrorMessage, validateName, validateNewPassword } from '../auth/account'
 import { AuthSessionExpiredError } from '../auth/authApi'
+import { queryKeys } from '../data/queryKeys'
 import { ErrorState } from '../components/ErrorState'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { Button, Panel } from '../components/ui'
@@ -31,12 +33,18 @@ function PasswordField({ id, label, value, onChange, autoComplete, describedBy, 
 }
 
 export default function MyPage() {
-  const { getProfile, updateName, changePassword, withdraw } = useAuth()
+  const { user: authUser, getProfile, updateName, changePassword, withdraw } = useAuth()
   const navigate = useNavigate()
-  const [profile, setProfile] = useState<AuthUser | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [attempt, setAttempt] = useState(0)
+  const queryClient = useQueryClient()
+  const profileKey = queryKeys.profile(authUser?.id ?? 0)
+  // 세션 만료는 다시 시도해도 같으므로 재시도하지 않는다. 화면을 열 때마다 새로 받고 떠나면 캐시를 버린다
+  const profileQ = useQuery({ queryKey: profileKey, queryFn: () => getProfile(), retry: false, staleTime: 0, gcTime: 0 })
+  const profile: AuthUser | null = profileQ.data ?? null
+  const loading = profileQ.isPending
+  const profileError = profileQ.error
+  const loadError = profileError && !(profileError instanceof AuthSessionExpiredError)
+    ? (profileError instanceof Error ? profileError.message : '회원 정보를 불러오지 못했습니다.')
+    : null
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
@@ -65,21 +73,10 @@ export default function MyPage() {
   }, [confirmWithdrawal])
 
   useEffect(() => {
-    let active = true
-    getProfile().then((user) => {
-      if (active) setProfile(user)
-    }).catch((error: unknown) => {
-      if (!active) return
-      if (error instanceof AuthSessionExpiredError) {
-        navigate('/login', { replace: true, state: { authMessage: error.message } })
-      } else {
-        setLoadError(error instanceof Error ? error.message : '회원 정보를 불러오지 못했습니다.')
-      }
-    }).finally(() => {
-      if (active) setLoading(false)
-    })
-    return () => { active = false }
-  }, [getProfile, navigate, attempt])
+    if (profileError instanceof AuthSessionExpiredError) {
+      navigate('/login', { replace: true, state: { authMessage: profileError.message } })
+    }
+  }, [profileError, navigate])
 
   const handleError = (error: unknown, setError: (message: string) => void) => {
     if (error instanceof AuthSessionExpiredError) {
@@ -115,7 +112,7 @@ export default function MyPage() {
     setPending('name')
     try {
       const user = await updateName(nameDraft)
-      setProfile(user)
+      queryClient.setQueryData(profileKey, user)
       setEditingName(false)
       setNameSaved(true)
     } catch (error) {
@@ -162,7 +159,7 @@ export default function MyPage() {
     <SelfShell header={<PageHeader label="ACCOUNT" title="마이페이지" />}>
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-5 px-4 py-8 sm:px-8">
         {loading ? <p role="status" className="text-text-muted">회원 정보를 불러오는 중입니다…</p> : loadError ? (
-          <ErrorState message={loadError} onRetry={() => { setLoading(true); setLoadError(null); setAttempt((value) => value + 1) }} />
+          <ErrorState message={loadError} onRetry={() => void profileQ.refetch()} />
         ) : profile && (
           <>
             <Panel label="PROFILE" title="기본 정보">
