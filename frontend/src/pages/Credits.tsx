@@ -175,7 +175,8 @@ export default function Credits() {
   }
 
   function orderAction(order: Purchase, action: 'recover' | 'cancel' | 'refund') {
-    if (action === 'refund' && !window.confirm('토스 결제 취소 없이 서비스 내 크레딧만 회수됩니다. 테스트 환불을 진행할까요?')) return
+    if (action === 'refund' && order.status === 'PAID'
+      && !window.confirm(`${number(order.credits)} 크레딧을 회수하고 ${number(order.amountKrw)}원 결제를 전액 취소합니다. 환불할까요?`)) return
     void perform(async () => {
       try {
         const updated = await creditsApi[action](order.orderId)
@@ -277,7 +278,7 @@ export default function Credits() {
               <section className="rounded-xl border border-line bg-panel p-5 shadow-sm">
                 <p className="label">PURCHASES</p>
                 <h2 className="mt-1 text-xl font-bold text-text">구매 내역</h2>
-                <p className="mt-1 text-sm text-text-muted">모의 환불 기능</p>
+                <p className="mt-1 text-sm text-text-muted">결제 후 7일 안에, 구매한 크레딧만큼 잔액이 남아 있으면 전액 환불할 수 있습니다.</p>
                 {purchases.content.length === 0 ? <p className="py-6 text-text-muted">구매 내역이 없습니다.</p> : (
                   <ul className="mt-3 divide-y divide-line">
                     {purchases.content.map((order) => (
@@ -286,13 +287,17 @@ export default function Credits() {
                           <span aria-hidden className={cx('h-2.5 w-2.5 shrink-0 rounded-full', statusDot(order.status))} />
                           <div className="min-w-0">
                             <p className="tnum font-semibold text-text">{number(order.credits)} 크레딧 · {number(order.amountKrw)}원</p>
-                            <p className="mt-0.5 text-sm text-text-muted">{date(order.createdAt)} · {paymentStatusLabel(order.status)}</p>
+                            <p className="mt-0.5 text-sm text-text-muted">
+                              {date(order.createdAt)} · {paymentStatusLabel(order.status)}
+                              {refundable(order) && <> · {date(order.refundableUntil!)}까지 환불 가능</>}
+                            </p>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {(order.status === 'CONFIRMING' || order.status === 'WAITING_FOR_DEPOSIT') && <button className={button} disabled={busy} onClick={() => orderAction(order, 'recover')}>재확인</button>}
                           {order.status === 'READY' && <button className={button} disabled={busy} onClick={() => orderAction(order, 'cancel')}>주문 취소</button>}
-                          {order.status === 'PAID' && <button className={button} disabled={busy} onClick={() => orderAction(order, 'refund')}>모의 환불</button>}
+                          {refundable(order) && <button className={button} disabled={busy} onClick={() => orderAction(order, 'refund')}>환불</button>}
+                          {order.status === 'REFUNDING' && <button className={button} disabled={busy} onClick={() => orderAction(order, 'refund')}>환불 다시 확인</button>}
                         </div>
                       </li>
                     ))}
@@ -338,10 +343,15 @@ export default function Credits() {
 }
 
 /** 구매 상태 점 색: 완료 = 성공색, 실패 = 경고색, 진행 중 = 주의색, 나머지 = 흐린 회색 */
+/** 결제 완료이고 환불 기한(결제 승인 + 168시간) 전인 주문. 잔액 확인은 서버가 한다 */
+function refundable(order: Purchase) {
+  return order.status === 'PAID' && !!order.refundableUntil && Date.parse(order.refundableUntil) > Date.now()
+}
+
 function statusDot(status: string) {
   if (status === 'PAID') return 'bg-signal'
   if (status === 'FAILED') return 'bg-alert'
-  if (status === 'READY' || status === 'CONFIRMING' || status === 'WAITING_FOR_DEPOSIT') return 'bg-caution'
+  if (status === 'READY' || status === 'CONFIRMING' || status === 'WAITING_FOR_DEPOSIT' || status === 'REFUNDING') return 'bg-caution'
   return 'bg-text-faint'
 }
 
