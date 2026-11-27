@@ -180,7 +180,13 @@ test.describe('바로 ↔ 배치 전환은 레이아웃을 움직이지 않는�
       const btn = page.getByRole('button', { name: action }).last()
       const aside = page.getByRole('complementary', { name: '고른 값 요약' })
       await expect(page.getByText('일반은 30분~1시간 안에 끝나요')).toBeVisible()
-      await page.waitForTimeout(800) // 폼이 들어오는 연출이 끝난 뒤에 잰다
+      // 글꼴이 다 불러와지고 폼이 들어오는 연출이 끝난 뒤에 잰다(글꼴이 바뀌면 버튼 폭이 달라진다)
+      await page.evaluate(async () => {
+        await document.fonts.ready
+        // 끝없이 도는 연출(반복 무한)은 기다리지 않는다
+        const finite = document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        await Promise.all(finite.map((a) => a.finished.catch(() => undefined)))
+      })
       // 스크롤과 상관없이 비교하려고 폼 맨 위(직군 제목)에서 버튼까지의 거리와 버튼 크기·x 를 잰다
       const top = page.getByRole('heading', { name: '직군' })
       const measure = async () => {

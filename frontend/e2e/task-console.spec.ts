@@ -160,7 +160,8 @@ test.describe('과제 만들기', () => {
     await page.getByRole('button', { name: '과제 만들기' }).click()
     await expect(page.getByText(/과제를 만들었어요/)).toBeVisible({ timeout: 15_000 })
 
-    const gen = api.sent.find((r) => r.path === '/api/admin/task-gen')!
+    await expect.poll(() => api.sent.some((r) => r.path === '/api/admin/task-gen' && r.method === 'POST')).toBe(true)
+    const gen = api.sent.find((r) => r.path === '/api/admin/task-gen' && r.method === 'POST')!
     expect(gen.body).toEqual({ track: 'DEV', topic: '주문 취소 재고 복구', trap: '취소가 두 번 오면 재고가 두 번 늘어남', usage: 'LIVE', minutes: 20, mode: 'NOW' })
     expect(gen.body).not.toHaveProperty('jobRole')
     expect(gen.body).not.toHaveProperty('difficulty')
@@ -168,7 +169,8 @@ test.describe('과제 만들기', () => {
 })
 
 test('만드는 동안 새 단계 글이 와도 활성 단계와 세부 글이 보인다', async ({ page }) => {
-  await mockApi(page)
+  const api = await mockApi(page)
+  api.holdJob() // 부하로 폴링이 빨리 와도 끝나 버리지 않게 진행 중으로 붙잡아 둔다
   await page.goto('/console/tasks/new?tab=manual')
   await page.getByRole('button', { name: /^개발/ }).click()
   await page.getByLabel('상황', { exact: true }).fill('주문 취소 재고 복구')
@@ -177,16 +179,18 @@ test('만드는 동안 새 단계 글이 와도 활성 단계와 세부 글이 �
   await page.getByRole('button', { name: '과제 만들기' }).click()
   await expect(page.getByTestId('gen-detail')).toHaveText('설계도 작성 중')
   await expect(page.getByText('(진행 중)')).toHaveCount(1)
-  // 진행 값(%)은 줄지 않는다
+  // 진행 값(%)은 줄지 않고, 시간이 지나면 늘어난다
   const read = async () => parseInt((await page.getByText(/^\d+%$/).first().textContent()) ?? '0', 10)
   let last = await read()
-  for (let i = 0; i < 4; i++) {
-    await page.waitForTimeout(400)
-    if (await page.getByText(/^\d+%$/).count() === 0) break
+  const first = last
+  let shrank = false
+  await expect.poll(async () => {
     const now = await read()
-    expect(now).toBeGreaterThanOrEqual(last)
+    if (now < last) shrank = true
     last = now
-  }
+    return now
+  }).toBeGreaterThan(first)
+  expect(shrank).toBe(false)
 })
 
 test('추천 카드를 골라 만들면 그 카드의 역량을 같이 보낸다', async ({ page }) => {
@@ -195,11 +199,13 @@ test('추천 카드를 골라 만들면 그 카드의 역량을 같이 보낸다
   await page.getByRole('button', { name: /^개발/ }).click()
   await page.getByRole('button', { name: /추천 받기/ }).click()
   await page.getByRole('button', { name: /^.*상황 \d/ }).nth(1).click()
-  await expect(page.getByLabel('함정')).toHaveValue(/함정 2/)
+  // 카드 내용이 글자씩 채워지는 동안에는 값이 카드와 달라 역량이 안 붙는다 → 두 칸이 다 채워진 뒤에 넘어간다
+  await expect(page.getByLabel('상황', { exact: true })).toHaveValue('상황 2: 주문 취소 후 재고가 복구되지 않는다')
+  await expect(page.getByLabel('함정')).toHaveValue('함정 2: 취소 이벤트가 두 번 와도 한 번만 복구해야 함')
   await page.getByRole('button', { name: /^다음/ }).click()
   await page.getByRole('button', { name: '과제 만들기' }).click()
   await expect(page.getByText(/과제를 만들었어요/)).toBeVisible({ timeout: 15_000 })
-  expect(api.sent.find((r) => r.path === '/api/admin/task-gen')!.body.competencies).toEqual(['usage', 'delegation'])
+  await expect.poll(() => api.sent.find((r) => r.path === '/api/admin/task-gen' && r.method === 'POST')?.body.competencies).toEqual(['usage', 'delegation'])
 })
 
 test('경고만 있으면 축하는 그대로, 경고 안내와 경고 줄이 위에 보인다', async ({ page }) => {

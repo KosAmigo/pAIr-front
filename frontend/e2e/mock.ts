@@ -67,6 +67,7 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     localStorage.setItem('pair.auth', JSON.stringify({ token: 't', user: authUser }))
   }, user)
   let polls = 0
+  let holdRunning = false // true 면 직접 만들기 작업이 끝나지 않고 계속 진행 중으로 답한다
   // 예상 비용 API 가 실패하는 경우를 흉내 낸다
   let estimateFails = false
   // 자동 생성으로 만든 작업 목록 (GET /jobs 가 이걸 돌려준다)
@@ -158,7 +159,8 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     }
     if (path.startsWith('/api/admin/task-gen/j1')) {
       polls++
-      return json({ status: polls > 1 ? 'DONE' : 'RUNNING', step: polls > 1 ? '완료' : '설계도 작성 중', taskCode: 'N1', checks: [{ name: '컴파일', ok: true, detail: '' }, { name: '분량 대비 시간', ok: false, level: 'warn', detail: '40분 치고 분량이 적어요' }], error: null })
+      const running = holdRunning || polls <= 1
+      return json({ status: running ? 'RUNNING' : 'DONE', step: running ? '설계도 작성 중' : '완료', taskCode: 'N1', checks: [{ name: '컴파일', ok: true, detail: '' }, { name: '분량 대비 시간', ok: false, level: 'warn', detail: '40분 치고 분량이 적어요' }], error: null })
     }
     // 회차 AI 비용(관리자 카드): 객체 응답이라 아래 기본값 [] 로 두면 카드가 터져 화면 전체가 비어 버린다
     const aiCost = path.match(/^\/api\/console\/sessions\/(\d+)\/ai-cost$/)
@@ -172,6 +174,8 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     sent,
     /** 예상 비용 API 를 실패시킨다 */
     failEstimate: () => { estimateFails = true },
+    /** 직접 만들기 작업을 끝내지 않고 진행 중으로 붙잡아 둔다(부하에서 폴링이 빨리 와도 진행 화면이 그대로 있게) */
+    holdJob: () => { holdRunning = true },
     /** 작업 목록을 직접 넣는다 (자동 생성을 거치지 않고) */
     seedJobs: (jobs: Record<string, any>[]) => { autoJobs = jobs },
     /** 작업 하나를 끝낸다: DONE 으로 바꾸고 새 검수 전 과제를 과제 목록에 넣는다 */
