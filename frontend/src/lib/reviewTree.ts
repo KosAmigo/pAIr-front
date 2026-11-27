@@ -1,4 +1,4 @@
-import type { AttemptSummary, TreeNode } from '../api.ts'
+import type { AttemptSummary, TaskType, TreeNode } from '../api.ts'
 import { layoutTree, type TreeRow } from './replayTree.ts'
 
 // DESIGN.md §7-5 복기 화면의 계산 부분. 그리는 일(SVG)은 컴포넌트가 하고, 여기서는 위치·경로·기본 선택만 정한다.
@@ -7,6 +7,7 @@ import { layoutTree, type TreeRow } from './replayTree.ts'
 export type TaskGroup = {
   taskId: string
   title: string
+  type: TaskType
   /** 오래된 순 */
   attempts: AttemptSummary[]
   count: number
@@ -38,6 +39,7 @@ export function groupByTask(list: AttemptSummary[]): TaskGroup[] {
     groups.push({
       taskId,
       title: newest.taskTitle,
+      type: newest.taskType,
       attempts,
       count: attempts.length,
       best: scored.length ? Math.max(...scored.map((a) => a.total as number)) : null,

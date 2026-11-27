@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { assignSlot, commonAncestor, divergeTurn, groupByTask, layoutLanes, pickDefaults, resolveSelection, routeIds, SPARK_MAX } from '../src/lib/reviewTree.ts'
+import { reportAttempts, resumeByTask } from '../src/lib/attempts.ts'
 
 const att = (id, taskId, startedAt, total = null, status = 'DONE') => ({ id, taskId, taskTitle: `과제 ${taskId}`, taskType: 'dev', startedAt, status, total })
 const score = (total) => (total == null ? null : { total, max: 100, items: [] })
@@ -23,6 +24,7 @@ test('attempts are grouped by task, newest task first, with count, best and spar
   assert.equal(g.newestId, 'a3')
   assert.equal(g.newestScoredId, 'a2')
   assert.equal(g.title, '과제 t1')
+  assert.equal(g.type, 'dev')
 })
 
 test('spark keeps only the latest scored attempts and a task with no score has no best', () => {
@@ -105,4 +107,19 @@ test('the address picks are kept when valid and filled in by the default rules w
   assert.deepEqual(resolveSelection(lanes, 'nope', 'gone'), { a: '2', b: '4' })
   assert.deepEqual(resolveSelection(lanes, '4', '4'), { a: '2', b: '4' })
   assert.deepEqual(resolveSelection(layoutLanes([node('1', null, 'a', null, 65)]).lanes, null, '1'), { a: '1', b: null })
+})
+
+test('resume picks the newest unsubmitted attempt per task and reports list only submitted ones', () => {
+  const list = [
+    att('a1', 't1', '2026-11-10T01:00:00Z', null, 'SOLVING'),
+    att('a3', 't1', '2026-11-13T01:00:00Z', null, 'FOLLOWUP'),
+    att('a2', 't1', '2026-11-12T01:00:00Z', 80),
+    att('b1', 't2', '2026-11-20T01:00:00Z', null, 'SCORING'),
+    att('c1', 't3', '2026-11-21T01:00:00Z', null, 'ERROR'),
+  ]
+  assert.deepEqual([...resumeByTask(list)], [['t1', 'a3']])
+  const empty = (id, taskId, at) => ({ ...att(id, taskId, at, null, 'SOLVING'), empty: true })
+  const withEmpty = [...list, empty('a4', 't1', '2026-11-14T01:00:00Z'), empty('d1', 't4', '2026-11-14T01:00:00Z'), empty('d2', 't4', '2026-11-15T01:00:00Z')]
+  assert.deepEqual(Object.fromEntries(resumeByTask(withEmpty)), { t1: 'a3', t4: 'd2' })
+  assert.deepEqual(reportAttempts(list).map((a) => a.id), ['c1', 'b1', 'a2'])
 })

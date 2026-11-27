@@ -36,7 +36,7 @@ async function open(page: Page, path: string) {
 test.describe('휴대폰 폭(375px)', () => {
   test.use({ viewport: { width: 375, height: 812 } })
 
-  for (const path of ['/tasks', '/dashboard', '/review', '/credits', '/mypage']) {
+  for (const path of ['/tasks', '/dashboard', '/review', '/reports', '/credits', '/mypage']) {
     test(`${path} 화면이 옆으로 넘치지 않는다`, async ({ page }) => {
       await open(page, path)
       const overflow = await page.evaluate(() => {

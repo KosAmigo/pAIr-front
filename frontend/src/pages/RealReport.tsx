@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Bot, CircleAlert, CircleCheck, Loader2, RotateCcw, User } from 'lucide-react'
+import { Bot, CircleAlert, CircleCheck, Loader2, Play, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { cx } from '../components/cx'
 import { Button, ButtonLink, Panel } from '../components/ui'
 import { ScoreHero, StageSep } from '../components/report/ScoreHero'
 import { CompetencyCards } from '../components/report/CompetencyCards'
 import { QuestionScoreCard } from '../components/report/QuestionScoreCard'
+import { isUnsubmitted } from '../lib/attempts'
 import { api, ApiError, type CheckResult, type JudgeView, type Report, type ReportResponse, type Turn } from '../api'
 
 // 실제 응시 결과 리포트. 감점식 채점(pAIr-docs/평가/채점_기준표.md): 6개 항목, 총점 100점.
@@ -300,7 +301,7 @@ export default function RealReport() {
         if (!alive) return
         setData(d)
         setError(null)
-        if (d.status === 'SCORING' || d.status === 'FOLLOWUP' || d.status === 'SOLVING') {
+        if (d.status === 'SCORING') {
           timer.current = setTimeout(() => setTick((t) => t + 1), 2000)
         }
       })
@@ -350,7 +351,19 @@ export default function RealReport() {
           </Button>
         </div>
       )}
-      {data && (data.status === 'SCORING' || data.status === 'FOLLOWUP' || data.status === 'SOLVING') && (
+      {data && isUnsubmitted(data.status) && (
+        <div className="mx-auto mt-16 max-w-[640px] rounded-md border border-line bg-panel p-8">
+          <span className="label">IN PROGRESS</span>
+          <h2 className="mt-2 text-h2 font-semibold">{data.status === 'FOLLOWUP' ? '후속 질문이 남아 있습니다' : '아직 제출하지 않은 풀이입니다'}</h2>
+          <p className="mt-3 text-[15px] leading-6 text-text-muted">
+            {data.status === 'FOLLOWUP' ? '후속 질문에 답하면 채점을 시작합니다.' : '제출하고 후속 질문에 답하면 채점을 시작합니다.'}
+          </p>
+          <ButtonLink to={`/exam/${encodeURIComponent(attemptId)}`} variant="primary" className="mt-6">
+            <Play size={18} aria-hidden /> 이어서 풀기
+          </ButtonLink>
+        </div>
+      )}
+      {data && data.status === 'SCORING' && (
         <div className="mx-auto mt-16 max-w-[640px] rounded-md border border-line bg-panel p-8">
           <span className="label">SCORING</span>
           <h2 className="mt-2 flex items-center gap-2 text-h2 font-semibold">

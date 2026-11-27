@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } 
 import Dashboard from './pages/Dashboard'
 import RealExam, { NewExam } from './pages/RealExam'
 import Report from './pages/Report'
+import Reports from './pages/Reports'
 import Review from './pages/Review'
 import ReplayRedirect from './pages/ReplayRedirect'
 import Entry from './pages/Entry'
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/review" element={<Review />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/history" element={<Navigate to="/review" replace />} />
           </Route>
 

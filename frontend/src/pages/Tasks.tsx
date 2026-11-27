@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Clock, Loader2, Sparkles } from 'lucide-react'
+import { ArrowRight, Clock, Loader2, Play, Sparkles } from 'lucide-react'
 import { trackIconOf } from '../components/domainIcons'
 import { motion } from 'motion/react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
@@ -8,6 +8,7 @@ import { ErrorState } from '../components/ErrorState'
 import { cx } from '../components/cx'
 import { GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
 import type { Track } from '../data/catalog'
+import { resumeByTask } from '../lib/attempts'
 import { api, ApiError, type Task, type TaskSummary } from '../api'
 import { distance, duration, easing, springs } from '../lib/motion'
 
@@ -24,6 +25,7 @@ const TRACKS: { value: Track; label: string }[] = [
 type Row = Task & { status: TaskSummary['status'] }
 const isOpen = (t: Row) => t.status === 'OPEN'
 const startUrl = (t: Row) => `/exam/new?task=${encodeURIComponent(t.id)}`
+const resumeUrl = (attemptId: string) => `/exam/${encodeURIComponent(attemptId)}`
 const trackName = (t: Row) => (t.type === 'biz' ? '비개발' : '개발')
 const TrackIcon = ({ t, ...rest }: { t: Row; size: number; strokeWidth?: number; className?: string }) => {
   const Icon = trackIconOf(t.type)
@@ -31,7 +33,7 @@ const TrackIcon = ({ t, ...rest }: { t: Row; size: number; strokeWidth?: number;
 }
 
 /** 추천 과제: 이 화면의 다크 무대 */
-function Featured({ t }: { t: Row }) {
+function Featured({ t, resumeId }: { t: Row; resumeId?: string }) {
   return (
     <StageSection aria-label="추천 과제">
       <div className="grid items-center gap-10 px-6 py-8 md:grid-cols-[minmax(0,1fr)_320px] md:px-12 md:py-10">
@@ -48,7 +50,7 @@ function Featured({ t }: { t: Row }) {
               <Clock size={16} className="text-stage-muted" aria-hidden /> {t.minutes}분
             </span>
           </div>
-          <div className="mt-8 flex items-center gap-4">
+          <div className="mt-8 flex flex-wrap items-center gap-4">
             <Magnetic>
                 <Link
                   to={startUrl(t)}
@@ -57,6 +59,14 @@ function Featured({ t }: { t: Row }) {
                   지금 도전하기 <ArrowRight size={18} aria-hidden />
                 </Link>
               </Magnetic>
+            {resumeId && (
+              <Link
+                to={resumeUrl(resumeId)}
+                className="inline-flex h-14 items-center gap-2 rounded-full border border-stage-line-strong px-7 text-[17px] font-semibold text-stage-text transition-colors hover:bg-stage-panel"
+              >
+                <Play size={18} aria-hidden /> 이어서 풀기
+              </Link>
+            )}
           </div>
         </div>
 
@@ -79,15 +89,17 @@ function Featured({ t }: { t: Row }) {
   )
 }
 
-function TaskCard({ t }: { t: Row }) {
+function TaskCard({ t, resumeId }: { t: Row; resumeId?: string }) {
   const open = isOpen(t)
+  // 이어서 풀 응시가 있으면 누를 곳이 둘이라 카드 전체를 링크로 만들지 않는다 (링크 안에 링크를 넣을 수 없다)
+  const wholeLink = open && !resumeId
   return (
     <Spotlight
-      as={open ? Link : 'div'}
-      {...(open ? { to: startUrl(t) } : { 'aria-disabled': true })}
+      as={wholeLink ? Link : 'div'}
+      {...(wholeLink ? { to: startUrl(t) } : resumeId ? {} : { 'aria-disabled': true })}
       className={cx(
         'group flex h-full w-full flex-col rounded-xl border border-line bg-panel p-6 shadow-sm transition-[transform,box-shadow,border-color] duration-150',
-        open ? 'hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg' : 'opacity-60',
+        open || resumeId ? 'hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg' : 'opacity-60',
       )}
     >
       <div className="flex items-start gap-4">
@@ -104,13 +116,24 @@ function TaskCard({ t }: { t: Row }) {
         <span className="inline-flex items-center gap-1 font-mono">
           <Clock size={14} aria-hidden /> {t.minutes}m
         </span>
-        {open ? (
-          <span className="ml-auto inline-flex items-center gap-1 font-semibold text-brand">
-            도전 <ArrowRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden />
-          </span>
-        ) : (
-          <span className="ml-auto font-semibold text-text-muted">마감</span>
-        )}
+        <span className="ml-auto inline-flex items-center gap-4">
+          {resumeId && (
+            <Link to={resumeUrl(resumeId)} className="-my-1.5 inline-flex h-8 items-center gap-1 rounded-full border border-brand/40 px-3 font-semibold text-brand hover:bg-brand-dim">
+              <Play size={14} aria-hidden /> 이어서 풀기
+            </Link>
+          )}
+          {!open ? (
+            <span className="font-semibold text-text-muted">마감</span>
+          ) : wholeLink ? (
+            <span className="inline-flex items-center gap-1 font-semibold text-brand">
+              도전 <ArrowRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden />
+            </span>
+          ) : (
+            <Link to={startUrl(t)} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
+              도전 <ArrowRight size={16} aria-hidden />
+            </Link>
+          )}
+        </span>
       </div>
     </Spotlight>
   )
@@ -151,10 +174,16 @@ export default function Tasks() {
   const [track, setTrack] = useState<Track>('dev')
   const [time, setTime] = useState<(typeof TIMES)[number]['value']>('ALL')
   const [all, setAll] = useState<Row[] | null>(null)
+  const [resume, setResume] = useState(new Map<string, string>())
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   useEffect(() => {
     let alive = true
+    // 응시 기록을 못 읽어도 과제 목록은 보여 준다 (이어서 풀기만 빠진다)
+    api
+      .list(true)
+      .then((list) => alive && setResume(resumeByTask(list)))
+      .catch(() => undefined)
     api
       .taskList()
       .then(async (list) => {
@@ -218,7 +247,7 @@ export default function Tasks() {
         <div key={`${track}-${time}`} className="flex flex-col gap-8">
           {featured && (
             <motion.div initial={{ opacity: 0, y: distance.app }} animate={{ opacity: 1, y: 0 }} transition={{ duration: duration.slow, ease: easing.expo }}>
-              <Featured t={featured} />
+              <Featured t={featured} resumeId={resume.get(featured.id)} />
             </motion.div>
           )}
           <section aria-labelledby="all-h">
@@ -231,7 +260,7 @@ export default function Tasks() {
               <RevealGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {tasks.map((t) => (
                   <RevealItem key={t.id} className="flex">
-                    <TaskCard t={t} />
+                    <TaskCard t={t} resumeId={resume.get(t.id)} />
                   </RevealItem>
                 ))}
               </RevealGroup>

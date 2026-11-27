@@ -10,13 +10,14 @@ import { Logo, ModeBadge } from './ui'
 import { UserMenu } from './UserMenu'
 import { CreditPill } from './CreditPill'
 
-// DESIGN.md §7 공통 셸: 자가진단 화면은 상단 탭(과제 / 대시보드 / 복기)으로 이동한다.
+// DESIGN.md §7 공통 셸: 자가진단 화면은 상단 탭(과제 / 대시보드 / 복기 / 리포트)으로 이동한다.
 // 왼쪽 아이콘 레일은 응시 화면 전용이다 (components/ActivityRail.tsx).
 // 표현 무대(DESIGN.md §0-1): 위쪽에 오로라 띠, 상단 바는 유리, 화면 내용은 PageTransition 으로 들어온다.
 const tabs = [
   { to: '/tasks', label: '과제', match: ['/tasks'] },
   { to: '/dashboard', label: '대시보드', match: ['/dashboard'] },
-  { to: '/review', label: '복기', match: ['/review', '/report', '/replay', '/history'] },
+  { to: '/review', label: '복기', match: ['/review', '/replay', '/history'] },
+  { to: '/reports', label: '리포트', match: ['/report'] },
 ]
 
 export function SelfShell({ children, header }: { children: ReactNode; header?: ReactNode }) {

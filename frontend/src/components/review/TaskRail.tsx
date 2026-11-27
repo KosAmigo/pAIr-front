@@ -1,4 +1,5 @@
 import { cx } from '../cx'
+import { TrackChip } from '../TrackChip'
 import type { TaskGroup } from '../../lib/reviewTree'
 
 /** 왼쪽 과제별 트리 레일: 과제 카드(갈래 수, 최고점, 점수 막대) */
@@ -19,6 +20,7 @@ export function TaskRail({ groups, selected, onSelect }: { groups: TaskGroup[]; 
               on ? 'border-brand shadow-[0_0_0_3px_rgb(108_71_255/0.15)]' : 'border-line hover:border-line-strong',
             )}
           >
+            <TrackChip type={g.type} className="mb-1.5" />
             <h3 className="text-[15px] leading-5 font-bold text-text">{g.title}</h3>
             <div className="mt-1.5 flex items-end gap-2.5 text-[12px] text-text-muted">
               <span>갈래 {g.count}개</span>

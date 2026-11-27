@@ -880,13 +880,16 @@ export default function RealExam() {
   const saveFiles = useCallback(
     async (paths?: string[]) => {
       const targets = (paths ?? [...dirty]).filter((p) => dirty.has(p))
+      const saved: Record<string, string> = {}
       for (const p of targets) {
-        await api.save(sessionId, p, contents[p] ?? '')
+        saved[p] = contents[p] ?? ''
+        await api.save(sessionId, p, saved[p])
       }
       if (targets.length) {
         setDirty((d) => {
           const n = new Set(d)
-          targets.forEach((p) => n.delete(p))
+          // 보내는 동안 더 고친 파일은 저장 대상으로 남긴다
+          targets.forEach((p) => (contentsRef.current[p] ?? '') === saved[p] && n.delete(p))
           return n
         })
       }
@@ -903,6 +906,13 @@ export default function RealExam() {
     }, 2000)
     return () => clearTimeout(id)
   }, [dirty, contents, stage, saveFiles])
+
+  // 자동 저장을 기다리던 중에 화면을 나가면(뒤로 가기 등) 마지막으로 한 번 저장한다
+  const saveOnLeave = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    saveOnLeave.current = dirty.size && stage === 'solve' ? () => void saveFiles().catch(() => undefined) : null
+  })
+  useEffect(() => () => saveOnLeave.current?.(), [sessionId])
 
   // 입력이 멈추고 잠시 뒤 서버에서 오류를 분석해 밑줄을 갱신한다 (저장 여부와 상관없이 화면의 내용 기준)
   useEffect(() => {
