@@ -2,6 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Bot, ChevronDown, ChevronRight, CircleHelp, FileText, Folder, Hammer, Loader2, Lock, Paperclip, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
+import { FileSearch } from '../components/FileSearch'
+import type { SearchHit } from '../lib/fileSearch'
 import { SendKey } from '../components/SendKey'
 import { cx } from '../components/cx'
 import { Button, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
@@ -920,6 +922,34 @@ export default function RealExam() {
     return () => clearTimeout(id)
   }, [contents, stage, sessionId])
 
+  // Ctrl/⌘+F: 브라우저 찾기 대신 파일 검색을 연다
+  const [searching, setSearching] = useState(false)
+  const [searchLoading, setSearchLoading] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'KeyF' && (e.ctrlKey || e.metaKey) && !e.altKey) {
+        e.preventDefault()
+        setSearching(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  // 파일 내용은 열 때 불러오므로, 검색창을 열면 아직 안 읽은 파일도 읽는다(PDF 자료는 이름으로만 찾는다)
+  useEffect(() => {
+    if (!searching || !view) return
+    const missing = view.files.filter((p) => !(p in contentsRef.current))
+    if (!missing.length) return
+    setSearchLoading(true)
+    void Promise.allSettled(missing.map((p) => api.file(sessionId, p))).then((results) => {
+      const got = Object.fromEntries(results.flatMap((r) => (r.status === 'fulfilled' ? [[r.value.path, r.value.content]] : [])))
+      // 그사이 불러왔거나 고친 내용은 덮어쓰지 않는다
+      setContents((m) => ({ ...got, ...m }))
+      setSearchLoading(false)
+      if (results.some((r) => r.status === 'rejected')) setActionError('일부 파일을 읽지 못해 검색에서 빠졌습니다.')
+    })
+  }, [searching, view, sessionId])
+
   // Ctrl+S
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -977,6 +1007,12 @@ export default function RealExam() {
       setReveal({ path: t.file, line: t.line, column: t.column, nonce: Date.now() })
     },
   }
+  const pickSearchHit = async (hit: SearchHit) => {
+    setSearching(false)
+    await openFile(hit.path)
+    setRefTab('file')
+    if (hit.line) setReveal({ path: hit.path, line: hit.line, column: hit.column ?? 1, nonce: Date.now() })
+  }
   const closeFile = (p: string) => {
     void saveFiles([p])
     const next = open.filter((f) => f !== p)
@@ -1024,16 +1060,22 @@ export default function RealExam() {
     setChatBusy(true)
     setChatError(null)
     setStreaming({ question: text, answer: '' })
+    // 보내는 순간 입력창의 첨부는 비운다. 실패하면 되돌리고, 답변 중에 새로 붙인 파일은 남긴다
+    const sent = attachedRef.current
+    updateAttached(() => [])
     try {
       // 서버는 저장된 파일 내용을 읽으므로, 고치던 첨부 파일은 먼저 저장한다
-      const dirtyAttached = attached.filter((a) => a.source === 'ATTEMPT_FILE' && dirty.has(a.path)).map((a) => a.path)
+      const dirtyAttached = sent.filter((a) => a.source === 'ATTEMPT_FILE' && dirty.has(a.path)).map((a) => a.path)
       if (dirtyAttached.length) await saveFiles(dirtyAttached)
-      const added = await chatStream(sessionId, text, (d) => setStreaming((s) => (s ? { ...s, answer: s.answer + d } : s)), attached)
+      const added = await chatStream(sessionId, text, (d) => setStreaming((s) => (s ? { ...s, answer: s.answer + d } : s)), sent)
       if (!live) void refreshCredits()
       setTurns((t) => [...t, ...added])
-      updateAttached(() => [])
       return true
     } catch (e) {
+      updateAttached((now) => now.reduce((list, ref) => {
+        const r = addAttachment(list, ref, aiLimits.maxAttach)
+        return r.ok ? r.list : list
+      }, sent))
       setChatError((e as ApiError).message)
       return false
     } finally {
@@ -1505,6 +1547,15 @@ export default function RealExam() {
         )}
       </div>
 
+      {searching && (
+        <FileSearch
+          paths={[...view.files, ...materials.map((m) => m.path)]}
+          contents={contents}
+          loading={searchLoading}
+          onPick={(h) => void pickSearchHit(h)}
+          onClose={() => setSearching(false)}
+        />
+      )}
       {tourOpen &&<CoachTour steps={examGuideSteps({ proctoring: Boolean(live?.proctoring) })} storageKey="exam-guide-v3" onClose={() => setTourOpen(false)} />}
       {linkExpired && (
         <div role="alertdialog" aria-modal="true" aria-label="입장 링크 만료" className="fixed inset-0 z-[95] flex items-center justify-center bg-bg/95 p-4">

@@ -5,7 +5,7 @@ import { javaLanguage } from '@codemirror/lang-java'
 import { markdown } from '@codemirror/lang-markdown'
 import { bracketMatching, HighlightStyle, indentOnInput, LanguageSupport, syntaxHighlighting, syntaxTree } from '@codemirror/language'
 import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint'
-import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
+import { highlightSelectionMatches, selectNextOccurrence } from '@codemirror/search'
 import { Annotation, EditorState, type Extension } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { styleTags, tags as t } from '@lezer/highlight'
@@ -220,7 +220,7 @@ export function CodeEditor({
             return true
           },
         }),
-        keymap.of([{ key: 'F12', run: (v) => (void goToDefinition(v.state.selection.main.head), true) }, indentWithTab, ...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap]),
+        keymap.of([{ key: 'F12', run: (v) => (void goToDefinition(v.state.selection.main.head), true) }, indentWithTab, ...closeBracketsKeymap, ...defaultKeymap, { key: 'Mod-d', run: selectNextOccurrence, preventDefault: true }, ...historyKeymap, ...completionKeymap]),
         languageFor(path),
         syntaxHighlighting(highlight),
         theme,
