@@ -10,7 +10,7 @@ import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { ResizeHandle } from '../components/ResizeHandle'
 import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
-import { DIAGNOSTICS_DELAY_MS, isJavaSource, javaSources, marksFor, type DefinitionTarget } from '../lib/liveDiagnostics'
+import { isJavaSource, javaSources, marksFor, type DefinitionTarget } from '../lib/liveDiagnostics'
 import { api, ApiError, chatStream, type AiLimits, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
 import { AttemptPdf } from '../components/AttemptPdf'
 import {
@@ -39,6 +39,7 @@ import { NewExam } from '../exam/components/NewExam'
 import { buildTree } from '../exam/components/PathTree'
 import { readOnlyPath, fileName } from '../exam/format'
 import { HEARTBEAT_MS } from '../exam/constants'
+import { useLiveDiagnostics } from '../exam/hooks/useLiveDiagnostics'
 import { useEditor } from '../exam/hooks/useEditor'
 import { useExamLoader, type LoadSinks } from '../exam/hooks/useExamLoader'
 import { usePanelWidths, DEFAULT_WIDTHS, MIN_WIDTHS, RAIL_WIDTH, CENTER_MIN, maxPanelWidth } from '../exam/hooks/usePanelWidths'
@@ -86,8 +87,6 @@ export default function RealExam() {
   }
   const [viewing, setViewing] = useState<{ turn: number; index: number } | null>(null)
   // 빌드(컴파일만) 또는 테스트 실행 결과. 마지막으로 누른 쪽을 보여 준다.
-  const [liveDiagnostics, setLiveDiagnostics] = useState<CompileDiagnostic[] | null>(null)
-  const diagnosticsSeq = useRef(0)
   const [run, setRun] = useState<{
     kind: 'build' | 'test'
     compiled: boolean
@@ -115,6 +114,7 @@ export default function RealExam() {
     searching, setSearching, searchLoading,
   } = useEditor({ sessionId, view, stage, pdfInfo, setActionError, flash })
   loadSinks.current = { setTurns, setContents, setOpen, setActive }
+  const liveDiagnostics = useLiveDiagnostics(sessionId, stage, contents)
   const [fuIndex, setFuIndex] = useState(0)
   const [fuAnswers, setFuAnswers] = useState<string[] | null>(null)
   const [refTab, setRefTab] = useState<'prompts' | 'file'>('prompts')
@@ -194,25 +194,6 @@ export default function RealExam() {
     void finishAntiCheating()
     void endLiveProctoring().finally(() => navigate(`/exam/${sessionId}/submitted`, { replace: true }))
   }, [liveOver, sessionId, navigate, finishAntiCheating])
-
-  // 입력이 멈추고 잠시 뒤 서버에서 오류를 분석해 밑줄을 갱신한다 (저장 여부와 상관없이 화면의 내용 기준)
-  useEffect(() => {
-    if (stage !== 'solve') return
-    const files = javaSources(contents)
-    if (!Object.keys(files).length) return
-    const seq = ++diagnosticsSeq.current
-    const id = setTimeout(() => {
-      api
-        .diagnostics(sessionId, files)
-        .then((r) => {
-          if (seq === diagnosticsSeq.current) setLiveDiagnostics(r.diagnostics)
-        })
-        .catch(() => {
-          // 분석이 바쁘거나 실패하면 이전 밑줄을 그대로 둔다. 빌드 버튼의 결과가 기준이다
-        })
-    }, DIAGNOSTICS_DELAY_MS)
-    return () => clearTimeout(id)
-  }, [contents, stage, sessionId])
 
   if (loadError) return <CenterMessage text="" error={loadError} />
   if (!view) return <CenterMessage text="응시 화면을 불러오고 있습니다" />
