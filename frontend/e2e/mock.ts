@@ -138,6 +138,12 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
       polls++
       return json({ status: polls > 1 ? 'DONE' : 'RUNNING', step: polls > 1 ? '완료' : '설계도 작성 중', taskCode: 'N1', checks: [{ name: '컴파일', ok: true, detail: '' }, { name: '분량 대비 시간', ok: false, level: 'warn', detail: '40분 치고 분량이 적어요' }], error: null })
     }
+    // 회차 AI 비용(관리자 카드): 객체 응답이라 아래 기본값 [] 로 두면 카드가 터져 화면 전체가 비어 버린다
+    const aiCost = path.match(/^\/api\/console\/sessions\/(\d+)\/ai-cost$/)
+    if (aiCost) {
+      const part = { calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, usd: 0, models: [] }
+      return json({ sessionId: Number(aiCost[1]), attempts: 0, totalUsd: 0, perAttemptUsd: null, chat: part, scoring: part, unpricedModels: [] })
+    }
     return json([])
   })
   return {

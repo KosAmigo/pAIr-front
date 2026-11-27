@@ -24,6 +24,10 @@ async function setup(page: Page, phase: 'LIVE' | 'ENDED') {
       sent.push(body)
       return json({ id: sent.length, message: body.message, sentAt: '2026-11-25T02:00:00Z', readAt: null })
     }
+    // 종료된 회차는 감독 패널에 보관 기간 막대가 나온다: 객체 응답이어야 한다
+    if (path === '/retention') {
+      return json({ expiresAt: '2026-12-25T00:00:00Z', extensionsUsed: 0, maxExtensions: 2, extensionDays: 7, canExtend: true, history: [] })
+    }
     return json([])
   })
   await page.goto('/console/sessions/7/attempts/21')
