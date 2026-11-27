@@ -224,16 +224,18 @@ async function upload<T>(url: string, form: FormData): Promise<T> {
   return data as T
 }
 
-/** 로그인 헤더가 필요한 파일(CSV, 사진)을 받아 브라우저 URL 로 바꾼다 */
-async function blobUrl(url: string): Promise<string> {
+/** 로그인 헤더가 필요한 파일(CSV, 사진)을 Blob 으로 받는다. 화면에 보일 때는 useBlobUrl 이 브라우저 URL 로 바꾸고 풀어 준다 */
+async function fetchBlob(url: string): Promise<Blob> {
   const res = await authenticatedFetch(url, { headers: getAuthHeaders() })
   if (!res.ok) {
     const err = new ApiError(`파일을 받지 못했습니다 (${res.status})`)
     err.status = res.status
     throw err
   }
-  return URL.createObjectURL(await res.blob())
+  return res.blob()
 }
+/** 내려받기용: Blob 을 브라우저 URL 로 바꾼다 (받는 쪽이 풀어 준다) */
+const blobUrl = async (url: string) => URL.createObjectURL(await fetchBlob(url))
 
 /** 이벤트 앞뒤 증거 구간의 사진 한 장 (GET .../events/{id}/clip) */
 export type ClipFrameView = { id: number; source: 'PC_CAM' | 'PHONE_CAM'; offsetMs: number; sizeBytes: number; deleted: boolean }
@@ -292,10 +294,10 @@ export const consoleApi = {
     call<ProctorEventView[]>('GET', `${S}/${id}/participants/${participantId}/events`),
   review: (id: number, eventId: number, review: EventReview | null, note?: string) =>
     call<ProctorEventView>('PUT', `${S}/${id}/events/${eventId}/review`, { review, note }),
-  snapshotUrl: (id: number, eventId: number) => blobUrl(`${S}/${id}/events/${eventId}/snapshot`),
+  snapshotBlob: (id: number, eventId: number) => fetchBlob(`${S}/${id}/events/${eventId}/snapshot`),
   /** 이벤트 앞뒤 증거 구간 목록 (시간순) */
   eventClip: (id: number, eventId: number) => call<EventClipView>('GET', `${S}/${id}/events/${eventId}/clip`),
-  clipImageUrl: (id: number, eventId: number, frameId: number) => blobUrl(`${S}/${id}/events/${eventId}/clip/${frameId}/image`),
+  clipImageBlob: (id: number, eventId: number, frameId: number) => fetchBlob(`${S}/${id}/events/${eventId}/clip/${frameId}/image`),
   /** { 이벤트번호: 사진 장수 } — 증거 구간이 있는 이벤트 표시용 */
   clips: (id: number) => call<Record<string, number>>('GET', `${S}/${id}/clips`),
   retention: (id: number) => call<RetentionView>('GET', `${S}/${id}/retention`),
@@ -304,7 +306,7 @@ export const consoleApi = {
   envCheck: (id: number, participantId: number) => call<EnvCheckView | null>('GET', `${S}/${id}/participants/${participantId}/env-check`),
   /** 점검 사진(귀 왼쪽·오른쪽, 손목) 목록. 이어폰·스마트워치는 감독관이 이 사진으로 확인한다 */
   envCheckPhotos: (id: number, participantId: number) => call<EnvCheckPhotoView[]>('GET', `${S}/${id}/participants/${participantId}/env-check/photos`),
-  envCheckPhotoUrl: (id: number, photoId: number) => blobUrl(`${S}/${id}/env-check/photos/${photoId}/image`),
+  envCheckPhotoBlob: (id: number, photoId: number) => fetchBlob(`${S}/${id}/env-check/photos/${photoId}/image`),
   /** 점검에 실패한 항목이 있는 채 입장한 응시자 모음 */
   envCheckFailures: (id: number) => call<EnvCheckFailureView[]>('GET', `${S}/${id}/env-check-failures`),
   sendNotice: (id: number, participantId: number, message: string) =>
@@ -331,7 +333,7 @@ export const consoleApi = {
   // 과제 검수 자료
   materials: (taskId: string) => call<TaskMaterial[]>('GET', `/api/console/tasks/${enc(taskId)}/materials`),
   /** PDF 는 인증 헤더가 필요해 fetch → blob URL 로 받는다. 다 쓰면 URL.revokeObjectURL */
-  materialFileUrl: (taskId: string, path: string) => blobUrl(`/api/console/tasks/${enc(taskId)}/materials/file?path=${enc(path)}`),
+  materialFileBlob: (taskId: string, path: string) => fetchBlob(`/api/console/tasks/${enc(taskId)}/materials/file?path=${enc(path)}`),
   materialPages: (taskId: string, path: string, pages?: string) =>
     call<MaterialPage[]>('GET', `/api/console/tasks/${enc(taskId)}/materials/pages?path=${enc(path)}${pages ? `&pages=${enc(pages)}` : ''}`),
   /** (가정) 백엔드에 아직 없음 */

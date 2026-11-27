@@ -1,10 +1,11 @@
 // 콘솔 과제 목록 (DESIGN.md §7-9-1 ~ 9-3). 데이터는 백엔드(/api/console/tasks)에서만 온다.
 // 목록은 과제 화면·콘솔 메뉴(검수 대기 숫자)·회차 화면이 같이 쓰므로 React Query 캐시 하나(['console-tasks'])에 둔다.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { queryClient } from '../queryClient'
 import { consoleApi, type ConsoleTaskDetail, type ConsoleTaskSummary, type TaskUsage } from '../consoleApi'
 import { KINDS } from './catalog'
+import { errorMessage, queryKeys } from './queryKeys'
 
 // 탭 나누기·거르기 같은 화면 규칙은 taskBoard.ts (테스트하기 쉽게 따로 둔다)
 export { tabOf, type TaskTab } from './taskBoard'
@@ -55,26 +56,14 @@ export async function setUsage(id: string, usage: TaskUsage) {
 
 /** 과제 하나의 요약과 정의(설명·요구사항·후속 질문 등). setSummary 로 공개 상태가 바뀐 요약을 반영한다 */
 export function useTaskDetail(id: string | undefined) {
-  const [tick, setTick] = useState(0)
-  // 어떤 요청(과제 ID + 다시 시도 횟수)의 결과인지 key 로 구분해, 이전 과제의 결과를 보여 주지 않는다
-  const key = `${id}#${tick}`
-  const [res, setRes] = useState<{ key: string; detail: ConsoleTaskDetail | null; error: string | null } | null>(null)
-  useEffect(() => {
-    if (!id) return
-    let alive = true
-    consoleApi.task(id).then(
-      (d) => alive && setRes({ key, detail: d, error: null }),
-      (e) => alive && setRes({ key, detail: null, error: e instanceof Error ? e.message : String(e) }),
-    )
-    return () => {
-      alive = false
-    }
-  }, [id, key])
-  const cur = res?.key === key ? res : null
-  const reload = useCallback(() => setTick((n) => n + 1), [])
+  // 과제 ID 가 키에 들어 있어 다른 과제로 가면 이전 과제의 결과는 보이지 않는다
+  const q = useQuery({ queryKey: queryKeys.consoleTask(id ?? ''), queryFn: () => consoleApi.task(id!), enabled: !!id, staleTime: 0, gcTime: 0 })
+  const { refetch } = q
+  const reload = useCallback(() => void refetch(), [refetch])
   const setSummary = useCallback(
-    (summary: ConsoleTaskSummary) => setRes((r) => (r?.detail ? { ...r, detail: { ...r.detail, summary } } : r)),
-    [],
+    (summary: ConsoleTaskSummary) =>
+      queryClient.setQueryData<ConsoleTaskDetail>(queryKeys.consoleTask(id ?? ''), (d) => (d ? { ...d, summary } : d)),
+    [id],
   )
-  return { detail: cur?.detail ?? null, error: cur?.error ?? null, reload, setSummary }
+  return { detail: id ? (q.data ?? null) : null, error: id ? errorMessage(q.error) : null, reload, setSummary }
 }
