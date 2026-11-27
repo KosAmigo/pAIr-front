@@ -5,8 +5,9 @@ export function CreditProvider({ token, children }: { token: string | null; chil
   const store = useMemo(() => token ? createCreditStore(token) : null, [token])
   useEffect(() => {
     if (!store) return
-    void store.refresh()
-    return store.cancel
+    const { refresh, cancel } = store.getState()
+    void refresh()
+    return cancel
   }, [store])
   return <CreditContext.Provider value={store}>{children}</CreditContext.Provider>
 }
