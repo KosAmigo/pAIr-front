@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { LayoutDashboard } from 'lucide-react'
-import { motion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
 import { canUseSelfDiagnosis, useAuth } from '../auth/auth'
 import { springs } from '../lib/motion'
 import { cx } from './cx'
@@ -22,6 +22,7 @@ const tabs = [
 
 export function SelfShell({ children, header }: { children: ReactNode; header?: ReactNode }) {
   const { pathname } = useLocation()
+  const reduce = useReducedMotion()
   const { user } = useAuth()
   // 기업 계정은 마이페이지 같은 계정 화면만 이 셸을 쓴다. 자가진단 메뉴와 크레딧·충전은 보이지 않는다
   const selfUse = canUseSelfDiagnosis(user?.role)
@@ -34,7 +35,7 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
           <Logo />
           {selfUse && <span className="hidden sm:inline-flex"><ModeBadge mode="self" /></span>}
         </div>
-        {selfUse && <nav aria-label="자가진단 메뉴" className="order-last flex h-11 w-full items-stretch gap-6 border-t border-line/50 md:order-none md:ml-10 md:h-auto md:w-auto md:border-t-0">
+        {selfUse && <nav aria-label="자가진단 메뉴" className="order-last flex h-12 w-full items-center gap-1.5 border-t border-line/50 md:order-none md:ml-8 md:h-auto md:w-auto md:border-t-0">
           {tabs.map((t) => {
             const active = t.match.some((m) => pathname.startsWith(m))
             return (
@@ -43,19 +44,21 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
                 to={t.to}
                 aria-current={active ? 'page' : undefined}
                 className={cx(
-                  'relative inline-flex items-center text-[15px] font-medium transition-colors duration-[180ms]',
-                  active ? 'text-text' : 'text-text-muted hover:text-text',
+                  'relative inline-flex h-9 items-center rounded-lg px-4 text-[15px] font-semibold transition-colors duration-[180ms] outline-none focus-visible:ring-4 focus-visible:ring-brand/25',
+                  active ? 'text-brand' : 'text-text-muted hover:bg-panel-raised/70 hover:text-text',
                 )}
               >
-                {t.label}
+                {/* 선택 칸: 테두리와 옅은 면이 메뉴 사이를 미끄러진다. 움직임 줄이기에서는 바로 바뀐다 */}
                 {active && (
                   <motion.span
                     layoutId="self-shell-tab"
-                    transition={springs.snappy}
-                    className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-brand-gradient"
+                    transition={reduce ? { duration: 0 } : springs.snappy}
+                    data-testid="self-tab-active"
+                    className="absolute inset-0 z-0 rounded-lg border border-brand/40 bg-brand-dim shadow-[0_0_18px_-6px_rgb(108_71_255/0.45)]"
                     aria-hidden
                   />
                 )}
+                <span className="relative z-10">{t.label}</span>
               </NavLink>
             )
           })}

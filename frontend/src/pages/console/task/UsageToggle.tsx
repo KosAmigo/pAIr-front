@@ -43,7 +43,7 @@ export function UsageToggle({ task, onChanged, compact }: { task: ConsoleTaskSum
     const desc = lock ?? DESC[st.usage]
     return (
       <div className="inline-flex items-center gap-2" title={desc}>
-        <div role="radiogroup" aria-label="용도 바꾸기" aria-describedby="usage-desc" aria-disabled={!!lock || undefined} className="glass-stage grid w-[200px] grid-cols-2 gap-0.5 rounded-full border border-stage-line p-0.5 shadow-[0_6px_20px_-10px_rgb(108_71_255/0.5)]">
+        <div role="radiogroup" aria-label="용도 바꾸기" aria-describedby="usage-desc" aria-disabled={!!lock || undefined} className="glass-stage isolate grid w-[200px] grid-cols-2 gap-0.5 rounded-full border border-stage-line p-0.5 shadow-[0_6px_20px_-10px_rgb(108_71_255/0.5)]">
           {OPTIONS.map((o) => {
             const on = st.usage === o.value
             return (
@@ -56,8 +56,8 @@ export function UsageToggle({ task, onChanged, compact }: { task: ConsoleTaskSum
                 onClick={() => void choose(o.value)}
                 className={cx('relative inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-bold transition-colors outline-none focus-visible:ring-4 focus-visible:ring-stage-brand/30 disabled:cursor-not-allowed', on ? 'text-on-accent' : 'text-stage-muted hover:text-stage-text')}
               >
-                {on && <motion.span layoutId="usage-pill-hero" transition={springs.snappy} className={cx('absolute inset-0 -z-10 rounded-full shadow-[0_4px_14px_-4px_rgb(108_71_255/0.6)]', o.value === 'LIVE' ? 'bg-stage-text' : 'bg-brand-gradient')} />}
-                <o.icon size={13} aria-hidden /> {o.label}
+                {on && <motion.span layoutId="usage-pill-hero" transition={springs.snappy} className={cx('absolute inset-0 z-0 rounded-full shadow-[0_4px_14px_-4px_rgb(108_71_255/0.6)]', o.value === 'LIVE' ? 'bg-stage-text' : 'bg-brand-gradient')} />}
+                <span className="relative z-10 inline-flex items-center gap-1.5"><o.icon size={13} aria-hidden /> {o.label}</span>
               </button>
             )
           })}
@@ -79,7 +79,7 @@ export function UsageToggle({ task, onChanged, compact }: { task: ConsoleTaskSum
         용도
         {st.saving && <Loader2 size={13} className="animate-spin text-stage-brand" aria-label="저장 중" />}
       </span>
-      <div role="radiogroup" aria-label="용도 바꾸기" aria-disabled={!!lock || undefined} title={lock ?? undefined} className="glass-stage grid w-[216px] grid-cols-2 gap-1 rounded-full border border-stage-line p-1">
+      <div role="radiogroup" aria-label="용도 바꾸기" aria-disabled={!!lock || undefined} title={lock ?? undefined} className="glass-stage isolate grid w-[216px] grid-cols-2 gap-1 rounded-full border border-stage-line p-1">
         {OPTIONS.map((o) => {
           const on = st.usage === o.value
           return (
@@ -99,10 +99,10 @@ export function UsageToggle({ task, onChanged, compact }: { task: ConsoleTaskSum
                 <motion.span
                   layoutId="usage-pill"
                   transition={springs.snappy}
-                  className={cx('absolute inset-0 -z-10 rounded-full', o.value === 'LIVE' ? 'bg-stage-text' : 'bg-brand-gradient')}
+                  className={cx('absolute inset-0 z-0 rounded-full', o.value === 'LIVE' ? 'bg-stage-text' : 'bg-brand-gradient')}
                 />
               )}
-              <o.icon size={14} aria-hidden /> {o.label}
+              <span className="relative z-10 inline-flex items-center gap-1.5"><o.icon size={14} aria-hidden /> {o.label}</span>
             </button>
           )
         })}
@@ -133,7 +133,7 @@ export function UsageChip({ usage, lock }: { usage: TaskUsage; lock?: string | n
       aria-label={`용도 ${o.label}`}
       className={cx('inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold text-on-accent shadow-[0_4px_14px_-4px_rgb(108_71_255/0.6)]', usage === 'LIVE' ? 'bg-stage-text' : 'bg-brand-gradient')}
     >
-      <o.icon size={13} aria-hidden /> {o.label}
+      <span className="relative z-10 inline-flex items-center gap-1.5"><o.icon size={13} aria-hidden /> {o.label}</span>
     </span>
   )
 }
