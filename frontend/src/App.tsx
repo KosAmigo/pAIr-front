@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { MotionConfig } from 'motion/react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import RealExam, { NewExam } from './pages/RealExam'
 import Report from './pages/Report'
@@ -72,11 +72,13 @@ function ExamRoute() {
   const [params] = useSearchParams()
   const { user, loading } = useAuth()
   const loc = useLocation()
+  const { sessionId } = useParams()
   if (loading) return null
   if (params.get('mode') !== 'live' && !user) {
     return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />
   }
-  return <RealExam />
+  // 응시 ID 가 바뀌면(/exam/A → /exam/B) 화면 상태를 처음부터 다시 만든다
+  return <RealExam key={sessionId} />
 }
 
 function ConsoleHome() {
