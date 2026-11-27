@@ -2,7 +2,8 @@
 // 데이터는 모두 consoleApi(백엔드, AWS RDS)에서 온다. 목업 저장소는 2026-11-19에 지웠다.
 import { useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { consoleApi, type ConsoleTaskSummary, type EventType, type ParticipantView, type Phase, type ProctorEventView, type ResultState } from '../consoleApi'
+import { type ConsoleTaskSummary, type EventType, type ParticipantView, type Phase, type ProctorEventView, type ResultState } from '../consoleApi'
+import { consoleTasksQuery } from './consoleTasks'
 
 // ── 감독 이벤트 ──
 export const EVENT_LABEL: Record<EventType, string> = {
@@ -106,7 +107,7 @@ export function useLoad<T>(key: string | null, fetcher: () => Promise<T>, pollMs
 
 /** 콘솔 과제 목록 → ID 로 찾기 (회차는 과제 ID 만 갖고 있다) */
 export function useTaskMap() {
-  const r = useLoad('console-tasks', () => consoleApi.tasks())
+  const r = useLoad(consoleTasksQuery.queryKey[0], consoleTasksQuery.queryFn)
   const map = new Map<string, ConsoleTaskSummary>((r.data ?? []).map((t) => [t.id, t]))
   return { ...r, map }
 }
