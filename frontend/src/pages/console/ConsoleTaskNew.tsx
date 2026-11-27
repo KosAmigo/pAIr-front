@@ -82,6 +82,7 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
   const lastStep = useRef<GenStep | null>(null)
   const retriedRef = useRef(false)
   const timers = useRef<number[]>([])
+  const filling = useRef<Form | null>(null) // 채우는 중이면 다 채워졌을 때의 값
 
   // 화면을 떠나면 조회와 채우기 연출을 멈춘다
   useEffect(
@@ -128,7 +129,9 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
     timers.current.forEach((t) => window.clearTimeout(t))
     timers.current = []
     const target = applySuggestion(form, s)
+    filling.current = target
     if (prefersReduced()) {
+      filling.current = null
       setForm((f) => applySuggestion(f, s))
       FILL_FIELDS.forEach(flash)
       return
@@ -143,6 +146,16 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
         timers.current.push(window.setTimeout(() => set(k, text.slice(0, upto)), start + j * 22))
       }
     })
+    timers.current.push(window.setTimeout(() => (filling.current = null), FILL_FIELDS.length * 220 + 24 * 22 + 50))
+  }
+  // 채우는 도중에 사용자가 직접 고치면 그 글을 존중해 연출을 접는다(역량도 기존대로 지워진다)
+  const userSet = <K extends keyof Form>(k: K, v: Form[K]) => {
+    if (filling.current) {
+      timers.current.forEach((t) => window.clearTimeout(t))
+      timers.current = []
+      filling.current = null
+    }
+    set(k, v)
   }
   const pick = (s: Suggestion) => {
     if (!form.track) return
@@ -154,7 +167,15 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
 
   const next = () => {
     setTried(true)
-    if (!valid) return
+    // 채우는 도중이면 남은 글자를 한 번에 채워 카드와 같은 값으로 만든다
+    const target = filling.current
+    if (target) {
+      timers.current.forEach((t) => window.clearTimeout(t))
+      timers.current = []
+      filling.current = null
+      setForm(target)
+      if (Object.keys(validateForm(target)).length > 0) return
+    } else if (!valid) return
     setStartError(null)
     setPhase('confirm')
   }
@@ -274,7 +295,7 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
                 <textarea
                   aria-label="상황"
                   value={form.topic}
-                  onChange={(e) => set('topic', e.target.value)}
+                  onChange={(e) => userSet('topic', e.target.value)}
                   rows={2}
                   maxLength={100}
                   placeholder={form.track === 'BIZ' ? '예: 요금제 개편안 손익 비교' : '예: 쿠폰 할인 계산'}
@@ -286,7 +307,7 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
                 <textarea
                   aria-label="함정"
                   value={form.trap}
-                  onChange={(e) => set('trap', e.target.value)}
+                  onChange={(e) => userSet('trap', e.target.value)}
                   rows={3}
                   maxLength={500}
                   placeholder="예: 쿠폰 두 장을 겹치면 할인이 중복 적용됨"

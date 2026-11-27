@@ -208,6 +208,22 @@ test('추천 카드를 골라 만들면 그 카드의 역량을 같이 보낸다
   await expect.poll(() => api.sent.find((r) => r.path === '/api/admin/task-gen' && r.method === 'POST')?.body.competencies).toEqual(['usage', 'delegation'])
 })
 
+test('추천 카드를 채우는 도중에 다음을 눌러도 그 카드의 역량을 같이 보낸다', async ({ page }) => {
+  const api = await mockApi(page)
+  await page.clock.install()
+  await page.goto('/console/tasks/new?tab=manual')
+  await page.getByRole('button', { name: /^개발/ }).click()
+  await page.getByRole('button', { name: /추천 받기/ }).click()
+  const card = page.getByRole('button', { name: /^.*상황 \d/ }).nth(1)
+  await expect(card).toBeVisible()
+  // 채우기 연출의 타이머를 멈춰 둔 채(= 채우는 도중) 다음으로 넘어간다
+  await page.clock.pauseAt(new Date(Date.now() + 60_000))
+  await card.click()
+  await page.getByRole('button', { name: /^다음/ }).click()
+  await page.getByRole('button', { name: '과제 만들기' }).click()
+  await expect.poll(() => api.sent.find((r) => r.path === '/api/admin/task-gen' && r.method === 'POST')?.body.competencies).toEqual(['usage', 'delegation'])
+})
+
 test('경고만 있으면 축하는 그대로, 경고 안내와 경고 줄이 위에 보인다', async ({ page }) => {
   await mockApi(page)
   await page.goto('/console/tasks/new?tab=manual')
