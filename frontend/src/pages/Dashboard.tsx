@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowUpRight, Coins, History as HistoryIcon, Loader2, Play, Target } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
@@ -14,7 +15,7 @@ import { duration, easing } from '../lib/motion'
 import { topHabits } from '../lib/habits'
 import { useAuth } from '../auth/auth'
 import { useCredits } from '../data/credits'
-import type { ApiError } from '../api'
+import { errorMessage, freshOnMount, queryKeys } from '../data/queryKeys'
 
 // DESIGN.md §7-2 개인 대시보드 (2026-11-19 전면 개편: "역량 시트")
 // 위: 다크 무대에 역량 육각형, 총점과 등급, 6개 스탯 막대. 육각형과 막대는 마우스 강조를 함께 쓴다.
@@ -135,22 +136,10 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
   const taskParam = params.get('task')
-  const [data, setData] = useState<Awaited<ReturnType<typeof loadStatHistory>> | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    let alive = true
-    loadStatHistory(taskParam)
-      .then((d) => {
-        if (!alive) return
-        setData(d)
-        setError(null)
-      })
-      .catch((e: ApiError) => alive && setError(e.message))
-    return () => {
-      alive = false
-    }
-  }, [tick, taskParam])
+  // 과제를 바꾸면 이전 과제의 점수가 잠깐 보이지 않도록 이전 데이터를 쓰지 않는다 (키에 과제 ID)
+  const q = useQuery({ queryKey: queryKeys.statHistory(taskParam), queryFn: () => loadStatHistory(taskParam), ...freshOnMount })
+  const data = q.data ?? null
+  const error = errorMessage(q.error)
 
   return (
     <SelfShell
@@ -165,7 +154,7 @@ export default function Dashboard() {
       }
     >
       {error ? (
-        <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} className="mt-16" />
+        <ErrorState message={error} onRetry={() => void q.refetch()} className="mt-16" />
       ) : !data ? (
         <p className="m-8 flex items-center gap-2 text-body text-text-muted">
           <Loader2 size={18} className="animate-spin" aria-hidden /> 불러오는 중

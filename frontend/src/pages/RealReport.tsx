@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { Bot, CircleAlert, CircleCheck, Loader2, Play, RotateCcw, User } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
@@ -8,6 +9,8 @@ import { ScoreHero, StageSep } from '../components/report/ScoreHero'
 import { CompetencyCards } from '../components/report/CompetencyCards'
 import { QuestionScoreCard } from '../components/report/QuestionScoreCard'
 import { isUnsubmitted } from '../lib/attempts'
+import { reportQuery } from '../data/userQueries'
+import { errorMessage, queryKeys } from '../data/queryKeys'
 import { api, ApiError, type CheckResult, type JudgeView, type Report, type ReportResponse, type Turn } from '../api'
 
 // 실제 응시 결과 리포트. 감점식 채점(pAIr-docs/평가/채점_기준표.md): 6개 항목, 총점 100점.
@@ -288,37 +291,21 @@ export function ReportView({ r, bare }: { r: Report; bare?: boolean }) {
 
 export default function RealReport() {
   const { attemptId = '' } = useParams()
-  const [data, setData] = useState<ReportResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    api
-      .report(attemptId)
-      .then((d) => {
-        if (!alive) return
-        setData(d)
-        setError(null)
-        if (d.status === 'SCORING') {
-          timer.current = setTimeout(() => setTick((t) => t + 1), 2000)
-        }
-      })
-      .catch((e: ApiError) => alive && setError(e.message))
-    return () => {
-      alive = false
-      if (timer.current) clearTimeout(timer.current)
-    }
-  }, [attemptId, tick])
+  const queryClient = useQueryClient()
+  // 응시 ID 가 키에 들어 있어 다른 리포트로 가면 이전 리포트가 보이지 않는다. 채점 중이면 2초마다 다시 받는다
+  const q = useQuery(reportQuery(attemptId))
+  const data: ReportResponse | null = q.data ?? null
+  const [actionError, setActionError] = useState<string | null>(null)
+  const error = actionError ?? errorMessage(q.error)
 
   const rescore = async () => {
     try {
       await api.rescore(attemptId)
-      setData((d) => (d ? { ...d, status: 'SCORING', error: null } : d))
-      setTick((t) => t + 1)
+      setActionError(null)
+      queryClient.setQueryData<ReportResponse>(queryKeys.report(attemptId), (d) => (d ? { ...d, status: 'SCORING', error: null } : d))
+      void queryClient.invalidateQueries({ queryKey: queryKeys.report(attemptId) })
     } catch (e) {
-      setError((e as ApiError).message)
+      setActionError((e as ApiError).message)
     }
   }
 

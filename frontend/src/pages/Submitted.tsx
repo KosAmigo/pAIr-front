@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Building2, Check, Hourglass, Loader2, Sparkles } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
@@ -6,7 +7,8 @@ import { cx } from '../components/cx'
 import { ButtonLink, Logo } from '../components/ui'
 import { Aurora, Glass, GlowBorder, GradientText, Particles, Reveal, RevealGroup, RevealItem } from '../components/fx'
 import { ErrorState } from '../components/ErrorState'
-import { api, ApiError, type AttemptView } from '../api'
+import { attemptQuery } from '../data/userQueries'
+import { errorMessage } from '../data/queryKeys'
 import { readLiveExam } from '../proctor/liveExam.ts'
 import { duration, easing } from '../lib/motion'
 
@@ -33,23 +35,9 @@ export default function Submitted() {
   const { sessionId = '' } = useParams()
   // 실전 맥락(회차 이름)은 응시 화면이 끝나며 지울 수 있어, 남아 있을 때만 쓴다
   const [sessionTitle] = useState(() => readLiveExam(sessionId)?.title ?? null)
-  const [view, setView] = useState<AttemptView | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    let alive = true
-    api
-      .attempt(sessionId)
-      .then((v) => {
-        if (!alive) return
-        setView(v)
-        setError(null)
-      })
-      .catch((e: ApiError) => alive && setError(e.message))
-    return () => {
-      alive = false
-    }
-  }, [sessionId, tick])
+  const q = useQuery(attemptQuery(sessionId))
+  const view = q.data ?? null
+  const error = errorMessage(q.error)
   const [fire, setFire] = useState(false)
   useEffect(() => {
     const t = window.setTimeout(() => setFire(true), 900)
@@ -95,7 +83,7 @@ export default function Submitted() {
         {/* 제출 영수증: 과제별 제출 줄 + 응시자, 아래 끝은 톱니 모양으로 찢긴 종이 */}
         <Reveal delay={0.9} className="mt-10 w-[640px] max-w-full">
           {error ? (
-            <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
+            <ErrorState message={error} onRetry={() => void q.refetch()} />
           ) : !view ? (
             <p className="flex items-center justify-center gap-2 py-6 text-[15px] text-text-muted">
               <Loader2 size={16} className="animate-spin" aria-hidden /> 제출 내역을 불러오는 중
