@@ -15,7 +15,7 @@ import { setPublished, useTaskDetail } from '../../data/consoleTasks'
 import { countChecks } from '../../data/taskGen'
 import { useGenReport } from '../../data/taskReview'
 import { checkBadge, isClosed, madeAt, REVIEW_CHECKS, tabOf, trackOf, TRACK_LABEL } from '../../data/taskBoard'
-import { ConfirmModal, TaskStatusBadge } from './common'
+import { ConfirmModal } from './common'
 import { ConsoleHero, HeroSep, PillTabs } from './ConsoleHero'
 import { fmtTime, useToast } from './format'
 import { AiBadge, CheckBadge } from './task/badges'
@@ -23,8 +23,7 @@ import { PdfViewer } from './task/PdfViewer'
 import { ReviewChecklist } from './task/ReviewChecklist'
 import { useChecklist } from './task/useChecklist'
 import { FilesTab, GenReportTab, OverviewTab, QuestionsTab } from './task/ReviewTabs'
-import { StatusFlow } from './task/StatusFlow'
-import { UsageToggle } from './task/UsageToggle'
+import { HeroStatus } from './task/HeroStatus'
 
 type Tab = 'overview' | 'files' | 'materials' | 'questions' | 'report'
 const TAB_NAME: Record<Tab, string> = { overview: '개요', files: '파일', materials: '자료', questions: '문항', report: '자동 확인 결과' }
@@ -110,17 +109,14 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
         <ConsoleHero
           label="과제 요약"
           badge={
-            <>
-              <TaskStatusBadge task={s} stage />
+            <HeroStatus task={s} draft={draft} onChanged={setSummary}>
               {s.generated && <AiBadge />}
               {check && <CheckBadge result={check} />}
-            </>
+            </HeroStatus>
           }
           title={s.title}
           meta={
             <>
-              <span>{s.id}</span>
-              <HeroSep />
               <span>{TRACK_LABEL[track]}</span>
               {s.difficulty && (
                 <>
@@ -150,8 +146,6 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
         />
 
         <Glass className="stage-scope flex flex-wrap items-center gap-x-8 gap-y-5 rounded-2xl px-6 py-5">
-          <StatusFlow tab={tab} usage={s.usage} />
-          {draft && <UsageToggle task={s} onChanged={setSummary} />}
           <div className="ml-auto flex min-w-[260px] flex-col items-end gap-2">
             <p className="text-right text-[14px] font-semibold break-keep text-text-muted" aria-live="polite">
               {nextText}

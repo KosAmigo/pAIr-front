@@ -1,4 +1,4 @@
-// 과제 만들기 – 자동 생성 탭: 폼 → 주제 미리보기(빼기·다시 받기) → 만들기 → 진행 목록(대기·진행·완료) → 대기 취소.
+// 과제 만들기 – 자동 생성 탭: 폼 → 주제 미리보기(빼기·다시 받기) → 만들기 → '만드는 중인 과제' 페이지의 목록(대기·진행·완료) → 대기 취소.
 // 그리고 탭이 주소에 남는지, 직접 만들기의 배치 선택이 요청 본문에 들어가는지.
 import { expect, test } from '@playwright/test'
 import { mockApi } from './mock'
@@ -15,18 +15,18 @@ test.describe('자동 생성', () => {
     await page.getByRole('button', { name: /주제 미리보기/ }).click()
     await expect(page.getByRole('alert').filter({ hasText: '직군을 고르세요' })).toBeVisible()
 
-    // 기본값: 60분, 자가진단, 10개, 바로 만들기, 마감 칸 없음
+    // 기본값: 60분, 자가진단, 10개, 바로 만들기, 마감 칸은 흐리게(꺼짐)
     await expect(page.getByRole('radio', { name: '60분' })).toHaveAttribute('aria-checked', 'true')
     await expect(page.getByRole('radio', { name: /^자가진단/ })).toHaveAttribute('aria-checked', 'true')
     await expect(page.getByLabel('개수')).toHaveValue('10')
     await expect(page.getByRole('radio', { name: '바로 만들기' })).toHaveAttribute('aria-checked', 'true')
-    await expect(page.getByRole('radiogroup', { name: '마감' })).toHaveCount(0)
+    await expect(page.getByRole('radiogroup', { name: '마감' })).toHaveAttribute('aria-disabled', 'true') // 바로: 같은 자리에서 흐리게
 
     await page.getByRole('radio', { name: '배치' }).click()
-    await expect(page.getByRole('radio', { name: '3시간' })).toHaveAttribute('aria-checked', 'true')
-    await expect(page.getByText('비용 약 절반, 마감 안에 끝나요')).toBeVisible()
+    await expect(page.getByRole('radio', { name: /^3시간/ })).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByText('비용은 바로 생성의 약 40%예요')).toBeVisible()
     await page.getByRole('radio', { name: '바로 만들기' }).click()
-    await expect(page.getByRole('radiogroup', { name: '마감' })).toHaveCount(0)
+    await expect(page.getByRole('radiogroup', { name: '마감' })).toHaveAttribute('aria-disabled', 'true') // 바로: 같은 자리에서 흐리게
 
     // 개수는 1~10 안으로 맞춰진다
     await page.getByLabel('개수').fill('99')
@@ -34,13 +34,13 @@ test.describe('자동 생성', () => {
     await expect(page.getByLabel('개수')).toHaveValue('10')
   })
 
-  test('미리보기 → 카드 빼기 → 다시 받기(exclude) → 만들기 → 진행 목록 → 대기 취소', async ({ page }) => {
+  test('미리보기 → 카드 빼기 → 다시 받기(exclude) → 만들기 → 새 페이지의 목록 → 대기 취소', async ({ page }) => {
     const api = await mockApi(page)
     await page.goto('/console/tasks/new')
     await page.getByRole('button', { name: /^개발/ }).click()
     await page.getByLabel('개수').fill('4')
     await page.getByRole('radio', { name: '배치' }).click()
-    await page.getByRole('radio', { name: '6시간' }).click()
+    await page.getByRole('radio', { name: /^6시간/ }).click()
     await page.getByRole('button', { name: /주제 미리보기/ }).click()
 
     const cards = page.getByRole('article')
@@ -53,7 +53,7 @@ test.describe('자동 생성', () => {
 
     // 다시 받기: 본 것(뺀 것 포함) 4개를 exclude 로
     await page.getByRole('button', { name: '다시 받기' }).click()
-    await expect(page.getByText(/자동 주제 5/)).toBeVisible()
+    await expect(page.getByRole('article').getByText(/자동 주제 5/)).toBeVisible()
     await expect(cards).toHaveCount(4)
     const again = api.sent.filter((r) => r.path.endsWith('/auto/preview')).at(-1)!
     expect(again.body.exclude).toHaveLength(4)
@@ -68,9 +68,12 @@ test.describe('자동 생성', () => {
     expect(auto.body.topics).toHaveLength(3)
     expect(auto.body.topics[0]).toHaveProperty('trapType')
 
+    // 만들기 뒤엔 만드는 중인 과제 페이지로 가고, 방금 만든 묶음의 첫 작업(a1)이 골라져 있다
+    await expect(page).toHaveURL(/\/console\/tasks\/generating\?job=a1/)
     // 진행 목록: 한 묶음에 진행·대기·완료 행
     const list = page.getByRole('region', { name: '진행 목록' })
-    await expect(list.getByText('3개 중 1개 끝남')).toBeVisible()
+    // 묶음 머리줄: 도는 작업이 있어 펼쳐져 있다
+    await expect(list.getByRole('button', { name: /3개 중 1개 끝남/ })).toHaveAttribute('aria-expanded', 'true')
     const rows = list.getByTestId('gen-job')
     await expect(rows).toHaveCount(3)
     await expect(rows.nth(0).getByRole('status')).toHaveText('생성 중')
@@ -79,7 +82,6 @@ test.describe('자동 생성', () => {
     await expect(rows.nth(1).getByRole('status')).toHaveText('대기 1번째')
     await expect(rows.nth(2).getByRole('status')).toHaveText('완료')
     await expect(rows.nth(2)).toContainText('통과 1 · 경고 1 · 실패 0')
-    await expect(rows.nth(2).getByRole('link', { name: /검수하기/ })).toHaveAttribute('href', '/console/tasks/N7')
 
     // 대기 중인 것만 취소 버튼이 있다
     await expect(list.getByRole('button', { name: /취소/ })).toHaveCount(1)
@@ -99,10 +101,10 @@ test.describe('자동 생성', () => {
     await page.getByRole('button', { name: /주제 미리보기/ }).click()
     await expect(page.getByRole('article')).toHaveCount(3)
     await page.getByRole('button', { name: '건너뛰고 바로 만들기' }).click()
-    await expect(page.getByRole('status').filter({ hasText: '3개를 만들기 시작했어요' })).toBeVisible()
+    await expect(page).toHaveURL(/\/console\/tasks\/generating\?job=a1/)
     const auto = api.sent.find((r) => r.path === '/api/admin/task-gen/auto')!
     expect(auto.body).toEqual({ track: 'BIZ', minutes: 20, count: 3, usage: 'LIVE', mode: 'NOW' })
-    await expect(page.getByText('서버가 고른 주제 1')).toBeVisible()
+    await expect(page.getByRole('button', { name: '서버가 고른 주제 1 자세히 보기' })).toBeVisible()
   })
 
   test('이미 시작해서 취소할 수 없으면(409) 쉬운 말로 알려 준다', async ({ page }) => {
@@ -112,6 +114,7 @@ test.describe('자동 생성', () => {
     await page.getByRole('button', { name: /^개발/ }).click()
     await page.getByLabel('개수').fill('3')
     await page.getByRole('button', { name: '미리보기 없이 바로 만들기' }).click()
+    await expect(page).toHaveURL(/\/console\/tasks\/generating/)
     await page.getByRole('button', { name: /취소/ }).click()
     await expect(page.getByRole('alert').filter({ hasText: '이미 시작했거나 끝나서 취소할 수 없어요' })).toBeVisible()
   })
@@ -125,7 +128,7 @@ test.describe('자동 생성', () => {
         body: JSON.stringify([{ jobId: 'w1', batchId: null, status: 'RUNNING', step: '설계도 작성 중', waitingBatch: true, mode: 'BATCH', deadlineAt: deadline, topic: '배치 주제', track: 'DEV', minutes: 40, checks: [], error: null, taskCode: null, createdAt: deadline }]),
       }),
     )
-    await page.goto('/console/tasks/new')
+    await page.goto('/console/tasks/generating')
     const row = page.getByRole('region', { name: '진행 목록' }).getByTestId('gen-job')
     await expect(row.getByRole('status')).toHaveText('배치 대기 중')
     await expect(row).toContainText('마감 18:30')
@@ -153,15 +156,46 @@ test.describe('탭과 직접 만들기', () => {
     await page.getByRole('button', { name: /^개발/ }).click()
     await page.getByLabel('상황', { exact: true }).fill('주문 취소 재고 복구')
     await page.getByLabel('함정').fill('취소가 두 번 오면 재고가 두 번 늘어남')
-    await expect(page.getByRole('radiogroup', { name: '마감' })).toHaveCount(0)
+    await expect(page.getByRole('radiogroup', { name: '마감' })).toHaveAttribute('aria-disabled', 'true') // 바로: 같은 자리에서 흐리게
     await page.getByRole('radio', { name: '배치' }).click()
-    await expect(page.getByRole('radiogroup', { name: '마감' })).toBeVisible()
-    await page.getByRole('radio', { name: '1시간' }).click()
+    await expect(page.getByRole('radiogroup', { name: '마감' })).toHaveAttribute('aria-disabled', 'false')
+    await page.getByRole('radio', { name: /^12시간/ }).click()
     await page.getByRole('button', { name: /^다음/ }).click()
     await expect(page.getByText(/배치 · 마감/)).toBeVisible()
     await page.getByRole('button', { name: '과제 만들기' }).click()
     await expect(page.getByText(/과제를 만들었어요/)).toBeVisible({ timeout: 15_000 })
     const gen = api.sent.find((r) => r.path === '/api/admin/task-gen')!
-    expect(gen.body).toMatchObject({ track: 'DEV', mode: 'BATCH', batchDeadlineHours: 1 })
+    expect(gen.body).toMatchObject({ track: 'DEV', mode: 'BATCH', batchDeadlineHours: 12 })
   })
+})
+
+test.describe('바로 ↔ 배치 전환은 레이아웃을 움직이지 않는다', () => {
+  for (const [tab, url, action] of [
+    ['자동 생성', '/console/tasks/new', /주제 미리보기/],
+    ['직접 만들기', '/console/tasks/new?tab=manual', /^다음/],
+  ] as const) {
+    test(`${tab}: 아래 버튼·미리보기 높이가 같고, 마감 줄은 항상 있다`, async ({ page }) => {
+      await mockApi(page)
+      await page.goto(url)
+      const btn = page.getByRole('button', { name: action }).last()
+      const aside = page.getByRole('complementary', { name: '고른 값 요약' })
+      await expect(page.getByText('바로 생성은 마감 없이 약 15분')).toBeVisible()
+      await page.waitForTimeout(800) // 폼이 들어오는 연출이 끝난 뒤에 잰다
+      // 스크롤과 상관없이 비교하려고 폼 맨 위(직군 제목)에서 버튼까지의 거리와 버튼 크기·x 를 잰다
+      const top = page.getByRole('heading', { name: '직군' })
+      const measure = async () => {
+        const [b, t] = [await btn.boundingBox(), await top.boundingBox()]
+        return { dy: b!.y - t!.y, x: b!.x, w: b!.width, h: b!.height }
+      }
+      const b0 = await measure()
+      const a0 = await aside.boundingBox()
+      await page.getByRole('radio', { name: '배치' }).click()
+      await expect(page.getByRole('radiogroup', { name: '마감' })).toHaveAttribute('aria-disabled', 'false')
+      await expect(page.getByText('비용은 바로 생성의 약 40%예요. 3시간 안에 끝나요')).toBeVisible()
+      expect(await measure()).toEqual(b0)
+      expect((await aside.boundingBox())!.height).toBe(a0!.height)
+      await page.getByRole('radio', { name: '바로 만들기' }).click()
+      expect(await measure()).toEqual(b0)
+    })
+  }
 })

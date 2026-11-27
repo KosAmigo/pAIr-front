@@ -124,7 +124,7 @@ test('buildGenRequest: 방식(mode)과 배치 마감', () => {
   const f = { track: 'DEV', topic: ' 쿠폰 ', trap: ' 중복 ', usage: 'SELF', minutes: 40 }
   assert.deepEqual(buildGenRequest(f), { track: 'DEV', topic: '쿠폰', trap: '중복', usage: 'SELF', minutes: 40 }) // 안 고르면 예전 그대로
   assert.deepEqual(buildGenRequest({ ...f, mode: 'NOW', batchDeadlineHours: 6 }), { track: 'DEV', topic: '쿠폰', trap: '중복', usage: 'SELF', minutes: 40, mode: 'NOW' })
-  assert.equal(buildGenRequest({ ...f, mode: 'BATCH', batchDeadlineHours: 1 }).batchDeadlineHours, 1)
+  assert.equal(buildGenRequest({ ...f, mode: 'BATCH', batchDeadlineHours: 12 }).batchDeadlineHours, 12)
   assert.equal(buildGenRequest({ ...f, mode: 'BATCH' }).batchDeadlineHours, 3) // 기본 3시간
 })
 
@@ -145,4 +145,122 @@ test('자동 생성 API 는 미리보기·시작·목록·취소 주소를 그�
     ['GET', '/api/admin/task-gen/jobs?active=true'],
     ['POST', '/api/admin/task-gen/a%2Fb/cancel'],
   ])
+})
+
+// ── 만드는 중인 과제 페이지 (2026-11-27) ──
+import { activeCount, contentSections, generatingHref, isEnded, jobsPollMs, modeLabel, newlyDone, JOBS_BUSY_MS, JOBS_IDLE_MS } from '../src/data/taskGenJobs.ts'
+
+test('activeCount·jobsPollMs: 대기+진행만 센다, 도는 작업이 없으면 간격을 늘린다', () => {
+  const rows = [{ status: 'QUEUED' }, { status: 'RUNNING' }, { status: 'DONE' }, { status: 'FAILED' }]
+  assert.equal(activeCount(rows), 2)
+  assert.equal(activeCount(null), 0)
+  assert.equal(jobsPollMs(rows), JOBS_BUSY_MS)
+  assert.equal(jobsPollMs(null), JOBS_BUSY_MS)
+  assert.equal(jobsPollMs([{ status: 'DONE' }, { status: 'CANCELED' }]), JOBS_IDLE_MS)
+  assert.equal(jobsPollMs([]), JOBS_IDLE_MS)
+  assert.ok(JOBS_IDLE_MS > JOBS_BUSY_MS)
+})
+
+test('상태 표시 글: 대기 n번째 / 세부 단계 / 배치 대기 / 완료 / 실패 / 취소 (jobView) 와 isEnded·modeLabel', () => {
+  assert.equal(jobView(row({ status: 'QUEUED', queuePosition: 2 })).label, '대기 2번째')
+  assert.equal(jobView(row({ step: '정답 쪽 작성 중' })).sub, '정답과 숨은 테스트 작성 중')
+  assert.equal(jobView(row({ waitingBatch: true, mode: 'BATCH' })).label, '배치 대기 중')
+  assert.equal(jobView(row({ status: 'DONE', checks: [{ name: 'a', ok: true, detail: '' }] })).label, '완료')
+  assert.equal(jobView(row({ status: 'FAILED', error: '시간 초과' })).sub, '시간 초과')
+  assert.equal(jobView(row({ status: 'CANCELED' })).label, '취소됨')
+  assert.deepEqual(['QUEUED', 'RUNNING', 'DONE', 'FAILED', 'CANCELED'].map(isEnded), [false, false, true, true, true])
+  assert.equal(modeLabel('NOW'), '바로 만들기')
+  assert.equal(modeLabel(null), '바로 만들기')
+  assert.equal(modeLabel('BATCH', clock(15, 5)), '배치 · 마감 15:05')
+  assert.equal(modeLabel('BATCH'), '배치')
+})
+
+test('groupJobs: 묶음별로 묶고 직접 만들기 작업은 하나씩 (새 페이지 목록)', () => {
+  const rows = [
+    row({ jobId: 'a1', batchId: 'b1', createdAt: clock(9, 1) }),
+    row({ jobId: 'm1', batchId: null, createdAt: clock(9, 5) }),
+    row({ jobId: 'a2', batchId: 'b1', status: 'QUEUED', createdAt: clock(9, 2) }),
+  ]
+  const g = groupJobs(rows)
+  assert.equal(g.length, 2)
+  assert.deepEqual(g[0].jobs.map((j) => j.jobId), ['m1']) // 최근 것이 위
+  assert.deepEqual(g[1].jobs.map((j) => j.jobId), ['a1', 'a2'])
+  assert.equal(g[1].counts.QUEUED, 1)
+})
+
+test('newlyDone: 이전에 DONE 이 아니었다가 DONE 이 된 작업만, 첫 조회는 없음', () => {
+  const prev = [{ jobId: 'a', status: 'RUNNING' }, { jobId: 'b', status: 'DONE' }, { jobId: 'c', status: 'QUEUED' }]
+  const next = [{ jobId: 'a', status: 'DONE' }, { jobId: 'b', status: 'DONE' }, { jobId: 'c', status: 'RUNNING' }, { jobId: 'd', status: 'DONE' }]
+  assert.deepEqual(newlyDone(prev, next), ['a']) // d 는 이전에 없던 작업이라 제외
+  assert.deepEqual(newlyDone(null, next), [])
+  assert.deepEqual(newlyDone(next, next), [])
+})
+
+test('generatingHref: 작업 번호를 주소에 싣는다', () => {
+  assert.equal(generatingHref(), '/console/tasks/generating')
+  assert.equal(generatingHref('a 1'), '/console/tasks/generating?job=a%201')
+})
+
+test('contentSections: null 단계는 자리 표시, 나온 단계는 줄로, 결함·정답은 검수용', () => {
+  // content 가 없으면 모두 자리 표시 (개발이면 코드, 문항은 없음)
+  const empty = contentSections(null, 'DEV')
+  assert.deepEqual(empty.map((s) => s.key), ['blueprint', 'writing', 'code', 'answer', 'fillers'])
+  assert.ok(empty.every((s) => !s.ready && s.blocks.length === 0))
+  // 비개발은 코드 대신 문항
+  assert.deepEqual(contentSections(null, 'BIZ').map((s) => s.key), ['blueprint', 'writing', 'questions', 'answer', 'fillers'])
+
+  const c = {
+    form: { track: 'DEV' },
+    blueprint: {
+      title: '쿠폰', examples: [{ input: '2장', expected: '1번 할인' }], flaws: [{ what: '중복', where: 'A.java' }],
+      judgments: [{ question: '허용?', options: ['예', '아니오'] }], fillers: [{ path: 'R.md', summary: '배경', confusing: true }],
+    },
+    writing: { description: ['p1', 'p2'], requirements: [], notes: null, documents: [{ path: 'd.pdf', chars: 1200 }] },
+    code: null,
+    answer: { hiddenTests: [{ path: 'T.java', methods: ['a', 'b'] }], wrongFixes: 2, altSolutions: 0 },
+  }
+  const s = contentSections(c, null) // 직군은 content.form 에서
+  assert.deepEqual(s.map((x) => [x.key, x.ready]), [['blueprint', true], ['writing', true], ['code', false], ['answer', true], ['fillers', false]])
+  const bp = s[0].blocks
+  assert.deepEqual(bp.find((b) => b.label === '예시').lines, ['2장 → 1번 할인'])
+  assert.equal(bp.find((b) => b.label.startsWith('결함')).adminOnly, true)
+  assert.deepEqual(bp.find((b) => b.label === '판단 지점').lines, ['허용? (예 / 아니오)'])
+  assert.deepEqual(bp.find((b) => b.label === '관련 자료').lines, ['R.md — 배경 (헷갈리게 둔 자료)'])
+  assert.equal(bp.find((b) => b.label === '제목').adminOnly, undefined)
+  assert.deepEqual(s[1].blocks.map((b) => b.label), ['설명', '문서 목록']) // 빈 요구사항·null notes 는 뺀다
+  assert.equal(s[1].blocks[1].lines[0], 'd.pdf · 1,200자')
+  assert.equal(s[3].adminOnly, true)
+  assert.deepEqual(s[3].blocks.map((b) => b.lines), [['T.java — a, b'], ['오답 2개 · 다른 풀이 0개']])
+})
+
+// ── 생성 기록 카드: 단계별 모델·횟수 (genReportView) ──
+import { countRows, modelLine, shortModel, stageGroup, stageSummary } from '../src/data/genReportView.ts'
+
+test('shortModel·stageGroup: 모델 이름은 짧게, 단계 이름은 묶음으로', () => {
+  assert.equal(shortModel('gpt-6.1-sol'), 'sol')
+  assert.equal(shortModel('gpt-6.1-terra'), 'terra')
+  assert.equal(shortModel('claude-sonnet-5-5'), 'sonnet')
+  assert.equal(shortModel(''), '-')
+  assert.equal(shortModel(null), '-')
+  assert.deepEqual(['설계도 작성 중', '글 작성 중', '시작 코드 작성 중', '문항 글 작성 중', '정답 쪽 작성 중', '관련 적은 자료 작성 중', '관문 검사 중', 'blueprint', 'whatever'].map(stageGroup), ['blueprint', 'writing', 'code', 'questions', 'answer', 'fillers', 'judge', 'blueprint', 'other'])
+})
+
+test('stageSummary: 단계 묶음별 모델(중복 없이)·호출 수·배치/바로, stages 없으면 null', () => {
+  assert.equal(stageSummary({ details: null }), null)
+  assert.equal(stageSummary({ details: { stages: [] } }), null)
+  const s = stageSummary({
+    details: {
+      stages: [
+        { stage: '설계도 작성 중', model: 'gpt-6.1-sol', via: 'batch' },
+        { stage: '글 작성 중', model: 'gpt-6.1-sol', via: 'batch' },
+        { stage: '글 작성 중', model: 'gpt-6.1-sol', via: 'now' },
+        { stage: '관련 적은 자료 작성 중', model: 'gpt-6.1-terra', via: 'now' },
+        { stage: '관문 검사 중', model: 'gpt-6.1-sol', via: 'now' },
+        { stage: '관문 검사 중', model: 'claude-sonnet-5-5', via: 'now' },
+      ],
+    },
+  })
+  assert.equal(modelLine(s), '설계도 sol · 글 sol · 자료 terra · 검사 sol/sonnet')
+  assert.deepEqual(countRows(s), [{ label: '설계도', n: 1, redo: false }, { label: '글', n: 2, redo: true }, { label: '자료', n: 1, redo: false }]) // 검사는 만든 횟수에서 뺀다
+  assert.deepEqual([s.batch, s.now, s.hasBatch], [2, 4, true])
 })

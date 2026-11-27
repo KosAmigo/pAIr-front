@@ -28,8 +28,6 @@ export function GenProgress({
   track: GenTrack
   topic: string
 }) {
-  const steps = stepStates(step ?? '생성 중', retried)
-  const say = stepNarration(step, track)
   return (
     <StageSection aria-label="과제 생성 진행" className="p-0">
       <GlowBorder className="rounded-xl">
@@ -55,7 +53,24 @@ export function GenProgress({
             </div>
           </div>
 
-          <ol className="grid gap-3" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+          <GenStages step={step} detail={detail} retried={retried} track={track} />
+          <p className="text-[13px] text-stage-muted">이 화면을 떠나면 진행 확인이 멈춰요. 만들기는 서버에서 계속되고, 끝나면 과제 목록의 검수 전에 나와요.</p>
+        </div>
+      </GlowBorder>
+    </StageSection>
+  )
+}
+
+/**
+ * 단계 줄(생성 → 확인 → 다시 생성 → 저장) + 지금 하는 일 문장 + 세부 단계 글.
+ * 직접 만들기 진행 화면과 '만드는 중인 과제' 상세가 같이 쓴다. finished 면 모든 단계가 끝난 모양이다.
+ */
+export function GenStages({ step, detail, retried, track, finished = false }: { step: GenStep | null; detail?: string | null; retried: boolean; track: GenTrack; finished?: boolean }) {
+  const steps = stepStates(step ?? '생성 중', retried).map((x) => (finished ? { ...x, state: 'done' as const } : x))
+  const say = finished ? '모든 단계가 끝났어요' : stepNarration(step, track)
+  return (
+    <>
+<ol className="grid gap-3" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
             {steps.map(({ step: s, state }) => {
               const Icon = ICON[s]
               return (
@@ -121,9 +136,6 @@ export function GenProgress({
               {detail}
             </p>
           )}
-          <p className="text-[13px] text-stage-muted">이 화면을 떠나면 진행 확인이 멈춰요. 만들기는 서버에서 계속되고, 끝나면 과제 목록의 검수 전에 나와요.</p>
-        </div>
-      </GlowBorder>
-    </StageSection>
+    </>
   )
 }

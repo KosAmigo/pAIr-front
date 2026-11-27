@@ -1,30 +1,71 @@
-// 진행 목록: 지금 대기·진행 중인 과제 생성 작업과 최근 끝난 작업. 묶음(batchId)별로 묶어 보여 준다.
-// 행: 주제·직군·시간 / 상태(대기 n번째, 진행 단계, 배치 대기·마감, 완료·실패·취소) / 끝나면 "검수하기", 대기면 "취소".
-// 행이 생기고 사라질 때만 부드럽게 움직이고, 움직임 줄이기에서는 움직이지 않는다.
+// 만드는 중인 과제 목록 (왼쪽, 좁고 촘촘하게). 묶음(batchId)마다 머리줄 하나(직군·시간·개수·끝난 수 + 작은 진행 막대)와 접었다 펼치는 행들.
+// 펼침: 진행 중인 묶음은 펼침, 끝난 묶음은 접힘이 기본이고 사용자가 바꾼 상태는 기억한다(localStorage). 높이는 부드럽게 바뀌고 움직임 줄이기에서는 바로 바뀐다.
+// 행은 한 줄: 상태 점 + 주제(한 줄 말줄임) + 짧은 상태 글. 자세한 글(세부 단계·마감·검사 요약)은 title·화면 읽기용으로만 둔다.
+// 머리에는 새로고침 아이콘 버튼 하나뿐(누르면 바로 다시 불러온다, 마우스를 올리면 마지막 갱신 시각). 자동 갱신은 뒤에서 그대로 돈다.
 import { useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
-import { ArrowRight, CircleAlert, Layers, X } from 'lucide-react'
+import { Check, ChevronRight, CircleAlert, Layers, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { TRACK_ICON } from '../../../components/domainIcons'
-import { ButtonLink } from '../../../components/ui'
-import { canCancel, cancelErrorMessage, groupJobs, groupSummary, jobView, reviewHref, taskGenApi, type JobRow, type JobTone } from '../../../data/taskGen'
-import { distance, duration, easing, useShouldAnimate } from '../../../lib/motion'
+import { CountUp } from '../../../components/fx'
+import { canCancel, cancelErrorMessage, fmtClock, groupJobs, jobView, taskGenApi, type JobGroup, type JobRow, type JobTone } from '../../../data/taskGen'
+import { DOT } from './formConsts'
+import { TRACK_TONE } from './trackTone'
 
-const TONE: Record<JobTone, string> = {
-  wait: 'bg-panel-raised text-text-muted',
-  run: 'bg-brand-dim text-brand',
-  batch: 'bg-info/12 text-info',
-  done: 'bg-signal/12 text-signal',
-  warn: 'bg-caution/12 text-caution',
-  fail: 'bg-alert/12 text-alert',
-  cancel: 'bg-text/8 text-text-muted',
+const OPEN_KEY = 'pair.genGroups'
+type OpenMap = Record<string, boolean>
+const loadOpen = (): OpenMap => {
+  try {
+    return JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}') as OpenMap
+  } catch {
+    return {}
+  }
 }
+const isLive = (g: JobGroup) => g.counts.QUEUED + g.counts.RUNNING > 0
+/** 묶음 상태: live = 도는 중(그라데이션 테두리·빛), failed = 끝났는데 실패가 섞임(경고), done = 모두 끝남(성공 톤) */
+type GroupState = 'live' | 'failed' | 'done'
+const groupState = (g: Pick<JobGroup, 'counts'>): GroupState =>
+  g.counts.QUEUED + g.counts.RUNNING > 0 ? 'live' : g.counts.FAILED > 0 ? 'failed' : 'done'
+const CARD: Record<GroupState, string> = {
+  live: 'border-transparent bg-[linear-gradient(#fff,#fff)_padding-box,linear-gradient(120deg,#8b5cf6,#6c47ff_45%,#2f5bea)_border-box] shadow-[0_10px_30px_-14px_rgb(108_71_255/0.55)]',
+  failed: 'border-caution/40 bg-caution/5 shadow-sm',
+  done: 'border-signal/35 bg-signal/5 shadow-sm',
+}
+const clock = (ms: number | null) =>
+  ms === null ? '아직 못 불러왔어요' : `마지막 갱신 ${[new Date(ms).getHours(), new Date(ms).getMinutes(), new Date(ms).getSeconds()].map((n) => String(n).padStart(2, '0')).join(':')}`
 
-export function GenJobList({ rows, error, onChanged }: { rows: JobRow[] | null; error: string | null; onChanged: () => void }) {
-  const animate = useShouldAnimate({ essential: true })
+export function GenJobList({
+  rows,
+  error,
+  selected,
+  fetchedAt,
+  refreshing,
+  onSelect,
+  onChanged,
+  onRefresh,
+}: {
+  rows: JobRow[] | null
+  error: string | null
+  selected: string | null
+  fetchedAt: number | null
+  refreshing: boolean
+  onSelect: (jobId: string) => void
+  onChanged: () => void
+  onRefresh: () => void
+}) {
   const [notice, setNotice] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState<string | null>(null)
+  const [opened, setOpened] = useState<OpenMap>(loadOpen)
   const groups = rows ? groupJobs(rows) : []
+
+  const toggle = (g: JobGroup) => {
+    const next = { ...opened, [g.key]: !(opened[g.key] ?? isLive(g)) }
+    setOpened(next)
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify(next))
+    } catch {
+      /* 저장이 막혀도 이번 화면에서는 동작한다 */
+    }
+  }
 
   const cancel = async (j: JobRow) => {
     setCancelling(j.jobId)
@@ -39,118 +80,199 @@ export function GenJobList({ rows, error, onChanged }: { rows: JobRow[] | null; 
     }
   }
 
-  const enter = animate ? { opacity: 0, y: distance.app / 2 } : false
-  const t = { duration: duration.normal, ease: easing.standard }
-
   return (
-    <section aria-labelledby="gen-jobs-title" className="mx-auto mt-8 w-full max-w-[960px]">
-      <div className="flex items-baseline gap-3">
-        <h2 id="gen-jobs-title" className="text-[18px] font-extrabold tracking-[-0.01em] text-text">
+    <section aria-labelledby="gen-jobs-title" className="flex min-w-0 flex-col gap-2">
+      <div className="flex items-center gap-1">
+        <h2 id="gen-jobs-title" className="text-[15px] font-extrabold tracking-[-0.01em] text-text">
           진행 목록
         </h2>
-        <p className="text-[13px] text-text-muted">3초마다 새로 불러와요. 페이지를 나갔다 와도 이어서 보여요.</p>
+        <button
+          type="button"
+          onClick={onRefresh}
+          aria-label="새로고침"
+          title={clock(fetchedAt)}
+          className="ml-auto inline-flex size-10 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 outline-none hover:bg-panel-raised hover:text-text focus-visible:ring-4 focus-visible:ring-brand/30"
+        >
+          <RefreshCw size={16} aria-hidden className={refreshing ? 'motion-safe:animate-spin' : undefined} />
+        </button>
       </div>
 
       {(notice || error) && (
-        <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-alert/30 bg-alert/8 px-4 py-3 text-[14px] leading-6 break-keep text-text">
-          <CircleAlert size={18} className="mt-0.5 shrink-0 text-alert" aria-hidden /> {notice ?? `목록을 불러오지 못했어요. ${error}`}
+        <p role="alert" className="flex items-start gap-2 rounded-lg border border-alert/30 bg-alert/8 px-3 py-2 text-[13px] leading-5 break-keep text-text">
+          <CircleAlert size={16} className="mt-0.5 shrink-0 text-alert" aria-hidden /> {notice ?? `목록을 불러오지 못했어요. ${error}`}
         </p>
       )}
 
-      {rows === null && !error && <p className="mt-4 text-[14px] text-text-muted">불러오는 중…</p>}
-      {rows !== null && groups.length === 0 && (
-        <p className="mt-4 rounded-xl border border-dashed border-line-strong px-5 py-6 text-[14px] text-text-muted">지금 진행 중이거나 최근에 끝난 작업이 없어요.</p>
-      )}
+      {rows === null && !error && <p className="text-[13px] text-text-muted">불러오는 중…</p>}
+      {rows !== null && groups.length === 0 && <p className="rounded-lg border border-dashed border-line-strong px-3 py-4 text-[13px] text-text-muted">작업이 없어요.</p>}
 
-      <ul className="mt-4 flex flex-col gap-4">
-        <AnimatePresence initial={false}>
-          {groups.map((g) => (
-            <motion.li
-              key={g.key}
-              layout={animate ? 'position' : false}
-              initial={enter}
-              animate={{ opacity: 1, y: 0 }}
-              exit={animate ? { opacity: 0 } : undefined}
-              transition={t}
-              className="overflow-hidden rounded-2xl border border-line bg-panel shadow-sm"
-            >
-              {g.batchId && (
-                <div className="flex items-center gap-2 border-b border-line bg-panel-raised px-5 py-2.5 text-[13px] font-semibold text-text-muted">
-                  <Layers size={14} aria-hidden />
-                  <span>자동 생성 묶음</span>
-                  <span className="tnum ml-auto">{groupSummary(g)}</span>
+      <ul className="flex flex-col gap-2">
+        {groups.map((g) => {
+          const open = !g.batchId || (opened[g.key] ?? isLive(g))
+          return (
+            <li key={g.key} data-testid="gen-group" data-state={g.batchId ? groupState(g) : 'single'} className={cx('overflow-hidden rounded-xl border', g.batchId ? CARD[groupState(g)] : 'border-line bg-panel shadow-sm')}>
+              {g.batchId && <GroupHead g={g} open={open} onToggle={() => toggle(g)} />}
+              {/* 높이 전환: grid 행을 0fr → 1fr 로 (움직임 줄이기에서는 바로) */}
+              <div className={cx('grid transition-[grid-template-rows] duration-[260ms] ease-out motion-reduce:transition-none', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+                <div className={cx('min-h-0 overflow-hidden transition-[visibility] duration-[260ms] motion-reduce:transition-none', open ? 'visible' : 'invisible')}>
+                  <ul className={cx('divide-y divide-line', g.batchId && 'border-t border-line')}>
+                    {g.jobs.map((j) => (
+                      <li key={j.jobId} data-testid="gen-job">
+                        <JobItem job={j} on={selected === j.jobId} busy={cancelling === j.jobId} onSelect={() => onSelect(j.jobId)} onCancel={() => void cancel(j)} />
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              )}
-              <ul className="divide-y divide-line">
-                <AnimatePresence initial={false}>
-                  {g.jobs.map((j) => (
-                    <motion.li key={j.jobId} data-testid="gen-job" initial={enter} animate={{ opacity: 1, y: 0 }} exit={animate ? { opacity: 0 } : undefined} transition={t}>
-                      <JobItem job={j} busy={cancelling === j.jobId} onCancel={() => void cancel(j)} />
-                    </motion.li>
-                  ))}
-                </AnimatePresence>
-              </ul>
-            </motion.li>
-          ))}
-        </AnimatePresence>
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </section>
   )
 }
 
-function JobItem({ job, busy, onCancel }: { job: JobRow; busy: boolean; onCancel: () => void }) {
-  const v = jobView(job)
-  const Icon = job.track ? TRACK_ICON[job.track] : null
-  const title = job.topic?.trim() || '주제를 정하는 중'
+/** 묶음 머리줄: 펼침 버튼(aria-expanded) + 직군 타일 + 직군·방식 칩 + 진행 링(n/m) + 개수 칩 + 진행 막대 + 작업별 상태 점 */
+function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle: () => void }) {
+  const first = g.jobs[0]
+  const total = g.jobs.length
+  const c = g.counts
+  const ended = c.DONE + c.FAILED + c.CANCELED
+  const state = groupState(g)
+  const Icon = first?.track ? TRACK_ICON[first.track] : Layers
+  const tone = first?.track ? TRACK_TONE[first.track] : { tile: 'bg-panel-raised text-text-muted', text: '', ring: '' }
+  const name = first?.track === 'BIZ' ? '비개발' : first?.track === 'DEV' ? '개발' : '자동 생성'
+  const batch = first?.mode === 'BATCH'
+  const deadline = batch ? fmtClock(first?.deadlineAt) : null
+  const pct = total ? ended / total : 0
+  const R = 15
+  const C = 2 * Math.PI * R
+  const chips: [string, number, string][] = [
+    ['진행', c.RUNNING, 'bg-brand-dim text-brand'],
+    ['대기', c.QUEUED, 'bg-panel-raised text-text-muted'],
+    ['완료', c.DONE, 'bg-signal/12 text-signal'],
+    ['실패', c.FAILED, 'bg-alert/12 text-alert'],
+  ]
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
-      <div className="flex min-w-0 flex-1 basis-64 items-center gap-3">
-        {Icon && (
-          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-panel-raised text-text-muted" aria-hidden>
-            <Icon size={18} />
-          </span>
-        )}
-        <div className="min-w-0">
-          <p className="text-[15px] leading-6 font-bold break-keep text-text">{title}</p>
-          <p className="text-[12px] text-text-muted">
-            {job.track === 'BIZ' ? '비개발' : job.track === 'DEV' ? '개발' : ''}
-            {job.minutes ? (
-              <>
-                {job.track ? ' · ' : ''}
-                <span className="tnum font-mono">{job.minutes}</span>분
-              </>
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={`자동 생성 묶음 ${name} ${total}개 중 ${ended}개 끝남`}
+      className="flex w-full flex-col gap-2 px-3 pt-3 pb-2.5 text-left outline-none hover:bg-white/50 focus-visible:ring-4 focus-visible:ring-brand/30 focus-visible:ring-inset"
+    >
+      <span className="flex items-center gap-2.5">
+        <ChevronRight size={14} aria-hidden className={cx('shrink-0 text-text-muted transition-transform duration-200 motion-reduce:transition-none', open && 'rotate-90')} />
+        <span aria-hidden className={cx('inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1', tone.tile, tone.ring)}>
+          <Icon size={16} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex items-center gap-1.5 text-[14px] leading-4 font-extrabold text-text">
+            <span className="truncate">{name}</span>
+            {first?.minutes ? (
+              <span className="shrink-0 text-[12px] font-bold text-text-muted">
+                <span className="tnum font-mono">{first.minutes}</span>분
+              </span>
             ) : null}
-          </p>
-        </div>
-      </div>
+            {state === 'failed' && <TriangleAlert size={13} aria-hidden className="shrink-0 text-caution" />}
+          </span>
+          <span className="flex flex-wrap items-center gap-1">
+            <span className={cx('inline-flex h-[18px] items-center rounded-full px-1.5 text-[11px] font-bold', batch ? 'bg-info/12 text-info' : 'bg-panel-raised text-text-muted')}>
+              {batch ? '배치' : '바로'}
+            </span>
+            {deadline && (
+              <span className="tnum inline-flex h-[18px] items-center rounded-full bg-info/12 px-1.5 font-mono text-[11px] font-bold text-info">마감 {deadline}</span>
+            )}
+          </span>
+        </span>
+        {/* 진행 링: 끝난 수 / 전체 */}
+        <span aria-hidden className="relative inline-flex size-10 shrink-0 items-center justify-center">
+          <svg viewBox="0 0 36 36" className="absolute inset-0 -rotate-90">
+            <circle cx="18" cy="18" r={R} fill="none" strokeWidth="3.5" className="stroke-line" />
+            <circle
+              cx="18"
+              cy="18"
+              r={R}
+              fill="none"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeDasharray={C}
+              strokeDashoffset={C * (1 - pct)}
+              className={cx('transition-[stroke-dashoffset] duration-500 motion-reduce:transition-none', state === 'live' ? 'stroke-brand' : state === 'failed' ? 'stroke-caution' : 'stroke-signal')}
+            />
+          </svg>
+          {state === 'done' ? (
+            <Check size={16} strokeWidth={3} className="text-signal" />
+          ) : (
+            <span className="tnum font-mono text-[11px] leading-none font-bold text-text">
+              <CountUp value={ended} />/{total}
+            </span>
+          )}
+        </span>
+      </span>
 
-      <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
+      <span className="flex flex-wrap items-center gap-1 pl-[22px]">
+        {chips.map(([label, n, cls]) =>
+          n > 0 ? (
+            <span key={label} className={cx('inline-flex h-5 items-center gap-1 rounded-full px-2 text-[11px] font-bold', cls)}>
+              {label} <span className="tnum font-mono">{n}</span>
+            </span>
+          ) : null,
+        )}
+      </span>
+
+      <span aria-hidden className={cx('block h-1.5 overflow-hidden rounded-full bg-line/70 ml-[22px]')}>
+        <span
+          className={cx('block h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', state === 'live' ? 'bg-brand-gradient gen-shimmer' : state === 'failed' ? 'bg-caution' : 'bg-signal')}
+          style={{ width: `${pct * 100}%` }}
+        />
+      </span>
+
+      {/* 작업마다 점 하나: 접어도 한눈에 */}
+      <span aria-hidden className="flex flex-wrap gap-1 pl-[22px]">
+        {g.jobs.map((j) => {
+          const v = jobView(j)
+          return <span key={j.jobId} title={`${j.topic?.trim() || '주제를 정하는 중'} · ${v.label}`} className={cx('size-2 rounded-full', DOT[v.tone], v.tone === 'run' && 'motion-safe:animate-pulse')} />
+        })}
+      </span>
+    </button>
+  )
+}
+
+function JobItem({ job, on, busy, onSelect, onCancel }: { job: JobRow; on: boolean; busy: boolean; onSelect: () => void; onCancel: () => void }) {
+  const v = jobView(job)
+  const title = job.topic?.trim() || '주제를 정하는 중'
+  const tone: JobTone = v.tone
+  return (
+    <div className={cx('flex items-center transition-colors duration-150', on ? 'bg-brand-dim/60' : 'hover:bg-panel-raised/60')}>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={on}
+        aria-label={`${title} 자세히 보기`}
+        title={[v.label, v.sub].filter(Boolean).join(' · ')}
+        className="flex min-h-10 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left outline-none focus-visible:ring-4 focus-visible:ring-brand/30 focus-visible:ring-inset"
+      >
+        <span aria-hidden className={cx('size-2 shrink-0 rounded-full', DOT[tone], tone === 'run' && 'motion-safe:animate-pulse')} />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-text">{title}</span>
         {/* key 가 바뀌면 상태 글이 새로 들어오며 한 번 부드럽게 나타난다 */}
-        <span key={v.label} role="status" className={cx('fade-in inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[13px] font-bold', TONE[v.tone])}>
-          {v.tone === 'run' && <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-current" />}
+        <span key={v.label} role="status" className="fade-in shrink-0 text-[12px] font-bold text-text-muted">
           {v.label}
         </span>
-        {v.sub && <span className="tnum max-w-[320px] text-[12px] break-keep text-text-muted">{v.sub}</span>}
-      </div>
-
-      <div className="flex min-w-[88px] justify-end">
-        {job.status === 'DONE' && job.taskCode && (
-          <ButtonLink to={reviewHref(job.taskCode)} variant="primary" size="sm" aria-label={`${title} 검수하기`}>
-            검수하기 <ArrowRight size={14} aria-hidden />
-          </ButtonLink>
-        )}
-        {canCancel(job) && (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            aria-label={`${title} 취소`}
-            className="inline-flex h-10 items-center gap-1 rounded-lg border border-line-strong px-3 text-[13px] font-semibold text-text-muted transition-colors duration-150 outline-none hover:border-alert/50 hover:text-alert focus-visible:ring-4 focus-visible:ring-brand/30 disabled:opacity-50"
-          >
-            <X size={14} aria-hidden /> 취소
-          </button>
-        )}
-      </div>
+        {v.sub && <span className="sr-only">{v.sub}</span>}
+      </button>
+      {canCancel(job) && (
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          aria-label={`${title} 취소`}
+          title="취소"
+          className="mr-1 inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 outline-none hover:bg-alert/10 hover:text-alert focus-visible:ring-4 focus-visible:ring-brand/30 disabled:opacity-50"
+        >
+          <X size={14} aria-hidden />
+        </button>
+      )}
     </div>
   )
 }

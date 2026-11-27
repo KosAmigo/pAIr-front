@@ -3,9 +3,9 @@ import type { ReactNode } from 'react'
 import { Check, CircleAlert } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { TRACK_ICON } from '../../../components/domainIcons'
-import { BATCH_HOURS, GEN_MINUTES, type BatchHours, type GenMinutes, type GenMode, type GenTrack, type GenUsage } from '../../../data/taskGen'
+import { GEN_MINUTES, type BatchHours, type GenMinutes, type GenMode, type GenTrack, type GenUsage } from '../../../data/taskGen'
 import { choiceClass } from './choice'
-import { TRACKS, USAGES } from './formConsts'
+import { DEADLINE_OPTIONS, TRACKS, USAGES } from './formConsts'
 import { TRACK_TONE } from './trackTone'
 
 export function Field({ n, title, hint, error, children }: { n: number; title: string; hint?: string; error?: string | null; children: ReactNode }) {
@@ -49,7 +49,7 @@ export function TrackPicker({ value, onChange }: { value: GenTrack | null; onCha
               <span className={cx('block text-[16px] font-bold', on ? 'text-brand' : 'text-text')}>{t.title}</span>
               <span className="block text-[13px] break-keep text-text-muted">{t.desc}</span>
             </span>
-            {on && <Check size={18} strokeWidth={3} className="ml-auto shrink-0 text-brand" aria-hidden />}
+            <span className="ml-auto flex size-[18px] shrink-0 items-center justify-center">{on && <Check size={18} strokeWidth={3} className="text-brand" aria-hidden />}</span>
           </button>
         )
       })}
@@ -107,7 +107,7 @@ export function UsagePicker({ value, onChange }: { value: GenUsage; onChange: (v
                 <span className="block text-[16px] leading-5 font-bold">{u.title}</span>
                 <span className={cx('block text-[12px] leading-4 font-semibold break-keep', on ? 'text-brand' : 'text-text-muted')}>{u.desc}</span>
               </span>
-              {on && <Check size={16} strokeWidth={3} className="ml-auto shrink-0" aria-hidden />}
+              <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{on && <Check size={16} strokeWidth={3} aria-hidden />}</span>
             </button>
           )
         })}
@@ -128,6 +128,7 @@ export function ModePicker({
   onMode: (m: GenMode) => void
   onHours: (h: BatchHours) => void
 }) {
+  const batch = mode === 'BATCH'
   const opts: { value: GenMode; title: string }[] = [
     { value: 'NOW', title: '바로 만들기' },
     { value: 'BATCH', title: '배치' },
@@ -147,7 +148,7 @@ export function ModePicker({
                   role="radio"
                   aria-checked={on}
                   onClick={() => onMode(o.value)}
-                  className={cx('inline-flex h-14 min-w-32 items-center justify-center gap-1.5 rounded-xl px-5 text-[16px] font-bold', choiceClass(on))}
+                  className={cx('inline-flex h-14 w-36 items-center justify-center gap-1.5 rounded-xl px-4 text-[16px] font-bold', choiceClass(on))}
                 >
                   {on && <Check size={16} strokeWidth={3} aria-hidden />}
                   {o.title}
@@ -156,35 +157,37 @@ export function ModePicker({
             })}
           </div>
         </div>
-        {mode === 'BATCH' && (
-          <div className="step-in flex flex-col gap-2">
-            <span className="text-[14px] font-bold text-text">마감</span>
-            <div role="radiogroup" aria-label="마감" className="flex gap-2">
-              {BATCH_HOURS.map((h) => {
-                const on = hours === h
-                return (
-                  <button
-                    key={h}
-                    type="button"
-                    role="radio"
-                    aria-checked={on}
-                    onClick={() => onHours(h)}
-                    className={cx('inline-flex h-14 w-24 items-center justify-center gap-1.5 rounded-xl px-4 text-[16px] font-bold', choiceClass(on))}
-                  >
-                    {on && <Check size={16} strokeWidth={3} aria-hidden />}
+        {/* 마감 줄은 바로/배치 어느 쪽이든 같은 자리·같은 높이다(아래 버튼이 움직이지 않는다). 바로일 때는 흐리게 꺼 둔다 */}
+        <div className="flex flex-col gap-2" aria-disabled={!batch}>
+          <span className={cx('text-[14px] font-bold transition-opacity duration-150', batch ? 'text-text' : 'text-text-faint')}>마감</span>
+          <div role="radiogroup" aria-label="마감" aria-disabled={!batch} className={cx('flex gap-2 transition-opacity duration-150', !batch && 'opacity-45')}>
+            {DEADLINE_OPTIONS.map(({ hours: h, name }) => {
+              const on = batch && hours === h
+              return (
+                <button
+                  key={h}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  aria-disabled={!batch}
+                  tabIndex={batch ? undefined : -1}
+                  onClick={() => batch && onHours(h)}
+                  className={cx('inline-flex h-14 w-28 flex-col items-center justify-center rounded-xl px-3 text-[16px] leading-5 font-bold', !batch && 'cursor-default', choiceClass(on))}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {on && <Check size={14} strokeWidth={3} aria-hidden />}
                     <span>
                       <span className="tnum font-mono">{h}</span>시간
                     </span>
-                  </button>
-                )
-              })}
-            </div>
+                  </span>
+                  <span className="text-[12px] font-semibold opacity-80">{name}</span>
+                </button>
+              )
+            })}
           </div>
-        )}
+        </div>
       </div>
-      <p className="text-[13px] break-keep text-text-muted">
-        {mode === 'BATCH' ? '배치: 비용 약 절반, 마감 안에 끝나요' : '바로 만들기는 보통 1분 안팎에 끝나요. 배치는 비용 약 절반, 마감 안에 끝나요.'}
-      </p>
+      <p className="min-h-5 text-[13px] break-keep text-text-muted">{batch ? (DEADLINE_OPTIONS.find((o) => o.hours === hours)?.hint ?? '') : '바로 생성은 마감 없이 약 15분'}</p>
     </div>
   )
 }
