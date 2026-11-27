@@ -10,6 +10,12 @@ export const SLOT = {
 
 export const pad2 = (n: number) => String(n).padStart(2, '0')
 export const turnTag = (n: number) => `T${pad2(n)}`
+/** 같은 날 시작한 미제출 풀이를 구분하는 날짜 + 시각 */
+export const startLabel = (iso: string) => {
+  const d = new Date(iso)
+  return `${shortDate(iso)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
 export const shortDate = (iso: string) => {
   const d = new Date(iso)
   return `${d.getMonth() + 1}.${pad2(d.getDate())}`

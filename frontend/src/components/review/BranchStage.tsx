@@ -5,7 +5,8 @@ import type { Checkpoint } from '../../api'
 import { branchColor } from '../../lib/replayTree'
 import { dotColumn, labelEvery, laneDots, maxCheckpointTurn, stageCols, stageGap } from '../../lib/branchDots'
 import { commonAncestor, routeIds, type TreeLane } from '../../lib/reviewTree'
-import { shortDate, SLOT, turnTag } from './shared'
+import { shortDate, SLOT, startLabel, turnTag } from './shared'
+import { isUnsubmitted } from '../../lib/attempts'
 
 // DESIGN.md §7-5 갈래 트리 (어두운 안쪽 무대). 가로축은 대화 턴, 갈래는 가로 선 하나.
 // 모든 갈래의 끝(점수 원)은 오른쪽 같은 열(결승선)에 세운다. 그래프는 SVG.
@@ -28,6 +29,7 @@ export function BranchStage({
   onSlot,
   onPick,
   onOpen,
+  onDelete,
   checkpoints,
   onDot,
 }: {
@@ -40,6 +42,8 @@ export function BranchStage({
   onSlot: (s: Slot) => void
   onPick: (id: string) => void
   onOpen: (id: string) => void
+  /** 제출하지 않은 갈래의 삭제를 눌렀다 */
+  onDelete: (lane: TreeLane) => void
   /** 갈래(응시)마다의 체크포인트. 선 위에 질문한 시점마다 작은 점을 찍는다 */
   checkpoints: Record<string, Checkpoint[]>
   /** 점을 눌렀다: 그 갈래, 체크포인트, 점 요소(팝오버 위치용) */
@@ -254,7 +258,7 @@ export function BranchStage({
                   {l.name}
                 </text>
                 <text x={finishX + r + 10} y={y + 12} fontSize={11} fontWeight={600} fill="#9b97c4">
-                  {shortDate(l.startedAt)}
+                  {isUnsubmitted(l.status) ? startLabel(l.startedAt) : shortDate(l.startedAt)}
                   {l.parentLane != null ? ` · ${turnTag(l.startTurn)}에서 갈라짐` : ' · 원래 응시'}
                   {!scored ? ' · 채점 전' : ''}
                 </text>
@@ -285,6 +289,26 @@ export function BranchStage({
               </g>
             )
           })}
+          {/* 제출하지 않은 갈래만 지울 수 있다. 점수 원(비활성 버튼) 밖에 따로 둬야 키보드·화면 낭독기가 누를 수 있다 */}
+          {lanes.filter((l) => isUnsubmitted(l.status)).map((l) => (
+            <text
+              key={`x-${l.attemptId}`}
+              x={finishX + 11 + 10 + 66}
+              y={yOf(l) + 29}
+              fontSize={11}
+              fontWeight={700}
+              fill="#fda4af"
+              textDecoration="underline"
+              className="cursor-pointer outline-none focus-visible:fill-white"
+              role="button"
+              tabIndex={0}
+              aria-label={`${l.name} 삭제`}
+              onClick={() => onDelete(l)}
+              onKeyDown={keyActivate(() => onDelete(l))}
+            >
+              삭제
+            </text>
+          ))}
         </svg>
       </div>
     </section>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { GitBranch, Loader2, Play } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
@@ -12,7 +13,8 @@ import { NodeDrawer } from '../components/review/NodeDrawer'
 import { ScoreStairs } from '../components/review/ScoreStairs'
 import { TaskRail } from '../components/review/TaskRail'
 import { Verdict } from '../components/review/Verdict'
-import { useCompare } from '../components/review/shared'
+import { startLabel, useCompare } from '../components/review/shared'
+import { ConfirmModal } from './console/common'
 import { api, type ApiError, type AttemptSummary, type Checkpoint, type TreeNode } from '../api'
 import { loadCheckpoints, loadTaskTrees } from '../data/review'
 import { assignSlot, divergeTurn, groupByTask, layoutLanes, resolveSelection, type TreeLane } from '../lib/reviewTree'
@@ -41,13 +43,15 @@ export default function Review() {
   const [slot, setSlot] = useState<Slot>('a')
   const [transcriptOpen, setTranscriptOpen] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [removing, setRemoving] = useState<{ lane: TreeLane; busy: boolean; error: string | null } | null>(null)
   const [dot, setDot] = useState<{ lane: TreeLane; cp: Checkpoint; anchor: Anchor } | null>(null)
   const [cps, setCps] = useState<{ key: string; data: Record<string, Checkpoint[]> } | null>(null)
 
   useEffect(() => {
     let alive = true
+    // 빈 응시도 받아야 지울 수 있다 (안 보이면 과제 창의 이어서 풀기가 계속 남는다)
     api
-      .list()
+      .list(true)
       .then((d) => alive && (setList(d), setListError(null)))
       .catch((e: ApiError) => alive && setListError(e.message))
     return () => {
@@ -120,6 +124,21 @@ export default function Review() {
     setParams(new URLSearchParams({ task: id }), { replace: true })
   }
 
+  const remove = (lane: TreeLane) => {
+    setRemoving({ lane, busy: true, error: null })
+    api
+      .deleteAttempt(lane.attemptId)
+      .then(() => {
+        setRemoving(null)
+        setOpenId(null)
+        setDot(null)
+        setParams(new URLSearchParams(taskId ? { task: taskId } : {}), { replace: true })
+        // 목록을 다시 읽으면 응시 수가 바뀌어 트리도 새 목록으로 다시 불러온다
+        setListTick((t) => t + 1)
+      })
+      .catch((e: ApiError) => setRemoving({ lane, busy: false, error: e.message }))
+  }
+
   let body
   if (listError) body = <ErrorState message={listError} onRetry={() => setListTick((t) => t + 1)} className="mt-16" />
   else if (!list) body = <Loading />
@@ -150,7 +169,7 @@ export default function Review() {
               </div>
             ) : (
               <>
-                <BranchStage title={group?.title ?? ''} lanes={lanes} lastFork={layout.lastFork} a={sel.a} b={sel.b} slot={slot} onSlot={setSlot} onPick={pick} onOpen={setOpenId} checkpoints={checkpoints} onDot={openDot} />
+                <BranchStage title={group?.title ?? ''} lanes={lanes} lastFork={layout.lastFork} a={sel.a} b={sel.b} slot={slot} onSlot={setSlot} onPick={pick} onOpen={setOpenId} onDelete={(lane) => setRemoving({ lane, busy: false, error: null })} checkpoints={checkpoints} onDot={openDot} />
                 {lanes.length === 1 && <p className="mt-2 text-[13px] text-text-muted">선 위의 작은 점(질문을 보낸 시점)을 눌러 &quot;여기서 다시 풀기&quot;를 하면 갈래가 생겨요.</p>}
               </>
             )}
@@ -188,6 +207,35 @@ export default function Review() {
       }
     >
       {body}
+      {removing &&
+        // 화면 전환 영역(transform) 안에서는 fixed 가 어긋나므로 body 로 꺼내 그린다
+        createPortal(
+          <ConfirmModal
+            title="이 풀이를 삭제할까요?"
+            confirm={removing.busy ? '삭제하는 중' : '삭제'}
+            danger
+            disabled={removing.busy}
+            onConfirm={() => remove(removing.lane)}
+            onClose={() => !removing.busy && setRemoving(null)}
+            body={
+              <>
+                <p>
+                  {group?.title} · {removing.lane.name} ({startLabel(removing.lane.startedAt)} 시작)
+                </p>
+                <p className="mt-1 font-semibold text-text">
+                  {group?.attempts.find((x) => x.id === removing.lane.attemptId)?.empty ? '아직 작업한 내용이 없는 풀이예요.' : '작업한 내용이 있는 풀이예요.'}
+                </p>
+                <p className="mt-2">삭제한 풀이는 되돌릴 수 없고, 사용한 크레딧은 돌려드리지 않아요.</p>
+                {removing.error && (
+                  <p role="alert" className="mt-3 text-alert">
+                    {removing.error}
+                  </p>
+                )}
+              </>
+            }
+          />,
+          document.body,
+        )}
       {openLane && <NodeDrawer lane={openLane} onClose={() => setOpenId(null)} />}
       {dot && <DotPopover laneName={dot.lane.name} cp={dot.cp} anchor={dot.anchor} onClose={() => setDot(null)} />}
     </SelfShell>

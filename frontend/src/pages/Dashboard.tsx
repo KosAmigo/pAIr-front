@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowUpRight, Coins, History as HistoryIcon, Loader2, Play, Target } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
@@ -8,7 +8,8 @@ import { ButtonLink, Panel } from '../components/ui'
 import { ErrorState } from '../components/ErrorState'
 import { CountUp, GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, StageSection } from '../components/fx'
 import { StatHex, type HexStat } from '../components/dashboard/StatHex'
-import { loadStatHistory, STATS, total, type StatEntry, type StatScores } from '../data/dashboard'
+import { Select } from '../components/Select'
+import { dayLabel, loadStatHistory, STATS, total, type StatEntry, type StatScores } from '../data/dashboard'
 import { duration, easing } from '../lib/motion'
 import { topHabits } from '../lib/habits'
 import { useAuth } from '../auth/auth'
@@ -132,12 +133,14 @@ function GrowthChart({ focus, history }: { focus: string | null; history: StatEn
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const [data, setData] = useState<{ entries: StatEntry[]; attempts: number } | null>(null)
+  const [params, setParams] = useSearchParams()
+  const taskParam = params.get('task')
+  const [data, setData] = useState<Awaited<ReturnType<typeof loadStatHistory>> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   useEffect(() => {
     let alive = true
-    loadStatHistory()
+    loadStatHistory(taskParam)
       .then((d) => {
         if (!alive) return
         setData(d)
@@ -147,7 +150,7 @@ export default function Dashboard() {
     return () => {
       alive = false
     }
-  }, [tick])
+  }, [tick, taskParam])
 
   return (
     <SelfShell
@@ -177,13 +180,25 @@ export default function Dashboard() {
           </ButtonLink>
         </div>
       ) : (
-        <DashboardBody history={data.entries} attempts={data.attempts} />
+        <DashboardBody
+          history={data.entries}
+          attempts={data.attempts}
+          taskPicker={
+            <Select
+              ariaLabel="대시보드에 볼 과제"
+              value={data.taskId ?? ''}
+              options={data.tasks.map((t) => ({ value: t.taskId, label: `${dayLabel(t.latestAt)} · ${t.title}` }))}
+              onChange={(id) => setParams({ task: id }, { replace: true })}
+              className="w-full font-semibold"
+            />
+          }
+        />
       )}
     </SelfShell>
   )
 }
 
-function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: number }) {
+function DashboardBody({ history, attempts, taskPicker }: { history: StatEntry[]; attempts: number; taskPicker: ReactNode }) {
   const { state: credits } = useCredits()
   const unlimited = useAuth().user?.role === 'ADMIN'
   const [active, setActive] = useState<string | null>(null)
@@ -203,12 +218,7 @@ function DashboardBody({ history, attempts }: { history: StatEntry[]; attempts: 
           <div className="grid grid-cols-[300px_minmax(0,1fr)_340px] items-center gap-6 px-10 py-8">
             {/* 왼쪽: 최근 응시, 총점, 크레딧과 응시 수 (기획_결정사항 §3: 크레딧 잔액 표시) */}
             <div className="flex flex-col gap-5">
-              <GlowBorder className="w-fit max-w-full rounded-full">
-                <span className="glass-stage inline-flex h-9 max-w-full items-center gap-2 rounded-full px-4 text-[13px] font-semibold text-stage-text">
-                  <span className="tnum font-mono text-stage-brand">{latest.date}</span>
-                  <span className="truncate">{latest.task}</span>
-                </span>
-              </GlowBorder>
+              {taskPicker}
               <div>
                 <span className="label text-stage-muted">LATEST SCORE</span>
                 <div className="flex items-baseline gap-2">
