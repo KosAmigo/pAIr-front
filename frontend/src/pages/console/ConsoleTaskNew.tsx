@@ -47,6 +47,7 @@ import { GEN_CARD, inputCls, TRACKS } from './task/formConsts'
 import { Field, MinutesPicker, ModePicker, TrackPicker, UsagePicker } from './task/formParts'
 import { GenFrame, GenSummary, type SummaryRow } from './task/GenFrame'
 import { GeneratingButton } from './task/GenActionButtons'
+import { CostEstimateLine } from './task/CostEstimateLine'
 import { SuggestPanel } from './task/SuggestPanel'
 import { refreshGenJobs } from './task/useGenJobs'
 import { useSuggestions } from './task/useSuggestions'
@@ -305,7 +306,8 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
               <ModePicker mode={form.mode} hours={form.batchDeadlineHours} onMode={(m) => set('mode', m)} onHours={(h) => set('batchDeadlineHours', h)} />
             </Field>
 
-            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t border-line pt-6">
+              {form.track && <CostEstimateLine query={{ track: form.track, minutes: form.minutes, mode: form.mode, count: 1 }} />}
               {tried && !valid && <span className="mr-auto text-[14px] font-medium text-alert">빈 칸을 채워 주세요</span>}
               <Button type="submit" variant="primary" size="lg">
                 다음 <ArrowRight size={17} aria-hidden />
@@ -358,7 +360,7 @@ function manualSummary(f: Form): SummaryRow[] {
     { label: '함정', value: f.trap.trim() || null },
     { label: '용도', value: f.usage === 'LIVE' ? '실전' : '자가진단' },
     { label: '제한 시간', value: `${f.minutes}분` },
-    { label: '방식', value: f.mode === 'BATCH' ? `배치 · 마감 ${f.batchDeadlineHours}시간` : '바로 만들기' },
+    { label: '방식', value: f.mode === 'BATCH' ? `절약 · 마감 ${f.batchDeadlineHours}시간` : '일반' },
   ]
 }
 
@@ -383,7 +385,7 @@ function ConfirmCard({
       </span>,
     ],
     ['제한 시간', <span key="m"><span className="tnum font-mono">{form.minutes}</span>분</span>],
-    ['방식', <span key="mo">{form.mode === 'BATCH' ? <>배치 · 마감 <span className="tnum font-mono">{form.batchDeadlineHours}</span>시간</> : '바로 만들기'}</span>],
+    ['방식', <span key="mo">{form.mode === 'BATCH' ? <>절약 · 마감 <span className="tnum font-mono">{form.batchDeadlineHours}</span>시간</> : '일반'}</span>],
     [
       '용도',
       form.usage === 'LIVE' ? (
@@ -426,7 +428,11 @@ function ConfirmCard({
         ))}
       </dl>
 
-      <div className="mt-7 flex flex-wrap items-center justify-end gap-3">
+      <div className="mt-6">
+        <CostEstimateLine query={{ track: form.track, minutes: form.minutes, mode: form.mode, count: 1 }} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
         <Button variant="ghost" onClick={onBack} className="mr-auto">
           <ArrowLeft size={16} aria-hidden /> <Pencil size={14} aria-hidden /> 고치기
         </Button>

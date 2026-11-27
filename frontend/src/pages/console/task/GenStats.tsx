@@ -70,7 +70,7 @@ export function GenStats({ r }: { r: GenReport }) {
             </span>
             {s.hasBatch && (
               <span className="text-[12px] font-semibold text-text-muted">
-                배치 <span className="tnum font-mono">{s.batch}</span> · 바로 <span className="tnum font-mono">{s.now}</span>
+                절약 <span className="tnum font-mono">{s.batch}</span> · 일반 <span className="tnum font-mono">{s.now}</span>
               </span>
             )}
           </>

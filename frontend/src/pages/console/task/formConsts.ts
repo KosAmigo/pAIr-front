@@ -5,7 +5,7 @@ import { type BatchHours, type GenTrack, type GenUsage, type JobTone } from '../
 
 /** 배치 마감 선택지(화면은 이 목록만 읽는다). 기본값은 data/taskGen.ts 의 DEFAULT_BATCH_HOURS(3). 값이 바뀌면 BatchHours 타입도 같이 고친다 */
 export const DEADLINE_OPTIONS: readonly { hours: BatchHours; name: string; hint: string }[] = [
-  { hours: 3, name: '보통 · 추천', hint: '비용은 바로 생성의 약 40%예요. 3시간 안에 끝나요' },
+  { hours: 3, name: '보통 · 추천', hint: '비용은 일반의 절반이에요. 3시간 안에 끝나요' },
   { hours: 6, name: '여유', hint: '6시간 안에 끝나요' },
   { hours: 12, name: '넉넉히', hint: '12시간 안에 끝나요' },
   { hours: 24, name: '하루', hint: '24시간 안에 끝나요' },

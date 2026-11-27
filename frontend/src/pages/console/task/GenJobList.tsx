@@ -8,7 +8,7 @@ import { Check, ChevronRight, CircleAlert, Layers, RefreshCw, TriangleAlert, X }
 import { cx } from '../../../components/cx'
 import { TRACK_ICON } from '../../../components/domainIcons'
 import { CountUp } from '../../../components/fx'
-import { canCancel, cancelErrorMessage, fmtClock, groupJobs, jobView, taskGenApi, type JobGroup, type JobRow, type JobTone } from '../../../data/taskGen'
+import { canCancel, cancelErrorMessage, costLabel, fmtClock, fmtUsd, groupCost, groupJobs, jobView, taskGenApi, type JobGroup, type JobRow, type JobTone } from '../../../data/taskGen'
 import { DOT } from './formConsts'
 import { TRACK_TONE } from './trackTone'
 
@@ -147,6 +147,8 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
   const batch = first?.mode === 'BATCH'
   const deadline = batch ? fmtClock(first?.deadlineAt) : null
   const pct = total ? ended / total : 0
+  const sum = groupCost(g.jobs)
+  const live = state === 'live'
   const R = 15
   const C = 2 * Math.PI * R
   const counts = (
@@ -188,7 +190,14 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
             {state === 'failed' && <TriangleAlert size={14} aria-hidden className="shrink-0 text-caution" />}
           </span>
           <span className={cx('tnum truncate text-[12px] leading-4 font-bold', batch ? 'text-info' : 'text-text-muted')}>
-            {batch ? (deadline ? `배치 · 마감 ${deadline}` : '배치') : '바로'}
+            {batch ? (deadline ? `절약 · 마감 ${deadline}` : '절약') : '일반'}
+            {sum !== null && (
+              <span data-testid="group-cost" className="font-mono font-semibold text-text-muted">
+                {' · '}
+                {live ? '지금까지 ' : '합계 '}
+                {fmtUsd(sum)}
+              </span>
+            )}
           </span>
         </span>
         {/* 진행 링: 끝난 수 / 전체 */}
@@ -239,6 +248,7 @@ function JobItem({ job, on, busy, onSelect, onCancel }: { job: JobRow; on: boole
   const v = jobView(job)
   const title = job.topic?.trim() || '주제를 정하는 중'
   const tone: JobTone = v.tone
+  const cost = costLabel(job)
   return (
     <div className={cx('flex items-center transition-colors duration-150', on ? 'bg-brand-dim/60' : 'hover:bg-panel-raised/60')}>
       <button
@@ -255,6 +265,11 @@ function JobItem({ job, on, busy, onSelect, onCancel }: { job: JobRow; on: boole
         <span key={v.label} role="status" className="fade-in shrink-0 text-[12px] font-bold text-text-muted">
           {v.label}
         </span>
+        {cost && (
+          <span data-testid="job-cost" className="tnum shrink-0 font-mono text-[12px] font-semibold text-text-faint">
+            {cost}
+          </span>
+        )}
         {v.sub && <span className="sr-only">{v.sub}</span>}
       </button>
       {canCancel(job) && (

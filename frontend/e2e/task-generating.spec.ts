@@ -193,7 +193,7 @@ test.describe('만드는 중인 과제', () => {
     await expect(state(/실패 1/).locator('span[title]')).toHaveCount(2)
     // 개수는 머리 버튼 이름에, 직군·방식은 글로
     await expect(page.getByRole('button', { name: /3개 중 1개 끝남 · 진행 1 · 대기 1 · 완료 1/ })).toBeVisible()
-    await expect(state(/3개 중 1개 끝남/)).toContainText('바로')
+    await expect(state(/3개 중 1개 끝남/)).toContainText('일반')
     await expect(state(/실패 1/)).toContainText('비개발')
   })
 })
