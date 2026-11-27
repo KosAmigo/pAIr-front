@@ -1,6 +1,8 @@
 import { call } from '../api.ts'
 import { readAuthSession } from '../auth/authApi.ts'
-import { createContext, useContext, useSyncExternalStore } from 'react'
+import { createContext, useContext } from 'react'
+import { createStore, type StoreApi } from 'zustand/vanilla'
+import { useStore } from 'zustand'
 
 export type CreditState =
   | { status: 'loading' }
@@ -16,56 +18,54 @@ export async function fetchCredits(): Promise<number> {
   return data.balance
 }
 
+type CreditStoreState = {
+  state: CreditState
+  refresh: () => Promise<void>
+  cancel: () => void
+}
+
 export function createCreditStore(
   token: string,
   load: () => Promise<number> = fetchCredits,
   currentToken: () => string | undefined = () => readAuthSession()?.token,
 ) {
-  let state: CreditState = { status: 'loading' }
   let request = 0
-  const listeners = new Set<() => void>()
-  const publish = (next: CreditState) => {
-    state = next
-    listeners.forEach((listener) => listener())
-  }
-
-  return {
-    getSnapshot: () => state,
-    subscribe: (listener: () => void) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
-    },
+  return createStore<CreditStoreState>((set) => ({
+    state: { status: 'loading' },
     refresh: async () => {
       if (currentToken() !== token) return
       const id = ++request
-      publish({ status: 'loading' })
+      set({ state: { status: 'loading' } })
       try {
         const balance = await load()
-        if (id === request && currentToken() === token) publish({ status: 'ready', balance })
+        if (id === request && currentToken() === token) set({ state: { status: 'ready', balance } })
       } catch (error) {
         if (id === request && currentToken() === token) {
           console.error('크레딧 잔액 조회 실패:', error)
-          publish({ status: 'error' })
+          set({ state: { status: 'error' } })
         }
       }
     },
     cancel: () => { request++ },
-  }
+  }))
 }
 
-type CreditStore = ReturnType<typeof createCreditStore>
+type CreditStore = StoreApi<CreditStoreState>
 export const CreditContext = createContext<CreditStore | null>(null)
 
-const emptyState: CreditState = { status: 'loading' }
-const subscribeEmpty = () => () => {}
-const getEmptySnapshot = () => emptyState
-const refreshEmpty = async () => {}
+// 비로그인일 때도 훅 호출 순서가 같도록 빈 store 를 하나 둔다.
+const emptyStore: CreditStore = createStore<CreditStoreState>(() => ({
+  state: { status: 'loading' },
+  refresh: async () => {},
+  cancel: () => {},
+}))
+
+const selectState = (s: CreditStoreState) => s.state
+const selectRefresh = (s: CreditStoreState) => s.refresh
 
 export function useCredits(): { state: CreditState; refresh: () => Promise<void> } {
-  const store = useContext(CreditContext)
-  const state = useSyncExternalStore(
-    store?.subscribe ?? subscribeEmpty,
-    store?.getSnapshot ?? getEmptySnapshot,
-  )
-  return { state, refresh: store?.refresh ?? refreshEmpty }
+  const store = useContext(CreditContext) ?? emptyStore
+  const state = useStore(store, selectState)
+  const refresh = useStore(store, selectRefresh)
+  return { state, refresh }
 }

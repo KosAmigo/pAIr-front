@@ -40,24 +40,24 @@ test('balance request sends bearer authentication and validates the response', a
 test('loading, successful refresh and failure remain distinct', async () => {
   let next = deferred()
   const store = createCreditStore('a', () => next.promise, () => 'a')
-  const loading = store.refresh()
-  assert.deepEqual(store.getSnapshot(), { status: 'loading' })
+  const loading = store.getState().refresh()
+  assert.deepEqual(store.getState().state, { status: 'loading' })
   next.resolve(200)
   await loading
-  assert.deepEqual(store.getSnapshot(), { status: 'ready', balance: 200 })
+  assert.deepEqual(store.getState().state, { status: 'ready', balance: 200 })
 
   next = deferred()
-  const refreshed = store.refresh()
-  assert.deepEqual(store.getSnapshot(), { status: 'loading' })
+  const refreshed = store.getState().refresh()
+  assert.deepEqual(store.getState().state, { status: 'loading' })
   next.resolve(190)
   await refreshed
-  assert.deepEqual(store.getSnapshot(), { status: 'ready', balance: 190 })
+  assert.deepEqual(store.getState().state, { status: 'ready', balance: 190 })
 
   next = deferred()
-  const failed = store.refresh()
+  const failed = store.getState().refresh()
   next.reject(new Error('offline'))
   await failed
-  assert.deepEqual(store.getSnapshot(), { status: 'error' })
+  assert.deepEqual(store.getState().state, { status: 'error' })
 })
 
 test('older responses and responses after logout or account change cannot overwrite current balance', async () => {
@@ -68,24 +68,38 @@ test('older responses and responses after logout or account change cannot overwr
     requests.push(request)
     return request.promise
   }, () => token)
-  const first = store.refresh()
-  const second = store.refresh()
+  const first = store.getState().refresh()
+  const second = store.getState().refresh()
   requests[1].resolve(190)
   await second
   requests[0].resolve(200)
   await first
-  assert.deepEqual(store.getSnapshot(), { status: 'ready', balance: 190 })
+  assert.deepEqual(store.getState().state, { status: 'ready', balance: 190 })
 
-  const pending = store.refresh()
+  const pending = store.getState().refresh()
   token = 'b'
   requests[2].resolve(180)
   await pending
-  assert.deepEqual(store.getSnapshot(), { status: 'loading' })
-  await store.refresh()
+  assert.deepEqual(store.getState().state, { status: 'loading' })
+  await store.getState().refresh()
   assert.equal(requests.length, 3)
   token = undefined
-  await store.refresh()
+  await store.getState().refresh()
   assert.equal(requests.length, 3)
+})
+
+test('cancel ignores the in-flight response and the store notifies subscribers', async () => {
+  const next = deferred()
+  const store = createCreditStore('a', () => next.promise, () => 'a')
+  const seen = []
+  const unsubscribe = store.subscribe((s) => seen.push(s.state.status))
+  const pending = store.getState().refresh()
+  store.getState().cancel()
+  next.resolve(500)
+  await pending
+  assert.deepEqual(store.getState().state, { status: 'loading' })
+  assert.deepEqual(seen, ['loading'])
+  unsubscribe()
 })
 
 test('HTTP 402 preserves the backend message for start and non-streaming chat', async () => {
