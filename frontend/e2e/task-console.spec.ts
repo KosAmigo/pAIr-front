@@ -89,6 +89,7 @@ test.describe('목록', () => {
 test.describe('과제 만들기', () => {
   test('주제 → 추천 → 직군을 바꿔도 유지 → 주제 확인 → 용도·시간 → 생성 요청 본문', async ({ page }) => {
     const api = await mockApi(page)
+    const suggestions = () => api.sent.filter((r) => r.path === '/api/admin/task-gen/suggestions')
     await page.goto('/console/tasks/new?tab=manual')
     await expect(page.getByRole('heading', { name: '과제 만들기', level: 1 })).toBeVisible()
     // 직무·난이도 칸은 없다
@@ -123,8 +124,9 @@ test.describe('과제 만들기', () => {
 
     // 다시 추천은 앞서 받은 상황을 exclude 로 보낸다
     await askBtn.click()
-    await expect.poll(() => api.sent.at(-1)?.body.exclude?.length).toBe(3)
-    expect(api.sent.at(-1)?.body).toMatchObject({ track: 'DEV', topic: '주문 취소 재고 복구' })
+    // 비용 추정 GET 등 다른 요청이 뒤에 섞일 수 있으니 추천 요청만 본다
+    await expect.poll(() => suggestions().at(-1)?.body.exclude?.length).toBe(3)
+    expect(suggestions().at(-1)?.body).toMatchObject({ track: 'DEV', topic: '주문 취소 재고 복구' })
 
     // 오타 주제: 확인 박스가 카드 위에 뜨고 카드는 숨는다
     await topicInput.fill(TYPO_TOPIC)
@@ -132,10 +134,10 @@ test.describe('과제 만들기', () => {
     const box = page.getByRole('group', { name: '주제 확인' })
     await expect(box).toContainText(`'${TYPO_TOPIC}'를 '쿠폰 할인 계산'(으)로 이해했어요`)
     await expect(pickBtns).toHaveCount(0)
-    const askedBefore = api.sent.length
+    const askedBefore = suggestions().length
     await box.getByRole('button', { name: '이대로 보기' }).click()
     await expect(pickBtns).toHaveCount(3)
-    expect(api.sent.length).toBe(askedBefore) // 추가 요청 없음
+    expect(suggestions().length).toBe(askedBefore) // 추가 추천 요청 없음
 
     // 주제 고치기: 주제 칸에 포커스
     await askBtn.click()
