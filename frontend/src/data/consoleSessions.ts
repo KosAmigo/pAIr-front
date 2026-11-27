@@ -1,6 +1,7 @@
 // 콘솔 회차 화면 공용: 표시용 상수(이벤트 이름, 응시 상태 이름)와 백엔드 불러오기 훅.
 // 데이터는 모두 consoleApi(백엔드, AWS RDS)에서 온다. 목업 저장소는 2026-11-19에 지웠다.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { consoleApi, type ConsoleTaskSummary, type EventType, type ParticipantView, type Phase, type ProctorEventView, type ResultState } from '../consoleApi'
 
 // ── 감독 이벤트 ──
@@ -81,31 +82,26 @@ export type Loaded<T> = { data: T | null; error: string | null; loading: boolean
  * (다시 부를 때는 이전 데이터를 그대로 두고 바꾸기만 한다).
  */
 export function useLoad<T>(key: string | null, fetcher: () => Promise<T>, pollMs?: number): Loaded<T> {
-  const [state, setState] = useState<{ key: string | null; data: T | null; error: string | null }>({ key: null, data: null, error: null })
-  const [nonce, setNonce] = useState(0)
-  const fetchRef = useRef(fetcher)
-  useEffect(() => {
-    fetchRef.current = fetcher
+  const queryClient = useQueryClient()
+  const q = useQuery<T | null>({
+    queryKey: [key],
+    queryFn: fetcher,
+    enabled: key != null,
+    refetchInterval: pollMs || false,
   })
-  useEffect(() => {
-    if (key == null) return
-    let alive = true
-    const run = () =>
-      fetchRef.current().then(
-        (data) => alive && setState({ key, data, error: null }),
-        (e: unknown) => alive && setState((s) => ({ key, data: s.key === key ? s.data : null, error: e instanceof Error ? e.message : String(e) })),
-      )
-    run()
-    const t = pollMs ? window.setInterval(run, pollMs) : undefined
-    return () => {
-      alive = false
-      if (t) window.clearInterval(t)
-    }
-  }, [key, nonce, pollMs])
-  const reload = useCallback(() => setNonce((n) => n + 1), [])
-  const setData = useCallback((f: (d: T | null) => T | null) => setState((s) => ({ ...s, data: f(s.data) })), [])
-  const current = state.key === key
-  return { data: current ? state.data : null, error: current ? state.error : null, loading: key != null && !current, reload, setData }
+  const { refetch } = q
+  const reload = useCallback(() => void refetch(), [refetch])
+  const setData = useCallback(
+    (f: (d: T | null) => T | null) => queryClient.setQueryData<T | null>([key], (d) => f(d ?? null)),
+    [queryClient, key],
+  )
+  return {
+    data: key == null ? null : (q.data ?? null),
+    error: key == null || !q.error ? null : q.error instanceof Error ? q.error.message : String(q.error),
+    loading: key != null && q.isPending,
+    reload,
+    setData,
+  }
 }
 
 /** 콘솔 과제 목록 → ID 로 찾기 (회차는 과제 ID 만 갖고 있다) */
