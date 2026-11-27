@@ -2,7 +2,7 @@
 // 가짜 API 는 e2e/mock.ts 에서 테스트 안에서만 넣는다. 실행: npm run e2e / npm run shots
 import { defineConfig } from '@playwright/test'
 
-const PORT = 5179
+const PORT = Number(process.env.E2E_PORT ?? 5179)
 
 export default defineConfig({
   testDir: './e2e',
