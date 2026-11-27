@@ -24,6 +24,7 @@ import {
 } from '../../../data/taskGen'
 import { distance, springs, useShouldAnimate } from '../../../lib/motion'
 import { GEN_CARD, TRACKS, inputCls } from './formConsts'
+import { CostEstimateLine } from './CostEstimateLine'
 import { FlowSteps } from './FlowSteps'
 import { GenFrame, GenSummary, type SummaryRow } from './GenFrame'
 import { Field, MinutesPicker, ModePicker, TrackPicker, UsagePicker } from './formParts'
@@ -182,6 +183,8 @@ export function AutoGenPanel({ onStarted }: { onStarted: (jobIds: string[]) => v
           )}
         </div>
 
+        <CostEstimateLine query={{ track: form.track, minutes: form.minutes, mode: form.mode, count: Math.max(1, topics.length) }} />
+
         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
           <Button variant="ghost" onClick={backToForm} className="mr-auto">
             <ArrowLeft size={16} aria-hidden /> 설정 고치기
@@ -245,7 +248,8 @@ export function AutoGenPanel({ onStarted }: { onStarted: (jobIds: string[]) => v
         <ModePicker mode={rest.mode} hours={rest.batchDeadlineHours} onMode={(m) => set('mode', m)} onHours={(h) => set('batchDeadlineHours', h)} />
       </Field>
 
-      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
+      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t border-line pt-6">
+        {form && <div className="mr-auto"><CostEstimateLine query={{ track: form.track, minutes: form.minutes, mode: form.mode, count: form.count }} /></div>}
         <Button variant="ghost" onClick={() => void start(false)} disabled={sending || loading}>
           미리보기 없이 바로 만들기
         </Button>

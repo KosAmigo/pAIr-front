@@ -57,6 +57,8 @@ export type TaskGenJob = {
   /** 만들 때 적은 함정·용도 (백엔드가 새로 붙인 칸, 없을 수 있다) */
   trap?: string | null
   usage?: GenUsage | null
+  /** 지금까지(끝났으면 최종) 쓴 비용 USD. 단계가 바뀔 때 갱신되고, 배치 응답을 기다리는 동안은 멈춰 있다 */
+  costUsd?: number | null
 }
 
 /** 작업 목록의 한 줄 (GET /api/admin/task-gen/jobs) */
@@ -140,8 +142,49 @@ export type GenContent = {
   fillers?: { files?: { path: string; chars?: number | null }[] | null } | null
 }
 
+/** 예상 비용 (GET /api/admin/task-gen/cost-estimate). HISTORY = 최근 끝난 작업 중앙값, DEFAULT = 기록이 적어 상한에서 어림한 값 */
+export type CostEstimate = {
+  track: GenTrack
+  minutes: number
+  mode: GenMode
+  count: number
+  perTaskUsd: number
+  perTaskCapUsd: number
+  totalUsd: number
+  totalCapUsd: number
+  sampleSize: number
+  basis: 'HISTORY' | 'DEFAULT'
+}
+export type CostEstimateQuery = { track: GenTrack; minutes: GenMinutes; mode: GenMode; count: number }
+
+/** $0.27 (1센트보다 작은 값은 $0.005 처럼 세 자리) */
+export function fmtUsd(n: number): string {
+  return `$${n < 0.01 && n > 0 ? n.toFixed(3) : n.toFixed(2)}`
+}
+
+/** 예상 비용 한 줄: "예상 약 $0.90 (과제당 $0.30 · 최대 $2.40)" */
+export function estimateLine(e: CostEstimate): string {
+  const base = `예상 약 ${fmtUsd(e.totalUsd)} (과제당 ${fmtUsd(e.perTaskUsd)} · 최대 ${fmtUsd(e.totalCapUsd)})`
+  return e.basis === 'DEFAULT' ? `${base} · 기록이 적어 어림값` : base
+}
+
+/** 실제 비용 글: 실행 중이면 "지금까지 $0.12", 끝났으면 "$0.27", 값이 없으면 null */
+export function costLabel(job: Pick<TaskGenJob, 'status' | 'costUsd'>): string | null {
+  if (job.costUsd == null || !Number.isFinite(job.costUsd)) return null
+  if (job.status === 'QUEUED') return null
+  return job.status === 'RUNNING' ? `지금까지 ${fmtUsd(job.costUsd)}` : fmtUsd(job.costUsd)
+}
+
+/** 묶음 합계. 비용이 있는 작업이 하나도 없으면 null */
+export function groupCost(jobs: Pick<TaskGenJob, 'costUsd'>[]): number | null {
+  const known = jobs.filter((j) => j.costUsd != null && Number.isFinite(j.costUsd))
+  return known.length ? known.reduce((n, j) => n + (j.costUsd as number), 0) : null
+}
+
 const enc = encodeURIComponent
 export const taskGenApi = {
+  costEstimate: (q: CostEstimateQuery) =>
+    call<CostEstimate>('GET', `/api/admin/task-gen/cost-estimate?track=${q.track}&minutes=${q.minutes}&mode=${q.mode}&count=${q.count}`),
   start: (req: TaskGenRequest) => call<{ jobId: string }>('POST', '/api/admin/task-gen', req),
   preview: (req: AutoPreviewRequest) => call<AutoTopic[]>('POST', '/api/admin/task-gen/auto/preview', req),
   startAuto: (req: AutoRequest) => call<AutoResponse>('POST', '/api/admin/task-gen/auto', req),

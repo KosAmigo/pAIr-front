@@ -47,6 +47,7 @@ import { GEN_CARD, inputCls, TRACKS } from './task/formConsts'
 import { Field, MinutesPicker, ModePicker, TrackPicker, UsagePicker } from './task/formParts'
 import { GenFrame, GenSummary, type SummaryRow } from './task/GenFrame'
 import { GeneratingButton } from './task/GenActionButtons'
+import { CostEstimateLine } from './task/CostEstimateLine'
 import { SuggestPanel } from './task/SuggestPanel'
 import { refreshGenJobs } from './task/useGenJobs'
 import { useSuggestions } from './task/useSuggestions'
@@ -305,7 +306,8 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
               <ModePicker mode={form.mode} hours={form.batchDeadlineHours} onMode={(m) => set('mode', m)} onHours={(h) => set('batchDeadlineHours', h)} />
             </Field>
 
-            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-6">
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t border-line pt-6">
+              {form.track && <CostEstimateLine query={{ track: form.track, minutes: form.minutes, mode: form.mode, count: 1 }} />}
               {tried && !valid && <span className="mr-auto text-[14px] font-medium text-alert">빈 칸을 채워 주세요</span>}
               <Button type="submit" variant="primary" size="lg">
                 다음 <ArrowRight size={17} aria-hidden />
@@ -426,7 +428,11 @@ function ConfirmCard({
         ))}
       </dl>
 
-      <div className="mt-7 flex flex-wrap items-center justify-end gap-3">
+      <div className="mt-6">
+        <CostEstimateLine query={{ track: form.track, minutes: form.minutes, mode: form.mode, count: 1 }} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
         <Button variant="ghost" onClick={onBack} className="mr-auto">
           <ArrowLeft size={16} aria-hidden /> <Pencil size={14} aria-hidden /> 고치기
         </Button>

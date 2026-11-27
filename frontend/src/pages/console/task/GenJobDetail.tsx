@@ -6,7 +6,7 @@ import { cx } from '../../../components/cx'
 import { StageSection } from '../../../components/fx'
 import { TRACK_ICON, USAGE_ICON } from '../../../components/domainIcons'
 import { ButtonLink } from '../../../components/ui'
-import { genDetail, jobView, reviewHref, toGenStep, type GenTrack, type JobRow, type TaskGenJob } from '../../../data/taskGen'
+import { costLabel, genDetail, jobView, reviewHref, toGenStep, type GenTrack, type JobRow, type TaskGenJob } from '../../../data/taskGen'
 import { contentSections, modeLabel, type ContentSection } from '../../../data/taskGenJobs'
 import { RequirementsView } from '../../../components/RequirementsView'
 import { CheckTable } from './CheckTable'
@@ -26,6 +26,7 @@ export function GenJobDetail({ jobId, row, onBack }: { jobId: string; row: JobRo
   const usage = form?.usage ?? job?.usage ?? null
   const mode = form?.mode ?? job?.mode ?? null
   const v = job ? jobView({ ...job, jobId, checks: job.checks ?? [] } as JobRow) : null
+  const cost = job ? costLabel(job) : null
   const sections = contentSections(content, track)
   const TrackIcon = track ? TRACK_ICON[track] : null
 
@@ -84,6 +85,13 @@ export function GenJobDetail({ jobId, row, onBack }: { jobId: string; row: JobRo
           ) : null}
         </Info>
         <Info label="방식">{mode ? modeLabel(mode, job?.deadlineAt) : null}</Info>
+        {cost && (
+          <Info label="비용">
+            <span data-testid="detail-cost" className="tnum font-mono">
+              {cost}
+            </span>
+          </Info>
+        )}
       </dl>
 
       {/* ② 진행 단계 */}

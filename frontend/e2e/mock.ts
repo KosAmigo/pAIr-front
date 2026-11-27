@@ -67,6 +67,8 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     localStorage.setItem('pair.auth', JSON.stringify({ token: 't', user: authUser }))
   }, user)
   let polls = 0
+  // 예상 비용 API 가 실패하는 경우를 흉내 낸다
+  let estimateFails = false
   // 자동 생성으로 만든 작업 목록 (GET /jobs 가 이걸 돌려준다)
   let autoJobs: Record<string, any>[] = []
   // 생성이 끝나 새로 저장된 검수 전 과제 (과제 목록 자동 반영 검사용)
@@ -84,6 +86,19 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     if (detail) {
       const summary = TASKS.find((t) => t.id === decodeURIComponent(detail[1]))
       if (summary) return json({ summary, definition: { id: summary.id, title: summary.title, requirements: [], d4Minutes: null, requiredHeadings: null } })
+    }
+    if (path === '/api/admin/task-gen/cost-estimate') {
+      const q = new URL(req.url()).searchParams
+      sent.push({ method: req.method(), path: `${path}?${q.toString()}`, body: null })
+      if (estimateFails) return json({ message: 'boom' }, 500)
+      const count = Number(q.get('count'))
+      const perTaskUsd = q.get('mode') === 'BATCH' ? 0.15 : 0.3
+      const perTaskCapUsd = q.get('mode') === 'BATCH' ? 0.4 : 0.8
+      const history = q.get('minutes') !== '20' // 20분은 기록이 적은 경우
+      return json({
+        track: q.get('track'), minutes: Number(q.get('minutes')), mode: q.get('mode'), count, perTaskUsd, perTaskCapUsd,
+        totalUsd: perTaskUsd * count, totalCapUsd: perTaskCapUsd * count, sampleSize: history ? 12 : 0, basis: history ? 'HISTORY' : 'DEFAULT',
+      })
     }
     if (path === '/api/admin/task-gen/suggestions') {
       sent.push({ method: req.method(), path, body })
@@ -112,6 +127,7 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
           checks: state === 'DONE' ? [{ name: '컴파일', ok: true, detail: '' }, { name: '분량 대비 시간', ok: false, level: 'warn', detail: '' }] : [],
           error: null, mode: body.mode, deadlineAt: body.mode === 'BATCH' ? new Date(2026, 10, 26, 15, 5).toISOString() : null,
           queuePosition: state === 'QUEUED' ? ++queued : null,
+          costUsd: state === 'RUNNING' ? 0.12 : state === 'DONE' ? 0.27 : null,
           topic: body.topics?.[i]?.situation ?? `서버가 고른 주제 ${i + 1}`, track: body.track, minutes: body.minutes, createdAt: new Date(at + i).toISOString(),
         }
       })
@@ -148,6 +164,8 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
   })
   return {
     sent,
+    /** 예상 비용 API 를 실패시킨다 */
+    failEstimate: () => { estimateFails = true },
     /** 작업 목록을 직접 넣는다 (자동 생성을 거치지 않고) */
     seedJobs: (jobs: Record<string, any>[]) => { autoJobs = jobs },
     /** 작업 하나를 끝낸다: DONE 으로 바꾸고 새 검수 전 과제를 과제 목록에 넣는다 */
