@@ -28,6 +28,10 @@ export const queryKeys = {
   taskReview: (kind: string, code: string) => ['task-review', kind, code] as const,
   /** 생성 작업 하나의 상태+내용 */
   genJobDetail: (jobId: string) => ['gen-job-detail', jobId] as const,
+  /** 만드는 중인 생성 작업 목록(폴링) */
+  genJobs: ['gen-jobs', 'active'] as const,
+  /** 생성 작업 새로고침 버튼이 도는 상태(여러 화면이 같이 본다) */
+  genJobsRefreshing: ['gen-jobs', 'refreshing'] as const,
   /** 이미지(blob). 로그인 헤더가 필요해 Blob 으로 받는다 */
   blob: (...parts: (string | number)[]) => ['blob', ...parts] as const,
 }
