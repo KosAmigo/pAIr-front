@@ -46,7 +46,7 @@ test('jobView: 대기 순번, 진행 단계, 배치 대기·마감', () => {
   assert.equal(jobView(row({ step: '다시 생성 중' })).label, '다시 생성 중')
   assert.equal(jobView(row({ step: '설계도 작성 중', mode: 'BATCH', deadlineAt: clock(15, 30) })).sub, '설계도 작성 중 · 마감 15:30')
   // waitingBatch 가 있으면 배치 대기, 없으면(백엔드가 아직 안 줌) 그냥 진행 단계
-  assert.deepEqual(jobView(row({ step: '글 작성 중', waitingBatch: true, mode: 'BATCH', deadlineAt: clock(18, 30) })), { tone: 'batch', label: '배치 대기 중', sub: '마감 18:30', done: false })
+  assert.deepEqual(jobView(row({ step: '글 작성 중', waitingBatch: true, mode: 'BATCH', deadlineAt: clock(18, 30) })), { tone: 'batch', label: '절약 모드 대기 중', sub: '마감 18:30', done: false })
   assert.equal(jobView(row({ step: '글 작성 중', mode: 'BATCH' })).tone, 'run')
 })
 
@@ -164,15 +164,15 @@ test('activeCount·jobsPollMs: 대기+진행만 센다, 도는 작업이 없으�
 test('상태 표시 글: 대기 n번째 / 세부 단계 / 배치 대기 / 완료 / 실패 / 취소 (jobView) 와 isEnded·modeLabel', () => {
   assert.equal(jobView(row({ status: 'QUEUED', queuePosition: 2 })).label, '대기 2번째')
   assert.equal(jobView(row({ step: '정답 쪽 작성 중' })).sub, '정답과 숨은 테스트 작성 중')
-  assert.equal(jobView(row({ waitingBatch: true, mode: 'BATCH' })).label, '배치 대기 중')
+  assert.equal(jobView(row({ waitingBatch: true, mode: 'BATCH' })).label, '절약 모드 대기 중')
   assert.equal(jobView(row({ status: 'DONE', checks: [{ name: 'a', ok: true, detail: '' }] })).label, '완료')
   assert.equal(jobView(row({ status: 'FAILED', error: '시간 초과' })).sub, '시간 초과')
   assert.equal(jobView(row({ status: 'CANCELED' })).label, '취소됨')
   assert.deepEqual(['QUEUED', 'RUNNING', 'DONE', 'FAILED', 'CANCELED'].map(isEnded), [false, false, true, true, true])
-  assert.equal(modeLabel('NOW'), '바로 만들기')
-  assert.equal(modeLabel(null), '바로 만들기')
-  assert.equal(modeLabel('BATCH', clock(15, 5)), '배치 · 마감 15:05')
-  assert.equal(modeLabel('BATCH'), '배치')
+  assert.equal(modeLabel('NOW'), '일반')
+  assert.equal(modeLabel(null), '일반')
+  assert.equal(modeLabel('BATCH', clock(15, 5)), '절약 · 마감 15:05')
+  assert.equal(modeLabel('BATCH'), '절약')
 })
 
 test('groupJobs: 묶음별로 묶고 직접 만들기 작업은 하나씩 (새 페이지 목록)', () => {
