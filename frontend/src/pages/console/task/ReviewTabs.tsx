@@ -6,6 +6,7 @@ import { cx } from '../../../components/cx'
 import { ErrorState } from '../../../components/ErrorState'
 import { levelLabel } from '../../../components/taskKind'
 import type { ConsoleTaskDetail } from '../../../consoleApi'
+import { RequirementsView } from '../../../components/RequirementsView'
 import { GenStats } from './GenStats'
 import { useGenReport, useTaskFiles, useTaskQuestions, type Load } from '../../../data/taskReview'
 import { questionTypeLabel } from '../../../data/questions'
@@ -70,14 +71,7 @@ export function OverviewTab({ definition: d }: { definition: Definition }) {
         {d.requirements.length === 0 ? (
           <Empty />
         ) : (
-          <ol className="flex flex-col gap-2">
-            {d.requirements.map((r, i) => (
-              <li key={i} className="flex gap-3 text-[15px] leading-6 break-keep text-text">
-                <span className="tnum mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-dim font-mono text-[12px] font-semibold text-brand">{i + 1}</span>
-                {r}
-              </li>
-            ))}
-          </ol>
+          <RequirementsView lines={d.requirements} />
         )}
       </Card>
       <div className="flex flex-col gap-4">
