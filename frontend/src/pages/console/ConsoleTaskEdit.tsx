@@ -24,6 +24,7 @@ import { ReviewChecklist } from './task/ReviewChecklist'
 import { useChecklist } from './task/useChecklist'
 import { FilesTab, GenReportTab, OverviewTab, QuestionsTab } from './task/ReviewTabs'
 import { HeroStatus } from './task/HeroStatus'
+import { parseRequirements } from '../../data/requirements'
 
 type Tab = 'overview' | 'files' | 'materials' | 'questions' | 'report'
 const TAB_NAME: Record<Tab, string> = { overview: '개요', files: '파일', materials: '자료', questions: '문항', report: '자동 확인 결과' }
@@ -140,7 +141,8 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
           }
           stats={[
             { label: 'MINUTES', value: s.minutes, unit: '분' },
-            { label: 'REQUIREMENTS', value: d.requirements.length, unit: '개' },
+            // 만들 기능·매개변수 줄까지 세면 부풀어서, 기능 수 + 예시 수(옛 형식이면 예시·글 줄)로 센다
+            { label: 'REQUIREMENTS', value: ((r) => r.features.length + r.examples.length + r.other.length)(parseRequirements(d.requirements)), unit: '개' },
             { label: 'CHECKLIST', value: checklist.done, unit: `/ ${REVIEW_CHECKS.length}`, tone: checklist.done === REVIEW_CHECKS.length ? 'signal' : undefined },
           ]}
         />

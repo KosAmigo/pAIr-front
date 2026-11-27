@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { RequirementsView } from '../components/RequirementsView'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Bot, ChevronDown, ChevronRight, CircleHelp, FileText, Folder, Hammer, Loader2, Lock, Paperclip, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
@@ -1215,14 +1216,7 @@ export default function RealExam() {
                 </p>
               ))}
               <h3 className="label mt-6">REQUIREMENTS</h3>
-              <ol className="mt-2 space-y-2">
-                {task.requirements.map((r, i) => (
-                  <li key={r} className="flex gap-2 text-[15px] leading-6">
-                    <span className="font-mono text-[13px] leading-6 text-text-faint">{String(i + 1).padStart(2, '0')}</span>
-                    {r}
-                  </li>
-                ))}
-              </ol>
+              <RequirementsView lines={task.requirements} className="mt-2" />
               {hasQuestions && (
                 <button
                   type="button"

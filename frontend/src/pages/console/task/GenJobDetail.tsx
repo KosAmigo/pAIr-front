@@ -8,6 +8,7 @@ import { TRACK_ICON, USAGE_ICON } from '../../../components/domainIcons'
 import { ButtonLink } from '../../../components/ui'
 import { genDetail, jobView, reviewHref, toGenStep, type GenTrack, type JobRow, type TaskGenJob } from '../../../data/taskGen'
 import { contentSections, modeLabel, type ContentSection } from '../../../data/taskGenJobs'
+import { RequirementsView } from '../../../components/RequirementsView'
 import { CheckTable } from './CheckTable'
 import { TONE } from './formConsts'
 import { GenStages } from './GenProgress'
@@ -188,7 +189,9 @@ function Section({ s }: { s: ContentSection }) {
               {b.label}
               {b.adminOnly && <ReviewBadge />}
             </p>
-            {b.lines.length === 1 ? (
+            {b.label === '요구사항' ? (
+              <RequirementsView lines={b.lines} className="mt-1.5" />
+            ) : b.lines.length === 1 ? (
               <p className="mt-1 text-[14px] leading-6 break-keep text-text">{b.lines[0]}</p>
             ) : (
               <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-[14px] leading-6 break-keep text-text">

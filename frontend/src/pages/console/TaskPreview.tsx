@@ -1,6 +1,7 @@
 // DESIGN.md §7-9-3 응시자로 보기. 응시 화면(집중 무대)과 같은 틀로 과제를 띄우되, 맨 위 띠로 미리보기임을 알린다.
 // 응시를 만들지 않으므로 기록이 남지 않는다. 문항은 눌러 볼 수 있지만 저장하지 않고, AI 대화와 제출은 막는다.
 // 데이터: 과제 정의(/api/console/tasks/{id}), 자료 PDF·파일·문항(관리자 API, 없으면 안내).
+import { RequirementsView } from '../../components/RequirementsView'
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Bot, Eye, FileCode2, FileText, ListChecks, Loader2, X } from 'lucide-react'
@@ -121,14 +122,7 @@ function ExamLike({ code, detail }: { code: string; detail: ConsoleTaskDetail })
                 </p>
               ))}
               <h3 className="label mt-6">REQUIREMENTS</h3>
-              <ol className="mt-2 space-y-2">
-                {d.requirements.map((r, i) => (
-                  <li key={i} className="flex gap-2 text-[15px] leading-6 break-keep">
-                    <span className="font-mono text-[13px] leading-6 text-text-faint">{String(i + 1).padStart(2, '0')}</span>
-                    {r}
-                  </li>
-                ))}
-              </ol>
+              <RequirementsView lines={d.requirements} className="mt-2" />
               {hasQuestions && (
                 <button
                   type="button"
