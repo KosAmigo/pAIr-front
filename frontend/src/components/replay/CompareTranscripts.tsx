@@ -1,6 +1,9 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
-import { api, ApiError, type Turn } from '../../api'
+import type { Turn } from '../../api'
+import { reportQuery } from '../../data/userQueries'
+import { errorMessage } from '../../data/queryKeys'
 import { branchColor, type TreeRow } from '../../lib/replayTree'
 import { commonPrefixLength } from '../../lib/replayCompare'
 import { ErrorState } from '../ErrorState'
@@ -71,29 +74,18 @@ function Divider() {
  * 처음부터 똑같은 턴은 그대로 두고 달라지는 곳에 선을 그어 어디서 다른 질문을 했는지 바로 보이게 한다.
  */
 export function CompareTranscripts({ a, b, className }: { a: TreeRow; b: TreeRow; className?: string }) {
-  const [sides, setSides] = useState<{ a: Side; b: Side }>({ a: null, b: null })
-  const [tick, setTick] = useState(0)
-
-  useEffect(() => {
-    let alive = true
-    const load = (id: string) =>
-      api
-        .report(id)
-        .then((r): Side => ({ turns: r.report?.transcript ?? [] }))
-        .catch((e: ApiError): Side => ({ error: e.message }))
-    void Promise.all([load(a.attemptId), load(b.attemptId)]).then(([sa, sb]) => alive && setSides({ a: sa, b: sb }))
-    return () => {
-      alive = false
-    }
-  }, [a.attemptId, b.attemptId, tick])
+  const qa = useQuery(reportQuery(a.attemptId, false))
+  const qb = useQuery(reportQuery(b.attemptId, false))
+  const sideOf = (q: typeof qa): Side => (q.data ? { turns: q.data.report?.transcript ?? [] } : q.error ? { error: errorMessage(q.error) ?? '' } : null)
+  const sides = { a: sideOf(qa), b: sideOf(qb) }
 
   const ta = sides.a && 'turns' in sides.a ? sides.a.turns : null
   const tb = sides.b && 'turns' in sides.b ? sides.b.turns : null
   const shared = ta && tb ? commonPrefixLength(ta, tb) : 0
   const differs = ta && tb ? shared < Math.max(ta.length, tb.length) : false
   const retry = () => {
-    setSides({ a: null, b: null })
-    setTick((t) => t + 1)
+    void qa.refetch()
+    void qb.refetch()
   }
   return (
     <div className={`grid grid-cols-2 items-start gap-4 ${className ?? ''}`}>

@@ -13,6 +13,11 @@ export const queryKeys = {
   statHistory: (taskId: string | null) => ['stat-history', taskId] as const,
   /** 크레딧 화면: 상품·구매 내역·사용 내역 한 묶음 */
   creditsHistory: (userId: number, purchasePage: number, ledgerPage: number) => ['credits-history', userId, purchasePage, ledgerPage] as const,
+  /** 복기: 한 과제의 응시 트리(과제 ID·응시 수가 바뀌면 새로 받는다)와 갈래별 체크포인트 */
+  reviewTrees: (taskId: string, count: number) => ['review-trees', taskId, count] as const,
+  reviewCheckpoints: (laneKey: string) => ['review-checkpoints', laneKey] as const,
+  /** 복기: 두 응시 비교 */
+  compare: (aId: string, bId: string) => ['review-compare', aId, bId] as const,
   /** 마이페이지 회원 정보 */
   profile: (userId: number) => ['profile', userId] as const,
   /** 기업 감독관 초대 */

@@ -23,12 +23,12 @@ export const attemptsQuery = (includeEmpty = false) => ({
   ...freshOnMount,
 })
 
-/** 리포트. 채점 중(SCORING)이면 2초마다 다시 받는다 */
+/** 리포트. 채점 중(SCORING)이면 2초마다 다시 받는다 (poll=false 면 한 번만) */
 export const REPORT_POLL_MS = 2000
-export const reportQuery = (attemptId: string) => ({
+export const reportQuery = (attemptId: string, poll = true) => ({
   queryKey: queryKeys.report(attemptId),
   queryFn: () => api.report(attemptId),
-  refetchInterval: (q: { state: { data?: { status: string } } }) => (q.state.data?.status === 'SCORING' ? REPORT_POLL_MS : false),
+  refetchInterval: (q: { state: { data?: { status: string } } }) => (poll && q.state.data?.status === 'SCORING' ? REPORT_POLL_MS : false),
   ...freshOnMount,
 })
 

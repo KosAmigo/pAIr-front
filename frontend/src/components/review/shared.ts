@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { api, type AttemptCompare, type Turn } from '../../api'
+import { freshOnMount, queryKeys } from '../../data/queryKeys'
 import { commonPrefixLength } from '../../lib/replayCompare'
 
 /** A 는 파랑, B 는 보라 (시안 값. 갈래 색과 겹치지 않게 슬롯 전용으로 쓴다) */
@@ -28,28 +30,25 @@ export type CompareState =
 
 /** 두 응시의 비교 결과와 대화 기록을 함께 불러온다. 갈라진 순간의 질문은 앞부분이 같은 대화 뒤 첫 응시자 턴 */
 export function useCompare(aId: string | null, bId: string | null): CompareState {
-  const [tick, setTick] = useState(0)
-  const [result, setResult] = useState<{ key: string; state: CompareState } | null>(null)
-  const retry = useCallback(() => setTick((t) => t + 1), [])
-  const key = aId && bId ? `${aId}|${bId}|${tick}` : ''
-  useEffect(() => {
-    if (!aId || !bId) return
-    let alive = true
-    Promise.all([api.compareAttempts(aId, bId), api.report(aId), api.report(bId)])
-      .then(([compare, ra, rb]) => {
-        if (!alive) return
-        const turnsA = ra.report?.transcript ?? []
-        const turnsB = rb.report?.transcript ?? []
-        const n = commonPrefixLength(turnsA, turnsB)
-        const questionA = turnsA.slice(n).find((t) => t.role === 'user') ?? null
-        const questionB = turnsB.slice(n).find((t) => t.role === 'user') ?? null
-        const turns = [questionA?.turn, questionB?.turn].filter((t): t is number => t != null)
-        setResult({ key, state: { status: 'ready', compare, turnsA, turnsB, forkTurn: turns.length ? Math.min(...turns) : null, questionA, questionB } })
-      })
-      .catch((e: Error) => alive && setResult({ key, state: { status: 'error', message: e.message, retry } }))
-    return () => {
-      alive = false
-    }
-  }, [aId, bId, key, retry])
-  return result && result.key === key ? result.state : { status: 'loading' }
+  // 두 응시 ID 가 키에 들어 있어 다른 응시로 바꾸면 이전 비교는 보이지 않는다
+  const q = useQuery({
+    queryKey: queryKeys.compare(aId ?? '', bId ?? ''),
+    queryFn: async () => {
+      const [compare, ra, rb] = await Promise.all([api.compareAttempts(aId!, bId!), api.report(aId!), api.report(bId!)])
+      const turnsA = ra.report?.transcript ?? []
+      const turnsB = rb.report?.transcript ?? []
+      const n = commonPrefixLength(turnsA, turnsB)
+      const questionA = turnsA.slice(n).find((t) => t.role === 'user') ?? null
+      const questionB = turnsB.slice(n).find((t) => t.role === 'user') ?? null
+      const turns = [questionA?.turn, questionB?.turn].filter((t): t is number => t != null)
+      return { compare, turnsA, turnsB, forkTurn: turns.length ? Math.min(...turns) : null, questionA, questionB }
+    },
+    enabled: !!aId && !!bId,
+    ...freshOnMount,
+  })
+  const { refetch } = q
+  const retry = useCallback(() => void refetch(), [refetch])
+  if (q.data) return { status: 'ready', ...q.data }
+  if (q.error) return { status: 'error', message: q.error instanceof Error ? q.error.message : String(q.error), retry }
+  return { status: 'loading' }
 }

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
-import { api, ApiError, type FileDiff } from '../../api'
+import { api } from '../../api'
+import { errorMessage, freshOnMount } from '../../data/queryKeys'
 import { fileView, type EditKind, type FileChange, type FileView } from '../../lib/codeCompare'
 import { cx } from '../cx'
 import { ErrorState } from '../ErrorState'
@@ -125,21 +127,10 @@ function FileCard({ v, open, onToggle }: { v: FileView; open: boolean; onToggle:
  * A → B 차이만 보면 두 풀이가 똑같이 고친 부분은 안 나와서 B 만 고친 것처럼 보이므로, 기본은 원본 기준 A·B 각각이다.
  */
 export function CodeCompare({ aId, bId }: { aId: string; bId: string }) {
-  const [files, setFiles] = useState<FileDiff[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
+  const q = useQuery({ queryKey: ['review-code-compare', aId, bId], queryFn: () => api.compareFiles(aId, bId), ...freshOnMount })
+  const files = q.data ?? null
+  const error = errorMessage(q.error)
   const [openPath, setOpenPath] = useState<Record<string, boolean>>({})
-
-  useEffect(() => {
-    let alive = true
-    api
-      .compareFiles(aId, bId)
-      .then((d) => alive && (setFiles(d), setError(null)))
-      .catch((e: ApiError) => alive && setError(e.message))
-    return () => {
-      alive = false
-    }
-  }, [aId, bId, tick])
 
   const views = useMemo(() => (files ?? []).map((f) => fileView(f)), [files])
   const sum = (pick: (v: FileView) => FileChange | null) => views.reduce((s, v) => ({ add: s.add + (pick(v)?.add ?? 0), del: s.del + (pick(v)?.del ?? 0) }), { add: 0, del: 0 })
@@ -159,7 +150,7 @@ export function CodeCompare({ aId, bId }: { aId: string; bId: string }) {
       </div>
       <p className="mb-2 text-[13px] text-text-muted">과제 원본에서 A와 B가 각각 바꾼 줄이에요. 둘 다 똑같이 바꾼 코드도 여기서는 두 풀이 모두에 나와요.</p>
       {error ? (
-        <ErrorState compact message={error} onRetry={() => setTick((t) => t + 1)} />
+        <ErrorState compact message={error} onRetry={() => void q.refetch()} />
       ) : !files ? (
         <p className="flex items-center gap-2 text-[14px] text-text-muted">
           <Loader2 size={16} className="animate-spin" aria-hidden /> 불러오는 중
