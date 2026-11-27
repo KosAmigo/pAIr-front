@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Hammer, Loader2, Lock, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
@@ -10,22 +10,18 @@ import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { ResizeHandle } from '../components/ResizeHandle'
 import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
-import { DIAGNOSTICS_DELAY_MS, isJavaSource, javaSources, marksFor, type DefinitionTarget } from '../lib/liveDiagnostics'
-import { api, ApiError, chatStream, type AiLimits, type AttemptView, type CompileDiagnostic, type EditProposal, type Material, type Task, type Turn } from '../api'
+import { isJavaSource, javaSources, marksFor, type DefinitionTarget } from '../lib/liveDiagnostics'
+import { api, ApiError, type AiLimits, type CompileDiagnostic, type Task } from '../api'
 import { AttemptPdf } from '../components/AttemptPdf'
 import {
-  MAX_ATTACH, addAttachment, defaultPages, removeAttachment,
-  setPages, type AttachRef,
+  MAX_ATTACH, removeAttachment,
+  setPages,
 } from '../lib/chatAttach'
-import { EditModal, type EditAction } from '../components/EditProposal'
-import { useAntiCheating, WarningModal } from '../anti-cheating'
-import { PasteDetector } from '../anti-cheating/core/PasteDetector.ts'
-import type { Violation } from '../anti-cheating/core/types.ts'
-import { toBrowserViolation } from '../proctor/core/events.ts'
+import { EditModal } from '../components/EditProposal'
+import { WarningModal } from '../anti-cheating'
 import { proctorApi } from '../proctor/api/proctorApi.ts'
 import NoticeBanner from '../proctor/react/NoticeBanner.tsx'
-import { camHub } from '../proctor/camHub.ts'
-import { clearLiveExam, inviteForAttempt, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
+import { readLiveExam } from '../proctor/liveExam.ts'
 import { useCredits } from '../data/credits'
 import { ExamHeader } from '../exam/components/ExamHeader'
 import { SidePanel as SidePanelView } from '../exam/components/SidePanel'
@@ -38,19 +34,18 @@ import { CenterMessage } from '../exam/components/CenterMessage'
 import { NewExam } from '../exam/components/NewExam'
 import { buildTree } from '../exam/components/PathTree'
 import { readOnlyPath, fileName } from '../exam/format'
-import { HEARTBEAT_MS } from '../exam/constants'
+import { useChat } from '../exam/hooks/useChat'
+import { useLiveGuard } from '../exam/hooks/useLiveGuard'
+import { endLiveProctoring } from '../exam/endLiveProctoring'
+import { useLiveDiagnostics } from '../exam/hooks/useLiveDiagnostics'
+import { useEditor } from '../exam/hooks/useEditor'
+import { useExamLoader, type LoadSinks } from '../exam/hooks/useExamLoader'
 import { usePanelWidths, DEFAULT_WIDTHS, MIN_WIDTHS, RAIL_WIDTH, CENTER_MIN, maxPanelWidth } from '../exam/hooks/usePanelWidths'
 export { NewExam }
 
 // 카메라 감독은 실전 시험에서만 불러온다 (자가진단은 분석 모델을 내려받지 않는다)
 
 const CamMonitor = lazy(() => import('../proctor/react/CamMonitor.tsx'))
-
-/** 실전 시험이 끝나면 카메라·휴대폰 연결을 끄고 실전 맥락을 지운다 */
-async function endLiveProctoring() {
-  clearLiveExam()
-  await camHub.stop()
-}
 
 // 실제 응시 화면: 백엔드 API 에 연결된 버전. 레이아웃은 DESIGN.md §7-3 응시 화면을 따른다.
 
@@ -61,42 +56,15 @@ export default function RealExam() {
   const { refresh: refreshCredits } = useCredits()
   // 입장 링크로 시작한 실전 응시일 때만 값이 있다. 자가진단은 null → 감독을 전혀 켜지 않는다
   const [live] = useState(() => readLiveExam(sessionId))
-  const [view, setView] = useState<AttemptView | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [contents, setContents] = useState<Record<string, string>>({})
-  const [dirty, setDirty] = useState<Set<string>>(new Set())
-  const [open, setOpen] = useState<string[]>([])
-  const [active, setActive] = useState('')
+  // 처음 불러온 값을 편집기·채팅 상태로 넘긴다(아래에서 세터를 채운다)
+  const loadSinks = useRef<LoadSinks | null>(null)
+  const { view, setView, loadError, stage, setStage, elapsed, materials } = useExamLoader(sessionId, navigate, loadSinks)
   const [side, setSide] = useState<SidePanel>('task')
   const [showOutput, setShowOutput] = useState(true)
   const [showChat, setShowChat] = useState(true)
   const [widths, setWidth] = usePanelWidths()
   const sideKey = side === 'questions' ? 'questions' : 'side'
-  const [stage, setStage] = useState<'solve' | 'followup'>('solve')
-  const [elapsed, setElapsed] = useState(0)
-  const [turns, setTurns] = useState<Turn[]>([])
-  const [chatBusy, setChatBusy] = useState(false)
-  const [streaming, setStreaming] = useState<{ question: string; answer: string } | null>(null)
-  const [chatError, setChatError] = useState<string | null>(null)
-  const [editBusy, setEditBusy] = useState(false)
-  // 이번 질문에 붙이려고 끌어 놓은 파일과, 이 과제의 PDF 자료(응시 파일로 복사되지 않아 따로 온다)
-  const [attached, setAttached] = useState<AttachRef[]>([])
-  // 같은 렌더 안에서 파일을 연달아 놓아도 앞의 것이 사라지지 않게 최신 목록을 ref 로도 쥔다
-  const attachedRef = useRef<AttachRef[]>([])
-  const updateAttached = (fn: (l: AttachRef[]) => AttachRef[]) => {
-    attachedRef.current = fn(attachedRef.current)
-    setAttached(attachedRef.current)
-  }
-  const [materials, setMaterials] = useState<Material[]>([])
-  const [viewing, setViewing] = useState<{ turn: number; index: number } | null>(null)
   // 빌드(컴파일만) 또는 테스트 실행 결과. 마지막으로 누른 쪽을 보여 준다.
-  const [liveDiagnostics, setLiveDiagnostics] = useState<CompileDiagnostic[] | null>(null)
-  const diagnosticsSeq = useRef(0)
-  const contentsRef = useRef(contents)
-  useEffect(() => {
-    contentsRef.current = contents
-  }, [contents])
-  const [reveal, setReveal] = useState<{ path: string; line: number; column: number; nonce: number } | null>(null)
   const [run, setRun] = useState<{
     kind: 'build' | 'test'
     compiled: boolean
@@ -111,236 +79,43 @@ export default function RealExam() {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const flash = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2000)
+  }
+  const pdfInfo = useMemo(() => Object.fromEntries(materials.map((m) => [m.path, m])), [materials])
+  const tree = useMemo(() => buildTree([...(view?.files ?? []), ...materials.map((m) => m.path)]), [view, materials])
+
+  const {
+    contents, setContents, dirty, setDirty, open, setOpen, active, setActive,
+    reveal, setReveal, contentsRef, saveFiles, openFile, closeFile, edit,
+    searching, setSearching, searchLoading,
+  } = useEditor({ sessionId, view, stage, pdfInfo, setActionError, flash })
+  const liveDiagnostics = useLiveDiagnostics(sessionId, stage, contents)
   const [fuIndex, setFuIndex] = useState(0)
   const [fuAnswers, setFuAnswers] = useState<string[] | null>(null)
   const [refTab, setRefTab] = useState<'prompts' | 'file'>('prompts')
   // 객관식·단답형 문항 (비개발 과제). 풀이 중이 아니면 읽기 전용
   const qs = useQuestions(sessionId, stage !== 'solve')
+  // 과제별 AI 제한(E6). 서버가 주지 않으면(옛 서버) 화면 기본값
+  const aiLimits: AiLimits = view?.aiLimits ?? { turns: 40, maxAttach: MAX_ATTACH, contextChars: 30000 }
   const hasQuestions = qs.questions.length > 0 || qs.load === 'error'
-  const watching = Boolean(live && view && (view.attempt.status === 'SOLVING' || view.attempt.status === 'FOLLOWUP'))
-  // 감독 회차면 브라우저 이탈도 회차 감독 기록(proctor_events, source=BROWSER)에 함께 남긴다
-  const forwardViolation = useCallback(
-    (v: Violation) => {
-      const first = v.signals[0]?.type
-      if (!live?.proctoring || !first) return
-      // 단축키 입력은 서버에 창 이탈로 남기고, 키 입력으로 감지됐다는 표시만 붙인다
-      const viaShortcut = first === 'KEY_SHORTCUT'
-      const type = viaShortcut ? 'WINDOW_BLUR' : first
-      camHub.recordBrowser(toBrowserViolation(type, v.occurredAt, live.serverOffsetMs, { signals: v.signals.length, ...(viaShortcut ? { via: 'shortcut' } : {}) }))
-    },
-    [live],
-  )
-  // 브라우저 이탈 감지는 감독을 켠 실전 회차에서만 쓴다 (자가진단은 쓰지 않는다). 기록은 감독 이벤트(DB)로 간다
-  const antiCheating = useAntiCheating({ sessionId, active: watching && Boolean(live?.proctoring), onViolation: forwardViolation })
-  // 실전 시험은 전체 화면에서만 푼다. 전체 화면이어야 Alt+Tab·Win 키를 브라우저가 붙잡을 수 있다 (Keyboard Lock)
-  const [fullscreen, setFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement))
-  useEffect(() => {
-    const sync = () => setFullscreen(Boolean(document.fullscreenElement))
-    document.addEventListener('fullscreenchange', sync)
-    return () => document.removeEventListener('fullscreenchange', sync)
-  }, [])
-  const [tourOpen, setTourOpen] = useState(false)
-  // 실전: 10초마다 서버에 연결 신호를 보낸다. 창이 닫히거나 끊겨 5분(유예)을 넘기면 서버가 링크를 만료시킨다
-  const [linkExpired, setLinkExpired] = useState(false)
-  const liveInvite = live?.invite
-  useEffect(() => {
-    if (!liveInvite || !watching) return
-    let alive = true
-    const beat = () =>
-      proctorApi.heartbeat(liveInvite).then(
-        (r) => alive && r.expired && setLinkExpired(true),
-        () => undefined, // 신호가 안 가는 동안은 서버가 알아서 끊김으로 본다. 다음 신호에서 다시 보낸다
-      )
-    beat()
-    const id = window.setInterval(beat, HEARTBEAT_MS)
-    return () => {
-      alive = false
-      window.clearInterval(id)
-    }
-  }, [liveInvite, watching])
-  const needFullscreen = watching && Boolean(live?.proctoring) && !fullscreen
-  // 사용 안내는 위쪽 도움말(?) 버튼을 눌렀을 때만 보여 준다 (대기실에서는 문구가 돌아가며 안내한다)
-
-  // 외부 붙여넣기: 시험 화면 안에서 복사한 글이 아닌 것을 붙이면 PASTE 이벤트 (글자 수·위치만, 내용은 보내지 않음)
-  useEffect(() => {
-    if (!watching || !live?.proctoring) return
-    const detector = new PasteDetector((p) =>
-      camHub.recordBrowser(toBrowserViolation('PASTE', p.occurredAt, live.serverOffsetMs, { chars: p.chars, lines: p.lines, target: p.target })),
-    )
-    detector.start()
-    return () => detector.stop()
-  }, [watching, live])
-  const doneUrl = live ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`
-
-  // 실전: 종료 시각(서버 기준)이 지나면 서버가 자동 제출한다. 화면은 감독을 끄고 제출 완료로 간다
-  // 후속 질문 단계에서는 경과 타이머가 멈추므로 실전만 1초마다 다시 그려 남은 시간을 갱신한다
-  const [, setLiveTick] = useState(0)
-  useEffect(() => {
-    if (!live) return
-    const id = window.setInterval(() => setLiveTick((t) => t + 1), 1000)
-    return () => window.clearInterval(id)
-  }, [live])
-  const liveLeft = live ? secondsLeft(live) : null
-  const liveOver = liveLeft !== null && liveLeft <= 0
-  const finishAntiCheating = antiCheating.finish
-  const ended = useRef(false)
-  useEffect(() => {
-    if (!liveOver || ended.current) return
-    ended.current = true
-    void finishAntiCheating()
-    void endLiveProctoring().finally(() => navigate(`/exam/${sessionId}/submitted`, { replace: true }))
-  }, [liveOver, sessionId, navigate, finishAntiCheating])
-
-  // 처음 불러오기
-  useEffect(() => {
-    let alive = true
-    api
-      .attempt(sessionId)
-      .then(async (v) => {
-        if (!alive) return
-        if (v.attempt.status === 'SCORING' || v.attempt.status === 'DONE' || v.attempt.status === 'ERROR') {
-          // 실전 응시는 리포트를 보여 주지 않는다 (기획: 실전은 리포트·복기 차단)
-          navigate(inviteForAttempt(sessionId) ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`, { replace: true })
-          return
-        }
-        setView(v)
-        // 자료 목록은 없어도 풀이는 된다(개발 과제는 PDF 가 없다)
-        api.materials(sessionId).then((m) => alive && setMaterials(m)).catch(() => undefined)
-        setTurns(v.turns)
-        setElapsed(v.elapsedSeconds)
-        setStage(v.attempt.status === 'FOLLOWUP' ? 'followup' : 'solve')
-        const first = v.files.includes(v.task.openFile) ? v.task.openFile : v.files[0]
-        const c = await api.file(sessionId, first)
-        if (!alive) return
-        setContents({ [first]: c.content })
-        setOpen([first])
-        setActive(first)
-      })
-      .catch((e: ApiError) => setLoadError(e.message))
-    return () => {
-      alive = false
-    }
-  }, [sessionId, navigate])
-
-  // 타이머
-  useEffect(() => {
-    if (!view || stage !== 'solve') return
-    const id = setInterval(() => setElapsed((s) => s + 1), 1000)
-    return () => clearInterval(id)
-  }, [view, stage])
-
-  const flash = (msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2000)
-  }
-
-  const saveFiles = useCallback(
-    async (paths?: string[]) => {
-      const targets = (paths ?? [...dirty]).filter((p) => dirty.has(p))
-      const saved: Record<string, string> = {}
-      for (const p of targets) {
-        saved[p] = contents[p] ?? ''
-        await api.save(sessionId, p, saved[p])
-      }
-      if (targets.length) {
-        setDirty((d) => {
-          const n = new Set(d)
-          // 보내는 동안 더 고친 파일은 저장 대상으로 남긴다
-          targets.forEach((p) => (contentsRef.current[p] ?? '') === saved[p] && n.delete(p))
-          return n
-        })
-      }
-      return targets.length
-    },
-    [dirty, contents, sessionId],
-  )
-
-  // 입력이 멈추고 2초 뒤 자동 저장
-  useEffect(() => {
-    if (!dirty.size || stage !== 'solve') return
-    const id = setTimeout(() => {
-      saveFiles().catch((e: ApiError) => setActionError(e.message))
-    }, 2000)
-    return () => clearTimeout(id)
-  }, [dirty, contents, stage, saveFiles])
-
-  // 자동 저장을 기다리던 중에 화면을 나가면(뒤로 가기 등) 마지막으로 한 번 저장한다
-  const saveOnLeave = useRef<(() => void) | null>(null)
-  useEffect(() => {
-    saveOnLeave.current = dirty.size && stage === 'solve' ? () => void saveFiles().catch(() => undefined) : null
+  const { antiCheating, linkExpired, needFullscreen, liveLeft } = useLiveGuard({ sessionId, live, view, navigate })
+  const {
+    turns, setTurns, streaming, chatBusy, chatError, editBusy, attached, updateAttached,
+    viewing, setViewing, viewingEdit, attach, attachFor, sendChat, decideEdit,
+  } = useChat({
+    sessionId, live, maxAttach: aiLimits.maxAttach, pdfInfo, dirty, saveFiles,
+    setContents, setDirty, setOpen, setActive, setView, refreshCredits, flash,
   })
-  useEffect(() => () => saveOnLeave.current?.(), [sessionId])
-
-  // 입력이 멈추고 잠시 뒤 서버에서 오류를 분석해 밑줄을 갱신한다 (저장 여부와 상관없이 화면의 내용 기준)
-  useEffect(() => {
-    if (stage !== 'solve') return
-    const files = javaSources(contents)
-    if (!Object.keys(files).length) return
-    const seq = ++diagnosticsSeq.current
-    const id = setTimeout(() => {
-      api
-        .diagnostics(sessionId, files)
-        .then((r) => {
-          if (seq === diagnosticsSeq.current) setLiveDiagnostics(r.diagnostics)
-        })
-        .catch(() => {
-          // 분석이 바쁘거나 실패하면 이전 밑줄을 그대로 둔다. 빌드 버튼의 결과가 기준이다
-        })
-    }, DIAGNOSTICS_DELAY_MS)
-    return () => clearTimeout(id)
-  }, [contents, stage, sessionId])
-
-  // Ctrl/⌘+F: 브라우저 찾기 대신 파일 검색을 연다
-  const [searching, setSearching] = useState(false)
-  const [searchLoading, setSearchLoading] = useState(false)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'KeyF' && (e.ctrlKey || e.metaKey) && !e.altKey) {
-        e.preventDefault()
-        setSearching(true)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-  // 파일 내용은 열 때 불러오므로, 검색창을 열면 아직 안 읽은 파일도 읽는다(PDF 자료는 이름으로만 찾는다)
-  useEffect(() => {
-    if (!searching || !view) return
-    const missing = view.files.filter((p) => !(p in contentsRef.current))
-    if (!missing.length) return
-    setSearchLoading(true)
-    void Promise.allSettled(missing.map((p) => api.file(sessionId, p))).then((results) => {
-      const got = Object.fromEntries(results.flatMap((r) => (r.status === 'fulfilled' ? [[r.value.path, r.value.content]] : [])))
-      // 그사이 불러왔거나 고친 내용은 덮어쓰지 않는다
-      setContents((m) => ({ ...got, ...m }))
-      setSearchLoading(false)
-      if (results.some((r) => r.status === 'rejected')) setActionError('일부 파일을 읽지 못해 검색에서 빠졌습니다.')
-    })
-  }, [searching, view, sessionId])
-
-  // Ctrl+S
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault()
-        saveFiles()
-          .then((n) => flash(n ? '저장했습니다' : '변경 사항이 없습니다'))
-          .catch((er: ApiError) => setActionError(er.message))
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [saveFiles])
-
-  const pdfInfo = useMemo(() => Object.fromEntries(materials.map((m) => [m.path, m])), [materials])
-  const tree = useMemo(() => buildTree([...(view?.files ?? []), ...materials.map((m) => m.path)]), [view, materials])
+  loadSinks.current = { setTurns, setContents, setOpen, setActive }
+  const [tourOpen, setTourOpen] = useState(false)
+  const doneUrl = live ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`
 
   if (loadError) return <CenterMessage text="" error={loadError} />
   if (!view) return <CenterMessage text="응시 화면을 불러오고 있습니다" />
 
   const task = view.task as Task & { requiredHeadings?: string[] }
-  // 과제별 AI 제한(E6). 서버가 주지 않으면(옛 서버) 화면 기본값
-  const aiLimits: AiLimits = view.aiLimits ?? { turns: 40, maxAttach: MAX_ATTACH, contextChars: 30000 }
   const dev = task.type === 'dev'
   // 실전은 서버 기준 종료 시각까지, 자가진단은 과제 제한 시간에서 지난 시간을 뺀다
   const left = liveLeft ?? task.minutes * 60 - elapsed
@@ -350,19 +125,6 @@ export default function RealExam() {
   const tone = locked ? 'text-text' : left <= 180 ? 'text-alert' : left <= 600 ? 'text-caution' : 'text-text'
   const isDoc = !dev && active === task.editableFile
 
-  const openFile = async (p: string) => {
-    if (!(p in contents) && !pdfInfo[p]) {
-      try {
-        const c = await api.file(sessionId, p)
-        setContents((m) => ({ ...m, [p]: c.content }))
-      } catch (e) {
-        setActionError((e as ApiError).message)
-        return
-      }
-    }
-    if (!open.includes(p)) setOpen([...open, p])
-    setActive(p)
-  }
   /** 편집기 도우미(자동 완성·정의로 이동)가 서버에 보낼 화면의 저장 전 내용 */
   const editorHelp = {
     complete: async (path: string, offset: number) =>
@@ -381,17 +143,6 @@ export default function RealExam() {
     setRefTab('file')
     if (hit.line) setReveal({ path: hit.path, line: hit.line, column: hit.column ?? 1, nonce: Date.now() })
   }
-  const closeFile = (p: string) => {
-    void saveFiles([p])
-    const next = open.filter((f) => f !== p)
-    setOpen(next)
-    if (active === p) setActive(next[next.length - 1] ?? '')
-  }
-  const edit = (value: string) => {
-    setContents((m) => ({ ...m, [active]: value }))
-    setDirty((d) => new Set(d).add(active))
-  }
-
   const doRun = async (kind: 'build' | 'test') => {
     setBusyTask(kind)
     setActionError(null)
@@ -412,78 +163,6 @@ export default function RealExam() {
     }
   }
   const activeDiagnostics = marksFor(active, liveDiagnostics, run?.diagnostics)
-
-  /** 파일 트리의 파일을 첨부로 바꾼다. PDF 자료는 기본으로 전체(최대 20쪽)를 붙인다 */
-  const attachFor = (path: string): AttachRef =>
-    pdfInfo[path] ? { source: 'TASK_FILE', path, pages: defaultPages(pdfInfo[path].pages) } : { source: 'ATTEMPT_FILE', path }
-  /** 끌어다 놓거나 첨부 버튼을 누르면 호출된다. 못 붙이는 이유가 있으면 안내 문구를 돌려준다 */
-  const attach = (ref: AttachRef): string | null => {
-    const r = addAttachment(attachedRef.current, ref, aiLimits.maxAttach)
-    if (!r.ok) return r.message
-    updateAttached(() => r.list)
-    return null
-  }
-
-  const sendChat = async (text: string) => {
-    setChatBusy(true)
-    setChatError(null)
-    setStreaming({ question: text, answer: '' })
-    // 보내는 순간 입력창의 첨부는 비운다. 실패하면 되돌리고, 답변 중에 새로 붙인 파일은 남긴다
-    const sent = attachedRef.current
-    updateAttached(() => [])
-    try {
-      // 서버는 저장된 파일 내용을 읽으므로, 고치던 첨부 파일은 먼저 저장한다
-      const dirtyAttached = sent.filter((a) => a.source === 'ATTEMPT_FILE' && dirty.has(a.path)).map((a) => a.path)
-      if (dirtyAttached.length) await saveFiles(dirtyAttached)
-      const added = await chatStream(sessionId, text, (d) => setStreaming((s) => (s ? { ...s, answer: s.answer + d } : s)), sent)
-      if (!live) void refreshCredits()
-      setTurns((t) => [...t, ...added])
-      return true
-    } catch (e) {
-      updateAttached((now) => now.reduce((list, ref) => {
-        const r = addAttachment(list, ref, aiLimits.maxAttach)
-        return r.ok ? r.list : list
-      }, sent))
-      setChatError((e as ApiError).message)
-      return false
-    } finally {
-      setStreaming(null)
-      setChatBusy(false)
-    }
-  }
-
-  /** AI 수정 제안 적용/거절. 적용하면 서버가 파일을 고치고, 그 파일을 편집기에 열어 보여 준다. */
-  const decideEdit = async (turn: number, e: EditProposal, action: EditAction) => {
-    setEditBusy(true)
-    setChatError(null)
-    try {
-      if (action === 'apply' && dirty.has(e.path)) await saveFiles([e.path])
-      const r = await api.decideEdit(sessionId, turn, e.index, action)
-      const v = await api.attempt(sessionId)
-      setTurns(v.turns)
-      setView((old) => (old ? { ...old, files: v.files } : v))
-      if (r.status === 'APPLIED' && r.content != null) {
-        const content = r.content
-        setContents((m) => ({ ...m, [r.path]: content }))
-        setDirty((d) => {
-          const n = new Set(d)
-          n.delete(r.path)
-          return n
-        })
-        setOpen((o) => (o.includes(r.path) ? o : [...o, r.path]))
-        setActive(r.path)
-        setViewing(null)
-        flash(`적용했습니다: ${r.path}`)
-      } else {
-        setViewing(null)
-      }
-    } catch (er) {
-      setChatError((er as ApiError).message)
-    } finally {
-      setEditBusy(false)
-    }
-  }
-  const viewingEdit = viewing ? turns.find((t) => t.turn === viewing.turn)?.edits?.find((x) => x.index === viewing.index) : undefined
 
   const doSubmit = async () => {
     setBusy(true)
