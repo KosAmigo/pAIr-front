@@ -11,7 +11,7 @@ import { ResizeHandle } from '../components/ResizeHandle'
 import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
 import { DIAGNOSTICS_DELAY_MS, isJavaSource, javaSources, marksFor, type DefinitionTarget } from '../lib/liveDiagnostics'
-import { api, ApiError, chatStream, type AiLimits, type AttemptView, type CompileDiagnostic, type EditProposal, type Material, type Task, type Turn } from '../api'
+import { api, ApiError, chatStream, type AiLimits, type CompileDiagnostic, type EditProposal, type Task, type Turn } from '../api'
 import { AttemptPdf } from '../components/AttemptPdf'
 import {
   MAX_ATTACH, addAttachment, defaultPages, removeAttachment,
@@ -25,7 +25,7 @@ import { toBrowserViolation } from '../proctor/core/events.ts'
 import { proctorApi } from '../proctor/api/proctorApi.ts'
 import NoticeBanner from '../proctor/react/NoticeBanner.tsx'
 import { camHub } from '../proctor/camHub.ts'
-import { clearLiveExam, inviteForAttempt, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
+import { clearLiveExam, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
 import { useCredits } from '../data/credits'
 import { ExamHeader } from '../exam/components/ExamHeader'
 import { SidePanel as SidePanelView } from '../exam/components/SidePanel'
@@ -39,6 +39,7 @@ import { NewExam } from '../exam/components/NewExam'
 import { buildTree } from '../exam/components/PathTree'
 import { readOnlyPath, fileName } from '../exam/format'
 import { HEARTBEAT_MS } from '../exam/constants'
+import { useExamLoader, type LoadSinks } from '../exam/hooks/useExamLoader'
 import { usePanelWidths, DEFAULT_WIDTHS, MIN_WIDTHS, RAIL_WIDTH, CENTER_MIN, maxPanelWidth } from '../exam/hooks/usePanelWidths'
 export { NewExam }
 
@@ -61,8 +62,9 @@ export default function RealExam() {
   const { refresh: refreshCredits } = useCredits()
   // 입장 링크로 시작한 실전 응시일 때만 값이 있다. 자가진단은 null → 감독을 전혀 켜지 않는다
   const [live] = useState(() => readLiveExam(sessionId))
-  const [view, setView] = useState<AttemptView | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // 처음 불러온 값을 편집기·채팅 상태로 넘긴다(아래에서 세터를 채운다)
+  const loadSinks = useRef<LoadSinks | null>(null)
+  const { view, setView, loadError, stage, setStage, elapsed, materials } = useExamLoader(sessionId, navigate, loadSinks)
   const [contents, setContents] = useState<Record<string, string>>({})
   const [dirty, setDirty] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState<string[]>([])
@@ -72,8 +74,6 @@ export default function RealExam() {
   const [showChat, setShowChat] = useState(true)
   const [widths, setWidth] = usePanelWidths()
   const sideKey = side === 'questions' ? 'questions' : 'side'
-  const [stage, setStage] = useState<'solve' | 'followup'>('solve')
-  const [elapsed, setElapsed] = useState(0)
   const [turns, setTurns] = useState<Turn[]>([])
   const [chatBusy, setChatBusy] = useState(false)
   const [streaming, setStreaming] = useState<{ question: string; answer: string } | null>(null)
@@ -87,9 +87,9 @@ export default function RealExam() {
     attachedRef.current = fn(attachedRef.current)
     setAttached(attachedRef.current)
   }
-  const [materials, setMaterials] = useState<Material[]>([])
   const [viewing, setViewing] = useState<{ turn: number; index: number } | null>(null)
   // 빌드(컴파일만) 또는 테스트 실행 결과. 마지막으로 누른 쪽을 보여 준다.
+  loadSinks.current = { setTurns, setContents, setOpen, setActive }
   const [liveDiagnostics, setLiveDiagnostics] = useState<CompileDiagnostic[] | null>(null)
   const diagnosticsSeq = useRef(0)
   const contentsRef = useRef(contents)
@@ -190,44 +190,6 @@ export default function RealExam() {
     void finishAntiCheating()
     void endLiveProctoring().finally(() => navigate(`/exam/${sessionId}/submitted`, { replace: true }))
   }, [liveOver, sessionId, navigate, finishAntiCheating])
-
-  // 처음 불러오기
-  useEffect(() => {
-    let alive = true
-    api
-      .attempt(sessionId)
-      .then(async (v) => {
-        if (!alive) return
-        if (v.attempt.status === 'SCORING' || v.attempt.status === 'DONE' || v.attempt.status === 'ERROR') {
-          // 실전 응시는 리포트를 보여 주지 않는다 (기획: 실전은 리포트·복기 차단)
-          navigate(inviteForAttempt(sessionId) ? `/exam/${sessionId}/submitted` : `/report/${sessionId}`, { replace: true })
-          return
-        }
-        setView(v)
-        // 자료 목록은 없어도 풀이는 된다(개발 과제는 PDF 가 없다)
-        api.materials(sessionId).then((m) => alive && setMaterials(m)).catch(() => undefined)
-        setTurns(v.turns)
-        setElapsed(v.elapsedSeconds)
-        setStage(v.attempt.status === 'FOLLOWUP' ? 'followup' : 'solve')
-        const first = v.files.includes(v.task.openFile) ? v.task.openFile : v.files[0]
-        const c = await api.file(sessionId, first)
-        if (!alive) return
-        setContents({ [first]: c.content })
-        setOpen([first])
-        setActive(first)
-      })
-      .catch((e: ApiError) => setLoadError(e.message))
-    return () => {
-      alive = false
-    }
-  }, [sessionId, navigate])
-
-  // 타이머
-  useEffect(() => {
-    if (!view || stage !== 'solve') return
-    const id = setInterval(() => setElapsed((s) => s + 1), 1000)
-    return () => clearInterval(id)
-  }, [view, stage])
 
   const flash = (msg: string) => {
     setToast(msg)
