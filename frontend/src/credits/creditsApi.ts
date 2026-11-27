@@ -10,6 +10,8 @@ export type Purchase = {
   createdAt: string
   paidAt: string | null
   refundedAt: string | null
+  /** 결제 완료 주문을 환불할 수 있는 마지막 시각(결제 승인 + 168시간). 완료가 아니면 null */
+  refundableUntil?: string | null
 }
 export type LedgerEntry = {
   id: number

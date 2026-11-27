@@ -49,6 +49,7 @@ test('purchase status labels cover payment and refund states', () => {
     PAID: '완료',
     FAILED: '실패',
     CANCELED: '취소',
+    REFUNDING: '환불 처리 중',
     REFUNDED: '환불',
     CONFIRMING: '승인 확인 중',
     WAITING_FOR_DEPOSIT: '입금 대기',
@@ -174,6 +175,7 @@ test('크레딧 내역 사유를 한글로 보여 주고, 모르는 사유는 �
   assert.equal(ledgerReasonLabel('SIGNUP'), '가입 축하 지급')
   assert.equal(ledgerReasonLabel('PURCHASE'), '크레딧 충전')
   assert.equal(ledgerReasonLabel('PURCHASE_REFUND'), '충전 환불')
+  assert.equal(ledgerReasonLabel('PURCHASE_REFUND_UNDO'), '환불 거절로 되돌림')
   assert.equal(ledgerReasonLabel('ATTEMPT_START'), '자가진단 응시 시작')
   assert.equal(ledgerReasonLabel('CHAT_TURN'), 'AI 채팅')
   assert.equal(ledgerReasonLabel('ROLLBACK'), '복기 롤백')
