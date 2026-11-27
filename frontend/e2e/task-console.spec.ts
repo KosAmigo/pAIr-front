@@ -252,3 +252,19 @@ test('@shot 과제 콘솔 화면 스크린샷', async ({ page }, info) => {
   await expect(page.getByRole('heading', { name: /이대로/ })).toBeVisible()
   await shot(page, '13-new-confirm', p)
 })
+
+test('상세에서 과제를 숨기면 목록 캐시가 바뀌어 검수 전 탭에 나타난다', async ({ page }) => {
+  await mockApi(page)
+  await page.goto('/console/tasks')
+  await page.getByRole('tab', { name: /^자가진단/ }).click()
+  await page.locator('ul h3', { hasText: '쿠폰 할인 계산' }).click()
+  await expect(page).toHaveURL(/\/console\/tasks\/A1$/)
+  await page.getByRole('button', { name: '숨기기' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '숨기기' }).click()
+  await expect(page.getByRole('button', { name: '숨기기' })).toHaveCount(0)
+  await page.getByRole('link', { name: /과제 목록/ }).first().click()
+  // 목록 응답은 그대로(A1 은 OPEN)라서, 다시 받았다면 검수 전에 없다. 캐시를 응답으로 고쳤을 때만 보인다
+  await expect(page.getByRole('tab', { name: /^검수 전/ })).toBeVisible()
+  await page.getByRole('tab', { name: /^검수 전/ }).click()
+  await expect(page.locator('ul h3', { hasText: '쿠폰 할인 계산' })).toBeVisible()
+})
