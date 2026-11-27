@@ -5,12 +5,12 @@ import { motion } from 'motion/react'
 import { cx } from '../../../components/cx'
 import { duration, easing, springs } from '../../../lib/motion'
 
-const FLOW = ['아이디어', '확인', '생성', '검수'] as const
+const FLOW: readonly string[] = ['아이디어', '확인', '생성', '검수']
 
-export function FlowSteps({ at }: { at: number }) {
+export function FlowSteps({ at, names = FLOW }: { at: number; names?: readonly string[] }) {
   return (
-    <ol aria-label={`단계 ${at + 1} / ${FLOW.length}: ${FLOW[at]}`} className="flex items-center">
-      {FLOW.map((name, i) => {
+    <ol aria-label={`단계 ${at + 1} / ${names.length}: ${names[at]}`} className="flex items-center">
+      {names.map((name, i) => {
         const done = i < at
         const on = i === at
         return (

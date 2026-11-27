@@ -40,6 +40,27 @@ const autoTopic = (n: number) => ({
 /** 오타 주제. 이 주제를 보내면 topicCheck.ok=false 로 답한다 */
 export const TYPO_TOPIC = '쿠뽕'
 
+/** 만들어진 내용(content) 가짜 응답: 설계도까지만 나온 작업과 다 나온 작업 */
+export function contentFor(job: Record<string, any>) {
+  const blueprint = {
+    title: '쿠폰 중복 할인', summary: '쿠폰 두 장이 겹치면 할인이 두 번 들어간다', scenario: '주문 결제에서 쿠폰을 계산한다', category: '기능 구현', competencies: ['control', 'usage'],
+    api: ['int applyCoupons(Order order)'], examples: [{ input: '쿠폰 2장', expected: '한 번만 할인' }],
+    flaws: [{ what: '중복 적용', where: 'CouponService.apply' }], judgments: [{ question: '쿠폰 겹침을 허용할까?', options: ['허용', '불허'] }],
+    neededFiles: ['CouponService.java'], fillers: [{ path: 'README.md', summary: '배경 설명', confusing: false }], docs: [], questionPlan: [],
+  }
+  const full = job.status === 'DONE'
+  return {
+    jobId: job.jobId, status: job.status, step: job.step, updatedAt: '2026-11-27T01:00:00Z',
+    form: { track: job.track, topic: job.topic, trap: `함정: ${job.topic}`, usage: 'SELF', minutes: job.minutes, mode: job.mode ?? 'NOW' },
+    blueprint,
+    writing: full ? { description: ['쿠폰 계산기를 고치세요'], requirements: ['중복 할인 방지'], notes: '메모', documents: [] } : null,
+    code: full ? { files: [{ path: 'src/CouponService.java', chars: 1200 }] } : null,
+    answer: full ? { hiddenTests: [{ path: 'CouponServiceTest.java', methods: ['stacksOnce', 'noNegative'] }], wrongFixes: 2, altSolutions: 1 } : null,
+    questions: null,
+    fillers: full ? { files: [{ path: 'README.md', chars: 300 }] } : null,
+  }
+}
+
 export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admin@example.test', name: '관리자', role: 'ADMIN', companyId: null, companyName: null, emailVerified: true }) {
   const sent: SentRequest[] = []
   await page.addInitScript((authUser) => {
@@ -47,7 +68,9 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
   }, user)
   let polls = 0
   // 자동 생성으로 만든 작업 목록 (GET /jobs 가 이걸 돌려준다)
-  let autoJobs: Record<string, unknown>[] = []
+  let autoJobs: Record<string, any>[] = []
+  // 생성이 끝나 새로 저장된 검수 전 과제 (과제 목록 자동 반영 검사용)
+  const extraTasks: Task[] = []
   await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
     const req = route.request()
     const path = new URL(req.url()).pathname
@@ -55,7 +78,7 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     const body = raw ? JSON.parse(raw) : null
     const json = (data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) })
     if (path === '/api/auth/me') return json(user)
-    if (path === '/api/console/tasks') return json(TASKS)
+    if (path === '/api/console/tasks') return json([...TASKS, ...extraTasks])
     // 과제 상세: 카드를 눌러 상세로 갈 때 화면이 터지지 않을 만큼만
     const detail = path.match(/^\/api\/console\/tasks\/([^/]+)$/)
     if (detail) {
@@ -95,6 +118,12 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
       return json({ batchId: 'b1', jobIds: autoJobs.map((j) => j.jobId) }, 202)
     }
     if (path === '/api/admin/task-gen/jobs') return json(autoJobs)
+    const one = path.match(/^\/api\/admin\/task-gen\/(a\d+)(\/content)?$/)
+    if (one && req.method() === 'GET') {
+      const j = autoJobs.find((x) => x.jobId === one[1])
+      if (!j) return json({ message: 'not found' }, 404)
+      return json(one[2] ? contentFor(j) : j)
+    }
     const cancel = path.match(/^\/api\/admin\/task-gen\/(a\d+)\/cancel$/)
     if (cancel && req.method() === 'POST') {
       sent.push({ method: req.method(), path, body })
@@ -111,5 +140,14 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     }
     return json([])
   })
-  return { sent }
+  return {
+    sent,
+    /** 작업 목록을 직접 넣는다 (자동 생성을 거치지 않고) */
+    seedJobs: (jobs: Record<string, any>[]) => { autoJobs = jobs },
+    /** 작업 하나를 끝낸다: DONE 으로 바꾸고 새 검수 전 과제를 과제 목록에 넣는다 */
+    finishJob: (jobId: string, code: string, title: string) => {
+      autoJobs = autoJobs.map((j) => (j.jobId === jobId ? { ...j, status: 'DONE', step: '완료', taskCode: code, passed: true, queuePosition: null } : j))
+      extraTasks.push(task(code, { title, summary: '방금 만든 과제', track: 'DEV', status: 'HIDDEN' }))
+    },
+  }
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { CrumbContext } from './consoleCrumbs'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Building2, CalendarClock, FlaskConical, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { Building2, CalendarClock, FlaskConical, PanelLeftClose, PanelLeftOpen, ShieldCheck, type LucideIcon } from 'lucide-react'
 import { TaskIcon } from './domainIcons'
 import { motion } from 'motion/react'
 import { springs } from '../lib/motion'
@@ -23,7 +23,16 @@ const MENU: MenuItem[] = [
 ]
 
 /** 경로 → 브레드크럼 첫 칸 이름 */
-const SECTION: Record<string, string> = { tasks: '과제', sessions: '회차', companies: '회사', members: '회사 회원' }
+const SECTION: Record<string, string> = { grader: '채점 툴', tasks: '과제', sessions: '회차', companies: '회사', members: '회사 회원' }
+
+const NAV_KEY = 'pair.consoleNavCollapsed'
+const readCollapsed = () => {
+  try {
+    return localStorage.getItem(NAV_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export function ConsoleShell() {
   // 토큰에서 확인된 사용자 역할에 맞는 콘솔 메뉴만 표시한다.
@@ -41,6 +50,17 @@ export function ConsoleShell() {
   const toast = denied ? deniedState?.deniedMessage ?? '접근 권한이 없습니다' : null
 
   const [crumbs, setCrumbs] = useState<string[]>([])
+  // 사이드바 접힘: 접으면 아이콘만 남는 레일(72px), 펼치면 216px. 상태는 기억한다
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const toggleNav = () =>
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(NAV_KEY, c ? '0' : '1')
+      } catch {
+        /* 저장이 막혀도 이번 화면에서는 동작한다 */
+      }
+      return !c
+    })
   // 과제 목록은 관리자만 볼 수 있어 관리자일 때만 불러온다
   const taskList = useTaskList(user?.role === 'ADMIN')
   const draftCount = taskList.list?.filter((t) => t.status === 'HIDDEN').length ?? 0
@@ -48,35 +68,56 @@ export function ConsoleShell() {
   if (!user) return null
   // 과제 메뉴 옆 숫자 = 검수 대기 수
   const items = MENU.filter((m) => m.roles.includes(user.role)).map((m) => (m.to === '/console/tasks' ? { ...m, count: draftCount } : m))
-  const section = pathname.split('/')[2]
+  // 채점 툴(/grader)도 이 셸 안에 있다: 첫 칸 = 채점 툴
+  const inGrader = pathname.startsWith('/grader')
+  const section = inGrader ? 'grader' : pathname.split('/')[2]
 
   return (
     <div className="flex h-full">
-      <StageSection as="aside" aria-label="콘솔 메뉴" className="flex w-64 shrink-0 flex-col rounded-none! border-0! shadow-none!">
-        <div className="flex h-full flex-col">
-          <div className="flex h-16 items-center gap-2 px-5">
-            <Logo className="text-stage-text!" />
-            <span className="rounded-sm border border-stage-line px-1.5 font-mono text-[11px] font-semibold tracking-[0.12em] text-stage-brand">CONSOLE</span>
+      {/* 접힘 = 사이드바 폭만 왼쪽 기준으로 줄어든다. 안쪽은 216px 고정이라 내용은 왼쪽에 붙은 채 오른쪽 끝이 잘려 들어가고,
+          아이콘 칸(48px)은 펼침·접힘 모두 72px 레일의 가운데에 있어 화면 위치(x·y)가 변하지 않는다. 이름 글자는 투명도로만 나타나고 사라진다. */}
+      <StageSection as="aside" aria-label="콘솔 메뉴" data-collapsed={collapsed} className={cx('shrink-0 overflow-hidden rounded-none! border-0! shadow-none! transition-[width] duration-200 ease-out motion-reduce:transition-none', collapsed ? 'w-[72px]' : 'w-[216px]')}>
+        <div className="flex h-full w-[216px] flex-col">
+          <div className="flex h-16 items-center gap-2 pl-[27px]">
+            <Logo compact={collapsed} className="text-stage-text!" />
+            <span aria-hidden={collapsed} className={cx('rounded-sm border border-stage-line px-1.5 font-mono text-[11px] font-semibold tracking-[0.12em] text-stage-brand transition-opacity duration-150 motion-reduce:transition-none', collapsed && 'opacity-0')}>
+              CONSOLE
+            </span>
           </div>
-          <nav className="flex flex-col gap-1 px-3 pt-4">
-            <p className="px-3 pb-1 font-mono text-[11px] tracking-[0.12em] text-stage-faint">MENU</p>
+          <nav aria-label="콘솔 메뉴 항목" className="flex flex-col gap-1 px-3 pt-4">
+            <Label collapsed={collapsed} className="pb-1">MENU</Label>
             {items.map((m) => (
-              <MenuLink key={m.to} item={m} />
+              <MenuLink key={m.to} item={m} collapsed={collapsed} />
             ))}
             {user.role === 'ADMIN' && (
               <>
-                <p className="px-3 pt-5 pb-1 font-mono text-[11px] tracking-[0.12em] text-stage-faint">TOOLS</p>
-                <MenuLink item={{ to: '/grader', label: '채점 툴', icon: FlaskConical, roles: ['ADMIN'] }} />
+                <Label collapsed={collapsed} className="pt-5 pb-1">TOOLS</Label>
+                <MenuLink item={{ to: '/grader', label: '채점 툴', icon: FlaskConical, roles: ['ADMIN'] }} collapsed={collapsed} />
               </>
             )}
           </nav>
-          <div className="mt-auto p-3">
-            <div className="glass-stage rounded-xl px-4 py-3">
-              <p className="flex items-center gap-2 text-[13px] font-semibold text-stage-text">
+          <div className="mt-auto flex flex-col gap-1 px-3 pb-3">
+            <button
+              type="button"
+              onClick={toggleNav}
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+              title={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+              className="flex h-10 w-full items-center rounded-lg text-[14px] font-medium text-stage-muted transition-colors duration-150 outline-none hover:bg-stage-raised/60 hover:text-stage-text focus-visible:ring-4 focus-visible:ring-stage-brand/30"
+            >
+              <span className="flex w-12 shrink-0 items-center justify-center">
+                {collapsed ? <PanelLeftOpen size={18} strokeWidth={1.75} aria-hidden /> : <PanelLeftClose size={18} strokeWidth={1.75} aria-hidden />}
+              </span>
+              <span aria-hidden className={cx('whitespace-nowrap transition-opacity duration-150 motion-reduce:transition-none', collapsed && 'opacity-0')}>접기</span>
+            </button>
+            <div title={`${user.companyName ?? 'pAIr 운영'} · ${user.role}`} className="flex h-12 items-center">
+              <span className="glass-stage flex size-10 shrink-0 items-center justify-center rounded-full mx-1">
                 {user.companyName ? <Building2 size={16} className="text-stage-brand" aria-hidden /> : <ShieldCheck size={16} className="text-stage-brand" aria-hidden />}
-                {user.companyName ?? 'pAIr 운영'}
-              </p>
-              <p className="mt-0.5 font-mono text-[12px] text-stage-muted">{user.role}</p>
+              </span>
+              <span className={cx('ml-2 min-w-0 transition-opacity duration-150 motion-reduce:transition-none', collapsed && 'opacity-0')}>
+                <span className="block truncate text-[13px] font-semibold text-stage-text">{user.companyName ?? 'pAIr 운영'}</span>
+                <span className="block font-mono text-[12px] text-stage-muted">{user.role}</span>
+              </span>
             </div>
           </div>
         </div>
@@ -86,7 +127,7 @@ export function ConsoleShell() {
         <Aurora variant="band" className="h-[360px]" />
         <header className="glass relative z-20 flex h-14 shrink-0 items-center gap-3 rounded-none border-0 border-b border-line/70 px-8 shadow-none">
           <nav aria-label="현재 위치" className="flex items-center gap-2 text-[15px]">
-            <Link to={`/console/${section}`} className={cx(crumbs.length ? 'text-text-muted hover:text-text' : 'font-semibold text-text')}>
+            <Link to={inGrader ? '/grader' : `/console/${section}`} className={cx(crumbs.length ? 'text-text-muted hover:text-text' : 'font-semibold text-text')}>
               {SECTION[section] ?? '콘솔'}
             </Link>
             {crumbs.map((c, i) => (
@@ -128,32 +169,54 @@ export function ConsoleShell() {
   )
 }
 
-function MenuLink({ item }: { item: MenuItem }) {
+/** MENU·TOOLS 라벨: 접어도 높이는 그대로(아이콘 y 고정), 글자만 투명 */
+function Label({ collapsed, className, children }: { collapsed: boolean; className?: string; children: string }) {
+  return (
+    <p aria-hidden className={cx('px-3 font-mono text-[11px] tracking-[0.12em] text-stage-faint transition-opacity duration-150 motion-reduce:transition-none', collapsed && 'opacity-0', className)}>
+      {children}
+    </p>
+  )
+}
+
+/** 메뉴 한 줄. 아이콘 칸(48px)은 항상 72px 레일의 가운데. 접으면 줄 폭이 48px로 줄어 활성 판이 아이콘을 가운데 둔 정사각형에 가까워진다. */
+function MenuLink({ item, collapsed }: { item: MenuItem; collapsed: boolean }) {
+  const count = item.count != null && item.count > 0 ? item.count : 0
   return (
     <NavLink
       to={item.to}
+      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? `${item.label}${count ? `, 검수 대기 ${count}개` : ''}` : undefined}
       className={({ isActive }) =>
-        cx('relative flex h-11 items-center gap-3 rounded-lg px-3 text-[15px] font-medium transition-colors duration-150', isActive ? 'text-stage-text' : 'text-stage-muted hover:bg-stage-raised/60 hover:text-stage-text')
+        cx(
+          'relative flex h-11 items-center rounded-lg text-[15px] font-medium whitespace-nowrap transition-[width,color,background-color] duration-200 ease-out outline-none motion-reduce:transition-none focus-visible:ring-4 focus-visible:ring-stage-brand/30',
+          collapsed ? 'w-12' : 'w-[192px]',
+          isActive ? 'text-stage-text' : 'text-stage-muted hover:bg-stage-raised/60 hover:text-stage-text',
+        )
       }
     >
       {({ isActive }) => (
         <>
-          {/* 활성 메뉴 뒤 빛나는 판: 메뉴 사이를 미끄러진다 */}
+          {/* 활성 판: 메뉴 사이를 미끄러진다. 판·아이콘 색·옅은 빛으로만 활성을 보인다 */}
           {isActive && (
             <motion.span
               layoutId="console-menu-active"
               transition={springs.snappy}
+              data-testid="menu-active"
               className="absolute inset-0 -z-0 rounded-lg border border-stage-line bg-stage-raised shadow-[0_0_24px_-6px_color-mix(in_srgb,var(--color-stage-brand)_60%,transparent)]"
               aria-hidden
-            >
-              <span className="bg-brand-gradient absolute inset-y-2.5 left-0 w-[3px] rounded-full" />
-            </motion.span>
+            />
           )}
-          <item.icon size={18} strokeWidth={1.75} className={cx('relative', isActive && 'text-stage-brand')} aria-hidden />
-          <span className="relative">{item.label}</span>
-          {item.count != null && item.count > 0 && (
-            <span className="tnum relative ml-auto rounded-full bg-stage-caution/15 px-2 font-mono text-[12px] font-semibold text-stage-caution">{item.count}</span>
-          )}
+          <span className="relative flex w-12 shrink-0 items-center justify-center">
+            <item.icon size={18} strokeWidth={1.75} className={cx(isActive && 'text-stage-brand')} aria-hidden />
+            {collapsed && count > 0 && (
+              // 접으면 숫자 알약 대신 아이콘 오른쪽 위의 작은 점
+              <span data-testid="menu-dot" aria-hidden className="absolute top-2 right-2.5 size-2.5 rounded-full bg-stage-caution ring-2 ring-stage-bg" />
+            )}
+          </span>
+          <span aria-hidden={collapsed} className={cx('relative transition-opacity duration-150 motion-reduce:transition-none', collapsed && 'opacity-0')}>
+            {item.label}
+          </span>
+          {!collapsed && count > 0 && <span className="tnum relative ml-auto mr-2 rounded-full bg-stage-caution/15 px-2 font-mono text-[12px] font-semibold text-stage-caution">{count}</span>}
         </>
       )}
     </NavLink>

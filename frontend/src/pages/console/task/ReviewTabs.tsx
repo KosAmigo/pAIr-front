@@ -1,11 +1,12 @@
 // 검수 상세 탭 내용: 개요, 파일, 문항, 자동 확인 결과. (자료 PDF 는 PdfViewer)
 // 파일·문항 API 는 백엔드에 아직 없을 수 있어(404) "준비 중"을 보여 준다.
 import { useState, type ReactNode } from 'react'
-import { BookOpenCheck, Bot, Check, CircleAlert, Clock, Coins, EyeOff, FileCode2, FileText, Hammer, Loader2, Lock, Repeat } from 'lucide-react'
+import { BookOpenCheck, Check, CircleAlert, EyeOff, FileCode2, FileText, Hammer, Loader2, Lock } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { ErrorState } from '../../../components/ErrorState'
 import { levelLabel } from '../../../components/taskKind'
 import type { ConsoleTaskDetail } from '../../../consoleApi'
+import { GenStats } from './GenStats'
 import { useGenReport, useTaskFiles, useTaskQuestions, type Load } from '../../../data/taskReview'
 import { questionTypeLabel } from '../../../data/questions'
 import { CheckTable } from './CheckTable'
@@ -249,39 +250,15 @@ export function QuestionsTab({ code }: { code: string }) {
 }
 
 // ── 자동 확인 결과 ──
-const fmtNum = (n: number | undefined) => (n == null ? '-' : n.toLocaleString('ko-KR'))
 
 export function GenReportTab({ code }: { code: string }) {
   const report = useGenReport(code)
   return (
     <Loaded load={report} missing={<>AI로 만든 과제가 아니거나, 생성 기록(_gen/report.json)이 없어요.</>}>
       {(r) => {
-        const stats: { icon: typeof Bot; label: string; value: ReactNode }[] = [
-          { icon: Bot, label: '생성 모델', value: <span className="font-mono text-[15px]">{r.model}</span> },
-          { icon: Clock, label: '걸린 시간', value: <><span className="tnum font-mono">{fmtNum(r.seconds)}</span>초</> },
-          { icon: Repeat, label: '만든 횟수', value: <><span className="tnum font-mono">{fmtNum(r.attempts)}</span>번</> },
-          {
-            icon: Coins,
-            label: '토큰 (입력 / 출력)',
-            value: (
-              <span className="tnum font-mono text-[15px]">
-                {fmtNum(r.inputTokens)} / {fmtNum(r.outputTokens)}
-              </span>
-            ),
-          },
-        ]
         return (
           <div className="flex flex-col gap-4">
-            <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {stats.map((s) => (
-                <li key={s.label} className="flex flex-col gap-1 rounded-2xl border border-line bg-panel px-4 py-3.5 shadow-sm">
-                  <span className="flex items-center gap-1.5 text-[13px] font-semibold text-text-muted">
-                    <s.icon size={14} aria-hidden /> {s.label}
-                  </span>
-                  <span className="truncate text-[20px] font-bold text-text">{s.value}</span>
-                </li>
-              ))}
-            </ul>
+            <GenStats r={r} />
             {r.retryError && (
               <p className="rounded-xl border border-caution/30 bg-caution/8 px-4 py-3 text-[14px] leading-6 break-keep text-text">
                 <b className="font-bold text-caution">첫 시도에서 걸린 점 </b>

@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { CheckCircle2, Download, ExternalLink, FlaskConical, Info, Loader2, Play, Save, Square, Star } from 'lucide-react'
 import { cx } from '../components/cx'
 import { ErrorState } from '../components/ErrorState'
-import { Button, Logo } from '../components/ui'
-import { Aurora, BranchLine, CountUp, Glass, Reveal, StageSection } from '../components/fx'
+import { Button } from '../components/ui'
+import { BranchLine, CountUp, Glass, Reveal, StageSection } from '../components/fx'
 import { motion } from 'motion/react'
 import { duration, easing, stagger } from '../lib/motion'
 import { STATS } from '../data/dashboard'
@@ -1149,15 +1149,9 @@ export default function Grader() {
   }
 
   return (
-    // 2026-11-19 개편 (DESIGN.md §7-7): 오로라 띠 + 유리 상단 바, 다크 무대 "채점 실험실" 소개, 알약 탭.
-    <div className="relative isolate flex h-full flex-col">
-      <Aurora variant="band" className="h-[360px]" />
-      <header className="glass relative z-20 flex h-14 shrink-0 items-center gap-3 rounded-none! border-0! border-b! border-line/70! px-8 shadow-none!">
-        <Logo />
-        <span className="text-[16px] font-semibold">채점 툴</span>
-        <span className="rounded-sm bg-brand-dim px-1.5 font-mono text-[11px] font-semibold tracking-[0.12em] text-brand">LAB</span>
-      </header>
-      <main className="relative z-10 min-h-0 flex-1 overflow-auto">
+    // 2026-11-27: 콘솔 셸(왼쪽 메뉴 + 상단 바) 안에서 보인다. 상단 바·오로라는 셸이 그린다 (DESIGN.md §7-7, §7-9-0).
+    <div className="relative flex min-h-full flex-col pb-8">
+      <div className="relative z-10">
         <div className="mx-auto flex max-w-[1440px] flex-col gap-5 px-8 pt-6">
           <StageSection aria-label="채점 실험실">
             <div className="flex flex-wrap items-center gap-x-10 gap-y-5 px-8 py-7">
@@ -1216,7 +1210,7 @@ export default function Grader() {
           )}
           {rubric && tab === 'results' && <ResultsTab selected={runId} onSelect={setRunId} />}
         </div>
-      </main>
+      </div>
     </div>
   )
 }

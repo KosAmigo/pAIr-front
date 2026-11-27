@@ -3,7 +3,7 @@
 // ① 위에서 아래로: 직군 → 주제(선택, 추천 방향) → 추천 받기 → 고른 내용 확인·수정 → 용도·제한 시간. 직무·난이도 칸은 없다(난이도는 AI가 정한다).
 // ② 요약 카드로 한 번 확인 → ③ 생성(2초마다 상태 조회, 화면을 떠나면 조회만 멈춤) → 결과에서 ④ 검수로 간다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, CircleAlert, FilePlus2, Pencil } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
@@ -43,12 +43,14 @@ import { GenProgress } from './task/GenProgress'
 import { GenResult } from './task/GenResult'
 import { TRACK_ICON, USAGE_ICON } from '../../components/domainIcons'
 import { AutoGenPanel } from './task/AutoGenPanel'
-import { inputCls, TRACKS } from './task/formConsts'
+import { GEN_CARD, inputCls, TRACKS } from './task/formConsts'
 import { Field, MinutesPicker, ModePicker, TrackPicker, UsagePicker } from './task/formParts'
-import { GenJobList } from './task/GenJobList'
+import { GenFrame, GenSummary, type SummaryRow } from './task/GenFrame'
+import { GeneratingButton } from './task/GenActionButtons'
 import { SuggestPanel } from './task/SuggestPanel'
-import { useGenJobs } from './task/useGenJobs'
+import { refreshGenJobs } from './task/useGenJobs'
 import { useSuggestions } from './task/useSuggestions'
+import { generatingHref } from '../../data/taskGenJobs'
 
 /** topicHint = ②에 적는 추천 방향(주제, 선택), topic = ④의 상황(생성 요청의 topic) */
 type Form = { track: GenTrack | null; topicHint: string; topic: string; trap: string; usage: GenUsage; minutes: GenMinutes; mode: GenMode; batchDeadlineHours: BatchHours }
@@ -220,19 +222,20 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
 
   return (
     <>
-      <div className="mx-auto mb-5 w-full max-w-[960px]">
+      <div className="mx-auto mb-5 w-full max-w-[1180px]">
         <FlowSteps at={phase === 'result' && job?.status === 'FAILED' ? FLOW_AT.running : FLOW_AT[phase]} />
       </div>
 
-      <div className="mx-auto w-full max-w-[960px]">
+      <div className="mx-auto w-full max-w-[1180px]">
         {phase === 'idea' && (
+          <GenFrame aside={<GenSummary rows={manualSummary(form)} />}>
           <form
             noValidate
             onSubmit={(e) => {
               e.preventDefault()
               next()
             }}
-            className="glass step-in flex flex-col gap-7 rounded-2xl bg-white/90! p-7 shadow-md!"
+            className={GEN_CARD}
           >
             <Field n={1} title="직군" error={tried ? errors.track : null}>
               <TrackPicker value={form.track} onChange={(v) => set('track', v)} />
@@ -309,6 +312,7 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
               </Button>
             </div>
           </form>
+          </GenFrame>
         )}
 
         {phase === 'confirm' && form.track && (
@@ -343,6 +347,19 @@ function ManualGen({ onStarted }: { onStarted: () => void }) {
       )}
     </>
   )
+}
+
+/** 오른쪽 요약: 고른 값. 비어 있으면 '아직 안 골랐어요' */
+function manualSummary(f: Form): SummaryRow[] {
+  const track = TRACKS.find((t) => t.value === f.track)?.title ?? null
+  return [
+    { label: '직군', value: track },
+    { label: '상황', value: f.topic.trim() || null },
+    { label: '함정', value: f.trap.trim() || null },
+    { label: '용도', value: f.usage === 'LIVE' ? '실전' : '자가진단' },
+    { label: '제한 시간', value: `${f.minutes}분` },
+    { label: '방식', value: f.mode === 'BATCH' ? `배치 · 마감 ${f.batchDeadlineHours}시간` : '바로 만들기' },
+  ]
 }
 
 /** ② 확인: 만들기 전에 한 번 보는 요약 카드 (주제·함정·직군·용도·시간) */
@@ -427,12 +444,13 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'manual', label: '직접 만들기' },
 ]
 
-/** 과제 만들기: 탭(자동 생성 / 직접 만들기) + 진행 목록. 탭은 ?tab=manual 로 주소에 남는다(자동 생성은 주소에 안 적는다) */
+/** 과제 만들기: 탭(자동 생성 / 직접 만들기). 탭은 ?tab=manual 로 주소에 남는다(자동 생성은 주소에 안 적는다).
+ *  만드는 중인 작업의 진행 목록은 '만드는 중인 과제' 페이지에 있다(제목 오른쪽 버튼). */
 export default function ConsoleTaskNew() {
   useConsoleCrumbs(['과제 만들기'])
   const [params, setParams] = useSearchParams()
+  const nav = useNavigate()
   const tab: Tab = params.get('tab') === 'manual' ? 'manual' : 'auto'
-  const jobs = useGenJobs()
   const setTab = (v: Tab) =>
     setParams(
       (p) => {
@@ -446,15 +464,21 @@ export default function ConsoleTaskNew() {
 
   return (
     <>
-      <PageHeader label="NEW TASK" title="과제 만들기" />
-      <div className="mx-auto w-full max-w-[960px] px-8 pt-4">
-        <Tabs tabs={TABS} value={tab} onChange={setTab} />
+      <PageHeader label="NEW TASK" title="과제 만들기">
+        <GeneratingButton size="md" />
+      </PageHeader>
+      {/* 탭은 폼과 같은 폭(1180px) 안에서 가운데 */}
+      <div className="mx-auto flex w-full max-w-[1180px] justify-center border-b border-line/70 px-8 pt-4">
+        <Tabs tabs={TABS} value={tab} onChange={setTab} className="gap-10" />
       </div>
       <div className="px-8 pt-6 pb-12">
         <div role="tabpanel" aria-label={TABS.find((t) => t.value === tab)?.label}>
-          {tab === 'auto' ? <AutoGenPanel onStarted={jobs.refresh} /> : <ManualGen onStarted={jobs.refresh} />}
+          {tab === 'auto' ? (
+            <AutoGenPanel onStarted={(jobIds) => { refreshGenJobs(); nav(generatingHref(jobIds[0])) }} />
+          ) : (
+            <ManualGen onStarted={refreshGenJobs} />
+          )}
         </div>
-        <GenJobList rows={jobs.rows} error={jobs.error} onChanged={jobs.refresh} />
       </div>
     </>
   )

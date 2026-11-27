@@ -1,8 +1,9 @@
 // 자동 생성 탭: 폼(직군·시간·용도·개수·방식·마감) → 주제 미리보기(빼기·다시 받기) → 만들기.
-// 만들기를 누르면 작업이 서버 대기열에 들어가고, 진행은 아래 진행 목록(GenJobList)이 보여 준다.
+// 만들기를 누르면 작업이 서버 대기열에 들어가고, 부모가 '만드는 중인 과제' 페이지로 보낸다(onStarted 에 만든 작업 번호들).
+// 틀은 직접 만들기와 같다: 위 단계 표시, 왼쪽 유리 폼, 오른쪽 고른 값 요약(GenFrame).
 import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowLeft, ArrowRight, CircleAlert, Check, FilePlus2, RefreshCw, Sparkles, X, Zap } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CircleAlert, FilePlus2, RefreshCw, Sparkles, X, Zap } from 'lucide-react'
 import { Button } from '../../../components/ui'
 import { cx } from '../../../components/cx'
 import {
@@ -22,13 +23,17 @@ import {
   type GenTrack,
 } from '../../../data/taskGen'
 import { distance, springs, useShouldAnimate } from '../../../lib/motion'
-import { inputCls } from './formConsts'
+import { GEN_CARD, TRACKS, inputCls } from './formConsts'
+import { FlowSteps } from './FlowSteps'
+import { GenFrame, GenSummary, type SummaryRow } from './GenFrame'
 import { Field, MinutesPicker, ModePicker, TrackPicker, UsagePicker } from './formParts'
 import { CompetencyChips } from './SuggestPanel'
 
 type Phase = 'form' | 'preview'
 
-export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
+const AUTO_FLOW = ['설정', '주제 확인', '만들기'] as const
+
+export function AutoGenPanel({ onStarted }: { onStarted: (jobIds: string[]) => void }) {
   const [track, setTrack] = useState<GenTrack | null>(null)
   const [rest, setRest] = useState(DEFAULT_AUTO)
   const [countText, setCountText] = useState(String(DEFAULT_AUTO.count))
@@ -39,7 +44,6 @@ export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<string | null>(null)
   const animate = useShouldAnimate({ essential: true })
   const seq = useRef(0)
 
@@ -53,7 +57,6 @@ export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
     const my = ++seq.current
     setLoading(true)
     setError(null)
-    setDone(null)
     try {
       const got = await taskGenApi.preview(previewRequest(form, exclude))
       if (my !== seq.current) return
@@ -82,11 +85,10 @@ export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
     setError(null)
     try {
       const res = await taskGenApi.startAuto(autoRequest(form, withTopics ? topics : null))
-      setDone(`${res.jobIds.length}개를 만들기 시작했어요. 아래 진행 목록에서 볼 수 있어요.`)
       setPhase('form')
       setTopics([])
       setSeen([])
-      onStarted()
+      onStarted(res.jobIds)
     } catch (e) {
       setError(startErrorMessage(e))
     } finally {
@@ -101,6 +103,32 @@ export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
     setSeen([])
   }
 
+  const summary: SummaryRow[] = [
+    { label: '직군', value: TRACKS.find((t) => t.value === track)?.title ?? null },
+    { label: '제한 시간', value: `${rest.minutes}분` },
+    { label: '용도', value: rest.usage === 'LIVE' ? '실전' : '자가진단' },
+    { label: '개수', value: phase === 'preview' ? `${topics.length}개` : `${count}개` },
+    { label: '방식', value: rest.mode === 'BATCH' ? `배치 · 마감 ${rest.batchDeadlineHours}시간` : '바로 만들기' },
+  ]
+  const flow = (
+    <div className="mx-auto mb-5 w-full max-w-[1180px]">
+      <FlowSteps at={phase === 'preview' ? 1 : 0} names={AUTO_FLOW} />
+    </div>
+  )
+  const aside = (
+    <GenSummary rows={summary}>
+      {phase === 'preview' && topics.length > 0 && (
+        <div className="mt-5 rounded-xl border border-stage-line bg-stage-raised/70 p-4">
+          <p className="text-[13px] font-bold text-stage-muted">
+            주제 미리보기 · <span className="tnum font-mono">{topics.length}</span>개
+          </p>
+          <p className="mt-1 text-[15px] leading-6 font-bold break-keep text-stage-text">{topics[0]?.situation}</p>
+          {topics.length > 1 && <p className="mt-1 text-[13px] text-stage-muted">외 {topics.length - 1}개</p>}
+        </div>
+      )}
+    </GenSummary>
+  )
+
   const errBox = error && (
     <p role="alert" className="flex items-start gap-2 rounded-lg border border-alert/30 bg-alert/8 px-4 py-3 text-[14px] leading-6 break-keep text-text">
       <CircleAlert size={18} className="mt-0.5 shrink-0 text-alert" aria-hidden /> {error}
@@ -109,7 +137,10 @@ export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
 
   if (phase === 'preview' && form) {
     return (
-      <section aria-labelledby="auto-preview-title" className="step-in glass flex flex-col gap-5 rounded-2xl bg-white/90! p-7 shadow-md!">
+      <>
+      {flow}
+      <GenFrame aside={aside}>
+      <section aria-labelledby="auto-preview-title" className={GEN_CARD}>
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <h2 id="auto-preview-title" className="flex items-center gap-2 text-[20px] font-extrabold tracking-[-0.01em] text-text">
@@ -163,10 +194,15 @@ export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
           </Button>
         </div>
       </section>
+      </GenFrame>
+      </>
     )
   }
 
   return (
+    <>
+    {flow}
+    <GenFrame aside={aside}>
     <form
       noValidate
       aria-label="자동 생성"
@@ -174,15 +210,10 @@ export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
         e.preventDefault()
         preview()
       }}
-      className="glass step-in flex flex-col gap-7 rounded-2xl bg-white/90! p-7 shadow-md!"
+      className={GEN_CARD}
     >
       <p className="-mb-2 text-[14px] break-keep text-text-muted">직군과 시간만 정하면 AI가 서로 다른 주제로 과제를 여러 개 한 번에 만들어요.</p>
 
-      {done && (
-        <p role="status" className="flex items-center gap-2 rounded-lg border border-signal/30 bg-signal/10 px-4 py-3 text-[14px] font-semibold text-text">
-          <Check size={16} strokeWidth={3} className="text-signal" aria-hidden /> {done}
-        </p>
-      )}
       {errBox}
 
       <Field n={1} title="직군" error={tried && !track ? '직군을 고르세요' : null}>
@@ -227,6 +258,8 @@ export function AutoGenPanel({ onStarted }: { onStarted: () => void }) {
         </Button>
       </div>
     </form>
+    </GenFrame>
+    </>
   )
 }
 

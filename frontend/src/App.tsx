@@ -25,6 +25,7 @@ import { ConsoleShell } from './components/ConsoleShell'
 import ConsoleCompanies, { ConsoleCompanyDetail } from './pages/console/ConsoleCompanies'
 import ConsoleTasks from './pages/console/ConsoleTasks'
 import ConsoleTaskNew from './pages/console/ConsoleTaskNew'
+import ConsoleTasksGenerating from './pages/console/ConsoleTasksGenerating'
 import ConsoleTaskEdit from './pages/console/ConsoleTaskEdit'
 import TaskPreview from './pages/console/TaskPreview'
 import ConsoleSessions from './pages/console/ConsoleSessions'
@@ -122,9 +123,12 @@ export default function App() {
 
           {/* 채점 툴: 관리자 */}
           <Route element={<RequireAuth roles={['ADMIN']} />}>
-            <Route path="/grader" element={<Grader />} />
             <Route path="/proctor/lab" element={proctorLab} />
-            <Route path="/grader/result/:runId/:file" element={<GraderResult />} />
+            {/* 채점 툴은 콘솔 셸(왼쪽 메뉴 + 상단 바) 안에서 보인다. 주소는 그대로 */}
+            <Route element={<ConsoleShell />}>
+              <Route path="/grader" element={<Grader />} />
+              <Route path="/grader/result/:runId/:file" element={<GraderResult />} />
+            </Route>
           </Route>
 
           {/* 콘솔 (DESIGN.md §7-9) */}
@@ -146,6 +150,7 @@ export default function App() {
               <Route element={<RequireAuth roles={['ADMIN']} />}>
                 <Route path="tasks" element={<ConsoleTasks />} />
                 <Route path="tasks/new" element={<ConsoleTaskNew />} />
+                <Route path="tasks/generating" element={<ConsoleTasksGenerating />} />
                 <Route path="tasks/:taskId" element={<ConsoleTaskEdit />} />
                 <Route path="companies" element={<ConsoleCompanies />} />
                 <Route path="companies/:companyId" element={<ConsoleCompanyDetail />} />

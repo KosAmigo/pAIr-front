@@ -773,3 +773,28 @@
     transform: translateX(380%) skewX(-18deg);
   }
 }
+
+/* 만드는 중인 과제: 도는 묶음의 진행 막대 위로 흐르는 빛. 움직임 줄이기에서는 끈다 */
+.gen-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.gen-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.6) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: gen-shimmer 1600ms linear infinite;
+}
+@keyframes gen-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-shimmer::after {
+    animation: none;
+    display: none;
+  }
+}

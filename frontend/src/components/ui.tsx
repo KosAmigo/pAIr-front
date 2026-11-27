@@ -282,7 +282,8 @@ export function ModeBadge({ mode }: { mode: 'self' | 'live' }) {
   )
 }
 
-export function Logo({ className }: { className?: string }) {
+/** compact = 심볼만 보임 (접힌 사이드바). 글자는 자리를 지킨 채 투명해진다 */
+export function Logo({ className, compact }: { className?: string; compact?: boolean }) {
   return (
     <Link to="/" className={cx('inline-flex items-center gap-2 font-mono text-[16px] font-semibold text-text', className)} aria-label="pAIr 처음으로">
       <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden>
@@ -290,7 +291,7 @@ export function Logo({ className }: { className?: string }) {
         <circle cx="10" cy="7" r="3" fill="var(--color-brand)" />
         <circle cx="19" cy="25" r="3" fill="var(--color-branch-2)" />
       </svg>
-      <span>
+      <span className={cx('transition-opacity duration-150 motion-reduce:transition-none', compact && 'opacity-0')}>
         p<span className="text-brand-gradient">AI</span>r
       </span>
     </Link>

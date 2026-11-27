@@ -1,7 +1,7 @@
 // DESIGN.md §7-9-1 과제 목록 (ADMIN). 2026-11-23 정리: 자가진단 → 실전 → 검수 전 순서.
 // 위 스포트라이트 = 세 칸 요약(누르면 그 탭) + "과제 만들기" 주인공 버튼. 아래 = 알약 탭(오른쪽에 검색) + 직군 하위 거르기 + 카드 그리드.
 // 데이터는 백엔드 /api/console/tasks. 새 칸(track, summary, generated …)은 없을 수 있어 옵셔널로 다룬다.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileClock, FilePlus2, Search, X, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
@@ -12,6 +12,8 @@ import { countTabs, filterTasks, firstTab, TAB_HINT, TAB_LABEL, TAB_ORDER, track
 import { PillTabs } from './ConsoleHero'
 import { TRACK_ICON, USAGE_ICON } from '../../components/domainIcons'
 import { TaskCard, TaskCardSkeleton } from './task/TaskCard'
+import { CreateTaskButton, GeneratingButton } from './task/GenActionButtons'
+import { useGenJobs } from './task/useGenJobs'
 
 const TAB_ICON: Record<TaskTab, LucideIcon> = { draft: FileClock, public: USAGE_ICON.SELF, private: USAGE_ICON.LIVE }
 const TAB_TONE: Record<TaskTab, { num: string; icon: string }> = {
@@ -23,6 +25,14 @@ const TABS = TAB_ORDER
 
 export default function ConsoleTasks() {
   const { list, error } = useTaskList()
+  // 만들던 과제가 끝나(DONE) '검수 전'으로 저장되면 새로고침 없이 목록에 나타나게 다시 불러온다
+  const { doneSeq } = useGenJobs()
+  const seenDone = useRef(doneSeq)
+  useEffect(() => {
+    if (doneSeq === seenDone.current) return
+    seenDone.current = doneSeq
+    void loadTasks()
+  }, [doneSeq])
   const all = useMemo(() => list ?? [], [list])
   const counts = useMemo(() => countTabs(all), [all])
   // 사용자가 탭을 고르기 전에는 자가진단부터 연다 (검수 전이 있으면 탭에 개수 배지가 눈에 띄게 뜬다)
@@ -159,11 +169,12 @@ function Summary({ counts, loading, tab, onTab }: { counts: Record<TaskTab, numb
           <p className="mt-2 text-[15px] font-medium break-keep text-stage-muted" aria-live="polite">
             {next}
           </p>
-          <Magnetic className="mt-5 inline-block">
-            <ButtonLink to="/console/tasks/new" variant="primary" size="lg" className="h-12 rounded-full px-6 text-[16px] shadow-[0_12px_32px_-12px_rgb(108_71_255/0.7)]">
-              <FilePlus2 size={18} aria-hidden /> 과제 만들기
-            </ButtonLink>
-          </Magnetic>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Magnetic className="inline-block">
+              <CreateTaskButton size="lg" />
+            </Magnetic>
+            <GeneratingButton size="lg" />
+          </div>
         </div>
         <div role="group" aria-label="상태별 과제 수" className="grid w-full grid-cols-3 gap-3 lg:w-auto">
           {TABS.map((v) => {

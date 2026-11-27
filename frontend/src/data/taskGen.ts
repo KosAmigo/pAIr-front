@@ -9,8 +9,8 @@ export type GenMinutes = 20 | 40 | 60
 export const GEN_MINUTES: GenMinutes[] = [20, 40, 60]
 /** NOW = 바로 생성, BATCH = 배치(비용 약 절반, 마감 안에 끝남) */
 export type GenMode = 'NOW' | 'BATCH'
-export type BatchHours = 1 | 3 | 6
-export const BATCH_HOURS: BatchHours[] = [1, 3, 6]
+/** 백엔드가 받는 마감(그 밖 값은 400). 화면에 보이는 선택지와 이름은 pages/console/task/formConsts.ts 의 DEADLINE_OPTIONS */
+export type BatchHours = 3 | 6 | 12 | 24
 export const DEFAULT_BATCH_HOURS: BatchHours = 3
 /** 자동 생성 개수 범위 */
 export const AUTO_COUNT_MIN = 1
@@ -54,6 +54,9 @@ export type TaskGenJob = {
   queuePosition?: number | null
   /** 배치 창구에서 답을 기다리는 중 (백엔드가 아직 안 줄 수도 있다) */
   waitingBatch?: boolean
+  /** 만들 때 적은 함정·용도 (백엔드가 새로 붙인 칸, 없을 수 있다) */
+  trap?: string | null
+  usage?: GenUsage | null
 }
 
 /** 작업 목록의 한 줄 (GET /api/admin/task-gen/jobs) */
@@ -104,7 +107,37 @@ export type GenReport = {
   form?: (Partial<TaskGenRequest> & { jobRole?: string; difficulty?: string }) | null
   checks: GenCheck[]
   retryError?: string | null
-  details?: Record<string, unknown> | null
+  /** stages = 모델 호출마다 한 줄(stage·model·via). 옛 기록에는 없다 */
+  details?: ({ stages?: { stage?: string | null; model?: string | null; via?: string | null }[] | null } & Record<string, unknown>) | null
+}
+
+/** GET /api/admin/task-gen/{jobId}/content 응답. 칸이 없거나 null 이면 그 단계는 아직 안 나온 것 */
+export type GenContent = {
+  jobId?: string
+  status?: JobState
+  step?: string | null
+  updatedAt?: string | null
+  form?: { track?: GenTrack | null; topic?: string | null; trap?: string | null; usage?: GenUsage | null; minutes?: number | null; mode?: GenMode | null } | null
+  blueprint?: {
+    title?: string | null
+    summary?: string | null
+    scenario?: string | null
+    category?: string | null
+    competencies?: string[] | null
+    api?: string[] | null
+    examples?: { input: string; expected: string }[] | null
+    flaws?: { what: string; where: string }[] | null
+    judgments?: { question: string; options?: string[] | null }[] | null
+    neededFiles?: string[] | null
+    fillers?: { path: string; summary?: string | null; confusing?: boolean | null }[] | null
+    docs?: { path: string; role?: string | null }[] | null
+    questionPlan?: string[] | null
+  } | null
+  writing?: { description?: string[] | null; requirements?: string[] | null; notes?: string | null; documents?: { path: string; chars?: number | null }[] | null } | null
+  code?: { files?: { path: string; chars?: number | null }[] | null } | null
+  answer?: { hiddenTests?: { path: string; methods?: string[] | null }[] | null; wrongFixes?: number | null; altSolutions?: number | null } | null
+  questions?: { seq?: number | null; type?: string | null; content?: string | null }[] | null
+  fillers?: { files?: { path: string; chars?: number | null }[] | null } | null
 }
 
 const enc = encodeURIComponent
@@ -115,6 +148,8 @@ export const taskGenApi = {
   jobs: () => call<JobRow[]>('GET', '/api/admin/task-gen/jobs?active=true'),
   cancel: (jobId: string) => call<JobRow>('POST', `/api/admin/task-gen/${enc(jobId)}/cancel`),
   job: (jobId: string) => call<TaskGenJob>('GET', `/api/admin/task-gen/${enc(jobId)}`),
+  /** 만들어지는 중·만들어진 내용 (단계가 안 끝났으면 그 칸은 null) */
+  content: (jobId: string) => call<GenContent>('GET', `/api/admin/task-gen/${enc(jobId)}/content`),
   suggest: (req: SuggestRequest) => call<SuggestResponse>('POST', '/api/admin/task-gen/suggestions', req),
   report: (code: string) => call<GenReport>('GET', `/api/admin/tasks/${enc(code)}/gen-report`),
 }
