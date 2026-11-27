@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Download, ExternalLink, FlaskConical, Info, Loader2, Play, Save, Square, Star } from 'lucide-react'
 import { cx } from '../components/cx'
@@ -8,6 +9,7 @@ import { BranchLine, CountUp, Glass, Reveal, StageSection } from '../components/
 import { motion } from 'motion/react'
 import { duration, easing, stagger } from '../lib/motion'
 import { STATS } from '../data/dashboard'
+import { errorMessage, freshOnMount } from '../data/queryKeys'
 import { PillTabs } from './console/ConsoleHero'
 import {
   ApiError,
@@ -689,53 +691,35 @@ const stats = (xs: number[]) => {
 }
 
 function ResultsTab({ selected, onSelect }: { selected: string | null; onSelect: (id: string) => void }) {
-  const [runs, setRuns] = useState<GraderRun[] | null>(null)
-  const [loadedData, setData] = useState<{ meta: GraderRun; results: GraderResult[] } | null>(null)
+  const queryClient = useQueryClient()
   const [compareId, setCompareId] = useState('')
-  const [loadedCompare, setCompare] = useState<{ meta: GraderRun; results: GraderResult[] } | null>(null)
-  // 고른 실험과 다른 결과(이전에 고른 것)는 보여 주지 않는다 (effect 안에서 비우지 않고 여기서 거른다)
-  const data = loadedData?.meta.id === selected ? loadedData : null
-  const compare = compareId && loadedCompare?.meta.id === compareId ? loadedCompare : null
-  const [err, setErr] = useState<string | null>(null)
+  const [actionErr, setErr] = useState<string | null>(null)
 
-  const loadRuns = useCallback(() => {
-    grader
-      .runs()
-      .then((r) => {
-        setRuns(r)
-        if (!selected && r[0]) onSelect(r[0].id)
-      })
-      .catch((e: ApiError) => setErr(e.message))
-  }, [selected, onSelect])
-  useEffect(loadRuns, [loadRuns])
-
+  const runsQ = useQuery({ queryKey: ['grader-runs'], queryFn: () => grader.runs(), ...freshOnMount })
+  const runs: GraderRun[] | null = runsQ.data ?? null
+  // 고른 실험이 없으면 가장 최근 실험을 고른다
   useEffect(() => {
-    if (!selected) return
-    let alive = true
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const tick = () => {
-      grader
-        .run(selected)
-        .then((d) => {
-          if (!alive) return
-          setData(d)
-          if (d.meta.status === 'RUNNING') timer = setTimeout(tick, 3000)
-          else loadRunsQuiet()
-        })
-        .catch((e: ApiError) => setErr(e.message))
-    }
-    const loadRunsQuiet = () => grader.runs().then((r) => alive && setRuns(r)).catch(() => {})
-    tick()
-    return () => {
-      alive = false
-      if (timer) clearTimeout(timer)
-    }
-  }, [selected])
+    if (!selected && runs?.[0]) onSelect(runs[0].id)
+  }, [selected, runs, onSelect])
 
+  // 고른 실험: 채점 중(RUNNING)이면 3초마다 다시 받는다. 실험 ID 가 키에 들어 있어 이전에 고른 결과는 보이지 않는다
+  const runQ = useQuery({
+    queryKey: ['grader-run', selected],
+    queryFn: () => grader.run(selected!),
+    enabled: !!selected,
+    refetchInterval: (q) => (q.state.data?.meta.status === 'RUNNING' ? 3000 : false),
+    ...freshOnMount,
+  })
+  const data = runQ.data ?? null
+  // 끝나면 목록의 상태도 다시 받는다
+  const doneId = runQ.data && runQ.data.meta.status !== 'RUNNING' ? `${runQ.data.meta.id}:${runQ.data.meta.status}` : null
   useEffect(() => {
-    if (!compareId) return
-    grader.run(compareId).then(setCompare).catch((e: ApiError) => setErr(e.message))
-  }, [compareId])
+    if (doneId) void queryClient.invalidateQueries({ queryKey: ['grader-runs'] })
+  }, [doneId, queryClient])
+
+  const compareQ = useQuery({ queryKey: ['grader-run', compareId], queryFn: () => grader.run(compareId), enabled: !!compareId, ...freshOnMount })
+  const compare = compareId ? (compareQ.data ?? null) : null
+  const err = actionErr ?? errorMessage(runsQ.error ?? runQ.error ?? compareQ.error)
 
   const cancel = async () => {
     if (!selected) return

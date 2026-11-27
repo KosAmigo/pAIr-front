@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Clock, Loader2, Play, Sparkles } from 'lucide-react'
 import { trackIconOf } from '../components/domainIcons'
@@ -9,7 +10,9 @@ import { cx } from '../components/cx'
 import { GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight, StageSection } from '../components/fx'
 import type { Track } from '../data/catalog'
 import { resumeByTask } from '../lib/attempts'
-import { api, ApiError, type Task, type TaskSummary } from '../api'
+import type { Task, TaskSummary } from '../api'
+import { attemptsQuery, tasksQuery } from '../data/userQueries'
+import { errorMessage } from '../data/queryKeys'
 import { distance, duration, easing, springs } from '../lib/motion'
 
 // DESIGN.md §7-2a 과제 목록 — "퀘스트 보드" (2026-11-19 전면 개편)
@@ -181,33 +184,13 @@ function TimeFilterSwitch({ counts, value, onChange }: { counts: Record<TimeFilt
 export default function Tasks() {
   const [track, setTrack] = useState<Track>('dev')
   const [time, setTime] = useState<TimeFilter>('ALL')
-  const [all, setAll] = useState<Row[] | null>(null)
-  const [resume, setResume] = useState(new Map<string, string>())
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    let alive = true
-    // 응시 기록을 못 읽어도 과제 목록은 보여 준다 (이어서 풀기만 빠진다)
-    api
-      .list(true)
-      .then((list) => alive && setResume(resumeByTask(list)))
-      .catch(() => undefined)
-    api
-      .taskList()
-      .then(async (list) => {
-        const defs = await Promise.all(list.map((s) => api.task(s.id)))
-        return defs.map((d, i): Row => ({ ...d, status: list[i].status }))
-      })
-      .then((rows) => {
-        if (!alive) return
-        setAll(rows)
-        setError(null)
-      })
-      .catch((e: ApiError) => alive && setError(e.message))
-    return () => {
-      alive = false
-    }
-  }, [tick])
+  const tasksQ = useQuery(tasksQuery)
+  // 응시 기록을 못 읽어도 과제 목록은 보여 준다 (이어서 풀기만 빠진다)
+  const attemptsQ = useQuery(attemptsQuery(true))
+  const all: Row[] | null = tasksQ.data ?? null
+  const error = tasksQ.error ? errorMessage(tasksQ.error) : null
+  const resume = useMemo(() => (attemptsQ.data ? resumeByTask(attemptsQ.data) : new Map<string, string>()), [attemptsQ.data])
+  const retry = () => void Promise.all([tasksQ.refetch(), attemptsQ.refetch()])
   const ofTrack = (all ?? []).filter((t) => t.type === track)
   const timeCounts: Record<TimeFilter, number> = { ALL: ofTrack.length, 20: 0, 40: 0, 60: 0 }
   for (const t of ofTrack) timeCounts[timeBucket(t.minutes)]++
@@ -250,7 +233,7 @@ export default function Tasks() {
         </div>
 
         {error ? (
-          <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
+          <ErrorState message={error} onRetry={retry} />
         ) : !all ? (
           <p className="flex items-center gap-2 py-10 text-body text-text-muted">
             <Loader2 size={18} className="animate-spin" aria-hidden /> 불러오는 중

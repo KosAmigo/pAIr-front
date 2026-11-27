@@ -1,35 +1,20 @@
 // 이벤트 앞뒤 증거 구간 타임라인: 웹캠 사진을 시간순으로 훑어보고 크게 본다 (예전 기록에 휴대폰 사진이 있으면 함께 보인다).
 // 사진은 로그인 헤더가 필요해 blob URL 로 받는다 (모달을 열면 구간 사진을 모두 받는다. 웹캠 최대 12장, 장당 약 14KB).
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ImageOff, Loader2 } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
 import { consoleApi, type ClipFrameView } from '../../consoleApi'
+import { useBlobUrl } from '../../data/blobUrl'
 import { useLoad } from '../../data/consoleSessions'
+import { errorMessage } from '../../data/queryKeys'
 import { Modal } from './common'
 import { nearestToEvent, offsetLabel, splitBySource } from './evidenceView'
 import { Loading } from './Loading'
 
 function useFrameImage(sessionId: number, eventId: number, frame: ClipFrameView) {
-  const [state, setState] = useState<{ id: number; url?: string; error?: string } | null>(null)
-  useEffect(() => {
-    if (frame.deleted) return
-    let alive = true
-    let url: string | undefined
-    consoleApi.clipImageUrl(sessionId, eventId, frame.id).then(
-      (u) => {
-        if (!alive) return URL.revokeObjectURL(u)
-        url = u
-        setState({ id: frame.id, url: u })
-      },
-      (e: unknown) => alive && setState({ id: frame.id, error: e instanceof Error ? e.message : String(e) }),
-    )
-    return () => {
-      alive = false
-      if (url) URL.revokeObjectURL(url)
-    }
-  }, [sessionId, eventId, frame.id, frame.deleted])
-  return state?.id === frame.id ? state : null
+  const b = useBlobUrl(frame.deleted ? null : ['clip', sessionId, eventId, frame.id], () => consoleApi.clipImageBlob(sessionId, eventId, frame.id))
+  return { url: b.url ?? undefined, error: errorMessage(b.error) ?? undefined }
 }
 
 function Thumb({ sessionId, eventId, frame, selected, nearestId, onPick }: { sessionId: number; eventId: number; frame: ClipFrameView; selected: boolean; nearestId: number | null; onPick: () => void }) {

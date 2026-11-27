@@ -1,24 +1,16 @@
 // 복기 화면: 질문에 붙였던 첨부의 원문(그때 AI 에게 실제로 보낸 글자)을 펼쳐 본다.
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { createPortal } from 'react-dom'
 import { Loader2, Paperclip, X } from 'lucide-react'
-import { api, ApiError, type AttachmentDetail, type TurnAttachment } from '../../api'
+import { api, type TurnAttachment } from '../../api'
+import { errorMessage, freshOnMount } from '../../data/queryKeys'
 import { ErrorState } from '../ErrorState'
 import { IconButton } from '../ui'
 
 export function AttachmentModal({ attemptId, turn, attachment, onClose }: { attemptId: string; turn: number; attachment: TurnAttachment; onClose: () => void }) {
-  const [state, setState] = useState<{ detail: AttachmentDetail | null; error: string | null }>({ detail: null, error: null })
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    let alive = true
-    api
-      .attachment(attemptId, attachment.id)
-      .then((detail) => alive && setState({ detail, error: null }))
-      .catch((e: ApiError) => alive && setState({ detail: null, error: e.message }))
-    return () => {
-      alive = false
-    }
-  }, [attemptId, attachment.id, tick])
+  const q = useQuery({ queryKey: ['review-attachment', attemptId, attachment.id], queryFn: () => api.attachment(attemptId, attachment.id), ...freshOnMount })
+  const state = { detail: q.data ?? null, error: errorMessage(q.error) }
   useEffect(() => {
     // 뒤의 대화 서랍도 Esc 로 닫히므로, 캡처 단계에서 먼저 받아 이 창만 닫는다
     const onKey = (e: KeyboardEvent) => {
@@ -56,7 +48,7 @@ export function AttachmentModal({ attemptId, turn, attachment, onClose }: { atte
         </p>
         <div className="min-h-0 flex-1 overflow-auto p-4">
           {state.error ? (
-            <ErrorState compact message={state.error} onRetry={() => setTick((t) => t + 1)} />
+            <ErrorState compact message={state.error} onRetry={() => void q.refetch()} />
           ) : !state.detail ? (
             <p className="flex items-center gap-2 text-[14px] text-text-muted">
               <Loader2 size={16} className="animate-spin" aria-hidden /> 불러오는 중

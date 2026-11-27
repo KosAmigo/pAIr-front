@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import { PageHeader, SelfShell } from '../components/SelfShell'
 import { ErrorState } from '../components/ErrorState'
 import { TrackChip } from '../components/TrackChip'
 import { ButtonLink } from '../components/ui'
-import { api, type ApiError, type AttemptSummary } from '../api'
+import type { AttemptSummary } from '../api'
+import { attemptsQuery } from '../data/userQueries'
+import { errorMessage } from '../data/queryKeys'
 import { reportAttempts } from '../lib/attempts'
 
 // 상단 탭 "리포트": 제출한 자가진단 응시를 최근 순으로 보여 주고, 누르면 결과 리포트(/report/:attemptId)로 간다
@@ -24,25 +27,15 @@ function Result({ a }: { a: AttemptSummary }) {
 }
 
 export default function Reports() {
-  const [list, setList] = useState<AttemptSummary[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    let alive = true
-    api
-      .list()
-      .then((d) => alive && (setList(reportAttempts(d)), setError(null)))
-      .catch((e: ApiError) => alive && setError(e.message))
-    return () => {
-      alive = false
-    }
-  }, [tick])
+  const q = useQuery(attemptsQuery(false))
+  const list = useMemo<AttemptSummary[] | null>(() => (q.data ? reportAttempts(q.data) : null), [q.data])
+  const error = errorMessage(q.error)
 
   return (
     <SelfShell header={<PageHeader label="REPORTS" title="리포트" />}>
       <div className="mx-auto max-w-[960px] px-4 py-6 md:px-8">
         {error ? (
-          <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
+          <ErrorState message={error} onRetry={() => void q.refetch()} />
         ) : !list ? (
           <p className="flex items-center gap-2 py-10 text-body text-text-muted">
             <Loader2 size={18} className="animate-spin" aria-hidden /> 불러오는 중

@@ -1,9 +1,10 @@
 // 콘솔: 응시자가 환경 점검에서 찍은 귀·손목 사진. 이어폰·스마트워치는 자동으로 분석하지 않고 감독관이 이 사진으로 확인한다.
 // 사진은 로그인 헤더가 필요해 blob URL 로 받는다 (최대 3장).
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ImageOff, Loader2 } from 'lucide-react'
 import { ErrorState } from '../../components/ErrorState'
 import { consoleApi, type EnvCheckPhotoView } from '../../consoleApi'
+import { useBlobUrl } from '../../data/blobUrl'
 import { useLoad } from '../../data/consoleSessions'
 import { Modal } from './common'
 import { fmtTime } from './format'
@@ -12,27 +13,9 @@ const STAGE_LABEL: Record<EnvCheckPhotoView['stage'], string> = { EAR_LEFT: '왼
 const STAGE_ORDER: EnvCheckPhotoView['stage'][] = ['EAR_LEFT', 'EAR_RIGHT', 'WRIST']
 
 function usePhotoUrl(sessionId: number, photo: EnvCheckPhotoView) {
-  const [state, setState] = useState<{ key: string; url?: string; error?: boolean } | null>(null)
   // 다시 찍은 사진은 같은 번호라서 찍은 시각을 키에 넣어 다시 받는다
-  const key = `${photo.id}-${photo.capturedAt}`
-  useEffect(() => {
-    if (photo.deleted) return
-    let alive = true
-    let url: string | undefined
-    consoleApi.envCheckPhotoUrl(sessionId, photo.id).then(
-      (u) => {
-        if (!alive) return URL.revokeObjectURL(u)
-        url = u
-        setState({ key, url: u })
-      },
-      () => alive && setState({ key, error: true }),
-    )
-    return () => {
-      alive = false
-      if (url) URL.revokeObjectURL(url)
-    }
-  }, [sessionId, photo.id, photo.deleted, key])
-  return state?.key === key ? state : null
+  const b = useBlobUrl(photo.deleted ? null : ['env-photo', sessionId, photo.id, photo.capturedAt], () => consoleApi.envCheckPhotoBlob(sessionId, photo.id))
+  return { url: b.url ?? undefined, error: b.error != null }
 }
 
 function PhotoTile({ sessionId, photo, onOpen }: { sessionId: number; photo: EnvCheckPhotoView; onOpen: (url: string) => void }) {

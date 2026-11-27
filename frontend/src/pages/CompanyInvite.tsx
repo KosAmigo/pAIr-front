@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth, homeFor } from '../auth/auth'
 import { validateNewPassword } from '../auth/account'
 import { companyApi, type Invite } from '../company/companyApi'
 import { needsOnboarding } from '../company/policy'
+import { freshOnMount, queryKeys } from '../data/queryKeys'
 import { Button } from '../components/ui'
 
 const input = 'h-11 w-full rounded-md border border-line-strong bg-panel px-3 text-text'
@@ -14,9 +16,20 @@ export default function CompanyInvite() {
 }
 
 function InviteForm({ token }: { token: string }) {
-  const [invite, setInvite] = useState<Invite | null>(null)
-  const [loading, setLoading] = useState(!!token)
-  const [error, setError] = useState<string | null>(token ? null : '초대 토큰이 없습니다.')
+  // 초대 확인. 토큰이 틀렸을 때 다시 시도해도 같으므로 재시도하지 않는다
+  const inviteQ = useQuery({ queryKey: queryKeys.invitation(token), queryFn: () => companyApi.invitation(token), enabled: !!token, retry: false, ...freshOnMount })
+  const loading = !!token && inviteQ.isPending
+  const loadedError = !token
+    ? '초대 토큰이 없습니다.'
+    : inviteQ.error
+      ? (inviteQ.error instanceof Error ? inviteQ.error.message : '초대를 확인하지 못했습니다.')
+      : inviteQ.data && inviteQ.data.role !== 'PROCTOR'
+        ? '감독관 초대가 아닙니다.'
+        : null
+  const invite: Invite | null = inviteQ.data?.role === 'PROCTOR' ? inviteQ.data : null
+  // 입력·요청 중에 나온 오류. 아직 없으면(undefined) 불러오기 결과를 보인다
+  const [actionError, setError] = useState<string | null | undefined>(undefined)
+  const error = actionError === undefined ? loadedError : actionError
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [name, setName] = useState('')
@@ -25,17 +38,6 @@ function InviteForm({ token }: { token: string }) {
   const [code, setCode] = useState('')
   const { acceptInvitation, signedIn } = useAuth()
   const navigate = useNavigate()
-  useEffect(() => {
-    let active = true
-    if (!token) return
-    companyApi.invitation(token).then((value) => {
-      if (active) {
-        if (value.role !== 'PROCTOR') setError('감독관 초대가 아닙니다.')
-        else setInvite(value)
-      }
-    }).catch((e: unknown) => { if (active) setError(e instanceof Error ? e.message : '초대를 확인하지 못했습니다.') }).finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [token])
   async function run(operation: () => Promise<void>) {
     if (busy) return
     setBusy(true); setError(null); setNotice(null)

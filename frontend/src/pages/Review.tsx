@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { GitBranch, Loader2, Play } from 'lucide-react'
@@ -15,8 +16,10 @@ import { TaskRail } from '../components/review/TaskRail'
 import { Verdict } from '../components/review/Verdict'
 import { startLabel, useCompare } from '../components/review/shared'
 import { ConfirmModal } from './console/common'
-import { api, type ApiError, type AttemptSummary, type Checkpoint, type TreeNode } from '../api'
+import { api, type ApiError, type AttemptSummary, type Checkpoint } from '../api'
 import { loadCheckpoints, loadTaskTrees } from '../data/review'
+import { attemptsQuery } from '../data/userQueries'
+import { errorMessage, freshOnMount, queryKeys } from '../data/queryKeys'
 import { assignSlot, divergeTurn, groupByTask, layoutLanes, resolveSelection, type TreeLane } from '../lib/reviewTree'
 
 // DESIGN.md §7-5 복기 `/review?task=&a=&b=`
@@ -35,29 +38,16 @@ function Loading({ text = '불러오는 중' }: { text?: string }) {
 
 export default function Review() {
   const [params, setParams] = useSearchParams()
-  const [list, setList] = useState<AttemptSummary[] | null>(null)
-  const [listError, setListError] = useState<string | null>(null)
-  const [listTick, setListTick] = useState(0)
-  const [trees, setTrees] = useState<{ key: string; nodes: TreeNode[] | null; error: string | null } | null>(null)
-  const [treeTick, setTreeTick] = useState(0)
+  const queryClient = useQueryClient()
+  // 빈 응시도 받아야 지울 수 있다 (안 보이면 과제 창의 이어서 풀기가 계속 남는다)
+  const listQ = useQuery(attemptsQuery(true))
+  const list: AttemptSummary[] | null = listQ.data ?? null
+  const listError = errorMessage(listQ.error)
   const [slot, setSlot] = useState<Slot>('a')
   const [transcriptOpen, setTranscriptOpen] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<{ lane: TreeLane; busy: boolean; error: string | null } | null>(null)
   const [dot, setDot] = useState<{ lane: TreeLane; cp: Checkpoint; anchor: Anchor } | null>(null)
-  const [cps, setCps] = useState<{ key: string; data: Record<string, Checkpoint[]> } | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    // 빈 응시도 받아야 지울 수 있다 (안 보이면 과제 창의 이어서 풀기가 계속 남는다)
-    api
-      .list(true)
-      .then((d) => alive && (setList(d), setListError(null)))
-      .catch((e: ApiError) => alive && setListError(e.message))
-    return () => {
-      alive = false
-    }
-  }, [listTick])
 
   const groups = useMemo(() => (list ? groupByTask(list) : []), [list])
   const qTask = params.get('task')
@@ -65,22 +55,17 @@ export default function Review() {
   const qb = params.get('b')
   const group = groups.find((g) => g.taskId === qTask) ?? groups.find((g) => g.attempts.some((x) => x.id === qb || x.id === qa)) ?? groups[0] ?? null
   const taskId = group?.taskId ?? null
-  const treeKey = group ? `${group.taskId}|${group.count}|${treeTick}` : ''
   const newestFirst = useMemo(() => (group ? [...group.attempts].reverse().map((x) => x.id) : []), [group])
 
-  useEffect(() => {
-    if (!treeKey) return
-    let alive = true
-    loadTaskTrees(newestFirst)
-      .then((nodes) => alive && setTrees({ key: treeKey, nodes, error: null }))
-      .catch((e: ApiError) => alive && setTrees({ key: treeKey, nodes: null, error: e.message }))
-    return () => {
-      alive = false
-    }
-  }, [treeKey, newestFirst])
-
-  const treeReady = trees != null && trees.key === treeKey ? trees : null
-  const layout = useMemo(() => (treeReady?.nodes ? layoutLanes(treeReady.nodes) : null), [treeReady])
+  // 과제나 응시 수가 바뀌면 키가 달라져 이전 과제의 트리는 보이지 않는다
+  const treeQ = useQuery({
+    queryKey: queryKeys.reviewTrees(group?.taskId ?? '', group?.count ?? 0),
+    queryFn: () => loadTaskTrees(newestFirst),
+    enabled: !!group,
+    ...freshOnMount,
+  })
+  const treeReady = group ? { nodes: treeQ.data ?? null, error: errorMessage(treeQ.error) } : null
+  const layout = useMemo(() => (treeQ.data ? layoutLanes(treeQ.data) : null), [treeQ.data])
   const lanes = useMemo(() => layout?.lanes ?? [], [layout])
   const sel = useMemo(() => (layout ? resolveSelection(layout.lanes, qa, qb) : { a: null, b: null }), [layout, qa, qb])
   const byId = useMemo(() => new Map(lanes.map((l) => [l.attemptId, l])), [lanes])
@@ -91,15 +76,13 @@ export default function Review() {
 
   // 갈래마다 체크포인트(질문 시점)를 불러와 선 위의 점으로 쓴다
   const laneKey = lanes.map((l) => l.attemptId).join(',')
-  useEffect(() => {
-    if (!laneKey) return
-    let alive = true
-    loadCheckpoints(laneKey.split(',')).then((data) => alive && setCps({ key: laneKey, data }))
-    return () => {
-      alive = false
-    }
-  }, [laneKey])
-  const checkpoints = cps && cps.key === laneKey ? cps.data : {}
+  const cpsQ = useQuery({
+    queryKey: queryKeys.reviewCheckpoints(laneKey),
+    queryFn: () => loadCheckpoints(laneKey.split(',')),
+    enabled: !!laneKey,
+    ...freshOnMount,
+  })
+  const checkpoints = cpsQ.data ?? {}
   const openDot = (lane: TreeLane, cp: Checkpoint, target: Element) => {
     const r = target.getBoundingClientRect()
     setDot({ lane, cp, anchor: { left: r.left, top: r.top, bottom: r.bottom, width: r.width } })
@@ -134,13 +117,13 @@ export default function Review() {
         setDot(null)
         setParams(new URLSearchParams(taskId ? { task: taskId } : {}), { replace: true })
         // 목록을 다시 읽으면 응시 수가 바뀌어 트리도 새 목록으로 다시 불러온다
-        setListTick((t) => t + 1)
+        void queryClient.invalidateQueries({ queryKey: ['attempts'] })
       })
       .catch((e: ApiError) => setRemoving({ lane, busy: false, error: e.message }))
   }
 
   let body
-  if (listError) body = <ErrorState message={listError} onRetry={() => setListTick((t) => t + 1)} className="mt-16" />
+  if (listError) body = <ErrorState message={listError} onRetry={() => void listQ.refetch()} className="mt-16" />
   else if (!list) body = <Loading />
   else if (groups.length === 0)
     body = (
@@ -160,7 +143,7 @@ export default function Review() {
           <TaskRail groups={groups} selected={taskId} onSelect={selectTask} />
           <div className="min-w-0">
             {treeReady?.error ? (
-              <ErrorState message={treeReady.error} onRetry={() => setTreeTick((t) => t + 1)} />
+              <ErrorState message={treeReady.error} onRetry={() => void treeQ.refetch()} />
             ) : !layout ? (
               <div className="review-stage rounded-[20px] p-6">
                 <p className="relative z-10 flex items-center gap-2 text-[14px] text-[#9b97c4]">

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { FileBarChart2, Loader2, X } from 'lucide-react'
-import { api, ApiError, type Turn } from '../../api'
+import { reportQuery } from '../../data/userQueries'
+import { errorMessage } from '../../data/queryKeys'
 import { ButtonLink, IconButton } from '../ui'
 import { ErrorState } from '../ErrorState'
 import { TurnItem } from '../replay/TurnItem'
@@ -12,24 +14,13 @@ import { shortDate, turnTag } from './shared'
 /** 노드 서랍 (DESIGN.md §7-5): 한 갈래의 AI 대화 기록, 리포트 링크 */
 export function NodeDrawer({ lane, onClose }: { lane: TreeLane; onClose: () => void }) {
   const reduce = useReducedMotion()
-  const [tick, setTick] = useState(0)
-  const [state, setState] = useState<{ id: string; turns: Turn[] | null; error: string | null }>({ id: '', turns: null, error: null })
-  useEffect(() => {
-    let alive = true
-    api
-      .report(lane.attemptId)
-      .then((r) => alive && setState({ id: lane.attemptId, turns: r.report?.transcript ?? [], error: null }))
-      .catch((e: ApiError) => alive && setState({ id: lane.attemptId, turns: null, error: e.message }))
-    return () => {
-      alive = false
-    }
-  }, [lane.attemptId, tick])
+  const q = useQuery(reportQuery(lane.attemptId, false))
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
-  const cur = state.id === lane.attemptId ? state : { id: '', turns: null, error: null }
+  const cur = { turns: q.data ? (q.data.report?.transcript ?? []) : null, error: errorMessage(q.error) }
 
   // 변형(transform)이 걸린 화면 전환 영역 안에서는 fixed 가 어긋나므로 body 로 꺼내 그린다
   return createPortal(
@@ -62,7 +53,7 @@ export function NodeDrawer({ lane, onClose }: { lane: TreeLane; onClose: () => v
         <p className="label">TRANSCRIPT</p>
         <h3 className="mb-2 text-[15px] font-semibold text-text">AI 대화 기록</h3>
         {cur.error ? (
-          <ErrorState compact message={cur.error} onRetry={() => setTick((t) => t + 1)} />
+          <ErrorState compact message={cur.error} onRetry={() => void q.refetch()} />
         ) : !cur.turns ? (
           <p className="flex items-center gap-2 text-[14px] text-text-muted">
             <Loader2 size={16} className="animate-spin" aria-hidden /> 불러오는 중

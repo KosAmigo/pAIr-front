@@ -34,6 +34,7 @@ import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
 import { canReviewProctor, useAuth } from '../../auth/auth'
 import { consoleApi, type EventReview, type EventType, type ParticipantView, type ProctorEventView, type SessionSummary } from '../../consoleApi'
+import { useBlobUrl } from '../../data/blobUrl'
 import { EVENT_LABEL, isCameraEvent, useLoad } from '../../data/consoleSessions'
 import { LIVE_VIEW_ENABLED } from '../../proctor/features'
 import { countUnconfirmed, serverCheckBadge } from '../../proctor/core/serverCheck'
@@ -489,24 +490,8 @@ const MISSING_SNAPSHOT = {
 
 /** 스냅샷 사진: 로그인 헤더가 필요해 blob URL 로 받는다. 닫으면 URL 을 풀어 준다 */
 function Snapshot({ sessionId, eventId }: { sessionId: number; eventId: number }) {
-  const [state, setState] = useState<{ id: number; url?: string; error?: string } | null>(null)
-  useEffect(() => {
-    let alive = true
-    let url: string | undefined
-    consoleApi.snapshotUrl(sessionId, eventId).then(
-      (u) => {
-        if (!alive) return URL.revokeObjectURL(u)
-        url = u
-        setState({ id: eventId, url: u })
-      },
-      (e: unknown) => alive && setState({ id: eventId, error: e instanceof Error ? e.message : String(e) }),
-    )
-    return () => {
-      alive = false
-      if (url) URL.revokeObjectURL(url)
-    }
-  }, [sessionId, eventId])
-  const cur = state?.id === eventId ? state : null
+  const b = useBlobUrl(['snapshot', sessionId, eventId], () => consoleApi.snapshotBlob(sessionId, eventId))
+  const cur = { url: b.url ?? undefined, error: b.error == null ? undefined : b.error instanceof Error ? b.error.message : String(b.error) }
   if (cur?.url) return <img src={cur.url} alt="감독 스냅샷" className="w-full rounded-md" />
   return (
     <span className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-md bg-panel-raised px-4 text-center text-[13px] text-text-muted">
