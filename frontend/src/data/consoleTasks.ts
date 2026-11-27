@@ -1,6 +1,8 @@
 // 콘솔 과제 목록 (DESIGN.md §7-9-1 ~ 9-3). 데이터는 백엔드(/api/console/tasks)에서만 온다.
-// 목록은 과제 화면과 콘솔 메뉴(검수 대기 숫자)가 같이 쓰므로, 받아 온 결과를 여기 한 곳에 담아 둔다.
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+// 목록은 과제 화면·콘솔 메뉴(검수 대기 숫자)·회차 화면이 같이 쓰므로 React Query 캐시 하나(['console-tasks'])에 둔다.
+import { useCallback, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { queryClient } from '../queryClient'
 import { consoleApi, type ConsoleTaskDetail, type ConsoleTaskSummary, type TaskUsage } from '../consoleApi'
 import { KINDS } from './catalog'
 
@@ -11,48 +13,43 @@ export const kindName = (key: string) => KINDS.find((k) => k.key === key)?.name 
 /** 백엔드 과제 type(dev | biz) → 직군 이름 */
 export const trackName = (type: string) => (type === 'biz' ? '비개발' : '개발')
 
-type State = { list: ConsoleTaskSummary[] | null; error: string | null; loading: boolean }
-let state: State = { list: null, error: null, loading: false }
-const subs = new Set<() => void>()
-const set = (s: Partial<State>) => {
-  state = { ...state, ...s }
-  subs.forEach((f) => f())
-}
-const subscribe = (f: () => void) => {
-  subs.add(f)
-  return () => subs.delete(f)
+/** 콘솔 과제 목록 쿼리. 과제 화면·콘솔 메뉴·회차 화면이 같은 키·같은 함수를 쓴다 */
+export const consoleTasksQuery = {
+  queryKey: ['console-tasks'] as const,
+  queryFn: () => consoleApi.tasks(),
 }
 
 /** 과제 목록을 다시 받아 온다 */
-export async function loadTasks() {
-  set({ loading: true, error: null })
-  try {
-    set({ list: await consoleApi.tasks(), loading: false })
-  } catch (e) {
-    set({ error: e instanceof Error ? e.message : String(e), loading: false })
+export function loadTasks() {
+  return queryClient.invalidateQueries({ queryKey: consoleTasksQuery.queryKey })
+}
+
+/** 받아 온 과제 목록. enabled=false 면 불러오지 않는다 (관리자 아닌 역할) */
+export function useTaskList(enabled = true) {
+  const q = useQuery({ ...consoleTasksQuery, enabled })
+  return {
+    list: q.data ?? null,
+    error: q.error ? (q.error instanceof Error ? q.error.message : String(q.error)) : null,
+    loading: q.isFetching,
   }
 }
 
-/** 받아 온 과제 목록. 처음 쓸 때 한 번 불러온다. enabled=false 면 불러오지 않는다 (관리자 아닌 역할) */
-export function useTaskList(enabled = true) {
-  const s = useSyncExternalStore(subscribe, () => state)
-  useEffect(() => {
-    if (enabled && state.list == null && !state.loading && state.error == null) void loadTasks()
-  }, [enabled])
-  return s
-}
+const patchList = (next: ConsoleTaskSummary) =>
+  queryClient.setQueryData<ConsoleTaskSummary[]>(consoleTasksQuery.queryKey, (l) =>
+    l?.map((t) => (t.id === next.id ? next : t)),
+  )
 
 /** 공개 상태 바꾸기(관리자). 바뀐 요약으로 목록을 고친다 */
 export async function setPublished(id: string, open: boolean) {
   const next = open ? await consoleApi.publishTask(id) : await consoleApi.hideTask(id)
-  if (state.list) set({ list: state.list.map((t) => (t.id === id ? next : t)) })
+  patchList(next)
   return next
 }
 
 /** 용도 바꾸기(검수 전 과제만). 바뀐 요약으로 목록을 고친다 */
 export async function setUsage(id: string, usage: TaskUsage) {
   const next = await consoleApi.changeUsage(id, usage)
-  if (state.list) set({ list: state.list.map((t) => (t.id === id ? next : t)) })
+  patchList(next)
   return next
 }
 

@@ -81,11 +81,17 @@ export async function mockApi(page: Page, user: AuthUser = { id: 1, email: 'admi
     const json = (data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) })
     if (path === '/api/auth/me') return json(user)
     if (path === '/api/console/tasks') return json([...TASKS, ...extraTasks])
+    // 과제 숨기기: 바뀐 요약만 돌려준다 (목록 응답은 그대로 둬서, 화면이 응답으로 캐시를 고쳤는지 볼 수 있다)
+    const hide = path.match(/^\/api\/console\/tasks\/([^/]+)\/hide$/)
+    if (hide && req.method() === 'POST') {
+      const summary = TASKS.find((t) => t.id === decodeURIComponent(hide[1]))
+      return summary ? json({ ...summary, status: 'HIDDEN', publishedAt: null }) : json({ message: 'not found' }, 404)
+    }
     // 과제 상세: 카드를 눌러 상세로 갈 때 화면이 터지지 않을 만큼만
     const detail = path.match(/^\/api\/console\/tasks\/([^/]+)$/)
     if (detail) {
       const summary = TASKS.find((t) => t.id === decodeURIComponent(detail[1]))
-      if (summary) return json({ summary, definition: { id: summary.id, title: summary.title, requirements: [], d4Minutes: null, requiredHeadings: null } })
+      if (summary) return json({ summary, definition: { id: summary.id, title: summary.title, description: [], requirements: [], notes: [], followUps: [], d4Minutes: null, requiredHeadings: null } })
     }
     if (path === '/api/admin/task-gen/cost-estimate') {
       const q = new URL(req.url()).searchParams
