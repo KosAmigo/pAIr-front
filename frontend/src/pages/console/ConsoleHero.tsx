@@ -75,7 +75,7 @@ export function PillTabs<T extends string>({
   onChange: (v: T) => void
 }) {
   return (
-    <div role="tablist" aria-label={label} className="glass flex w-fit gap-1 rounded-full p-1.5">
+    <div role="tablist" aria-label={label} className="glass isolate flex w-fit gap-1 rounded-full p-1.5">
       {tabs.map((t) => {
         const on = t.value === value
         return (
@@ -92,8 +92,8 @@ export function PillTabs<T extends string>({
               on ? 'text-on-accent' : t.disabled ? 'cursor-not-allowed text-text-faint' : 'text-text-muted hover:text-text',
             )}
           >
-            {on && <motion.span layoutId={`${id}-pill`} transition={springs.snappy} className="bg-brand-gradient absolute inset-0 -z-10 rounded-full shadow-[0_8px_24px_-8px_rgb(108_71_255/0.6)]" />}
-            {t.label}
+            {on && <motion.span layoutId={`${id}-pill`} transition={springs.snappy} className="bg-brand-gradient absolute inset-0 z-0 rounded-full shadow-[0_8px_24px_-8px_rgb(108_71_255/0.6)]" />}
+            <span className="relative z-10 inline-flex items-center gap-2">{t.label}</span>
           </button>
         )
       })}

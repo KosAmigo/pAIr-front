@@ -12,7 +12,7 @@ import { api, ApiError, type Task, type TaskSummary } from '../api'
 import { distance, duration, easing, springs } from '../lib/motion'
 
 // DESIGN.md §7-2a 과제 목록 — "퀘스트 보드" (2026-11-19 전면 개편)
-// 위: 직군 스위치(미끄러지는 알약) + 시간 필터 칩(기획_결정사항 §2). 그 아래 다크 무대에 지금 바로 풀 수 있는 추천 과제를 크게.
+// 위: 직군 스위치(미끄러지는 알약) + 시간 필터(전체/20/40/60분, 개수 포함). 그 아래 다크 무대에 지금 바로 풀 수 있는 추천 과제를 크게.
 // 아래: 과제 카드. 목록은 GET /api/tasks, 카드에 쓰는 설명은 GET /api/tasks/{id} 로 받는다. 마감(CLOSED) 과제는 보이되 시작할 수 없다.
 
 const TRACKS: { value: Track; label: string }[] = [
@@ -116,40 +116,48 @@ function TaskCard({ t }: { t: Row }) {
   )
 }
 
-const TIMES = [
-  { value: 'ALL', label: '전체', ok: () => true },
-  { value: 'SHORT', label: '40분 이하', ok: (m: number) => m <= 40 },
-  { value: 'LONG', label: '41분 이상', ok: (m: number) => m > 40 },
-] as const
+// 실제 과제 시간은 20·40·60분이다. 그 밖의 값(예: 45분)은 가장 가까운 칸으로 센다
+const TIME_STEPS = [20, 40, 60] as const
+type TimeFilter = 'ALL' | (typeof TIME_STEPS)[number]
+const timeBucket = (m: number): (typeof TIME_STEPS)[number] => TIME_STEPS.reduce((best, x) => (Math.abs(x - m) < Math.abs(best - m) ? x : best))
 
-/** 필터 칩 한 줄: 고른 칩 뒤로 브랜드 배경이 미끄러진다 */
-function ChipFilter<T extends string>({ id, label, options, value, onChange }: { id: string; label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+/** 시간 필터: 직군 스위치와 같은 유리 알약. 칸마다 개수를 붙이고, 0개인 칸은 흐리게 둔다 */
+function TimeFilterSwitch({ counts, value, onChange }: { counts: Record<TimeFilter, number>; value: TimeFilter; onChange: (v: TimeFilter) => void }) {
+  const options: { value: TimeFilter; label: string }[] = [{ value: 'ALL', label: '전체' }, ...TIME_STEPS.map((m) => ({ value: m, label: `${m}분` }))]
   return (
-    <div role="radiogroup" aria-label={label} className="flex items-center gap-1">
-      <span className="mr-2 text-[13px] font-semibold text-text-muted">{label}</span>
-      {options.map((o) => {
-        const on = o.value === value
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(o.value)}
-            className={cx('relative inline-flex h-8 items-center rounded-full px-3.5 text-[14px] font-medium transition-colors', on ? 'text-brand' : 'text-text-muted hover:text-text')}
-          >
-            {on && <motion.span layoutId={`${id}-chip`} transition={springs.snappy} className="absolute inset-0 -z-10 rounded-full bg-brand-dim ring-1 ring-brand/30" />}
-            {o.label}
-          </button>
-        )
-      })}
+    <div className="flex items-center gap-2.5">
+      <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-text-muted">
+        <Clock size={15} aria-hidden /> 시간
+      </span>
+      <div role="radiogroup" aria-label="시간" className="glass isolate flex w-fit gap-1 rounded-full p-1.5">
+        {options.map((o) => {
+          const on = o.value === value
+          const n = counts[o.value]
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(o.value)}
+              className={cx('relative inline-flex h-9 items-center rounded-full px-4 text-[15px] font-semibold transition-colors', on ? 'text-brand' : n === 0 ? 'text-text-faint hover:text-text-muted' : 'text-text-muted hover:text-text')}
+            >
+              {on && <motion.span layoutId="time-pill" transition={springs.snappy} className="absolute inset-0 z-0 rounded-full bg-panel shadow-sm ring-1 ring-brand/40" />}
+              <span className="relative z-10 inline-flex items-center gap-1.5">
+                {o.label}
+                <span className={cx('tnum font-mono text-[12px]', on ? 'text-brand/70' : 'text-text-faint')}>{n}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
 export default function Tasks() {
   const [track, setTrack] = useState<Track>('dev')
-  const [time, setTime] = useState<(typeof TIMES)[number]['value']>('ALL')
+  const [time, setTime] = useState<TimeFilter>('ALL')
   const [all, setAll] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
@@ -171,8 +179,10 @@ export default function Tasks() {
       alive = false
     }
   }, [tick])
-  const timeOk = TIMES.find((t) => t.value === time)!.ok
-  const tasks = (all ?? []).filter((t) => t.type === track && timeOk(t.minutes))
+  const ofTrack = (all ?? []).filter((t) => t.type === track)
+  const timeCounts: Record<TimeFilter, number> = { ALL: ofTrack.length, 20: 0, 40: 0, 60: 0 }
+  for (const t of ofTrack) timeCounts[timeBucket(t.minutes)]++
+  const tasks = ofTrack.filter((t) => time === 'ALL' || timeBucket(t.minutes) === time)
   const featured = tasks.find(isOpen)
   return (
     <SelfShell
@@ -185,7 +195,7 @@ export default function Tasks() {
       <div className="mx-auto flex max-w-[1440px] flex-col gap-8 px-4 py-6 md:px-8">
         {/* 직군 스위치: 활성 칸 뒤로 그라데이션 알약이 미끄러진다. 오른쪽에 난이도·시간 필터 */}
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-        <div role="tablist" aria-label="직군" className="glass flex w-fit gap-1 rounded-full p-1.5">
+        <div role="tablist" aria-label="직군" className="glass isolate flex w-fit gap-1 rounded-full p-1.5">
           {TRACKS.map((tr) => {
             const on = tr.value === track
             const n = all ? all.filter((t) => t.type === tr.value).length : null
@@ -198,14 +208,16 @@ export default function Tasks() {
                 onClick={() => setTrack(tr.value)}
                 className={cx('relative inline-flex h-11 items-center gap-2 rounded-full px-6 text-[16px] font-semibold transition-colors', on ? 'text-on-accent' : 'text-text-muted hover:text-text')}
               >
-                {on && <motion.span layoutId="track-pill" transition={springs.snappy} className="bg-brand-gradient absolute inset-0 -z-10 rounded-full shadow-[0_8px_24px_-8px_rgb(108_71_255/0.6)]" />}
-                {tr.label}
-                {n != null && <span className={cx('tnum font-mono text-[13px]', on ? 'text-on-accent/80' : 'text-text-faint')}>{n}</span>}
+                {on && <motion.span layoutId="track-pill" transition={springs.snappy} className="bg-brand-gradient absolute inset-0 z-0 rounded-full shadow-[0_8px_24px_-8px_rgb(108_71_255/0.6)]" />}
+                <span className="relative z-10 inline-flex items-center gap-2">
+                  {tr.label}
+                  {n != null && <span className={cx('tnum font-mono text-[13px]', on ? 'text-on-accent/80' : 'text-text-faint')}>{n}</span>}
+                </span>
               </button>
             )
           })}
         </div>
-          <ChipFilter id="time" label="시간" options={TIMES} value={time} onChange={setTime} />
+          <TimeFilterSwitch counts={timeCounts} value={time} onChange={setTime} />
         </div>
 
         {error ? (
