@@ -1,4 +1,5 @@
 // 만드는 중인 과제 목록 (왼쪽, 좁고 촘촘하게). 묶음(batchId)마다 머리줄 하나(직군·시간·개수·끝난 수 + 작은 진행 막대)와 접었다 펼치는 행들.
+// 머리는 두 줄(이름·방식/마감·진행 링, 작업마다 한 칸인 막대)만 둔다.
 // 펼침: 진행 중인 묶음은 펼침, 끝난 묶음은 접힘이 기본이고 사용자가 바꾼 상태는 기억한다(localStorage). 높이는 부드럽게 바뀌고 움직임 줄이기에서는 바로 바뀐다.
 // 행은 한 줄: 상태 점 + 주제(한 줄 말줄임) + 짧은 상태 글. 자세한 글(세부 단계·마감·검사 요약)은 title·화면 읽기용으로만 둔다.
 // 머리에는 새로고침 아이콘 버튼 하나뿐(누르면 바로 다시 불러온다, 마우스를 올리면 마지막 갱신 시각). 자동 갱신은 뒤에서 그대로 돈다.
@@ -132,7 +133,8 @@ export function GenJobList({
   )
 }
 
-/** 묶음 머리줄: 펼침 버튼(aria-expanded) + 직군 타일 + 직군·방식 칩 + 진행 링(n/m) + 개수 칩 + 진행 막대 + 작업별 상태 점 */
+/** 묶음 머리줄(두 줄): 직군 타일 + 이름·분 + 방식/마감 한 줄 + 진행 링(n/m) + 펼침 화살표, 그 아래 작업마다 한 칸인 진행 막대.
+ * 개수(진행·대기·완료·실패)는 화면 읽기용 이름과 칸의 색·title 로만 보인다. */
 function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle: () => void }) {
   const first = g.jobs[0]
   const total = g.jobs.length
@@ -147,42 +149,46 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
   const pct = total ? ended / total : 0
   const R = 15
   const C = 2 * Math.PI * R
-  const chips: [string, number, string][] = [
-    ['진행', c.RUNNING, 'bg-brand-dim text-brand'],
-    ['대기', c.QUEUED, 'bg-panel-raised text-text-muted'],
-    ['완료', c.DONE, 'bg-signal/12 text-signal'],
-    ['실패', c.FAILED, 'bg-alert/12 text-alert'],
-  ]
+  const counts = (
+    [
+      ['진행', c.RUNNING],
+      ['대기', c.QUEUED],
+      ['완료', c.DONE],
+      ['실패', c.FAILED],
+    ] as const
+  )
+    .filter(([, n]) => n > 0)
+    .map(([l, n]) => `${l} ${n}`)
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      aria-label={`자동 생성 묶음 ${name} ${total}개 중 ${ended}개 끝남`}
-      className="flex w-full flex-col gap-2 px-3 pt-3 pb-2.5 text-left outline-none hover:bg-white/50 focus-visible:ring-4 focus-visible:ring-brand/30 focus-visible:ring-inset"
+      aria-label={[`자동 생성 묶음 ${name} ${total}개 중 ${ended}개 끝남`, ...counts].join(' · ')}
+      className="group/head flex w-full flex-col gap-2.5 px-3 pt-3 pb-3 text-left outline-none hover:bg-white/50 focus-visible:ring-4 focus-visible:ring-brand/30 focus-visible:ring-inset"
     >
       <span className="flex items-center gap-2.5">
-        <ChevronRight size={14} aria-hidden className={cx('shrink-0 text-text-muted transition-transform duration-200 motion-reduce:transition-none', open && 'rotate-90')} />
-        <span aria-hidden className={cx('inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1', tone.tile, tone.ring)}>
-          <Icon size={16} />
+        <span
+          aria-hidden
+          className={cx(
+            'relative inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] ring-1',
+            state === 'live' ? 'bg-brand-gradient text-white shadow-[0_6px_16px_-6px_rgb(108_71_255/0.7)] ring-white/30' : cx(tone.tile, tone.ring),
+          )}
+        >
+          <Icon size={17} />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex items-center gap-1.5 text-[14px] leading-4 font-extrabold text-text">
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex items-center gap-1.5 text-[15px] leading-5 font-extrabold tracking-[-0.01em] text-text">
             <span className="truncate">{name}</span>
             {first?.minutes ? (
-              <span className="shrink-0 text-[12px] font-bold text-text-muted">
+              <span className="shrink-0 text-[13px] font-bold text-text-muted">
                 <span className="tnum font-mono">{first.minutes}</span>분
               </span>
             ) : null}
-            {state === 'failed' && <TriangleAlert size={13} aria-hidden className="shrink-0 text-caution" />}
+            {state === 'failed' && <TriangleAlert size={14} aria-hidden className="shrink-0 text-caution" />}
           </span>
-          <span className="flex flex-wrap items-center gap-1">
-            <span className={cx('inline-flex h-[18px] items-center rounded-full px-1.5 text-[11px] font-bold', batch ? 'bg-info/12 text-info' : 'bg-panel-raised text-text-muted')}>
-              {batch ? '배치' : '바로'}
-            </span>
-            {deadline && (
-              <span className="tnum inline-flex h-[18px] items-center rounded-full bg-info/12 px-1.5 font-mono text-[11px] font-bold text-info">마감 {deadline}</span>
-            )}
+          <span className={cx('tnum truncate text-[12px] leading-4 font-bold', batch ? 'text-info' : 'text-text-muted')}>
+            {batch ? (deadline ? `배치 · 마감 ${deadline}` : '배치') : '바로'}
           </span>
         </span>
         {/* 진행 링: 끝난 수 / 전체 */}
@@ -209,30 +215,20 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
             </span>
           )}
         </span>
+        <ChevronRight size={16} aria-hidden className={cx('-mr-0.5 shrink-0 text-text-faint transition-transform duration-200 group-hover/head:text-text-muted motion-reduce:transition-none', open && 'rotate-90')} />
       </span>
 
-      <span className="flex flex-wrap items-center gap-1 pl-[22px]">
-        {chips.map(([label, n, cls]) =>
-          n > 0 ? (
-            <span key={label} className={cx('inline-flex h-5 items-center gap-1 rounded-full px-2 text-[11px] font-bold', cls)}>
-              {label} <span className="tnum font-mono">{n}</span>
-            </span>
-          ) : null,
-        )}
-      </span>
-
-      <span aria-hidden className={cx('block h-1.5 overflow-hidden rounded-full bg-line/70 ml-[22px]')}>
-        <span
-          className={cx('block h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', state === 'live' ? 'bg-brand-gradient gen-shimmer' : state === 'failed' ? 'bg-caution' : 'bg-signal')}
-          style={{ width: `${pct * 100}%` }}
-        />
-      </span>
-
-      {/* 작업마다 점 하나: 접어도 한눈에 */}
-      <span aria-hidden className="flex flex-wrap gap-1 pl-[22px]">
+      {/* 작업마다 한 칸: 색 = 상태, 도는 칸은 빛이 지나간다. 접어도 한눈에 */}
+      <span aria-hidden className="flex h-2 gap-[3px]">
         {g.jobs.map((j) => {
           const v = jobView(j)
-          return <span key={j.jobId} title={`${j.topic?.trim() || '주제를 정하는 중'} · ${v.label}`} className={cx('size-2 rounded-full', DOT[v.tone], v.tone === 'run' && 'motion-safe:animate-pulse')} />
+          return (
+            <span
+              key={j.jobId}
+              title={`${j.topic?.trim() || '주제를 정하는 중'} · ${v.label}`}
+              className={cx('h-full min-w-0 flex-1 rounded-full transition-colors duration-300', v.tone === 'run' ? 'bg-brand-gradient gen-shimmer' : DOT[v.tone], v.tone === 'wait' && 'opacity-40')}
+            />
+          )
         })}
       </span>
     </button>

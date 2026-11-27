@@ -172,7 +172,7 @@ test.describe('만드는 중인 과제', () => {
     await expect.poll(() => calls).toBeGreaterThan(before)
   })
 
-  test('묶음 카드는 상태별로 다르게 보인다: 도는 중 / 모두 끝남 / 실패 섞임, 작업마다 점 하나', async ({ page }) => {
+  test('묶음 카드는 상태별로 다르게 보인다: 도는 중 / 모두 끝남 / 실패 섞임, 작업마다 한 칸', async ({ page }) => {
     const api = await mockApi(page)
     api.seedJobs([
       ...JOBS, // b1: 진행·대기·완료 → live
@@ -187,13 +187,13 @@ test.describe('만드는 중인 과제', () => {
     const state = (name: RegExp) => groups.filter({ has: page.getByRole('button', { name }) })
     await expect(state(/3개 중 1개 끝남/)).toHaveAttribute('data-state', 'live')
     await expect(groups.filter({ hasText: '끝1' })).toHaveAttribute('data-state', 'done')
-    await expect(groups.filter({ hasText: '실패 1' })).toHaveAttribute('data-state', 'failed')
-    // 접힌 묶음에도 작업마다 점이 하나씩 (title = 주제 · 상태)
+    await expect(state(/실패 1/)).toHaveAttribute('data-state', 'failed')
+    // 접힌 묶음에도 작업마다 막대 한 칸씩 (title = 주제 · 상태)
     await expect(state(/3개 중 1개 끝남/).locator('[title*="진행 주제"]')).toHaveCount(1)
-    await expect(groups.filter({ hasText: '실패 1' }).locator('span[title]')).toHaveCount(2)
-    // 개수 칩과 직군·방식 칩
-    await expect(state(/3개 중 1개 끝남/)).toContainText('진행 1')
+    await expect(state(/실패 1/).locator('span[title]')).toHaveCount(2)
+    // 개수는 머리 버튼 이름에, 직군·방식은 글로
+    await expect(page.getByRole('button', { name: /3개 중 1개 끝남 · 진행 1 · 대기 1 · 완료 1/ })).toBeVisible()
     await expect(state(/3개 중 1개 끝남/)).toContainText('바로')
-    await expect(groups.filter({ hasText: '실패 1' })).toContainText('비개발')
+    await expect(state(/실패 1/)).toContainText('비개발')
   })
 })
