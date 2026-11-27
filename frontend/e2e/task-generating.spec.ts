@@ -106,6 +106,31 @@ test.describe('만드는 중인 과제', () => {
     await expect(page.getByText('방금 만든 로그 분석기')).toBeVisible({ timeout: 10_000 })
   })
 
+  test('조회 간격: 도는 작업이 있으면 3초, 모두 끝나면 30초로 바뀐다', async ({ page }) => {
+    const api = await mockApi(page)
+    api.seedJobs([JOBS[0]])
+    let calls = 0
+    page.on('request', (r) => {
+      if (new URL(r.url()).pathname === '/api/admin/task-gen/jobs') calls++
+    })
+    await page.clock.install()
+    await page.goto('/console/tasks/generating')
+    await expect.poll(() => calls).toBe(1)
+    await page.clock.runFor(3100)
+    await expect.poll(() => calls).toBe(2)
+    await page.clock.runFor(3100)
+    await expect.poll(() => calls).toBe(3)
+    // 모두 끝나면 긴 간격
+    api.seedJobs([JOBS[2]])
+    await page.clock.runFor(3100)
+    await expect.poll(() => calls).toBe(4)
+    await page.clock.runFor(10_000)
+    await page.waitForTimeout(200)
+    expect(calls).toBe(4)
+    await page.clock.runFor(21_000)
+    await expect.poll(() => calls).toBe(5)
+  })
+
   test('두 버튼은 세 화면에서 같은 컴포넌트(같은 testid·모양)로 보이고, 도는 작업이 없으면 배지가 없다', async ({ page }) => {
     const api = await mockApi(page)
     api.seedJobs(JOBS)
