@@ -1,28 +1,24 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { RequirementsView } from '../components/RequirementsView'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bot, ChevronDown, ChevronRight, CircleHelp, FileText, Folder, Hammer, Loader2, Lock, Paperclip, Play, Save, X } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Hammer, Loader2, Lock, Play, Save, X } from 'lucide-react'
 import { CodeEditor } from '../components/CodeEditor'
 import { FileSearch } from '../components/FileSearch'
 import type { SearchHit } from '../lib/fileSearch'
-import { SendKey } from '../components/SendKey'
 import { cx } from '../components/cx'
-import { Button, IconButton, Logo, ModeBadge, StatusDot } from '../components/ui'
+import { Button, IconButton } from '../components/ui'
 import { ActivityRail, type SidePanel } from '../components/ActivityRail'
 import { ResizeHandle } from '../components/ResizeHandle'
-import { QuestionPanel } from '../components/questions/QuestionPanel'
 import { useQuestions } from '../components/questions/useQuestions'
 import { CoachTour, examGuideSteps } from '../components/CoachTour'
 import { DIAGNOSTICS_DELAY_MS, isJavaSource, javaSources, marksFor, type DefinitionTarget } from '../lib/liveDiagnostics'
 import { api, ApiError, chatStream, type AiLimits, type AttemptView, type CompileDiagnostic, type EditProposal, type Material, type Task, type Turn } from '../api'
 import { AttemptPdf } from '../components/AttemptPdf'
 import {
-  ATTACH_CREDIT, ATTACH_MIME, MAX_ATTACH, addAttachment, attachCost, attachLabel, charsLabel, decodeDrop, defaultPages, encodeDrag, removeAttachment, turnsLeft,
-  sendable, setPages, validPages, type AttachRef,
+  MAX_ATTACH, addAttachment, defaultPages, removeAttachment,
+  setPages, type AttachRef,
 } from '../lib/chatAttach'
-import { EditCard, EditModal, type EditAction } from '../components/EditProposal'
-import { splitReply } from '../lib/edits'
-import { useAntiCheating, ViolationCounter, WarningModal } from '../anti-cheating'
+import { EditModal, type EditAction } from '../components/EditProposal'
+import { useAntiCheating, WarningModal } from '../anti-cheating'
 import { PasteDetector } from '../anti-cheating/core/PasteDetector.ts'
 import type { Violation } from '../anti-cheating/core/types.ts'
 import { toBrowserViolation } from '../proctor/core/events.ts'
@@ -31,11 +27,22 @@ import NoticeBanner from '../proctor/react/NoticeBanner.tsx'
 import { camHub } from '../proctor/camHub.ts'
 import { clearLiveExam, inviteForAttempt, readLiveExam, secondsLeft } from '../proctor/liveExam.ts'
 import { useCredits } from '../data/credits'
-import { CreditPill } from '../components/CreditPill'
+import { ExamHeader } from '../exam/components/ExamHeader'
+import { SidePanel as SidePanelView } from '../exam/components/SidePanel'
+import { ChatPanel } from '../exam/components/ChatPanel'
+import { FollowUp } from '../exam/components/FollowUp'
+import { PromptList } from '../exam/components/PromptList'
+import { ConfirmModal } from '../exam/components/ConfirmModal'
+import { DocChecks } from '../exam/components/DocChecks'
+import { CenterMessage } from '../exam/components/CenterMessage'
+import { NewExam } from '../exam/components/NewExam'
+import { buildTree } from '../exam/components/PathTree'
+import { readOnlyPath, fileName } from '../exam/format'
+import { HEARTBEAT_MS } from '../exam/constants'
+import { usePanelWidths, DEFAULT_WIDTHS, MIN_WIDTHS, RAIL_WIDTH, CENTER_MIN, maxPanelWidth } from '../exam/hooks/usePanelWidths'
+export { NewExam }
 
 // 카메라 감독은 실전 시험에서만 불러온다 (자가진단은 분석 모델을 내려받지 않는다)
-/** 실전 시험 중 서버에 연결 신호를 보내는 간격 (서버 유예 5분 판단용) */
-const HEARTBEAT_MS = 10_000
 
 const CamMonitor = lazy(() => import('../proctor/react/CamMonitor.tsx'))
 
@@ -46,656 +53,6 @@ async function endLiveProctoring() {
 }
 
 // 실제 응시 화면: 백엔드 API 에 연결된 버전. 레이아웃은 DESIGN.md §7-3 응시 화면을 따른다.
-
-function fmt(sec: number) {
-  const s = Math.max(0, sec)
-  return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, '0')).join(':')
-}
-
-const readOnlyPath = (p: string) => p.startsWith('logs/') || p.startsWith('자료/')
-const fileName = (p: string) => p.split('/').pop() ?? p
-
-// ── 진입: /exam/new?task=과제ID (또는 ?track=dev|biz 로 직군 기본 과제) → 응시 생성 후 이동 ─────
-export function NewExam() {
-  const [params] = useSearchParams()
-  const navigate = useNavigate()
-  const [error, setError] = useState<string | null>(null)
-  const started = useRef(false)
-  const { refresh: refreshCredits } = useCredits()
-  useEffect(() => {
-    if (started.current) return
-    started.current = true
-    const track = params.get('track') === 'biz' ? 'biz' : 'dev'
-    api
-      .start(params.get('task') || api.taskIdFor(track))
-      .then(({ attemptId }) => {
-        void refreshCredits()
-        navigate(`/exam/${attemptId}`, { replace: true })
-      })
-      .catch((e: ApiError) => setError(e.message))
-  }, [params, navigate, refreshCredits])
-  return <CenterMessage error={error} text="응시를 준비하고 있습니다" />
-}
-
-function CenterMessage({ text, error }: { text: string; error?: string | null }) {
-  return (
-    <div className="flex h-full items-center justify-center bg-bg">
-      {error ? (
-        <div className="max-w-[520px] rounded-md border border-alert/40 bg-panel p-6">
-          <span className="label text-alert">ERROR</span>
-          <p className="mt-2 text-body text-text">{error}</p>
-        </div>
-      ) : (
-        <span className="flex items-center gap-2 text-body text-text-muted">
-          <Loader2 size={18} className="animate-spin" aria-hidden /> {text}
-        </span>
-      )}
-    </div>
-  )
-}
-
-// ── 파일 트리 (경로 기반) ─────────────────
-type TreeNode = { name: string; path: string; children?: TreeNode[] }
-function buildTree(paths: string[]): TreeNode[] {
-  const root: TreeNode = { name: '', path: '', children: [] }
-  for (const p of paths) {
-    const parts = p.split('/')
-    let cur = root
-    parts.forEach((part, i) => {
-      const path = parts.slice(0, i + 1).join('/')
-      const leaf = i === parts.length - 1
-      let next = cur.children!.find((c) => c.name === part)
-      if (!next) {
-        next = { name: part, path, children: leaf ? undefined : [] }
-        cur.children!.push(next)
-      }
-      cur = next
-    })
-  }
-  const sort = (n: TreeNode[]): TreeNode[] =>
-    n
-      .sort((a, b) => (a.children ? 0 : 1) - (b.children ? 0 : 1) || a.name.localeCompare(b.name))
-      .map((c) => ({ ...c, children: c.children && sort(c.children) }))
-  return sort(root.children!)
-}
-
-/** 파일 트리의 파일 하나를 채팅 첨부로 바꾼다. PDF 자료는 기본으로 전체(최대 20쪽)를 붙인다 */
-type AttachFor = (path: string) => AttachRef
-
-function PathTree({
-  nodes,
-  depth = 0,
-  active,
-  onOpen,
-  attachFor,
-  onAttach,
-}: {
-  nodes: TreeNode[]
-  depth?: number
-  active: string
-  onOpen: (p: string) => void
-  /** 있으면 파일 행을 채팅창으로 끌어 첨부할 수 있다(끌기를 못 쓰는 사용자를 위해 행마다 첨부 버튼도 둔다) */
-  attachFor?: AttachFor
-  onAttach?: (r: AttachRef) => void
-}) {
-  const [closed, setClosed] = useState<Record<string, boolean>>({})
-  return (
-    <ul>
-      {nodes.map((n) =>
-        n.children ? (
-          <li key={n.path}>
-            <button
-              type="button"
-              onClick={() => setClosed({ ...closed, [n.path]: !closed[n.path] })}
-              aria-expanded={!closed[n.path]}
-              className="flex h-7 w-full items-center gap-1.5 pr-2 text-[14px] text-text-muted hover:bg-panel-raised hover:text-text"
-              style={{ paddingLeft: 8 + depth * 14 }}
-            >
-              {closed[n.path] ? <ChevronRight size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
-              <Folder size={16} strokeWidth={1.75} aria-hidden />
-              <span className="font-mono">{n.name}</span>
-            </button>
-            {!closed[n.path] && <PathTree nodes={n.children} depth={depth + 1} active={active} onOpen={onOpen} attachFor={attachFor} onAttach={onAttach} />}
-          </li>
-        ) : (
-          <li key={n.path} className="group relative">
-            <button
-              type="button"
-              onClick={() => onOpen(n.path)}
-              draggable={Boolean(attachFor)}
-              onDragStart={(e) => {
-                if (!attachFor) return
-                e.dataTransfer.setData(ATTACH_MIME, encodeDrag(attachFor(n.path)))
-                e.dataTransfer.effectAllowed = 'copy'
-              }}
-              className={cx(
-                'relative flex h-7 w-full items-center gap-1.5 pr-8 text-[14px]',
-                active === n.path ? 'bg-panel-raised text-text' : 'text-text-muted hover:bg-panel-raised hover:text-text',
-              )}
-              style={{ paddingLeft: 22 + depth * 14 }}
-            >
-              {active === n.path && <span className="absolute inset-y-0 left-0 w-0.5 bg-brand" aria-hidden />}
-              <FileText size={16} strokeWidth={1.75} aria-hidden />
-              <span className="truncate font-mono">{n.name}</span>
-            </button>
-            {attachFor && onAttach && (
-              <button
-                type="button"
-                aria-label={`${n.name} 채팅에 첨부`}
-                title="채팅에 첨부 (또는 채팅창으로 끌어 놓기)"
-                onClick={() => onAttach(attachFor(n.path))}
-                className="absolute top-1/2 right-1 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-text-faint opacity-0 hover:bg-panel hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
-              >
-                <Paperclip size={14} aria-hidden />
-              </button>
-            )}
-          </li>
-        ),
-      )}
-    </ul>
-  )
-}
-
-// ── AI 채팅 ─────────────────────────────
-function ChatPanel({
-  turns,
-  streaming,
-  disabled,
-  busy,
-  error,
-  onSend,
-  model,
-  maxChars,
-  limits,
-  editBusy,
-  onEdit,
-  onViewEdit,
-  attachments,
-  materialPages,
-  showCost,
-  onAttach,
-  onDetach,
-  onPages,
-}: {
-  turns: Turn[]
-  /** 보내는 중인 질문과 지금까지 받은 답변 글자 */
-  streaming: { question: string; answer: string } | null
-  disabled: boolean
-  busy: boolean
-  error: string | null
-  onSend: (t: string) => Promise<boolean>
-  model: string
-  maxChars: number
-  /** 과제별 AI 제한(질문 수, 한 번에 첨부, 첨부 글자 합계). 서버가 알려 주기 전에는 기본값 */
-  limits: AiLimits
-  editBusy: boolean
-  onEdit: (turn: number, e: EditProposal, a: EditAction) => void
-  onViewEdit: (turn: number, e: EditProposal) => void
-  /** 이번 질문에 붙이려고 끌어다 놓은 파일 */
-  attachments: AttachRef[]
-  /** PDF 자료의 전체 쪽 수(칩에 "/N쪽"으로 보여 준다) */
-  materialPages: Record<string, number>
-  /** 첨부가 크레딧을 더 쓰는지(자가진단만) */
-  showCost: boolean
-  /** 첨부를 더한다. 못 붙이는 이유가 있으면 안내 문구를 돌려준다 */
-  onAttach: (r: AttachRef) => string | null
-  onDetach: (r: AttachRef) => void
-  onPages: (path: string, pages: string) => void
-}) {
-  const [draft, setDraft] = useState('')
-  const [dragging, setDragging] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
-  const count = draft.length
-  const over = count > maxChars
-  const listRef = useRef<HTMLOListElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  // 입력이 길어지면 입력창이 위로 늘어난다. 최대 높이(화면의 40%, 최대 360px)를 넘으면 안에서 스크롤한다.
-  useLayoutEffect(() => {
-    const el = inputRef.current
-    if (!el) return
-    const min = 96
-    const max = Math.min(360, Math.round(window.innerHeight * 0.4))
-    el.style.height = 'auto'
-    const want = Math.max(min, el.scrollHeight)
-    el.style.height = `${Math.min(want, max)}px`
-    el.style.overflowY = want > max ? 'auto' : 'hidden'
-  }, [draft])
-  // 새 턴이 생기거나 답변 글자가 들어오는 동안 맨 아래로. 응시자가 위로 올려 읽는 중이면 따라가지 않는다.
-  const stick = useRef(true)
-  useEffect(() => {
-    const el = listRef.current
-    if (el && stick.current) el.scrollTo({ top: el.scrollHeight })
-  }, [turns.length, busy, streaming?.answer.length])
-  const send = async () => {
-    const text = draft.trim()
-    if (!text || busy || disabled || over || noTurnsLeft || !sendable(attachments)) return
-    stick.current = true
-    setDraft('') // 보낸 질문은 대화창으로 옮기고, 실패하면 입력창에 되돌린다
-    if (!(await onSend(text))) setDraft(text)
-  }
-  const nextTurn = turns.length + 1
-  const left = turnsLeft(limits.turns, turns)
-  const noTurnsLeft = left === 0
-  return (
-    <section
-      className={cx('relative flex h-full min-h-0 flex-col border-l border-line bg-panel', disabled && 'opacity-50')}
-      onDragOver={(e) => {
-        // 파일 트리에서 끌어온 것만 받는다(외부 파일은 무시)
-        if (disabled || !e.dataTransfer.types.includes(ATTACH_MIME)) return
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'copy'
-        setDragging(true)
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
-      }}
-      onDrop={(e) => {
-        if (disabled || !e.dataTransfer.types.includes(ATTACH_MIME)) return
-        e.preventDefault()
-        setDragging(false)
-        const ref = decodeDrop(e.dataTransfer.getData(ATTACH_MIME))
-        if (ref) setNotice(onAttach(ref))
-      }}
-    >
-      {dragging && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-brand bg-brand-dim text-[15px] font-semibold text-text">
-          <Paperclip size={18} className="mr-2" aria-hidden /> 여기에 놓으면 질문에 첨부됩니다 ({attachments.length}/{limits.maxAttach})
-        </div>
-      )}
-      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-4">
-        <Bot size={18} strokeWidth={1.75} className="text-info" aria-hidden />
-        <span className="label">AI ASSISTANT</span>
-        <span
-          className={cx('tnum ml-auto font-mono text-[12px]', left <= 2 ? 'text-alert' : 'text-text-faint')}
-          title={`질문 ${limits.turns}번까지 · 한 번에 첨부 ${limits.maxAttach}개 · 첨부 합계 ${charsLabel(limits.contextChars)}`}
-        >
-          남은 질문 {left}/{limits.turns}
-        </span>
-      </header>
-      <ol
-        ref={listRef}
-        onScroll={(e) => {
-          const el = e.currentTarget
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-        }}
-        className="min-h-0 flex-1 space-y-4 overflow-auto p-4"
-        aria-live="polite"
-      >
-        {turns.length === 0 && !busy && (
-          <li className="text-[14px] leading-6 text-text-muted">AI는 이 대화창에 붙여 넣거나, 파일 탐색기에서 끌어다 놓은 파일의 내용만 볼 수 있습니다. 필요한 코드, 로그, 자료를 함께 전달하세요.</li>
-        )}
-        {turns.map((m) =>
-          m.role === 'user' ? (
-            <li key={m.turn} className="ml-8 flex flex-col items-end gap-1">
-              <span className="flex gap-2 font-mono text-[12px] text-text-faint">
-                <span>#T{String(m.turn).padStart(2, '0')}</span>
-                <span>{m.time}</span>
-              </span>
-              <p className="rounded-md bg-panel-raised px-3 py-2 text-[15px] leading-6 whitespace-pre-wrap">{m.text}</p>
-              {m.attachments && m.attachments.length > 0 && (
-                <ul className="flex flex-wrap justify-end gap-1" aria-label="이 질문에 붙인 파일">
-                  {m.attachments.map((a) => (
-                    <li key={a.id} className="inline-flex max-w-full items-center gap-1 rounded-sm border border-line px-1.5 py-0.5 font-mono text-[12px] text-text-muted" title={`${a.path}${a.pages ? ` ${a.pages}쪽` : ''} · ${a.chars.toLocaleString()}자`}>
-                      <Paperclip size={12} aria-hidden />
-                      <span className="truncate">{attachLabel({ source: a.source, path: a.path, pages: a.pages ?? undefined })}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ) : (
-            <li key={m.turn} className="mr-4 flex flex-col gap-1 border-l-2 border-info pl-3">
-              <span className="flex items-center gap-2 font-mono text-[12px] text-text-faint">
-                <Bot size={14} className="text-info" aria-hidden />
-                <span>#T{String(m.turn).padStart(2, '0')}</span>
-                <span>{m.time}</span>
-              </span>
-              {splitReply(m.text).map((seg, i) => {
-                if (seg.kind === 'text')
-                  return (
-                    <p key={i} className="text-[15px] leading-6 whitespace-pre-wrap text-text">
-                      {seg.text}
-                    </p>
-                  )
-                const e = m.edits?.find((x) => x.index === seg.index)
-                return e ? (
-                  <EditCard
-                    key={i}
-                    edit={e}
-                    busy={editBusy}
-                    disabled={disabled}
-                    onAction={(a) => onEdit(m.turn, e, a)}
-                    onView={() => onViewEdit(m.turn, e)}
-                  />
-                ) : (
-                  <p key={i} className="font-mono text-[12px] text-text-faint">
-                    (형식이 맞지 않아 적용할 수 없는 수정 제안: {seg.path})
-                  </p>
-                )
-              })}
-            </li>
-          ),
-        )}
-        {streaming && (
-          <>
-            <li className="ml-8 flex flex-col items-end gap-1">
-              <span className="font-mono text-[12px] text-text-faint">#T{String(nextTurn).padStart(2, '0')}</span>
-              <p className="rounded-md bg-panel-raised px-3 py-2 text-[15px] leading-6 whitespace-pre-wrap">{streaming.question}</p>
-            </li>
-            {streaming.answer ? (
-              <li className="mr-4 flex flex-col gap-1 border-l-2 border-info pl-3">
-                <span className="flex items-center gap-2 font-mono text-[12px] text-text-faint">
-                  <Bot size={14} className="text-info" aria-hidden />
-                  <span>#T{String(nextTurn + 1).padStart(2, '0')}</span>
-                  <Loader2 size={12} className="animate-spin text-info" aria-hidden />
-                </span>
-                <p className="text-[15px] leading-6 whitespace-pre-wrap text-text">
-                  {streaming.answer}
-                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-info align-middle" aria-hidden />
-                </p>
-              </li>
-            ) : (
-              <li className="flex items-center gap-2 border-l-2 border-info pl-3 text-[14px] text-text-muted">
-                <Loader2 size={16} className="animate-spin text-info" aria-hidden /> AI가 답변을 작성하고 있습니다
-              </li>
-            )}
-          </>
-        )}
-      </ol>
-      {error && <p className="shrink-0 border-t border-alert/40 bg-alert/10 px-4 py-2 text-[14px] text-alert">{error}</p>}
-      <p id="chat-limit" className="sr-only">
-        질문은 한 번에 {maxChars}자까지 보낼 수 있습니다.
-      </p>
-      <div className="shrink-0 border-t border-line p-3">
-        <label htmlFor="chat-input" className="sr-only">
-          AI에게 질문
-        </label>
-        <div className={cx('rounded-md border bg-panel-raised', over ? 'border-alert' : 'border-line-strong focus-within:border-brand')}>
-          {notice && (
-            <p role="status" className="truncate px-3 pt-1.5 text-[12px] text-caution">
-              {notice}
-            </p>
-          )}
-          {attachments.length > 0 && (
-            <div className="px-2 pt-2">
-              <ul className="flex flex-wrap gap-1.5" aria-label="붙일 파일">
-                {attachments.map((a) => (
-                  <li key={`${a.source}|${a.path}`} className="inline-flex max-w-full items-center gap-1 rounded-sm border border-line bg-panel px-1.5 py-1 font-mono text-[12px]">
-                    <Paperclip size={12} className="shrink-0 text-text-faint" aria-hidden />
-                    <span className="truncate" title={a.path}>
-                      {a.path.split('/').pop()}
-                    </span>
-                    {a.source === 'TASK_FILE' && (
-                      <>
-                        <input
-                          aria-label={`${a.path.split('/').pop()} 쪽 범위`}
-                          value={a.pages ?? ''}
-                          onChange={(e) => onPages(a.path, e.target.value.replace(/\s/g, ''))}
-                          aria-invalid={!validPages(a.pages)}
-                          className={cx(
-                            'w-14 rounded-sm border bg-panel-raised px-1 text-center outline-none focus:border-brand',
-                            validPages(a.pages) ? 'border-line' : 'border-alert',
-                          )}
-                        />
-                        <span className="shrink-0 text-text-faint">/{materialPages[a.path] ?? '?'}쪽</span>
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      aria-label={`${a.path.split('/').pop()} 첨부 빼기`}
-                      onClick={() => onDetach(a)}
-                      className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-text-faint hover:bg-panel-raised hover:text-text"
-                    >
-                      <X size={12} aria-hidden />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <p className="tnum mt-1 font-mono text-[11px] text-text-faint">
-                첨부 {attachments.length}/{limits.maxAttach} · 합계 {charsLabel(limits.contextChars)} 이하
-                {showCost && ` · 크레딧 +${attachCost(attachments)} (파일당 ${ATTACH_CREDIT})`}
-                {!sendable(attachments) && <span className="ml-1 text-alert">PDF 쪽 범위를 확인하세요 (예: 1-2)</span>}
-              </p>
-            </div>
-          )}
-          <textarea
-            ref={inputRef}
-            id="chat-input"
-            rows={4}
-            disabled={disabled}
-            value={draft}
-            maxLength={maxChars}
-            onChange={(e) => {
-              setDraft(e.target.value)
-              setNotice(null)
-            }}
-            onPaste={(e) => {
-              // 붙여 넣기가 한도를 넘으면 들어갈 만큼만 넣고, 잘린 글자 수를 알려 준다
-              const el = e.currentTarget
-              const paste = e.clipboardData.getData('text')
-              const { selectionStart: st, selectionEnd: en, value } = el
-              const room = maxChars - (value.length - (en - st))
-              if (paste.length <= room) return
-              e.preventDefault()
-              const part = paste.slice(0, Math.max(0, room))
-              setDraft(value.slice(0, st) + part + value.slice(en))
-              setNotice(`붙여 넣은 내용 중 ${(paste.length - part.length).toLocaleString()}자가 잘렸습니다 (최대 ${maxChars.toLocaleString()}자)`)
-              requestAnimationFrame(() => el.setSelectionRange(st + part.length, st + part.length))
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault()
-                void send()
-              }
-            }}
-            placeholder={noTurnsLeft ? `질문 ${limits.turns}번을 모두 썼습니다. 지금까지의 답을 바탕으로 마무리하세요` : '맥락을 충분히 담아 질문하세요. 파일 탐색기의 파일을 이 창으로 끌어 놓으면 AI에게 함께 보여 줍니다'}
-            aria-describedby="chat-limit"
-            className="block w-full resize-none bg-transparent px-3 pt-2 font-sans text-[15px] leading-6 text-text outline-none placeholder:text-text-faint"
-          />
-          <div className="flex items-center gap-2 px-2 pb-2">
-            {/* 단축키와 모델명은 작게, 글자 수에 자리를 더 준다 */}
-            <kbd className="shrink-0 rounded-sm border border-line px-1 font-mono text-[11px] leading-4 text-text-faint" title="Ctrl + Enter 로 보내기">
-              Ctrl↵
-            </kbd>
-            <span className="min-w-0 max-w-[96px] truncate font-mono text-[11px] text-text-faint" title={`이 시험에서 쓰는 AI 모델: ${model}`}>
-              {model}
-            </span>
-            <span
-              className={cx(
-                'tnum ml-auto mr-1 shrink-0 font-mono text-[13px]',
-                count >= maxChars ? 'text-alert' : count >= maxChars * 0.9 ? 'text-caution' : 'text-text-faint',
-              )}
-              aria-live="polite"
-              title={`질문은 한 번에 ${maxChars.toLocaleString()}자까지`}
-            >
-              {over && '초과 '}
-              {count.toLocaleString()}/{maxChars.toLocaleString()}
-            </span>
-            <SendKey ready={draft.trim().length > 0 && sendable(attachments)} disabled={disabled || busy || over || noTurnsLeft || !sendable(attachments)} onClick={() => void send()} />
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ── 후속 질문 ───────────────────────────
-// 답변 상태는 부모가 가진다(아래 참고 패널에서 "#T03" 같은 턴 번호를 답변에 넣을 수 있게).
-function FollowUp({
-  questions,
-  i,
-  onIndex,
-  answers,
-  onAnswers,
-  busy,
-  error,
-  onDone,
-}: {
-  questions: string[]
-  i: number
-  onIndex: (i: number) => void
-  answers: string[]
-  onAnswers: (a: string[]) => void
-  busy: boolean
-  error: string | null
-  onDone: (a: string[]) => void
-}) {
-  const last = i === questions.length - 1
-  return (
-    <section className="flex h-full min-h-0 flex-col bg-panel">
-      <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line px-4">
-        <span className="label">FOLLOW-UP</span>
-        <span className="text-[16px] font-semibold">후속 질문</span>
-        <span className="tnum ml-auto font-mono text-[13px] text-text-muted">
-          {i + 1} / {questions.length}
-        </span>
-      </header>
-      <div className="flex gap-1 px-4 pt-3" aria-hidden>
-        {questions.map((_, j) => (
-          <span key={j} className={cx('h-0.5 flex-1 rounded-full', j <= i ? 'bg-brand' : 'bg-line')} />
-        ))}
-      </div>
-      <div key={i} className="fade-in flex min-h-0 flex-1 flex-col px-6 pt-4 pb-4">
-        <span className="label">QUESTION {String(i + 1).padStart(2, '0')}</span>
-        <h2 className="mt-1.5 text-[18px] leading-7 font-semibold">{questions[i]}</h2>
-        <p className="mt-1 text-[14px] text-text-muted">위 [내 질문] 탭과 파일 탭에서 내 질문과 제출한 파일을 볼 수 있습니다. [답변에 넣기]로 턴 번호를 근거로 붙이세요.</p>
-        <label htmlFor="answer" className="sr-only">
-          답변
-        </label>
-        <textarea
-          id="answer"
-          value={answers[i]}
-          onChange={(e) => onAnswers(answers.map((a, j) => (j === i ? e.target.value : a)))}
-          className="mt-3 min-h-0 flex-1 resize-none rounded-md border border-line-strong bg-panel-raised p-4 text-body text-text outline-none focus:border-brand"
-          placeholder="답변을 입력하세요"
-        />
-        {error && <p className="mt-3 text-[14px] text-alert">{error}</p>}
-        <div className="mt-3 flex items-center">
-          <span className="tnum font-mono text-[13px] text-text-faint">{answers[i].length} chars</span>
-          {i > 0 && (
-            <Button variant="ghost" className="ml-auto" onClick={() => onIndex(i - 1)}>
-              이전
-            </Button>
-          )}
-          <Button variant="primary" className={i > 0 ? 'ml-2' : 'ml-auto'} disabled={busy} onClick={() => (last ? onDone(answers) : onIndex(i + 1))}>
-            {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-            {last ? '완료하고 채점하기' : '다음'}
-          </Button>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/** 후속 질문 단계: 응시자가 AI에게 보낸 질문만 모아 보여 준다. [답변에 넣기]로 턴 번호를 지금 답변에 붙인다. */
-function PromptList({ turns, onInsert }: { turns: Turn[]; onInsert: (ref: string) => void }) {
-  const prompts = turns.filter((t) => t.role === 'user')
-  if (prompts.length === 0) return <p className="p-4 text-[14px] text-text-muted">AI에게 보낸 질문이 없습니다.</p>
-  return (
-    <ol className="h-full divide-y divide-line overflow-auto bg-panel-sunken">
-      {prompts.map((t) => {
-        const ref = `#T${String(t.turn).padStart(2, '0')}`
-        return (
-          <li key={t.turn} className="px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="rounded-sm bg-info/12 px-1.5 font-mono text-[12px] text-info">{ref}</span>
-              <span className="tnum font-mono text-[12px] text-text-faint">{t.time}</span>
-              <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onInsert(ref)}>
-                답변에 넣기
-              </Button>
-            </div>
-            <p className="mt-1.5 text-[14px] leading-6 whitespace-pre-wrap text-text">{t.text}</p>
-          </li>
-        )
-      })}
-    </ol>
-  )
-}
-
-function ConfirmModal({ busy, onCancel, onConfirm }: { busy: boolean; onCancel: () => void; onConfirm: () => void }) {
-  return (
-    <div className="fade-in fixed inset-0 z-50 flex items-center justify-center bg-bg/70" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-      <div className="w-[440px] rounded-lg border border-line bg-panel shadow-modal">
-        <header className="flex h-10 items-center border-b border-line px-4">
-          <span className="label">SUBMIT</span>
-          <IconButton label="닫기" className="ml-auto" onClick={onCancel}>
-            <X size={18} aria-hidden />
-          </IconButton>
-        </header>
-        <div className="p-6">
-          <h2 id="confirm-title" className="text-h2 font-semibold">
-            풀이를 제출할까요?
-          </h2>
-          <p className="mt-2 text-[15px] leading-6 text-text-muted">제출하면 파일과 AI 대화가 잠기고, 후속 질문 3개가 이어집니다.</p>
-        </div>
-        <footer className="flex justify-end gap-2 border-t border-line px-6 py-4">
-          <Button variant="ghost" onClick={onCancel}>
-            계속 풀기
-          </Button>
-          <Button variant="primary" disabled={busy} onClick={onConfirm}>
-            제출
-          </Button>
-        </footer>
-      </div>
-    </div>
-  )
-}
-
-function DocChecks({ task, doc }: { task: Task & { requiredHeadings?: string[] }; doc: string }) {
-  const heads = task.requiredHeadings ?? []
-  return (
-    <ul className="space-y-1 font-sans text-[14px]">
-      {heads.map((h) => {
-        const at = doc.indexOf(h)
-        const end = at < 0 ? -1 : doc.indexOf('\n', at)
-        const next = end < 0 ? -1 : doc.indexOf('\n#', end)
-        const body = end < 0 ? '' : doc.slice(end, next < 0 ? undefined : next).trim()
-        const ok = at >= 0 && body.length > 0
-        return (
-          <li key={h}>
-            <StatusDot status={ok ? 'ok' : 'check'} label={`${h.replace(/^#+\s*/, '')} ${ok ? '작성됨' : '비어 있음'}`} />
-          </li>
-        )
-      })}
-      <li className="tnum pt-2 font-mono text-[13px] text-text-faint">{doc.length} chars</li>
-    </ul>
-  )
-}
-
-// ── 패널 폭 ─────────────────────────────
-// 과제·파일 / 문항 / AI 채팅 폭(px). 사용자가 바꾼 값은 이 브라우저에 남긴다.
-const WIDTHS_KEY = 'exam-panel-widths'
-const DEFAULT_WIDTHS = { side: 280, questions: 360, chat: 380 }
-const MIN_WIDTHS = { side: 220, questions: 280, chat: 300 }
-const RAIL_WIDTH = 48
-const CENTER_MIN = 360
-
-function usePanelWidths() {
-  const [widths, setWidths] = useState<typeof DEFAULT_WIDTHS>(() => {
-    try {
-      return { ...DEFAULT_WIDTHS, ...JSON.parse(localStorage.getItem(WIDTHS_KEY) ?? '{}') }
-    } catch {
-      return DEFAULT_WIDTHS
-    }
-  })
-  const setWidth = (key: keyof typeof DEFAULT_WIDTHS, width: number) => {
-    const next = { ...widths, [key]: width }
-    setWidths(next)
-    try {
-      localStorage.setItem(WIDTHS_KEY, JSON.stringify(next))
-    } catch {
-      // 저장이 막힌 브라우저에서는 이번 화면에서만 유지한다
-    }
-  }
-  return [widths, setWidth] as const
-}
-
-// 가운데 칸의 최소 폭을 남기고 이 패널이 가질 수 있는 최대 폭
-const maxPanelWidth = (panel: HTMLElement) => {
-  const grid = panel.parentElement!
-  const center = grid.querySelector<HTMLElement>(':scope > [data-tour="editor"]')!
-  return panel.getBoundingClientRect().width + center.getBoundingClientRect().width - CENTER_MIN
-}
 
 // ── 응시 화면 ───────────────────────────
 export default function RealExam() {
@@ -1169,45 +526,18 @@ export default function RealExam() {
     <div className="focus-stage fade-in flex h-full flex-col bg-bg">
       <NoticeBanner invite={live?.invite} />
       {/* 6.7 Status Bar */}
-      <header className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-panel px-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Logo />
-          <span className="h-4 w-px bg-line" aria-hidden />
-          <span className="truncate text-[15px] font-semibold">{task.title}</span>
-          <ModeBadge mode={live ? 'live' : 'self'} />
-        </div>
-        <div className="flex items-baseline gap-2 px-2" data-tour="timer" aria-label={`남은 시간 ${fmt(left)}`}>
-          <span className="label">{locked ? 'FOLLOW-UP' : 'REMAINING'}</span>
-          <span className={cx('tnum font-mono text-[21px] leading-7 font-semibold transition-colors duration-[180ms]', tone)} role="timer">
-            {left < 0 && !locked ? '-' : ''}
-            {fmt(Math.abs(left))}
-          </span>
-        </div>
-        <div className="flex items-center justify-end gap-3">
-          <IconButton label="사용 안내" onClick={() => setTourOpen(true)}>
-            <CircleHelp size={18} aria-hidden />
-          </IconButton>
-          {!live && <CreditPill />}
-          {live && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void antiCheating.requestFullscreen().catch(() => setActionError('전체 화면으로 전환할 수 없습니다.'))}
-              >
-                전체 화면 시작
-              </Button>
-              <ViolationCounter count={antiCheating.count} />
-            </>
-          )}
-          <span className="font-mono text-[12px] text-text-faint">{view.attempt.model}</span>
-          {!locked && (
-            <Button variant="primary" size="sm" data-tour="submit" onClick={() => setConfirm(true)}>
-              제출
-            </Button>
-          )}
-        </div>
-      </header>
+      <ExamHeader
+        task={task}
+        live={live}
+        left={left}
+        locked={locked}
+        tone={tone}
+        model={view.attempt.model}
+        antiCheating={antiCheating}
+        setActionError={setActionError}
+        setTourOpen={setTourOpen}
+        setConfirm={setConfirm}
+      />
 
       {actionError && (
         <div role="alert" className="flex shrink-0 items-center gap-3 border-b border-alert/40 bg-alert/10 px-4 py-2 text-[14px] text-alert">
@@ -1243,71 +573,25 @@ export default function RealExam() {
         />
         {/* 사이드 패널: 과제 / 파일 */}
         {side && (
-        <aside className="relative flex min-h-0 min-w-0 flex-col border-r border-line bg-panel">
-          <ResizeHandle
-            label="왼쪽 패널 크기 조절"
-            edge="right"
-            value={widths[sideKey]}
-            min={MIN_WIDTHS[sideKey]}
-            maxWidth={maxPanelWidth}
-            onResize={(w) => setWidth(sideKey, w)}
-            onReset={() => setWidth(sideKey, DEFAULT_WIDTHS[sideKey])}
+          <SidePanelView
+            side={side}
+            widths={widths}
+            sideKey={sideKey}
+            setWidth={setWidth}
+            task={task}
+            dev={dev}
+            hasQuestions={hasQuestions}
+            qs={qs}
+            setSide={setSide}
+            tree={tree}
+            active={active}
+            openFile={openFile}
+            locked={locked}
+            setRefTab={setRefTab}
+            attachFor={attachFor}
+            attach={attach}
+            flash={flash}
           />
-          <header className="flex h-10 shrink-0 items-center border-b border-line px-4">
-            <span className="label">{side === 'task' ? 'TASK' : side === 'questions' ? 'QUESTIONS' : 'EXPLORER'}</span>
-          </header>
-          {side === 'questions' ? (
-            <QuestionPanel qs={qs} />
-          ) : side === 'task' ? (
-            <div className="fade-in min-h-0 flex-1 overflow-auto p-4">
-              <span className="label">{dev ? 'DEV' : 'BIZ'} TASK</span>
-              <h2 className="mt-1 text-h3 font-semibold">{task.title}</h2>
-              {task.description.map((d) => (
-                <p key={d} className="mt-3 text-[15px] leading-6 text-text">
-                  {d}
-                </p>
-              ))}
-              <h3 className="label mt-6">REQUIREMENTS</h3>
-              <RequirementsView lines={task.requirements} className="mt-2" />
-              {hasQuestions && (
-                <button
-                  type="button"
-                  onClick={() => setSide('questions')}
-                  className="mt-6 flex w-full items-center justify-between rounded-md border border-line bg-panel-raised/40 px-3 py-2.5 text-left text-[15px] font-semibold text-text hover:border-line-strong"
-                >
-                  <span>문항 풀기</span>
-                  <span className="tnum font-mono text-[13px] font-normal text-text-muted">
-                    {qs.answered}/{qs.questions.length}
-                  </span>
-                </button>
-              )}
-              <h3 className="label mt-6">NOTES</h3>
-              <ul className="mt-2 space-y-2">
-                {task.notes.map((n) => (
-                  <li key={n} className="border-l-2 border-caution pl-3 text-[14px] leading-5 text-text-muted">
-                    {n}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <nav className="fade-in min-h-0 flex-1 overflow-auto py-2" aria-label="파일 탐색기">
-              <PathTree
-                nodes={tree}
-                active={active}
-                onOpen={(p) => {
-                  void openFile(p)
-                  if (locked) setRefTab('file')
-                }}
-                attachFor={locked ? undefined : attachFor}
-                onAttach={(r) => {
-                  const why = attach(r)
-                  if (why) flash(why)
-                }}
-              />
-            </nav>
-          )}
-        </aside>
         )}
 
         {/* 가운데: 에디터 + 출력 | 후속 질문 */}
