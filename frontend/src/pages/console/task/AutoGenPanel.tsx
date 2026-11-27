@@ -109,7 +109,7 @@ export function AutoGenPanel({ onStarted }: { onStarted: (jobIds: string[]) => v
     { label: '제한 시간', value: `${rest.minutes}분` },
     { label: '용도', value: rest.usage === 'LIVE' ? '실전' : '자가진단' },
     { label: '개수', value: phase === 'preview' ? `${topics.length}개` : `${count}개` },
-    { label: '방식', value: rest.mode === 'BATCH' ? `배치 · 마감 ${rest.batchDeadlineHours}시간` : '바로 만들기' },
+    { label: '방식', value: rest.mode === 'BATCH' ? `절약 · 마감 ${rest.batchDeadlineHours}시간` : '일반' },
   ]
   const flow = (
     <div className="mx-auto mb-5 w-full max-w-[1180px]">

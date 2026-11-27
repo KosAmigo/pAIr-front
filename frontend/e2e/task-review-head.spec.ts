@@ -66,6 +66,6 @@ test('생성 기록: 단계별 모델과 단계별 만든 횟수(배치·바로)
   await expect(times).toContainText('글 2') // 글은 두 번 만들었다
   await expect(times).toContainText('설계도 1')
   await expect(times).not.toContainText('검사')
-  await expect(times).toContainText('배치 2 · 바로 5')
+  await expect(times).toContainText('절약 2 · 일반 5')
   await expect(page.getByRole('listitem').filter({ hasText: '걸린 시간' })).toContainText('95초')
 })

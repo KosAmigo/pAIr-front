@@ -190,7 +190,7 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
             {state === 'failed' && <TriangleAlert size={14} aria-hidden className="shrink-0 text-caution" />}
           </span>
           <span className={cx('tnum truncate text-[12px] leading-4 font-bold', batch ? 'text-info' : 'text-text-muted')}>
-            {batch ? (deadline ? `배치 · 마감 ${deadline}` : '배치') : '바로'}
+            {batch ? (deadline ? `절약 · 마감 ${deadline}` : '절약') : '일반'}
             {sum !== null && (
               <span data-testid="group-cost" className="font-mono font-semibold text-text-muted">
                 {' · '}

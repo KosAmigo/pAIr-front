@@ -130,8 +130,8 @@ export function ModePicker({
 }) {
   const batch = mode === 'BATCH'
   const opts: { value: GenMode; title: string }[] = [
-    { value: 'NOW', title: '바로 만들기' },
-    { value: 'BATCH', title: '배치' },
+    { value: 'NOW', title: '일반' },
+    { value: 'BATCH', title: '절약' },
   ]
   return (
     <div className="flex flex-col gap-3">
@@ -187,7 +187,7 @@ export function ModePicker({
           </div>
         </div>
       </div>
-      <p className="min-h-5 text-[13px] break-keep text-text-muted">{batch ? (DEADLINE_OPTIONS.find((o) => o.hours === hours)?.hint ?? '') : '바로 생성은 마감 없이 약 15분'}</p>
+      <p className="min-h-5 text-[13px] break-keep text-text-muted">{batch ? (DEADLINE_OPTIONS.find((o) => o.hours === hours)?.hint ?? '') : '일반은 30분~1시간 안에 끝나요'}</p>
     </div>
   )
 }

@@ -122,7 +122,7 @@ export function contentSections(c: GenContent | null, track: GenTrack | null): C
 
 /** 방식 글: 바로 만들기 / 배치 · 마감 HH:MM */
 export function modeLabel(mode: GenMode | null | undefined, deadlineAt?: string | null): string {
-  if (mode !== 'BATCH') return '바로 만들기'
+  if (mode !== 'BATCH') return '일반'
   const d = fmtClock(deadlineAt)
-  return d ? `배치 · 마감 ${d}` : '배치'
+  return d ? `절약 · 마감 ${d}` : '절약'
 }

@@ -25,7 +25,7 @@ test.describe('예상 비용', () => {
     await expect(line).toHaveText('예상 약 $0.90 (과제당 $0.30 · 최대 $2.40)')
     expect(api.sent.some((r) => r.path === '/api/admin/task-gen/cost-estimate?track=DEV&minutes=60&mode=NOW&count=3')).toBe(true)
 
-    await page.getByRole('radio', { name: '배치' }).click()
+    await page.getByRole('radio', { name: '절약' }).click()
     await expect(line).toHaveText('예상 약 $0.45 (과제당 $0.15 · 최대 $1.20)')
 
     await page.getByRole('radio', { name: '20분' }).click()

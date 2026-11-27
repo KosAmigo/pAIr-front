@@ -45,19 +45,19 @@ test('과제 만들기 토글(직군·바로/배치·시간·탭): 고르기 전
   await page.waitForTimeout(800) // 폼이 들어오는 연출이 끝난 뒤에 잰다
   const radio = (group: string, name: RegExp) => page.getByRole('radiogroup', { name: group }).getByRole('radio', { name })
   const targets: [string, Locator][] = [
-    ['바로', radio('방식', /바로 만들기/)],
-    ['배치', radio('방식', /^배치/)],
+    ['일반', radio('방식', /^일반/)],
+    ['절약', radio('방식', /^절약/)],
     ['20분', radio('제한 시간', /20분/)],
     ['60분', radio('제한 시간', /60분/)],
     ['자가진단', radio('용도', /자가진단/)],
     ['실전', radio('용도', /실전/)],
   ]
   const before = await Promise.all(targets.map(([, l]) => size(l)))
-  await radio('방식', /^배치/).click()
+  await radio('방식', /^절약/).click()
   await radio('제한 시간', /20분/).click()
   await radio('용도', /실전/).click()
   expect(await Promise.all(targets.map(([, l]) => size(l)))).toEqual(before)
-  await radio('방식', /바로 만들기/).click()
+  await radio('방식', /^일반/).click()
   await radio('제한 시간', /60분/).click()
   await radio('용도', /자가진단/).click()
   expect(await Promise.all(targets.map(([, l]) => size(l)))).toEqual(before)

@@ -360,7 +360,7 @@ function manualSummary(f: Form): SummaryRow[] {
     { label: '함정', value: f.trap.trim() || null },
     { label: '용도', value: f.usage === 'LIVE' ? '실전' : '자가진단' },
     { label: '제한 시간', value: `${f.minutes}분` },
-    { label: '방식', value: f.mode === 'BATCH' ? `배치 · 마감 ${f.batchDeadlineHours}시간` : '바로 만들기' },
+    { label: '방식', value: f.mode === 'BATCH' ? `절약 · 마감 ${f.batchDeadlineHours}시간` : '일반' },
   ]
 }
 
@@ -385,7 +385,7 @@ function ConfirmCard({
       </span>,
     ],
     ['제한 시간', <span key="m"><span className="tnum font-mono">{form.minutes}</span>분</span>],
-    ['방식', <span key="mo">{form.mode === 'BATCH' ? <>배치 · 마감 <span className="tnum font-mono">{form.batchDeadlineHours}</span>시간</> : '바로 만들기'}</span>],
+    ['방식', <span key="mo">{form.mode === 'BATCH' ? <>절약 · 마감 <span className="tnum font-mono">{form.batchDeadlineHours}</span>시간</> : '일반'}</span>],
     [
       '용도',
       form.usage === 'LIVE' ? (

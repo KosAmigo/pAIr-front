@@ -533,7 +533,7 @@ export function jobView(j: JobRow): JobView {
     case 'QUEUED':
       return { tone: 'wait', label: j.queuePosition ? `대기 ${j.queuePosition}번째` : '대기 중', sub: batch && deadline ? `마감 ${deadline}` : null, done: false }
     case 'RUNNING': {
-      if (j.waitingBatch) return { tone: 'batch', label: '배치 대기 중', sub: deadline ? `마감 ${deadline}` : null, done: false }
+      if (j.waitingBatch) return { tone: 'batch', label: '절약 모드 대기 중', sub: deadline ? `마감 ${deadline}` : null, done: false }
       const step = toGenStep(j.step, j.step === '다시 생성 중')
       const detail = genDetail(j.step, j.track ?? 'DEV')
       const sub = [detail && detail !== step ? detail : null, batch && deadline ? `마감 ${deadline}` : null].filter(Boolean).join(' · ')

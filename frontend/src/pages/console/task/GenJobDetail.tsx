@@ -105,7 +105,7 @@ export function GenJobDetail({ jobId, row, onBack }: { jobId: string; row: JobRo
             ) : (
               <GenStages
                 step={toGenStep(job.step, job.step === '다시 생성 중')}
-                detail={job.waitingBatch ? '배치 결과를 기다리고 있어요' : genDetail(job.step, track ?? 'DEV')}
+                detail={job.waitingBatch ? '절약 모드 결과를 기다리고 있어요' : genDetail(job.step, track ?? 'DEV')}
                 retried={job.step === '다시 생성 중'}
                 track={track ?? 'DEV'}
                 finished={job.status === 'DONE'}
