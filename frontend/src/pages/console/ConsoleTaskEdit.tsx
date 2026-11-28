@@ -149,7 +149,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
                 </a>
                 {s.status === 'HIDDEN' ? (
                   <Magnetic>
-                    <Button variant="primary" size="lg" disabled={busy} onClick={() => (checkFailed ? setConfirm('publish') : void change(true))} className="!h-10 rounded-full px-6">
+                    <Button variant="primary" size="lg" disabled={busy} onClick={() => (checkFailed ? setConfirm('publish') : void change(true))} className="!h-10 w-[204px] justify-center rounded-full px-6">
                       <Rocket size={17} aria-hidden /> {publishLabel}
                     </Button>
                   </Magnetic>
