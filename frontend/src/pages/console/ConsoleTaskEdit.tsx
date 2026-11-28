@@ -97,6 +97,14 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
         </Link>
         <ConsoleHero
           label="과제 요약"
+          badge={
+            (s.generated || check) && (
+              <>
+                {s.generated && <AiBadge />}
+                {check && <CheckBadge result={check} />}
+              </>
+            )
+          }
           centerStats
           title={s.title}
           meta={
@@ -128,28 +136,25 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
             { label: 'REQUIREMENTS', value: ((r) => r.features.length + r.examples.length + r.other.length)(parseRequirements(d.requirements)), unit: '개' },
           ]}
           actions={
-            <div className="flex flex-col items-end gap-3">
-              <HeroStatus task={s} draft={draft} onChanged={setSummary}>
-                {s.generated && <AiBadge />}
-                {check && <CheckBadge result={check} />}
-              </HeroStatus>
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end gap-4">
+              <HeroStatus task={s} draft={draft} onChanged={setSummary} />
+              <div className="flex items-center justify-end gap-2">
                 <a
                   href={`/console/tasks/${encodeURIComponent(s.id)}/preview`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex h-11 items-center gap-2 rounded-full border border-stage-line-strong px-5 text-[15px] font-semibold text-stage-text transition-colors hover:bg-white/10"
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-stage-line-strong px-5 text-[15px] font-semibold text-stage-text transition-colors hover:bg-white/10"
                 >
                   <Eye size={16} aria-hidden /> 응시자로 보기
                 </a>
                 {s.status === 'HIDDEN' ? (
                   <Magnetic>
-                    <Button variant="primary" size="lg" disabled={busy} onClick={() => (checkFailed ? setConfirm('publish') : void change(true))} className="h-11 rounded-full px-6">
+                    <Button variant="primary" size="lg" disabled={busy} onClick={() => (checkFailed ? setConfirm('publish') : void change(true))} className="!h-10 rounded-full px-6">
                       <Rocket size={17} aria-hidden /> {publishLabel}
                     </Button>
                   </Magnetic>
                 ) : (
-                  <Button variant="danger" size="lg" disabled={busy} onClick={() => setConfirm('hide')} className="h-11 rounded-full px-5">
+                  <Button variant="danger" size="lg" disabled={busy} onClick={() => setConfirm('hide')} className="!h-10 rounded-full px-5">
                     <EyeOff size={16} aria-hidden /> 숨기기
                   </Button>
                 )}

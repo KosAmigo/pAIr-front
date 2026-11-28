@@ -16,7 +16,7 @@ export function HeroStatus({ task, draft, onChanged, children }: { task: Console
     shown: { opacity: 1, y: 0, transition: { duration: reduce ? duration.fast : duration.normal, ease: easing.expo } },
   }
   return (
-    <motion.div initial="hidden" animate="shown" variants={{ shown: { transition: { staggerChildren: 0.07 } } }} className="flex flex-wrap items-center gap-x-2.5 gap-y-2" aria-label="상태와 용도" role="group">
+    <motion.div initial="hidden" animate="shown" variants={{ shown: { transition: { staggerChildren: 0.07 } } }} className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-2" aria-label="상태와 용도" role="group">
       <motion.span variants={item} className="inline-flex">
         <TaskStatusBadge task={task} stage />
       </motion.span>
