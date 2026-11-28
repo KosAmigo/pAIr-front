@@ -53,7 +53,7 @@ test.describe('예상 비용', () => {
 })
 
 test.describe('실제 비용', () => {
-  test('목록: 진행 중은 "지금까지", 끝났으면 금액, 값이 없으면 안 보인다 · 묶음 합계', async ({ page }) => {
+  test('목록: 진행 중은 "지금까지", 끝났으면 금액, 값이 없으면 안 보인다 · 진행 중 요약', async ({ page }) => {
     const api = await mockApi(page)
     api.seedJobs(JOBS)
     await page.goto('/console/tasks/generating')
@@ -61,7 +61,9 @@ test.describe('실제 비용', () => {
     await expect(rows.nth(0).getByTestId('job-cost')).toHaveText('지금까지 $0.12')
     await expect(rows.nth(1).getByTestId('job-cost')).toHaveCount(0)
     await expect(rows.nth(2).getByTestId('job-cost')).toHaveText('$0.27')
-    await expect(page.getByTestId('group-cost')).toContainText('지금까지 $0.39')
+    // 묶음 합계는 없고, 진행 중 작업만 모은 작은 요약 한 줄이 있다 (진행 a1 $0.12)
+    await expect(page.getByTestId('group-cost')).toHaveCount(0)
+    await expect(page.getByTestId('gen-summary')).toContainText('지금까지 $0.12')
   })
 
   test('상세: 진행 중·끝난 작업의 비용', async ({ page }) => {

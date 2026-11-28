@@ -89,14 +89,17 @@ export function SelfShell({ children, header }: { children: ReactNode; header?: 
   )
 }
 
-export function PageHeader({ label, title, children }: { label: string; title: ReactNode; children?: ReactNode }) {
+export function PageHeader({ label, title, aside, children }: { label: string; title: ReactNode; aside?: ReactNode; children?: ReactNode }) {
   return (
     <header className="relative z-10 flex min-h-16 shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line/70 px-4 py-2 md:px-8">
       <div className="flex flex-col">
         <ScrambleText text={label} className="label" />
-        <Reveal y={8}>
-          <h1 className="text-[21px] leading-7 font-bold text-text">{title}</h1>
-        </Reveal>
+        <div className="flex items-center gap-1">
+          <Reveal y={8}>
+            <h1 className="text-[21px] leading-7 font-bold text-text">{title}</h1>
+          </Reveal>
+          {aside}
+        </div>
       </div>
       <div className="ml-auto flex items-center gap-2">{children}</div>
     </header>

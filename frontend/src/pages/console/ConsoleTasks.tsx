@@ -1,13 +1,14 @@
 // DESIGN.md §7-9-1 과제 목록 (ADMIN). 2026-11-23 정리: 자가진단 → 실전 → 검수 전 순서.
 // 위 스포트라이트 = 세 칸 요약(누르면 그 탭) + "과제 만들기" 주인공 버튼. 아래 = 알약 탭(오른쪽에 검색) + 직군 하위 거르기 + 카드 그리드.
 // 데이터는 백엔드 /api/console/tasks. 새 칸(track, summary, generated …)은 없을 수 있어 옵셔널로 다룬다.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { FileClock, FilePlus2, Search, X, type LucideIcon } from 'lucide-react'
 import { cx } from '../../components/cx'
 import { ErrorState } from '../../components/ErrorState'
 import { CountUp, GradientText, Magnetic, RevealGroup, RevealItem, StageSection } from '../../components/fx'
 import { ButtonLink } from '../../components/ui'
-import { loadTasks, useTaskList } from '../../data/consoleTasks'
+import { kindName, loadTasks, useTaskList } from '../../data/consoleTasks'
 import { countTabs, filterTasks, firstTab, TAB_HINT, TAB_LABEL, TAB_ORDER, trackOf, type TaskTab, type TrackFilter } from '../../data/taskBoard'
 import { PillTabs } from './ConsoleHero'
 import { TRACK_ICON, USAGE_ICON } from '../../components/domainIcons'
@@ -22,6 +23,33 @@ const TAB_TONE: Record<TaskTab, { num: string; icon: string }> = {
   private: { num: 'text-stage-text', icon: 'bg-stage-text/8 text-stage-text' },
 }
 const TABS = TAB_ORDER
+const MAX_QUERY = 100
+
+/** 검색어·탭·직군을 주소(?q=&tab=&track=)에 둔다: 새로고침·뒤로/앞으로 가기에도 그대로 남는다 */
+function useBoardParams() {
+  const [params, setParams] = useSearchParams()
+  const tabParam = params.get('tab')
+  const trackParam = params.get('track')
+  const picked = TABS.find((v) => v === tabParam) ?? null
+  const track: TrackFilter = trackParam === 'DEV' || trackParam === 'BIZ' ? trackParam : 'ALL'
+  const q = (params.get('q') ?? '').slice(0, MAX_QUERY)
+  const update = useCallback(
+    (patch: Record<string, string | null>, replace: boolean) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          for (const [k, v] of Object.entries(patch)) {
+            if (v) next.set(k, v)
+            else next.delete(k)
+          }
+          return next
+        },
+        { replace },
+      ),
+    [setParams],
+  )
+  return { picked, track, q, update }
+}
 
 export default function ConsoleTasks() {
   const { list, error } = useTaskList()
@@ -36,18 +64,40 @@ export default function ConsoleTasks() {
   const all = useMemo(() => list ?? [], [list])
   const counts = useMemo(() => countTabs(all), [all])
   // 사용자가 탭을 고르기 전에는 자가진단부터 연다 (검수 전이 있으면 탭에 개수 배지가 눈에 띄게 뜬다)
-  const [picked, setPicked] = useState<TaskTab | null>(null)
+  const { picked, track, q, update } = useBoardParams()
+  const setPicked = (v: TaskTab) => update({ tab: v }, false)
+  const setTrack = (v: TrackFilter) => update({ track: v === 'ALL' ? null : v }, false)
+  // 입력창 글자는 따로 들고 있다가 주소에 반영한다(한글 조합 중에도 글자가 흔들리지 않게). 뒤로 가기 등으로 주소의 검색어가 바뀌면 입력창도 따라간다
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [text, setText] = useState(q)
+  const written = useRef(q)
+  useEffect(() => {
+    if (q !== written.current) {
+      written.current = q
+      setText(q)
+    }
+  }, [q])
+  const setQ = (v: string) => {
+    const next = v.slice(0, MAX_QUERY)
+    written.current = next
+    setText(next)
+    update({ q: next.trim() ? next : null }, true)
+  }
   const tab = picked ?? (list ? firstTab(counts) : 'draft')
-  const [track, setTrack] = useState<TrackFilter>('ALL')
-  const [q, setQ] = useState('')
 
-  const rows = useMemo(() => filterTasks(all, { tab, track, q }), [all, tab, track, q])
+  const rows = useMemo(() => filterTasks(all, { tab, track, q }, kindName), [all, tab, track, q])
   // 직군 칸의 개수: 지금 상태 탭(과 검색어) 안에서 센다
   const trackCounts = useMemo(() => {
-    const inTab = filterTasks(all, { tab, track: 'ALL', q })
+    const inTab = filterTasks(all, { tab, track: 'ALL', q }, kindName)
     return { ALL: inTab.length, DEV: inTab.filter((t) => trackOf(t) === 'DEV').length, BIZ: inTab.filter((t) => trackOf(t) === 'BIZ').length }
   }, [all, tab, q])
-  const filtered = track !== 'ALL' || q.trim() !== ''
+  const searching = q.trim() !== ''
+  const filtered = track !== 'ALL' || searching
+  // 이 탭엔 없지만 다른 탭에 검색 결과가 있으면 알려 준다
+  const elsewhere = useMemo(
+    () => (searching ? TABS.filter((v) => v !== tab).map((v) => ({ tab: v, n: filterTasks(all, { tab: v, track, q }, kindName).length })).filter((x) => x.n > 0) : []),
+    [all, tab, track, q, searching],
+  )
 
   return (
     <>
@@ -80,13 +130,26 @@ export default function ConsoleTasks() {
               <span className="sr-only">과제 검색</span>
               <Search size={16} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-text-faint" aria-hidden />
               <input
-                value={q}
+                ref={inputRef}
+                type="search"
+                value={text}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="제목, 한 줄 소개, 주제로 찾기"
-                className="h-11 w-full rounded-full border border-line-strong bg-panel pr-9 pl-10 text-[14px] outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]"
+                onKeyDown={(e) => {
+                  // 한글 조합 중 Esc·Enter 는 글자 확정용이라 건드리지 않는다
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                  if (e.key === 'Escape' && text) {
+                    e.preventDefault()
+                    setQ('')
+                  }
+                }}
+                maxLength={MAX_QUERY}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="제목, 소개, 주제, 코드로 찾기"
+                className="h-11 w-full [&::-webkit-search-cancel-button]:hidden rounded-full border border-line-strong bg-panel pr-9 pl-10 text-[14px] outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgb(108_71_255/0.15)]"
               />
-              {q && (
-                <button type="button" aria-label="검색어 지우기" title="검색어 지우기" onClick={() => setQ('')} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-text-faint hover:text-text">
+              {text && (
+                <button type="button" aria-label="검색어 지우기" title="검색어 지우기" onClick={() => (setQ(''), inputRef.current?.focus())} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-text-faint hover:text-text">
                   <X size={14} aria-hidden />
                 </button>
               )}
@@ -119,6 +182,9 @@ export default function ConsoleTasks() {
               })}
             </div>
           </div>
+          <p role="status" aria-live="polite" className="sr-only">
+            {searching && list != null ? (rows.length === 0 ? '검색 결과가 없어요.' : `검색 결과 ${rows.length}개`) : ''}
+          </p>
         </div>
 
         {error && list == null ? (
@@ -133,7 +199,7 @@ export default function ConsoleTasks() {
           <>
             {error && <ErrorState compact message={error} onRetry={() => void loadTasks()} />}
             {rows.length === 0 ? (
-              <Empty tab={tab} filtered={filtered} total={all.length} onClear={() => (setTrack('ALL'), setQ(''))} />
+              <Empty tab={tab} filtered={filtered} total={all.length} elsewhere={elsewhere} onTab={setPicked} onClear={() => (written.current = '', setText(''), update({ track: null, q: null }, false))} />
             ) : (
               <RevealGroup as="ul" key={`${tab}-${track}`} className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
                 {rows.map((t) => (
@@ -215,7 +281,7 @@ function Summary({ counts, loading, tab, onTab }: { counts: Record<TaskTab, numb
   )
 }
 
-function Empty({ tab, filtered, total, onClear }: { tab: TaskTab; filtered: boolean; total: number; onClear: () => void }) {
+function Empty({ tab, filtered, total, elsewhere, onTab, onClear }: { tab: TaskTab; filtered: boolean; total: number; elsewhere: { tab: TaskTab; n: number }[]; onTab: (t: TaskTab) => void; onClear: () => void }) {
   const Icon = TAB_ICON[tab]
   const text = filtered
     ? '조건에 맞는 과제가 없어요. 직군이나 검색어를 바꿔 보세요.'
@@ -233,6 +299,19 @@ function Empty({ tab, filtered, total, onClear }: { tab: TaskTab; filtered: bool
         <Icon size={28} strokeWidth={1.75} aria-hidden className="relative" />
       </span>
       <p className="max-w-[420px] text-[16px] font-semibold break-keep text-text">{text}</p>
+      {elsewhere.length > 0 && (
+        <p className="text-[14px] font-medium text-text-muted">
+          {elsewhere.map((x, i) => (
+            <span key={x.tab}>
+              {i > 0 && ', '}
+              <button type="button" onClick={() => onTab(x.tab)} className="font-semibold text-brand hover:underline">
+                {TAB_LABEL[x.tab]} {x.n}개
+              </button>
+            </span>
+          ))}
+          에는 있어요.
+        </p>
+      )}
       {filtered ? (
         <button type="button" onClick={onClear} className="text-[14px] font-semibold text-brand hover:underline">
           거르기 풀기

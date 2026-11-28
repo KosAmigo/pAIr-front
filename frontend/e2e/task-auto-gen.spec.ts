@@ -70,23 +70,26 @@ test.describe('자동 생성', () => {
 
     // 만들기 뒤엔 만드는 중인 과제 페이지로 가고, 방금 만든 묶음의 첫 작업(a1)이 골라져 있다
     await expect(page).toHaveURL(/\/console\/tasks\/generating\?job=a1/)
-    // 진행 목록: 한 묶음에 진행·대기·완료 행
+    // 진행 목록: 작업마다 카드 하나. 진행·대기는 위에, 끝난 작업(a3)은 '완료 1' 줄 안에 접혀 있다
     const list = page.getByRole('region', { name: '진행 목록' })
-    // 묶음 머리줄: 도는 작업이 있어 펼쳐져 있다
-    await expect(list.getByRole('button', { name: /3개 중 1개 끝남/ })).toHaveAttribute('aria-expanded', 'true')
     const rows = list.getByTestId('gen-job')
     await expect(rows).toHaveCount(3)
+    await expect(page.getByTestId('gen-done-toggle')).toContainText(/완료\s*1/)
+    await expect(page.getByTestId('gen-done-toggle')).toHaveAttribute('aria-expanded', 'false')
     await expect(rows.nth(0).getByRole('status')).toHaveText('생성 중')
     await expect(rows.nth(0)).toContainText('설계도 작성 중')
     await expect(rows.nth(0)).toContainText('마감 15:05') // 배치: 마감 시각
     await expect(rows.nth(1).getByRole('status')).toHaveText('대기 1번째')
+    await page.getByTestId('gen-done-toggle').click()
     await expect(rows.nth(2).getByRole('status')).toHaveText('완료')
     await expect(rows.nth(2)).toContainText('통과 1 · 경고 1 · 실패 0')
 
     // 대기 중인 것만 취소 버튼이 있다
     await expect(list.getByRole('button', { name: /취소/ })).toHaveCount(1)
     await list.getByRole('button', { name: /취소/ }).click()
-    await expect(rows.nth(1).getByRole('status')).toHaveText('취소됨')
+    // 취소된 작업은 끝난 쪽(완료 줄)으로 내려간다
+    await expect(page.getByTestId('gen-done-toggle')).toContainText(/완료\s*2/)
+    await expect(list.getByRole('status').filter({ hasText: '취소됨' })).toHaveCount(1)
     expect(api.sent.some((r) => r.path === '/api/admin/task-gen/a2/cancel')).toBe(true)
     await expect(list.getByRole('button', { name: /취소/ })).toHaveCount(0)
   })

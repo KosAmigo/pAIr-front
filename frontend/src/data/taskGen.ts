@@ -44,6 +44,8 @@ export type TaskGenJob = {
   /** DONE 이어도 false 면 확인에 실패한 채 저장된 것 */
   passed?: boolean | null
   taskCode: string | null
+  /** 만들어진 과제가 삭제됐다 (백엔드가 줄 수도 있다). 없어도 DONE 인데 taskCode 가 null 이면 삭제로 본다 */
+  taskDeleted?: boolean
   checks: GenCheck[]
   error: string | null
   /** 아래는 작업 목록(jobs)·단건 조회가 주는 칸. 없을 수 있다 */
@@ -551,6 +553,14 @@ export function jobView(j: JobRow): JobView {
   }
 }
 
+/** 끝났지만 만들어진 과제가 지워진 작업 (검수·미리보기 링크가 없다) */
+export const taskGone = (j: Pick<TaskGenJob, 'status' | 'taskCode' | 'taskDeleted'>): boolean => j.status === 'DONE' && (j.taskDeleted === true || !j.taskCode)
+
+/** 목록·상세에 보일 작업 상태. 삭제된 과제는 '삭제된 과제'로 */
+export function jobViewOf(j: JobRow): JobView {
+  return taskGone(j) ? { tone: 'cancel', label: '삭제된 과제', sub: null, done: true } : jobView(j)
+}
+
 /** 대기 중인 작업만 취소할 수 있다 */
 export const canCancel = (j: Pick<JobRow, 'status'>): boolean => j.status === 'QUEUED'
 
@@ -561,36 +571,6 @@ export function cancelErrorMessage(e: unknown): string {
     return e.message
   }
   return e instanceof Error ? e.message : String(e)
-}
-
-export type JobGroup = { key: string; batchId: string | null; jobs: JobRow[]; counts: Record<JobState, number> }
-
-/** 묶음(batchId)별로 묶는다. 묶음 없는 작업(직접 만들기)은 하나씩. 새로 만든 묶음이 위로 온다 */
-export function groupJobs(rows: JobRow[]): JobGroup[] {
-  const at = (j: JobRow) => (j.createdAt ? Date.parse(j.createdAt) || 0 : 0)
-  const map = new Map<string, JobRow[]>()
-  for (const j of rows) {
-    const key = j.batchId ? `b:${j.batchId}` : `j:${j.jobId}`
-    map.set(key, [...(map.get(key) ?? []), j])
-  }
-  const groups = [...map.entries()].map(([key, jobs]) => {
-    const sorted = [...jobs].sort((a, b) => at(a) - at(b))
-    const counts: Record<JobState, number> = { QUEUED: 0, RUNNING: 0, DONE: 0, FAILED: 0, CANCELED: 0 }
-    for (const j of sorted) counts[j.status]++
-    return { key, batchId: sorted[0]?.batchId ?? null, jobs: sorted, counts }
-  })
-  return groups.sort((a, b) => Math.max(...b.jobs.map(at)) - Math.max(...a.jobs.map(at)))
-}
-
-/** 묶음 머리글: "5개 중 2개 끝남 · 진행 1 · 대기 2" */
-export function groupSummary(g: Pick<JobGroup, 'jobs' | 'counts'>): string {
-  const c = g.counts
-  const ended = c.DONE + c.FAILED + c.CANCELED
-  const parts = [`${g.jobs.length}개 중 ${ended}개 끝남`]
-  if (c.RUNNING) parts.push(`진행 ${c.RUNNING}`)
-  if (c.QUEUED) parts.push(`대기 ${c.QUEUED}`)
-  if (c.FAILED) parts.push(`실패 ${c.FAILED}`)
-  return parts.join(' · ')
 }
 
 /** 검수하러 갈 과제 콘솔 상세 주소 */

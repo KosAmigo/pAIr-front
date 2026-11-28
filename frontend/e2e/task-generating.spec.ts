@@ -39,8 +39,9 @@ test.describe('만드는 중인 과제', () => {
     await expect(page.getByRole('region', { name: '작업 상세' }).getByRole('heading', { name: '진행 주제' })).toBeVisible()
 
     // 폼 정보 + 진행 단계(설계도 작성 중은 '생성 중' 단계, 세부 글은 그대로)
-    const info = detail.getByRole('group', { name: '만들 때 정한 내용' }).or(detail.locator('dl'))
-    await expect(info.first()).toContainText('함정: 진행 주제')
+    await expect(detail.getByRole('list', { name: '만들 때 정한 내용' })).toContainText('자가진단')
+    await expect(detail.getByText('함정: 진행 주제')).toBeVisible()
+    await expect(detail.getByText('JOB', { exact: true })).toHaveCount(0)
     await expect(detail.getByTestId('gen-detail')).toHaveText('설계도 작성 중')
     await expect(detail.getByRole('listitem').filter({ hasText: '생성 중' }).first()).toContainText('진행 중')
 
@@ -74,7 +75,10 @@ test.describe('만드는 중인 과제', () => {
     await expect(page.getByRole('region', { name: '작업 상세' })).toContainText('앞 작업이 끝나면 시작해요')
     await expect(page.getByRole('button', { name: /취소/ })).toHaveCount(1)
     await page.getByRole('button', { name: '대기 주제 취소' }).click()
-    await expect(page.getByTestId('gen-job').nth(1).getByRole('status')).toHaveText('취소됨')
+    // 취소된 작업은 끝난 쪽(완료 줄)으로 내려간다
+    await expect(page.getByTestId('gen-done-toggle')).toContainText(/완료\s*2/)
+    // 고른 작업(a2)이라 완료 줄이 저절로 펼쳐져 취소됨이 보인다
+    await expect(page.getByRole('button', { name: '대기 주제 자세히 보기' }).locator('[role=status]')).toHaveText('취소됨')
     expect(api.sent.some((r) => r.path === '/api/admin/task-gen/a2/cancel')).toBe(true)
   })
 
@@ -124,6 +128,8 @@ test.describe('만드는 중인 과제', () => {
     api.seedJobs([JOBS[2]])
     await page.clock.runFor(3100)
     await expect.poll(() => calls).toBe(4)
+    // 다음 간격은 4번째 응답을 화면이 받은 뒤에 잰다. 응답이 반영(완료 줄이 나타남)되기 전에 시계를 돌리면 30초 타이머가 그 뒤에 걸려 어긋난다
+    await expect(page.getByTestId('gen-done-toggle')).toBeVisible()
     await page.clock.runFor(10_000)
     await page.waitForTimeout(200)
     expect(calls).toBe(4)
@@ -160,9 +166,9 @@ test.describe('만드는 중인 과제', () => {
     await expect(page.getByTestId('generating-btn')).toHaveAccessibleName('만드는 중인 과제')
   })
 
-  test('묶음 펼치기·접기(진행 중은 펼침, 끝난 묶음은 접힘, 기억함)와 새로고침 버튼, 안내 문구 없음', async ({ page }) => {
+  test("끝난 작업은 맨 아래 '완료 N' 줄에 접혀 있고(기억함), 새로고침 버튼이 바로 다시 불러온다, 안내 문구 없음", async ({ page }) => {
     const api = await mockApi(page)
-    // 진행 중인 묶음 b1 + 끝난 묶음 b2
+    // 진행 b1(진행·대기·완료) + 끝난 작업 e1: 완료 쪽은 a3, e1 두 개
     api.seedJobs([
       ...JOBS,
       job({ jobId: 'e1', batchId: 'b2', status: 'DONE', step: '완료', taskCode: 'N8', passed: true, topic: '끝난 묶음 주제', createdAt: at(0) }),
@@ -172,21 +178,21 @@ test.describe('만드는 중인 과제', () => {
       if (new URL(r.url()).pathname === '/api/admin/task-gen/jobs') calls++
     })
     await page.goto('/console/tasks/generating')
-    const live = page.getByRole('button', { name: /3개 중 1개 끝남/ })
-    const ended = page.getByRole('button', { name: /1개 중 1개 끝남/ })
-    await expect(live).toHaveAttribute('aria-expanded', 'true')
-    await expect(ended).toHaveAttribute('aria-expanded', 'false')
+    // 위에는 진행·대기 작업만, 끝난 작업은 접힌 '완료 2' 줄 안에 있다
     await expect(page.getByRole('button', { name: '진행 주제 자세히 보기' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '끝난 묶음 주제 자세히 보기' })).toBeHidden() // 접힌 묶음의 행은 안 보이고 탭으로도 못 간다
+    await expect(page.getByRole('button', { name: '대기 주제 자세히 보기' })).toBeVisible()
+    const done = page.getByTestId('gen-done-toggle')
+    await expect(done).toContainText(/완료\s*2/)
+    await expect(done).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('button', { name: '끝난 묶음 주제 자세히 보기' })).toBeHidden() // 접힌 곳의 카드는 안 보이고 탭으로도 못 간다
+    await expect(page.getByTestId('gen-summary')).toContainText('진행 중 2')
 
-    // 끝난 묶음을 펼치고 진행 묶음을 접는다 → 새로고침해도 그대로
-    await ended.click()
-    await live.click()
+    // 펼치면 보이고, 새로고침해도 그대로(기억)
+    await done.click()
     await expect(page.getByRole('button', { name: '끝난 묶음 주제 자세히 보기' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '진행 주제 자세히 보기' })).toBeHidden()
+    await expect(page.getByRole('button', { name: '완료 주제 자세히 보기' })).toBeVisible()
     await page.reload()
-    await expect(page.getByRole('button', { name: /3개 중 1개 끝남/ })).toHaveAttribute('aria-expanded', 'false')
-    await expect(page.getByRole('button', { name: /1개 중 1개 끝남/ })).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByTestId('gen-done-toggle')).toHaveAttribute('aria-expanded', 'true')
 
     // 안내 문구는 없고, 새로고침 아이콘 버튼 하나가 바로 다시 불러온다
     await expect(page.getByText(/3초마다|새로 불러와요|나갔다 와도/)).toHaveCount(0)
@@ -197,28 +203,38 @@ test.describe('만드는 중인 과제', () => {
     await expect.poll(() => calls).toBeGreaterThan(before)
   })
 
-  test('묶음 카드는 상태별로 다르게 보인다: 도는 중 / 모두 끝남 / 실패 섞임, 작업마다 한 칸', async ({ page }) => {
+  test('작업 카드는 상태별로 다르게 보인다: 진행 중 / 실패 / 완료, 선택한 카드 표시, 진행 막대', async ({ page }) => {
     const api = await mockApi(page)
     api.seedJobs([
-      ...JOBS, // b1: 진행·대기·완료 → live
-      job({ jobId: 'd1', batchId: 'b2', status: 'DONE', step: '완료', taskCode: 'N8', topic: '끝1', createdAt: at(10) }),
-      job({ jobId: 'd2', batchId: 'b2', status: 'DONE', step: '완료', taskCode: 'N9', topic: '끝2', createdAt: at(11) }),
-      job({ jobId: 'f1', batchId: 'b3', status: 'DONE', step: '완료', taskCode: 'N10', topic: '성공', track: 'BIZ', createdAt: at(20) }),
-      job({ jobId: 'f2', batchId: 'b3', status: 'FAILED', error: '시간 초과', topic: '실패', track: 'BIZ', createdAt: at(21) }),
+      ...JOBS, // a1 진행(설계도 작성 중), a2 대기, a3 완료
+      job({ jobId: 'f1', batchId: 'b3', status: 'FAILED', error: '시간 초과', topic: '실패 주제', track: 'BIZ', createdAt: at(21) }),
     ])
-    await page.goto('/console/tasks/generating')
-    const groups = page.getByTestId('gen-group')
-    await expect(groups).toHaveCount(3)
-    const state = (name: RegExp) => groups.filter({ has: page.getByRole('button', { name }) })
-    await expect(state(/3개 중 1개 끝남/)).toHaveAttribute('data-state', 'live')
-    await expect(groups.filter({ hasText: '끝1' })).toHaveAttribute('data-state', 'done')
-    await expect(state(/실패 1/)).toHaveAttribute('data-state', 'failed')
-    // 접힌 묶음에도 작업마다 막대 한 칸씩 (title = 주제 · 상태)
-    await expect(state(/3개 중 1개 끝남/).locator('[title*="진행 주제"]')).toHaveCount(1)
-    await expect(state(/실패 1/).locator('span[title]')).toHaveCount(2)
-    // 개수는 머리 버튼 이름에, 직군·방식은 글로
-    await expect(page.getByRole('button', { name: /3개 중 1개 끝남 · 진행 1 · 대기 1 · 완료 1/ })).toBeVisible()
-    await expect(state(/3개 중 1개 끝남/)).toContainText('일반')
-    await expect(state(/실패 1/)).toContainText('비개발')
+    await page.goto('/console/tasks/generating?job=a3')
+    const jobs = page.getByTestId('gen-job')
+    // 묶음 카드는 없다: 작업 하나마다 카드 하나
+    await expect(page.getByTestId('gen-group')).toHaveCount(0)
+    // 선택한 작업(a3)이 완료 쪽에 있으면 완료 줄이 펼쳐져 보인다
+    await expect(page.getByTestId('gen-done-toggle')).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByTestId('gen-done-toggle')).toContainText(/완료\s*2/)
+    const card = (title: string) => jobs.filter({ has: page.getByRole('button', { name: `${title} 자세히 보기` }) })
+    await expect(card('진행 주제')).toHaveAttribute('data-state', 'live')
+    await expect(card('대기 주제')).toHaveAttribute('data-state', 'live')
+    await expect(card('실패 주제')).toHaveAttribute('data-state', 'failed')
+    await expect(card('완료 주제')).toHaveAttribute('data-state', 'done')
+    // 고른 카드만 aria-current 와 ring
+    await expect(page.getByRole('button', { name: '완료 주제 자세히 보기' })).toHaveAttribute('aria-current', 'true')
+    await expect(card('완료 주제')).toHaveClass(/ring-2/)
+    await expect(card('진행 주제')).not.toHaveClass(/ring-2/)
+    // 진행 중 카드에만 얇은 진행 막대(생성 단계 = 1/3), 끝난 카드에는 없다
+    await expect(card('진행 주제').locator('[style*="scaleX(0.34)"]')).toHaveCount(1)
+    await expect(card('완료 주제').locator('[style*="scaleX"]')).toHaveCount(0)
+    // 정보 한 줄: 분 · 방식 · 상태 (직군 글자는 화면에 없고 title 에만)
+    await expect(card('진행 주제')).toContainText('40분')
+    await expect(card('진행 주제')).toContainText('일반')
+    await expect(card('실패 주제')).not.toContainText('비개발')
+    await expect(page.getByRole('button', { name: '실패 주제 자세히 보기' })).toHaveAttribute('title', /비개발/)
+    // '진행 목록' 글씨는 화면에 없고 화면 읽기용 제목으로만 남는다
+    await expect(page.getByRole('region', { name: '진행 목록' })).toBeAttached()
+    await expect(page.getByRole('heading', { name: '진행 목록' })).toHaveClass(/sr-only/)
   })
 })
