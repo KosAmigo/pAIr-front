@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Clock, Loader2, Play, Sparkles } from 'lucide-react'
@@ -14,6 +14,8 @@ import type { Task, TaskSummary } from '../api'
 import { attemptsQuery, tasksQuery } from '../data/userQueries'
 import { errorMessage } from '../data/queryKeys'
 import { distance, duration, easing, springs } from '../lib/motion'
+import { StartBlockedModal } from '../components/StartBlockedModal'
+import { useStartAttempt } from '../exam/hooks/useStartAttempt'
 
 // DESIGN.md §7-2a 과제 목록 — "퀘스트 보드" (2026-11-19 전면 개편)
 // 위: 직군 스위치(미끄러지는 알약) + 시간 필터(전체/20/40/60분, 개수 포함). 그 아래 다크 무대에 지금 바로 풀 수 있는 추천 과제를 크게.
@@ -28,6 +30,8 @@ const TRACKS: { value: Track; label: string }[] = [
 type Row = Task & { status: TaskSummary['status'] }
 const isOpen = (t: Row) => t.status === 'OPEN'
 const startUrl = (t: Row) => `/exam/new?task=${encodeURIComponent(t.id)}`
+/** 도전 링크를 누르면 화면을 넘기기 전에 응시를 만든다(크레딧이 모자라면 그 자리에 창). href 는 새 탭 열기용으로 둔다 */
+type OnStart = (taskId: string) => (e: MouseEvent) => void
 const resumeUrl = (attemptId: string) => `/exam/${encodeURIComponent(attemptId)}`
 const trackName = (t: Row) => (t.type === 'biz' ? '비개발' : '개발')
 const TrackIcon = ({ t, ...rest }: { t: Row; size: number; strokeWidth?: number; className?: string }) => {
@@ -36,7 +40,7 @@ const TrackIcon = ({ t, ...rest }: { t: Row; size: number; strokeWidth?: number;
 }
 
 /** 추천 과제: 이 화면의 다크 무대 */
-function Featured({ t, resumeId }: { t: Row; resumeId?: string }) {
+function Featured({ t, resumeId, onStart, starting }: { t: Row; resumeId?: string; onStart: OnStart; starting: boolean }) {
   return (
     <StageSection aria-label="추천 과제">
       <div className="grid items-center gap-10 px-6 py-8 md:grid-cols-[minmax(0,1fr)_320px] md:px-12 md:py-10">
@@ -57,9 +61,11 @@ function Featured({ t, resumeId }: { t: Row; resumeId?: string }) {
             <Magnetic>
                 <Link
                   to={startUrl(t)}
+                  onClick={onStart(t.id)}
+                  aria-busy={starting}
                   className="btn-shimmer bg-brand-gradient inline-flex h-14 items-center gap-2 rounded-full px-8 text-[17px] font-semibold text-on-accent shadow-[0_12px_40px_-8px_rgb(108_71_255/0.7)]"
                 >
-                  지금 도전하기 <ArrowRight size={18} aria-hidden />
+                  지금 도전하기 {starting ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <ArrowRight size={18} aria-hidden />}
                 </Link>
               </Magnetic>
             {resumeId && (
@@ -92,14 +98,14 @@ function Featured({ t, resumeId }: { t: Row; resumeId?: string }) {
   )
 }
 
-function TaskCard({ t, resumeId }: { t: Row; resumeId?: string }) {
+function TaskCard({ t, resumeId, onStart }: { t: Row; resumeId?: string; onStart: OnStart }) {
   const open = isOpen(t)
   // 이어서 풀 응시가 있으면 누를 곳이 둘이라 카드 전체를 링크로 만들지 않는다 (링크 안에 링크를 넣을 수 없다)
   const wholeLink = open && !resumeId
   return (
     <Spotlight
       as={wholeLink ? Link : 'div'}
-      {...(wholeLink ? { to: startUrl(t) } : resumeId ? {} : { 'aria-disabled': true })}
+      {...(wholeLink ? { to: startUrl(t), onClick: onStart(t.id) } : resumeId ? {} : { 'aria-disabled': true })}
       className={cx(
         'group flex h-full w-full flex-col rounded-xl border border-line bg-panel p-6 shadow-sm transition-[transform,box-shadow,border-color] duration-150',
         open || resumeId ? 'hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg' : 'opacity-60',
@@ -132,7 +138,7 @@ function TaskCard({ t, resumeId }: { t: Row; resumeId?: string }) {
               도전 <ArrowRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden />
             </span>
           ) : (
-            <Link to={startUrl(t)} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
+            <Link to={startUrl(t)} onClick={onStart(t.id)} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
               도전 <ArrowRight size={16} aria-hidden />
             </Link>
           )}
@@ -196,6 +202,7 @@ export default function Tasks() {
   for (const t of ofTrack) timeCounts[timeBucket(t.minutes)]++
   const tasks = ofTrack.filter((t) => time === 'ALL' || timeBucket(t.minutes) === time)
   const featured = tasks.find(isOpen)
+  const { start, startingId, blocked, close } = useStartAttempt()
   return (
     <SelfShell
       header={
@@ -242,7 +249,7 @@ export default function Tasks() {
         <div key={`${track}-${time}`} className="flex flex-col gap-8">
           {featured && (
             <motion.div initial={{ opacity: 0, y: distance.app }} animate={{ opacity: 1, y: 0 }} transition={{ duration: duration.slow, ease: easing.expo }}>
-              <Featured t={featured} resumeId={resume.get(featured.id)} />
+              <Featured t={featured} resumeId={resume.get(featured.id)} onStart={start} starting={startingId === featured.id} />
             </motion.div>
           )}
           <section aria-labelledby="all-h">
@@ -255,7 +262,7 @@ export default function Tasks() {
               <RevealGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {tasks.map((t) => (
                   <RevealItem key={t.id} className="flex">
-                    <TaskCard t={t} resumeId={resume.get(t.id)} />
+                    <TaskCard t={t} resumeId={resume.get(t.id)} onStart={start} />
                   </RevealItem>
                 ))}
               </RevealGroup>
@@ -264,6 +271,7 @@ export default function Tasks() {
         </div>
         )}
       </div>
+      {blocked && <StartBlockedModal message={blocked.message} creditShortage={blocked.creditShortage} onClose={close} />}
     </SelfShell>
   )
 }
