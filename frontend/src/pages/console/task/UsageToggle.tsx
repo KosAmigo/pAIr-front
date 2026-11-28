@@ -124,7 +124,7 @@ export function UsageToggle({ task, onChanged, compact }: { task: ConsoleTaskSum
   )
 }
 
-/** 검수 전이 아닌 과제의 용도: 바꿀 수 없는 읽기 전용 칩(같은 알약 모양) */
+/** 공개한 과제의 용도: 바꿀 수 없는 배지 하나('자가진단 과제' / '실전 과제') */
 export function UsageChip({ usage, lock }: { usage: TaskUsage; lock?: string | null }) {
   const o = OPTIONS.find((x) => x.value === usage)!
   return (
@@ -133,7 +133,7 @@ export function UsageChip({ usage, lock }: { usage: TaskUsage; lock?: string | n
       aria-label={`용도 ${o.label}`}
       className={cx('inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold text-on-accent shadow-[0_4px_14px_-4px_rgb(108_71_255/0.6)]', usage === 'LIVE' ? 'bg-stage-text' : 'bg-brand-gradient')}
     >
-      <span className="relative z-10 inline-flex items-center gap-1.5"><o.icon size={13} aria-hidden /> {o.label}</span>
+      <span className="relative z-10 inline-flex items-center gap-1.5"><o.icon size={13} aria-hidden /> {o.label} 과제</span>
     </span>
   )
 }

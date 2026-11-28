@@ -286,7 +286,7 @@ test('상세에서 과제를 숨기면 목록 캐시가 바뀌어 검수 전 탭
   await page.getByRole('button', { name: '숨기기' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '숨기기' }).click()
   await expect(page.getByRole('button', { name: '숨기기' })).toHaveCount(0)
-  await page.getByRole('link', { name: /과제 목록/ }).first().click()
+  await page.goBack() // 검수 화면에는 '← 과제 목록' 링크가 없다 (사이드바·브라우저 뒤로가기)
   // 목록 응답은 그대로(A1 은 OPEN)라서, 다시 받았다면 검수 전에 없다. 캐시를 응답으로 고쳤을 때만 보인다
   await expect(page.getByRole('tab', { name: /^검수 전/ })).toBeVisible()
   await page.getByRole('tab', { name: /^검수 전/ }).click()

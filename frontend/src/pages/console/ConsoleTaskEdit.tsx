@@ -4,7 +4,7 @@
 // 내용 편집은 백엔드 API 가 없어 읽기 전용이다. 공개·숨기기·용도 바꾸기만 한다.
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Eye, EyeOff, Loader2, Rocket } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Rocket } from 'lucide-react'
 import { levelLabel } from '../../components/taskKind'
 import { ErrorState } from '../../components/ErrorState'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
@@ -91,10 +91,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
 
   return (
     <>
-      <div className="flex flex-col gap-5 px-8 pt-6 pb-12">
-        <Link to="/console/tasks" className="inline-flex w-fit items-center gap-1 text-[14px] font-semibold text-text-muted hover:text-text">
-          <ArrowLeft size={15} aria-hidden /> 과제 목록
-        </Link>
+      <div className="flex flex-col gap-5 px-8 pt-8 pb-12">
         <ConsoleHero
           label="과제 요약"
           badge={
