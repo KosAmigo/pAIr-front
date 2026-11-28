@@ -1,16 +1,20 @@
 // 검수 상세 탭 내용: 개요, 파일, 문항, 자동 확인 결과. (자료 PDF 는 PdfViewer)
 // 파일·문항 API 는 백엔드에 아직 없을 수 있어(404) "준비 중"을 보여 준다.
 import { useState, type ReactNode } from 'react'
-import { BookOpenCheck, Check, CircleAlert, EyeOff, FileCode2, FileText, Hammer, Loader2, Lock } from 'lucide-react'
+import { BookOpenCheck, Check, CircleAlert, ChevronDown, EyeOff, FileText, Hammer, Loader2, Lock } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { ErrorState } from '../../../components/ErrorState'
 import { levelLabel } from '../../../components/taskKind'
 import type { ConsoleTaskDetail } from '../../../consoleApi'
 import { RequirementsView } from '../../../components/RequirementsView'
-import { GenStats } from './GenStats'
+import type { GenReport } from '../../../data/taskGen'
 import { useGenReport, useTaskFiles, useTaskQuestions, type Load } from '../../../data/taskReview'
 import { questionTypeLabel } from '../../../data/questions'
-import { CheckTable } from './CheckTable'
+import { CheckReport } from './CheckReport'
+import { GenStats } from './GenStats'
+import { Collapse } from './Collapse'
+import { FileTree } from './FileTree'
+import { parseRequirements } from '../../../data/requirements'
 
 type Definition = ConsoleTaskDetail['definition']
 
@@ -53,10 +57,14 @@ function Loaded<T>({ load, missing, children }: { load: Load<T> & { reload: () =
 }
 
 // ── 개요 ──
+// 2×2 격자: [과제 설명 | 요구사항(만들 기능)] / [후속 질문 | 예시]. 참고 사항(고정 문구)은 응시 화면에만 보인다. 좁으면 한 열.
 export function OverviewTab({ definition: d }: { definition: Definition }) {
+  const parsed = parseRequirements(d.requirements)
+  const noFeatures = parsed.features.length === 0 && parsed.other.length === 0
+  const noExamples = parsed.examples.length === 0 && parsed.tables.length === 0 && !parsed.common
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      <Card title="과제 설명" label="DESCRIPTION" className="xl:col-span-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Card title="과제 설명" label="DESCRIPTION">
         {d.description.length === 0 ? (
           <Empty />
         ) : (
@@ -68,40 +76,24 @@ export function OverviewTab({ definition: d }: { definition: Definition }) {
         )}
       </Card>
       <Card title="요구사항" label="REQUIREMENTS">
-        {d.requirements.length === 0 ? (
+        {noFeatures ? <Empty /> : <RequirementsView lines={d.requirements} part="features" />}
+      </Card>
+      <Card title="후속 질문" label="FOLLOW-UPS">
+        {d.followUps.length === 0 ? (
           <Empty />
         ) : (
-          <RequirementsView lines={d.requirements} />
+          <ol className="flex list-decimal flex-col gap-1.5 pl-5">
+            {d.followUps.map((t, i) => (
+              <li key={i} className="text-[15px] leading-6 break-keep text-text">
+                {t}
+              </li>
+            ))}
+          </ol>
         )}
       </Card>
-      <div className="flex flex-col gap-4">
-        <Card title="참고 사항" label="NOTES">
-          {d.notes.length === 0 ? (
-            <Empty />
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {d.notes.map((n, i) => (
-                <li key={i} className="border-l-2 border-caution pl-3 text-[14px] leading-6 break-keep text-text-muted">
-                  {n}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-        <Card title="후속 질문" label="FOLLOW-UPS">
-          {d.followUps.length === 0 ? (
-            <Empty />
-          ) : (
-            <ol className="flex list-decimal flex-col gap-1.5 pl-5">
-              {d.followUps.map((t, i) => (
-                <li key={i} className="text-[15px] leading-6 break-keep text-text">
-                  {t}
-                </li>
-              ))}
-            </ol>
-          )}
-        </Card>
-      </div>
+      <Card title="예시" label="EXAMPLES">
+        {noExamples ? <Empty /> : <RequirementsView lines={d.requirements} part="examples" />}
+      </Card>
     </div>
   )
 }
@@ -132,30 +124,8 @@ export function FilesTab({ code, definition: d }: { code: string; definition: De
         const sorted = [...list].sort((a, b) => Number(a.visibility === 'HIDDEN') - Number(b.visibility === 'HIDDEN') || a.path.localeCompare(b.path))
         const cur = sorted.find((f) => f.path === chosen) ?? sorted.find((f) => f.path === d.openFile) ?? sorted[0]
         return (
-          <div className="grid h-[68vh] min-h-0 grid-cols-1 overflow-hidden rounded-2xl border border-line bg-panel shadow-sm md:grid-cols-[260px_minmax(0,1fr)]">
-            <nav aria-label="과제 파일" className="min-h-0 overflow-auto border-b border-line p-2 md:border-r md:border-b-0">
-              <p className="label px-2 py-1.5">EXPLORER</p>
-              <ul>
-                {sorted.map((f) => {
-                  const on = f.path === cur.path
-                  const hidden = f.visibility === 'HIDDEN'
-                  return (
-                    <li key={f.path}>
-                      <button
-                        type="button"
-                        aria-current={on || undefined}
-                        onClick={() => setChosen(f.path)}
-                        className={cx('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-mono text-[13px] transition-colors', on ? 'bg-brand-dim text-text' : 'hover:bg-panel-raised', hidden ? 'text-text-muted' : 'text-text')}
-                      >
-                        {hidden ? <EyeOff size={14} className="shrink-0 text-text-faint" aria-label="응시자에게 숨김" /> : <FileCode2 size={14} className="shrink-0 text-branch-2" aria-hidden />}
-                        <span className="truncate">{f.path}</span>
-                        {f.path === d.openFile && <span className="ml-auto shrink-0 rounded-sm bg-brand-dim px-1 font-sans text-[11px] font-semibold text-brand">처음</span>}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </nav>
+          <div className="grid h-[68vh] min-h-0 grid-cols-1 overflow-hidden rounded-2xl border border-line bg-panel shadow-sm md:grid-cols-[300px_minmax(0,1fr)]">
+            <FileTree files={sorted} current={cur.path} openFile={d.openFile} onPick={setChosen} />
             <div className="flex min-h-0 flex-col">
               <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-4">
                 <span className="truncate font-mono text-[13px] font-semibold text-text">{cur.path}</span>
@@ -245,6 +215,24 @@ export function QuestionsTab({ code }: { code: string }) {
 
 // ── 자동 확인 결과 ──
 
+/** 모델·단계별 횟수·시간·토큰 자세히: 처음엔 접혀 있다 */
+function GenDetails({ r }: { r: GenReport }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold text-text-muted transition-colors hover:bg-panel-raised hover:text-text">
+        <ChevronDown size={15} aria-hidden className={cx('transition-transform duration-300 motion-reduce:transition-none', open && 'rotate-180')} />
+        생성 기록 자세히
+      </button>
+      <Collapse open={open}>
+        <div className="pt-2">
+          <GenStats r={r} />
+        </div>
+      </Collapse>
+    </div>
+  )
+}
+
 export function GenReportTab({ code }: { code: string }) {
   const report = useGenReport(code)
   return (
@@ -252,14 +240,14 @@ export function GenReportTab({ code }: { code: string }) {
       {(r) => {
         return (
           <div className="flex flex-col gap-4">
-            <GenStats r={r} />
             {r.retryError && (
               <p className="rounded-xl border border-caution/30 bg-caution/8 px-4 py-3 text-[14px] leading-6 break-keep text-text">
                 <b className="font-bold text-caution">첫 시도에서 걸린 점 </b>
                 {r.retryError}
               </p>
             )}
-            <CheckTable checks={r.checks ?? []} />
+            <CheckReport r={r} />
+            <GenDetails r={r} />
             {r.form && (
               <Card title="만들 때 넣은 내용" label="INPUT">
                 <dl className="grid grid-cols-1 gap-2 text-[14px] sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-6">

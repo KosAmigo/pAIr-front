@@ -3,7 +3,7 @@
 // 읽을 수 있는 줄이 하나도 없으면(그냥 글만) 예전처럼 번호 목록으로 보여 준다. 좁은 곳(응시 화면 옆 패널)은 컨테이너 폭을 보고 표가 카드로 바뀐다.
 import { useMemo } from 'react'
 import { cx } from './cx'
-import { hasStructure, methodOf, parseRequirements, splitCalls, splitSignature, type ReqTable } from '../data/requirements'
+import { hasStructure, methodOf, parseRequirements, splitCalls, splitSignature, type ReqExample, type ReqTable } from '../data/requirements'
 
 const code = 'font-mono text-[13px] leading-5'
 
@@ -42,13 +42,48 @@ function Input({ text }: { text: string }) {
   )
 }
 
+/** 옛 모양(`입력 → 결과` 줄) 예시 표 */
+function OldExamples({ examples }: { examples: ReqExample[] }) {
+  return (
+        <section aria-label="예시" className="flex flex-col gap-2">
+        <h4 className="text-[13px] font-bold text-text-muted">예시</h4>
+        <div className="overflow-hidden rounded-xl border border-line">
+          <table className="w-full border-collapse text-left">
+            <thead className="@max-sm:sr-only">
+              <tr className="bg-panel-raised/70 text-[12px] font-bold text-text-muted">
+                <th scope="col" className="w-[62%] px-3.5 py-2 font-bold">
+                  입력
+                </th>
+                <th scope="col" className="px-3.5 py-2 font-bold">
+                  결과
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {examples.map((e, i) => (
+                <tr key={i} data-testid="req-example" className="align-top @max-sm:block @max-sm:px-3.5 @max-sm:py-2.5">
+                  <td data-label="입력" className="px-3.5 py-2.5 @max-sm:block @max-sm:p-0 @max-sm:before:mb-0.5 @max-sm:before:block @max-sm:before:text-[12px] @max-sm:before:font-bold @max-sm:before:text-text-muted @max-sm:before:content-[attr(data-label)]">
+                    <Input text={e.input} />
+                  </td>
+                  <td data-label="결과" className="px-3.5 py-2.5 @max-sm:mt-1.5 @max-sm:block @max-sm:p-0 @max-sm:before:mb-0.5 @max-sm:before:block @max-sm:before:text-[12px] @max-sm:before:font-bold @max-sm:before:text-text-muted @max-sm:before:content-[attr(data-label)]">
+                    <code className={cx(code, 'break-all whitespace-pre-wrap font-bold text-brand')}>{e.expected}</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+  )
+}
+
 /** 함수 하나의 예시: 준비 상자(있으면 한 번) + 매개변수 | 결과 표 */
 function ExampleTable({ t, showTitle }: { t: ReqTable; showTitle: boolean }) {
   return (
     <div data-testid="req-table" className="flex flex-col gap-1.5">
       {showTitle && <code className={cx(code, 'font-semibold text-text')}>{t.method}</code>}
       {t.prep && (
-        <p data-testid="req-prep" className="rounded-lg bg-panel px-3 py-2 text-[13px] leading-5 break-keep text-text-muted">
+        <p data-testid="req-prep" className="rounded-lg bg-panel-raised/70 px-3 py-2 text-[13px] leading-5 break-keep text-text-muted">
           <b className="mr-1.5 font-bold text-text">준비</b>
           {t.prep}
         </p>
@@ -94,8 +129,28 @@ const sameMethod = (feature: string, method: string) => {
   return a === method || (!method.includes('.') && a.split('.').pop() === method) || (!a.includes('.') && method.split('.').pop() === a)
 }
 
-export function RequirementsView({ lines, className }: { lines: readonly string[] | null | undefined; className?: string }) {
+/**
+ * part: 기본은 한 줄기로 전부 (응시 화면). 'features' 는 만들 기능 카드만, 'examples' 는 예시(공통·준비·함수별 표)만 —
+ * 콘솔 검수 개요가 두 칸으로 나눠 보여 줄 때 쓴다.
+ */
+export function RequirementsView({ lines, className, part = 'all' }: { lines: readonly string[] | null | undefined; className?: string; part?: 'all' | 'features' | 'examples' }) {
   const p = useMemo(() => parseRequirements(lines), [lines])
+  if (part === 'examples') {
+    return (
+      <div className={cx('@container flex flex-col gap-3', className)} data-testid="requirements-examples">
+        {p.common && (
+          <p data-testid="req-common" className="rounded-lg bg-panel-raised/70 px-3 py-2 text-[13px] leading-5 break-keep text-text-muted">
+            <b className="mr-1.5 font-bold text-text">예시 공통</b>
+            {p.common}
+          </p>
+        )}
+        {p.tables.map((t) => (
+          <ExampleTable key={t.method} t={t} showTitle />
+        ))}
+        {p.examples.length > 0 && <OldExamples examples={p.examples} />}
+      </div>
+    )
+  }
   if (!hasStructure(p)) {
     // 읽을 수 있는 모양이 없으면 예전 번호 목록
     return (
@@ -116,9 +171,9 @@ export function RequirementsView({ lines, className }: { lines: readonly string[
     if (t) used.add(t)
     return t
   }
-  const attached = p.features.map((f) => tableFor(f.signature))
-  const loose = p.tables.filter((t) => !used.has(t))
-  const common = p.common && (
+  const attached = p.features.map((f) => (part === 'features' ? undefined : tableFor(f.signature)))
+  const loose = part === 'features' ? [] : p.tables.filter((t) => !used.has(t))
+  const common = part !== 'features' && p.common && (
     <p data-testid="req-common" className="rounded-lg bg-panel px-3 py-2 text-[13px] leading-5 break-keep text-text-muted">
       <b className="mr-1.5 font-bold text-text">예시 공통</b>
       {p.common}
@@ -154,7 +209,7 @@ export function RequirementsView({ lines, className }: { lines: readonly string[
         </section>
       )}
 
-      {(loose.length > 0 || (p.features.length === 0 && p.common)) && (
+      {(loose.length > 0 || (part !== 'features' && p.features.length === 0 && p.common)) && (
         <section aria-label="예시" className="flex flex-col gap-3">
           <h4 className="text-[13px] font-bold text-text-muted">예시</h4>
           {p.features.length === 0 && common}
@@ -164,37 +219,7 @@ export function RequirementsView({ lines, className }: { lines: readonly string[
         </section>
       )}
 
-      {p.examples.length > 0 && (
-        <section aria-label="예시" className="flex flex-col gap-2">
-          <h4 className="text-[13px] font-bold text-text-muted">예시</h4>
-          <div className="overflow-hidden rounded-xl border border-line">
-            <table className="w-full border-collapse text-left">
-              <thead className="@max-sm:sr-only">
-                <tr className="bg-panel-raised/70 text-[12px] font-bold text-text-muted">
-                  <th scope="col" className="w-[62%] px-3.5 py-2 font-bold">
-                    입력
-                  </th>
-                  <th scope="col" className="px-3.5 py-2 font-bold">
-                    결과
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {p.examples.map((e, i) => (
-                  <tr key={i} data-testid="req-example" className="align-top @max-sm:block @max-sm:px-3.5 @max-sm:py-2.5">
-                    <td data-label="입력" className="px-3.5 py-2.5 @max-sm:block @max-sm:p-0 @max-sm:before:mb-0.5 @max-sm:before:block @max-sm:before:text-[12px] @max-sm:before:font-bold @max-sm:before:text-text-muted @max-sm:before:content-[attr(data-label)]">
-                      <Input text={e.input} />
-                    </td>
-                    <td data-label="결과" className="px-3.5 py-2.5 @max-sm:mt-1.5 @max-sm:block @max-sm:p-0 @max-sm:before:mb-0.5 @max-sm:before:block @max-sm:before:text-[12px] @max-sm:before:font-bold @max-sm:before:text-text-muted @max-sm:before:content-[attr(data-label)]">
-                      <code className={cx(code, 'break-all whitespace-pre-wrap font-bold text-brand')}>{e.expected}</code>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      {part === 'all' && p.examples.length > 0 && <OldExamples examples={p.examples} />}
 
       {p.other.length > 0 && (
         <ul className="flex flex-col gap-1.5">

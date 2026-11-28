@@ -23,7 +23,7 @@ test('검수 상세: 기능 카드(시그니처·매개변수)와 예시 표', a
   test.setTimeout(60_000)
   await setup(page, 'D1', NEW)
   await page.goto('/console/tasks/D1')
-  const req = page.getByTestId('requirements')
+  const req = page.locator('body') // 개요는 요구사항 칸(기능 카드)과 예시 칸으로 나뉜다
   const card = req.getByTestId('req-feature')
   await expect(card).toHaveCount(1)
   await expect(card).toContainText('UsageService.payable(int base, int used, int cap, int fee): int')
@@ -44,7 +44,7 @@ test('예전 형식 과제는 예시 표만 보인다', async ({ page }) => {
   test.setTimeout(60_000)
   await setup(page, 'D1', OLD)
   await page.goto('/console/tasks/D1')
-  const req = page.getByTestId('requirements')
+  const req = page.locator('body') // 개요는 요구사항 칸(기능 카드)과 예시 칸으로 나뉜다
   await expect(req.getByTestId('req-feature')).toHaveCount(0)
   await expect(req.getByTestId('req-example')).toHaveCount(2)
   await expect(req.getByRole('table').getByRole('row')).toHaveCount(3) // 머리 + 2줄
@@ -98,28 +98,27 @@ test('@shot 새 모양: 함수별 매개변수|결과 표, 준비 상자, 공통
   test.setTimeout(60_000)
   await setup(page, 'D1', TABLE)
   await page.goto('/console/tasks/D1')
-  const req = page.getByTestId('requirements')
+  const req = page.locator('body')
   await expect(req.getByTestId('req-common')).toContainText('한국 시간')
   await expect(req.getByTestId('req-feature')).toHaveCount(2)
   await expect(req.getByTestId('req-prep')).toHaveCount(1) // 함수별 한 번
-  const tables = req.getByTestId('req-table')
-  await expect(tables).toHaveCount(3) // 카드 둘 아래 + 카드 없는 함수 하나
+  // 개요에서는 요구사항 칸에 기능 카드만, 예시 칸에 표 (카드 아래 표 붙이기는 응시 화면 몫)
+  const tables = req.getByTestId('requirements-examples').getByTestId('req-table')
+  await expect(tables).toHaveCount(3) // 함수 둘 + 카드 없는 함수 하나
   await expect(tables.nth(0).getByRole('columnheader')).toHaveText(['visitDate', '결과'])
   await expect(tables.nth(1).getByRole('columnheader')).toHaveText(['code', 'visitDate', 'headCount', '결과'])
   await expect(tables.nth(2).getByRole('columnheader')).toHaveText(['결과']) // 매개변수 없음
   await expect(tables.nth(2)).toContainText('Clock.today')
   await expect(tables.nth(0).getByTestId('req-example')).toHaveCount(2)
-  // 표는 자기 함수 카드 바로 아래
-  await expect(req.getByTestId('req-feature').first().locator('xpath=following-sibling::*[1]')).toHaveAttribute('data-testid', 'req-table')
-  await req.scrollIntoViewIfNeeded()
-  await req.screenshot({ path: `.shots/requirements-table/${info.project.name}-overview.png` })
+  await req.getByTestId('requirements-examples').scrollIntoViewIfNeeded()
+  await req.getByTestId('requirements-examples').screenshot({ path: `.shots/requirements-table/${info.project.name}-overview.png` })
 })
 
 test('옛 모양과 새 모양이 섞여도 둘 다 보인다', async ({ page }) => {
   test.setTimeout(60_000)
   await setup(page, 'D1', [...OLD, '예시: ' + J({ method: 'A.f', args: [['a', '1']], expected: '2' }), '예시: {깨진 JSON'])
   await page.goto('/console/tasks/D1')
-  const req = page.getByTestId('requirements')
+  const req = page.locator('body') // 개요는 요구사항 칸(기능 카드)과 예시 칸으로 나뉜다
   await expect(req.getByTestId('req-table')).toHaveCount(1)
   await expect(req.getByTestId('req-example')).toHaveCount(3)
   await expect(req).toContainText('예시: {깨진 JSON') // 읽지 못한 줄은 글로
