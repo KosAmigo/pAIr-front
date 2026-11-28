@@ -22,6 +22,22 @@ export type Task = {
 /** 자가진단 과제 목록의 한 줄 (GET /api/tasks). CLOSED 는 목록에만 보이고 응시는 막힌다 */
 export type TaskSummary = { id: string; type: TaskType; title: string; minutes: number; status: 'OPEN' | 'CLOSED' }
 
+export type TaskIssueCategory = 'QUESTION_ERROR' | 'ANSWER_EXPLANATION' | 'DESCRIPTION_GAP' | 'DIFFICULTY' | 'OTHER'
+export type TaskIssueStatus = 'NEW' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED'
+export type TaskIssue = { id: number; taskId: string; taskTitle: string; category: TaskIssueCategory; questionNumber: string | null; message: string; status: TaskIssueStatus; submitterName: string; submitterEmail: string; createdAt: string; updatedAt: string }
+export type TaskIssuePage = { items: TaskIssue[]; page: number; size: number; totalElements: number; totalPages: number }
+export const taskIssuesApi = {
+  submit: (request: { taskId: string; category: TaskIssueCategory; questionNumber: string | null; message: string }) => call<{ id: number; taskId: string; taskTitle: string; category: string; questionNumber: string | null; message: string; status: TaskIssueStatus; createdAt: string }>('POST', '/api/task-issues', request),
+  list: (filters: { taskId?: string; category?: TaskIssueCategory | 'ALL'; status?: TaskIssueStatus | 'ALL'; page: number; size?: number }) => {
+    const params = new URLSearchParams({ page: String(filters.page), size: String(filters.size ?? 20) })
+    if (filters.taskId) params.set('taskId', filters.taskId)
+    if (filters.category && filters.category !== 'ALL') params.set('category', filters.category)
+    if (filters.status && filters.status !== 'ALL') params.set('status', filters.status)
+    return call<TaskIssuePage>('GET', `/api/admin/task-issues?${params}`)
+  },
+  changeStatus: (id: number, status: TaskIssueStatus) => call<TaskIssue>('PATCH', `/api/admin/task-issues/${id}/status`, { status }),
+}
+
 export type AttemptStatus = 'SOLVING' | 'FOLLOWUP' | 'SCORING' | 'DONE' | 'ERROR'
 
 export type Attempt = {

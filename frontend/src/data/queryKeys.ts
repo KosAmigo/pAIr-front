@@ -36,6 +36,7 @@ export const queryKeys = {
   adminMembers: (role: string, q: string, page: number) => ['admin-members', role, q, page] as const,
   /** 관리자 통계 (기간별) */
   adminStats: (from: string, to: string) => ['admin-stats', from, to] as const,
+  taskIssues: (taskId: string, category: string, status: string, page: number) => ['admin-task-issues', taskId, category, status, page] as const,
   /** 이미지(blob). 로그인 헤더가 필요해 Blob 으로 받는다 */
   blob: (...parts: (string | number)[]) => ['blob', ...parts] as const,
 }

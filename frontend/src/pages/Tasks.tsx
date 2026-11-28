@@ -11,6 +11,7 @@ import { GlowBorder, GradientText, Magnetic, RevealGroup, RevealItem, Spotlight,
 import type { Track } from '../data/catalog'
 import { resumeByTask } from '../lib/attempts'
 import type { Task, TaskSummary } from '../api'
+import { taskIssuesApi, type TaskIssueCategory } from '../api'
 import { attemptsQuery, tasksQuery } from '../data/userQueries'
 import { errorMessage } from '../data/queryKeys'
 import { distance, duration, easing, springs } from '../lib/motion'
@@ -98,30 +99,35 @@ function Featured({ t, resumeId, onStart, starting }: { t: Row; resumeId?: strin
   )
 }
 
-const ISSUE_CATEGORIES = ['문제 오류', '정답·해설 오류', '조건·설명 부족', '난이도 의견', '기타'] as const
-type IssueReport = { id: string; taskId: string; taskTitle: string; category: string; questionNumber: string; message: string; createdAt: string }
+const ISSUE_CATEGORIES: { value: TaskIssueCategory; label: string }[] = [
+  { value: 'QUESTION_ERROR', label: '문제 오류' }, { value: 'ANSWER_EXPLANATION', label: '정답·해설 오류' },
+  { value: 'DESCRIPTION_GAP', label: '조건·설명 부족' }, { value: 'DIFFICULTY', label: '난이도 의견' }, { value: 'OTHER', label: '기타' },
+]
 
 function TaskIssueForm({ task, onClose }: { task: Row; onClose: () => void }) {
-  const [category, setCategory] = useState<(typeof ISSUE_CATEGORIES)[number]>(ISSUE_CATEGORIES[0])
+  const [category, setCategory] = useState<TaskIssueCategory>(ISSUE_CATEGORIES[0].value)
   const [questionNumber, setQuestionNumber] = useState('')
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
-  const submit = (event: FormEvent) => {
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
-    const reports: IssueReport[] = JSON.parse(localStorage.getItem('pair-task-issue-reports') ?? '[]')
-    reports.unshift({ id: crypto.randomUUID(), taskId: task.id, taskTitle: task.title, category, questionNumber, message: message.trim(), createdAt: new Date().toISOString() })
-    localStorage.setItem('pair-task-issue-reports', JSON.stringify(reports))
-    setSent(true)
+    setSubmitting(true); setError('')
+    try { await taskIssuesApi.submit({ taskId: task.id, category, questionNumber: questionNumber.trim() || null, message: message.trim() }); setSent(true) }
+    catch (e) { setError(e instanceof Error ? e.message : '건의를 보내지 못했습니다.') }
+    finally { setSubmitting(false) }
   }
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <section role="dialog" aria-modal="true" aria-labelledby="issue-title" className="w-full max-w-lg rounded-2xl border border-line bg-panel p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4"><div><p className="label">TASK FEEDBACK</p><h2 id="issue-title" className="mt-1 text-xl font-bold">문제 건의하기</h2><p className="mt-1 text-sm text-text-muted">{task.title}</p></div><button type="button" onClick={onClose} aria-label="닫기" className="rounded-md p-2 text-text-muted hover:bg-panel-raised"><X size={18}/></button></div>
         {sent ? <div className="py-10 text-center"><p className="text-lg font-semibold">건의를 접수했어요</p><p className="mt-2 text-sm text-text-muted">보내주신 의견은 과제 개선에 참고할게요.</p><button type="button" onClick={onClose} className="mt-6 rounded-md bg-brand-gradient px-5 py-2.5 font-semibold text-on-accent">확인</button></div> : <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5 text-sm font-medium">카테고리<select value={category} onChange={(e) => setCategory(e.target.value as typeof category)} className="h-11 rounded-md border border-line-strong bg-panel px-3 text-text">{ISSUE_CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium">카테고리<select value={category} onChange={(e) => setCategory(e.target.value as TaskIssueCategory)} className="h-11 rounded-md border border-line-strong bg-panel px-3 text-text">{ISSUE_CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">문항 번호 <span className="text-xs font-normal text-text-muted">선택 항목</span><input value={questionNumber} onChange={(e) => setQuestionNumber(e.target.value)} placeholder="예: 2번" className="h-11 rounded-md border border-line-strong bg-panel px-3 text-text" /></label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">건의 내용<textarea required minLength={5} maxLength={2000} rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="어떤 점을 개선하면 좋을지 적어 주세요." className="resize-y rounded-md border border-line-strong bg-panel p-3 text-text"/><span className="text-right text-xs font-normal text-text-muted">{message.length}/2000</span></label>
-          <button type="submit" disabled={message.trim().length < 5} className="h-11 rounded-md bg-brand-gradient font-semibold text-on-accent disabled:opacity-40">건의 보내기</button>
+          {error && <p role="alert" className="text-sm text-alert">{error}</p>}
+          <button type="submit" disabled={message.trim().length < 5 || submitting} className="h-11 rounded-md bg-brand-gradient font-semibold text-on-accent disabled:opacity-40">{submitting ? '보내는 중…' : '건의 보내기'}</button>
         </form>}
       </section>
     </div>

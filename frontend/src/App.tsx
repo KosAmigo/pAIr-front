@@ -26,6 +26,7 @@ import { ConsoleShell } from './components/ConsoleShell'
 import ConsoleCompanies, { ConsoleCompanyDetail } from './pages/console/ConsoleCompanies'
 import ConsoleStats from './pages/console/ConsoleStats'
 import ConsoleUsers from './pages/console/ConsoleUsers'
+import ConsoleTaskIssues from './pages/console/ConsoleTaskIssues'
 import ConsoleTasks from './pages/console/ConsoleTasks'
 import ConsoleTaskNew from './pages/console/ConsoleTaskNew'
 import ConsoleTasksGenerating from './pages/console/ConsoleTasksGenerating'
@@ -161,6 +162,7 @@ export default function App() {
                 <Route path="companies" element={<ConsoleCompanies />} />
                 <Route path="companies/:companyId" element={<ConsoleCompanyDetail />} />
                 <Route path="users" element={<ConsoleUsers />} />
+                <Route path="task-issues" element={<ConsoleTaskIssues />} />
                 <Route path="stats" element={<ConsoleStats />} />
               </Route>
             </Route>
