@@ -6,6 +6,8 @@ import { useSearchParams } from 'react-router-dom'
 import { Smartphone } from 'lucide-react'
 import { Button, Logo, StatusDot } from '../../components/ui'
 import { createPhoneRelay, type PhoneRelay } from '../relay/PhoneRelay.ts'
+import { VisionSocket } from '../relay/visionSocket.ts'
+import { SERVER_VISION_ENABLED } from '../features.ts'
 import { parseQualityMode } from '../core/phoneQuality.ts'
 import { PhoneFrameSender } from '../relay/phoneSender.ts'
 import type { SendMode } from '../relay/phoneSenderCore.ts'
@@ -30,9 +32,15 @@ function readLastPhase(): Phase | null {
 
 const STATUS_INTERVAL_MS = 1000
 
+const SERVER_START_NOTICE =
+  '시작하면 카메라 사진이 서버로 전송되어 AI가 분석합니다. 이 화면에는 카메라 영상이 표시되지 않으며, 기업 담당자에게도 보이지 않습니다. 이후 안내(키보드·마우스·두 손 점검 등)는 모두 PC 화면에 나옵니다.'
+
 export default function PhoneCamPage() {
   const [params] = useSearchParams()
   const pairCode = params.get('p') ?? ''
+  /** 서버 추론 감독: PC 가 QR 주소에 sv=1 을 붙인다. 이때는 사진을 /ws/vision 으로 보내고 카메라 화면을 보여 주지 않는다 */
+  const serverMode = SERVER_VISION_ENABLED && params.get('sv') === '1'
+  const rateRef = useRef<{ fps?: number; maxEdge?: number; quality?: number } | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const socketRef = useRef<PhoneRelay | null>(null)
@@ -60,7 +68,33 @@ export default function PhoneCamPage() {
   }, [phase])
   useEffect(() => {
     if (!pairCode) return
-    const socket = createPhoneRelay(
+    const socket: PhoneRelay = serverMode
+      ? new VisionSocket({
+          hello: () => ({ type: 'hello', role: 'phone', pairCode }),
+          onMessage: (msg) => {
+            // 서버가 처음 값(ready.rate)과 이후 조절(rate)을 보낸다. 사진 전송 전에 받은 값은 기억해 둔다
+            if (msg.type === 'ready' || msg.type === 'rate') {
+              const rate = msg.type === 'ready' ? msg.rate : msg
+              if (rate) {
+                rateRef.current = rate
+                senderRef.current?.setServerRate(rate)
+              }
+            }
+            if (msg.type === 'ready') setPhase((p) => (p === 'connecting' ? 'ready' : p))
+            if (msg.type === 'error' && (msg.code === 'UNAUTHORIZED' || msg.code === 'BAD_REQUEST')) {
+              setFatal(true)
+              setPhase('error')
+              setError('연결 정보가 올바르지 않습니다. PC 화면의 QR 코드를 다시 찍어 주세요.')
+            }
+          },
+          onStop: (action) => {
+            // 짝 코드 오류·교체·서버 모드 불가는 다시 시도해도 같다
+            setFatal(true)
+            setPhase('error')
+            setError(action === 'fallback-legacy' ? '서버 감독을 쓸 수 없습니다. 기업 담당자에게 문의해 주세요.' : '연결이 끊겼습니다. PC 화면의 QR 코드를 다시 찍어 주세요.')
+          },
+        })
+      : createPhoneRelay(
       pairCode,
       (msg) => {
         if (msg.type === 'quality') {
@@ -100,7 +134,7 @@ export default function PhoneCamPage() {
       socket.close()
       stopCamera(streamRef.current)
     }
-  }, [pairCode])
+  }, [pairCode, serverMode])
 
   async function start() {
     const video = videoRef.current
@@ -116,6 +150,10 @@ export default function PhoneCamPage() {
       if (socket && !senderRef.current) {
         const sender = new PhoneFrameSender(video, socket)
         sender.setRequestedMode(modeRef.current)
+        if (serverMode) {
+          sender.enableServerMode()
+          if (rateRef.current) sender.setServerRate(rateRef.current)
+        }
         socket.onFrameDropped(() => sender.frameDropped())
         senderRef.current = sender
       }
@@ -135,9 +173,14 @@ export default function PhoneCamPage() {
           <Smartphone size={15} aria-hidden /> 보조 카메라
         </span>
       </header>
-      <div className="relative aspect-[4/3] w-full bg-black">
-        <video ref={videoRef} className="size-full object-contain" aria-label="휴대폰 카메라 화면" />
-      </div>
+      {serverMode ? (
+        // 서버 모드: 휴대폰 영상은 화면에 띄우지 않는다. 촬영에 필요한 video 는 보이지 않게 둔다 (display:none 은 프레임이 멈출 수 있다)
+        <video ref={videoRef} aria-hidden="true" tabIndex={-1} className="pointer-events-none fixed top-0 left-0 size-[2px] opacity-0" />
+      ) : (
+        <div className="relative aspect-[4/3] w-full bg-black">
+          <video ref={videoRef} className="size-full object-contain" aria-label="휴대폰 카메라 화면" />
+        </div>
+      )}
 
       <main className="flex flex-col gap-3 p-4">
         {phase === 'connecting' && <p className="text-[15px]">PC 와 연결하는 중입니다</p>}
@@ -155,7 +198,9 @@ export default function PhoneCamPage() {
               </p>
             )}
             <p className="text-[14px] leading-6 break-keep text-text-muted">
-              시작하면 카메라 사진이 PC 로 전달됩니다(변화가 있을 때와 5초마다). 이후 안내(책상 스캔 등)는 모두 PC 화면에 나옵니다. 평소 사진은 서버가 저장하지 않고 PC 로만 넘기며 분석은 PC 에서 합니다. 이상이 감지되면 그 앞뒤 사진만 부정행위 검토용으로 저장됩니다.
+              {serverMode
+                ? SERVER_START_NOTICE
+                : '시작하면 카메라 사진이 PC 로 전달됩니다(변화가 있을 때와 5초마다). 이후 안내(책상 스캔 등)는 모두 PC 화면에 나옵니다. 평소 사진은 서버가 저장하지 않고 PC 로만 넘기며 분석은 PC 에서 합니다. 이상이 감지되면 그 앞뒤 사진만 부정행위 검토용으로 저장됩니다.'}
             </p>
             <Button variant="primary" size="lg" onClick={() => void start()}>
               {phase === 'error' ? '다시 시도' : '보조 캠 시작'}

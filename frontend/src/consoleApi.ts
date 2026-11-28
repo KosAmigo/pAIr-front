@@ -8,7 +8,7 @@ const enc = encodeURIComponent
 
 export type Phase = 'UPCOMING' | 'LIVE' | 'ENDED' | 'CANCELED'
 export type InviteStatus = 'PENDING' | 'SENT' | 'FAILED'
-export type EventSource = 'BROWSER' | 'PC_CAM' | 'PHONE_CAM' | 'SCREEN'
+export type EventSource = 'BROWSER' | 'PC_CAM' | 'PHONE_CAM' | 'SCREEN' | 'SERVER'
 export type EventReview = 'OK' | 'SUSPECT'
 export type EventType =
   | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'MOUSE_LEAVE' | 'PASTE' | 'FULLSCREEN_EXIT'
@@ -16,6 +16,8 @@ export type EventType =
   | 'HAND_MISSING' | 'HAND_MOVED' | 'ARM_MOVE' | 'PHONE' | 'EXTRA_SCREEN' | 'BOOK' | 'PHONE_DISCONNECTED'
   | 'CONNECTION_LOST' | 'LINK_EXPIRED' | 'LINK_RESTORED'
   | 'SCREEN_STOPPED' | 'SCREEN_PARTIAL' | 'SCREEN_RESTARTED'
+  // 서버 추론 감독이 새로 만드는 유형 (백엔드가 추가한 뒤에 온다. 모르는 유형이 와도 화면은 깨지지 않는다: ProctorPanel·EVENT_LABEL 기본값)
+  | 'HANDS_OUT' | 'HAND_OUT_ONE' | 'TABLET' | 'NOTE' | 'SMARTWATCH' | 'PHONE_MOVED' | 'SUPERVISION_PAUSED'
 
 export type SessionSummary = {
   id: number
@@ -24,6 +26,8 @@ export type SessionSummary = {
   startsAt: string
   endsAt: string
   proctoring: boolean
+  /** 서버 추론 감독 회차 (없으면 옛 방식) */
+  serverVision?: boolean
   phase: Phase
   taskIds: string[]
   participants: number
@@ -239,7 +243,12 @@ const blobUrl = async (url: string) => URL.createObjectURL(await fetchBlob(url))
 
 /** 이벤트 앞뒤 증거 구간의 사진 한 장 (GET .../events/{id}/clip) */
 export type ClipFrameView = { id: number; source: 'PC_CAM' | 'PHONE_CAM'; offsetMs: number; sizeBytes: number; deleted: boolean }
-export type EventClipView = { eventId: number; frames: ClipFrameView[] }
+/** READY 승격 끝 · PENDING 뒤 4초와 마지막 묶음이 아직 저장 전(availableAt 에 열 수 있는 시각) · EXPIRED 보관 기간이 지남 · NONE 사진을 만들 수 없음. 옛 서버는 status 가 없다 */
+export type ClipStatus = 'READY' | 'PENDING' | 'EXPIRED' | 'NONE'
+export type EventClipView = { eventId: number; frames: ClipFrameView[]; status?: ClipStatus; availableAt?: string | null }
+/** 감독 중단 구간 사진 목록 (GET .../participants/{pid}/stream). 각 항목은 그 초의 사진 1장 */
+export type StreamChannel = 'webcam' | 'phone'
+export type StreamFramesView = { eventId: number; channel: StreamChannel; from: string; to: string; frames: { t: string; n: number }[]; next: string | null }
 /** 사진 보관 기간·연장 (GET .../retention). 회차 단위 */
 export type RetentionView = {
   expiresAt: string
@@ -247,6 +256,9 @@ export type RetentionView = {
   maxExtensions: number
   extensionDays: number
   canExtend: boolean
+  /** 기본 보관 일수(서버 추론 3, 아니면 7)와 삭제 예정 며칠 전부터 연장할 수 있는지(서버 추론 1, 아니면 2). 옛 서버는 없어서 7일·2일 전으로 본다 */
+  baseDays?: number
+  extendableFromDaysBefore?: number
   history: { seq: number; extendedBy: number; extendedAt: string; days: number; expiresBefore: string; expiresAfter: string }[]
 }
 
@@ -337,6 +349,11 @@ export const consoleApi = {
   /** 이벤트 앞뒤 증거 구간 목록 (시간순) */
   eventClip: (id: number, eventId: number) => call<EventClipView>('GET', `${S}/${id}/events/${eventId}/clip`),
   clipImageBlob: (id: number, eventId: number, frameId: number) => fetchBlob(`${S}/${id}/events/${eventId}/clip/${frameId}/image`),
+  /** 감독 중단 구간 사진 목록 (감독 중단 이벤트의 시작~끝 안에서만 열린다. 밖이면 403 OUT_OF_ALLOWED_RANGE) */
+  streamFrames: (id: number, participantId: number, eventId: number, channel: StreamChannel, from?: string, limit = 120) =>
+    call<StreamFramesView>('GET', `${S}/${id}/participants/${participantId}/stream?eventId=${eventId}&channel=${channel}&limit=${limit}${from ? `&from=${enc(from)}` : ''}`),
+  streamFrameUrl: (id: number, participantId: number, eventId: number, channel: StreamChannel, t: string) =>
+    blobUrl(`${S}/${id}/participants/${participantId}/stream/frame?eventId=${eventId}&channel=${channel}&t=${enc(t)}`),
   /** { 이벤트번호: 사진 장수 } — 증거 구간이 있는 이벤트 표시용 */
   clips: (id: number) => call<Record<string, number>>('GET', `${S}/${id}/clips`),
   retention: (id: number) => call<RetentionView>('GET', `${S}/${id}/retention`),

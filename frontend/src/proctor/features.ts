@@ -26,3 +26,15 @@ export const VISION_WORKER_ENABLED = true
  * 코드·서버 시그널링은 그대로 두었다. 켜려면 개발 서버를 `VITE_LIVE_VIEW_ENABLED=true` 로 띄우고 백엔드는 `PAIR_LIVE_VIEW_ENABLED=true` 로 켠다.
  */
 export const LIVE_VIEW_ENABLED = (import.meta.env?.VITE_LIVE_VIEW_ENABLED as string | undefined) === 'true'
+
+/**
+ * 서버 추론 감독 스위치 (프론트). 기본은 꺼짐이다. 켜려면 `VITE_SERVER_VISION_ENABLED=true` 로 띄운다.
+ * 꺼져 있으면 지금처럼 응시자 PC 가 분석하고 `/ws/proctor` 로 휴대폰 사진을 받는다 (기존 코드는 그대로 둔다).
+ * 서버 모드는 이 스위치와 백엔드가 입장 정보로 알려 주는 회차별 플래그가 둘 다 켜졌을 때만 쓴다 (serverVisionActive).
+ */
+export const SERVER_VISION_ENABLED = (import.meta.env?.VITE_SERVER_VISION_ENABLED as string | undefined) === 'true'
+
+/** 이 회차를 서버 추론 감독으로 진행하는지. 빌드 스위치와 회차별 플래그(입장 정보의 serverVision)가 모두 켜져야 한다 */
+export function serverVisionActive(entry: { serverVision?: boolean | null } | null | undefined, buildEnabled = SERVER_VISION_ENABLED): boolean {
+  return buildEnabled && entry?.serverVision === true
+}

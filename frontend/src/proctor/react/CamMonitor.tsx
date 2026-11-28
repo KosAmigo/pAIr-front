@@ -11,6 +11,7 @@ import type { LiveExam } from '../liveExam.ts'
 import { CamPreview } from './CamPreview.tsx'
 import { ConnectionGate } from './ConnectionGate.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
+import { VisionDownBanner } from './VisionDownBanner.tsx'
 import { PHONE_CAM_ENABLED } from '../features.ts'
 import { useCamHub } from './useCamHub.ts'
 
@@ -33,11 +34,11 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
   const skipped = checksSkipped()
   useEffect(() => {
     if (skipped) return
-    camHub.connect(live.invite)
+    camHub.connect(live.invite, { serverVision: live.serverVision })
     if (camHub.getState().monitor !== 'monitoring') {
       camHub.startMonitoring(live.serverOffsetMs, live.proctorProfile ?? 'default').catch(() => undefined)
     }
-  }, [live.invite, live.serverOffsetMs, live.proctorProfile, skipped])
+  }, [live.invite, live.serverOffsetMs, live.proctorProfile, live.serverVision, skipped])
 
   // 응시 중 3채널 연결 감시 (15초 넘게 끊기면 응시 화면을 막는다)
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
   return (
     <>
       <ConnectionGate />
+      <VisionDownBanner />
       <section
         aria-label="카메라 감독"
         data-tour="camera"
@@ -126,7 +128,7 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
                 </Button>
               </div>
             )}
-            {hub.monitor === 'monitoring' && (
+            {hub.monitor === 'monitoring' && !hub.serverMode && (
               <Button size="sm" variant="secondary" onClick={() => void camHub.recalibratePc().catch(() => undefined)}>
                 <RefreshCw size={14} aria-hidden /> PC 기준 자세 다시 잡기
               </Button>
@@ -151,7 +153,7 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
                 ))}
               </ul>
             )}
-            {!PHONE_CAM_ENABLED ? null : hub.phone !== 'connected' ? (
+            {!(PHONE_CAM_ENABLED || hub.serverMode) ? null : hub.phone !== 'connected' ? (
               <PhonePairCard />
             ) : (
               <div className="flex flex-col gap-1">
@@ -169,13 +171,15 @@ export default function CamMonitor({ live }: { live: LiveExam }) {
                 )}
               </div>
             )}
-            {hub.monitor === 'monitoring' && (
+            {hub.monitor === 'monitoring' && !hub.serverMode && (
               <p className="text-[12px] text-text-muted">
                 전송 {formatBytes(sent)} · 영상이었다면 약 {formatBytes(Math.round(videoEquiv))}
                 {videoEquiv > 0 && ` (${((1 - sent / videoEquiv) * 100).toFixed(1)}% 절감)`}
               </p>
             )}
-            <p className="text-[12px] text-text-faint">영상은 이 브라우저 안에서만 분석되고 전송되지 않습니다.</p>
+            <p className="text-[12px] text-text-faint">
+              {hub.serverMode ? '웹캠·휴대폰 사진이 서버로 전송되어 AI가 분석합니다. 판단은 담당자가 사람이 합니다.' : '영상은 이 브라우저 안에서만 분석되고 전송되지 않습니다.'}
+            </p>
           </div>
         )}
       </section>

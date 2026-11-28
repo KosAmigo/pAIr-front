@@ -5,6 +5,7 @@ import { ChangeGate, GATE_DEFAULTS } from '../core/frameGate.ts'
 import { MAX_FRAME_BYTES, QUALITY_RANGE, SCAN_TARGET_BYTES, WATCH_TARGET_BYTES, nextQuality } from '../core/jpegQuality.ts'
 import type { PhoneRelay } from './PhoneRelay.ts'
 import { frameSizeFor, modeAt, type SendMode } from './phoneSenderCore.ts'
+import { DEFAULT_RATE, intervalMsOf, normalizeRate, type VisionRate } from '../core/visionContract.ts'
 
 /** 변화 확인 간격. 서버 상한(초당 5장) 안에서 여유를 둔 최소 전송 간격(GATE_DEFAULTS.minIntervalMs)과 맞춘다 */
 const CHECK_MS = GATE_DEFAULTS.minIntervalMs
@@ -32,6 +33,9 @@ export class PhoneFrameSender {
   private mode: SendMode = 'scan'
   private readonly quality: Record<SendMode, number> = { watch: 0.5, scan: 0.7 }
   private stats: SenderStats = { sent: 0, bytes: 0, lastBytes: 0, quality: 0.7, mode: 'scan' }
+  /** 서버 추론 감독 모드: 변화 감지·화질 모드 없이 서버가 지시한 간격·크기·화질로 보낸다 */
+  private serverRate: VisionRate | null = null
+  private lastServerSentAt = 0
 
   constructor(video: HTMLVideoElement, relay: PhoneRelay) {
     this.video = video
@@ -59,6 +63,16 @@ export class PhoneFrameSender {
     this.timer = null
   }
 
+  /** 서버 모드로 바꾼다 (이후 setServerRate 지시를 따른다). 기본값은 서버 지시 전의 임시값 */
+  enableServerMode() {
+    this.serverRate = DEFAULT_RATE.phone
+  }
+
+  /** 서버 `rate` 지시 (서버 모드에서만 쓴다) */
+  setServerRate(input: { fps?: unknown; maxEdge?: unknown; quality?: unknown }) {
+    if (this.serverRate) this.serverRate = normalizeRate(input, this.serverRate)
+  }
+
   /** 서버가 보낸 화질 모드. 재연결하면 서버가 현재 모드를 다시 보내 준다 */
   setRequestedMode(mode: SendMode | null) {
     this.requested = mode
@@ -71,6 +85,10 @@ export class PhoneFrameSender {
     if (v.readyState < 2 || !v.videoWidth) return
     const now = performance.now()
     this.relay.alive() // 촬영 루프가 살아 있다 (끊기면 워커의 생존 신호도 멈춘다)
+    if (this.serverRate) {
+      await this.serverTick(now, this.serverRate)
+      return
+    }
     const mode = modeAt(this.requested)
     if (mode !== this.mode) {
       this.mode = mode
@@ -84,6 +102,28 @@ export class PhoneFrameSender {
     this.encoding = true
     try {
       await this.encodeAndSend(mode)
+    } finally {
+      this.encoding = false
+    }
+  }
+
+  private async serverTick(now: number, rate: VisionRate) {
+    if (this.encoding || now - this.lastServerSentAt < intervalMsOf(rate)) return
+    this.encoding = true
+    try {
+      this.lastServerSentAt = now
+      const v = this.video
+      const scale = Math.min(1, rate.maxEdge / Math.max(v.videoWidth, v.videoHeight))
+      const w = Math.round(v.videoWidth * scale)
+      const h = Math.round(v.videoHeight * scale)
+      const c = this.frameCanvas
+      if (c.width !== w) c.width = w
+      if (c.height !== h) c.height = h
+      c.getContext('2d')?.drawImage(v, 0, 0, w, h)
+      const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, 'image/jpeg', rate.quality))
+      if (!blob) return
+      this.relay.sendFrame(await blob.arrayBuffer())
+      this.stats = { sent: this.stats.sent + 1, bytes: this.stats.bytes + blob.size, lastBytes: blob.size, quality: rate.quality, mode: this.mode }
     } finally {
       this.encoding = false
     }

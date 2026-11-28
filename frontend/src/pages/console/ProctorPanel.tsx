@@ -26,6 +26,10 @@ import {
   ImageOff,
   ShieldCheck,
   ShieldAlert,
+  Tablet,
+  StickyNote,
+  Watch,
+  CirclePause,
   type LucideIcon,
   WifiOff,
   X,
@@ -44,6 +48,7 @@ import { fmtTime } from './format'
 import { describeEvent } from './eventDetail'
 import LiveWatch from './LiveWatch'
 import { EvidenceClipModal } from './EvidenceClip'
+import { StreamRangeModal } from './StreamRange'
 import { Loading } from './Loading'
 import NoticeSender from './NoticeSender'
 import { RetentionBar } from './RetentionBar'
@@ -76,6 +81,13 @@ const ICON: Record<EventType, LucideIcon> = {
   SCREEN_STOPPED: ScreenShareOff,
   SCREEN_PARTIAL: ScreenShare,
   SCREEN_RESTARTED: ScreenShare,
+  HANDS_OUT: Hand,
+  HAND_OUT_ONE: Hand,
+  TABLET: Tablet,
+  NOTE: StickyNote,
+  SMARTWATCH: Watch,
+  PHONE_MOVED: Smartphone,
+  SUPERVISION_PAUSED: CirclePause,
 }
 const LOW = 0.8
 
@@ -217,7 +229,7 @@ export default function ProctorPanel({
         ) : (
           <p className="mt-1 text-[13px] text-text-muted">감독을 쓰지 않은 회차입니다.</p>
         )}
-        {session.proctoring && session.phase === 'ENDED' && <RetentionBar sessionId={session.id} className="mt-3" />}
+        {session.proctoring && session.phase === 'ENDED' && <RetentionBar sessionId={session.id} serverVision={session.serverVision === true} className="mt-3" />}
         {canRestore && (
           <div role="alert" className="mt-3 flex items-center gap-2 rounded-md border border-alert/40 bg-alert/10 px-3 py-2 text-[13px] text-alert">
             <WifiOff size={16} className="shrink-0" aria-hidden />
@@ -294,7 +306,7 @@ export default function ProctorPanel({
           <ol className="fx-cards flex flex-col gap-3 p-4">
             {shown.length === 0 && <li className="py-8 text-center text-[14px] text-text-muted">{events.length ? '조건에 맞는 이벤트가 없습니다.' : '감독 이벤트가 없습니다.'}</li>}
             {shown.map((e) => (
-              <EventCard key={e.id} e={e} time={elapsed(session, e.startedAt)} focused={focus === e.id} fresh={freshIds.has(e.id)} clipCount={clips.data?.[String(e.id)] ?? 0} onClip={() => setClipFor(e)} onPhoto={() => setPhoto(e)} onReview={(r, note) => review(e, r, note)} />
+              <EventCard key={e.id} e={e} time={elapsed(session, e.startedAt)} focused={focus === e.id} fresh={freshIds.has(e.id)} clipCount={clips.data?.[String(e.id)] ?? 0} serverVision={session.serverVision === true} onClip={() => setClipFor(e)} onPhoto={() => setPhoto(e)} onReview={(r, note) => review(e, r, note)} />
             ))}
           </ol>
         </>
@@ -311,7 +323,8 @@ export default function ProctorPanel({
         />
       )}
 
-      {clipFor && <EvidenceClipModal sessionId={session.id} eventId={clipFor.id} title={EVENT_LABEL[clipFor.type] ?? clipFor.type} onClose={() => setClipFor(null)} />}
+      {clipFor && clipFor.type === 'SUPERVISION_PAUSED' && <StreamRangeModal sessionId={session.id} participantId={p.id} event={clipFor} onClose={() => setClipFor(null)} />}
+      {clipFor && clipFor.type !== 'SUPERVISION_PAUSED' && <EvidenceClipModal sessionId={session.id} eventId={clipFor.id} title={EVENT_LABEL[clipFor.type] ?? clipFor.type} onClose={() => setClipFor(null)} />}
       {photo && (
         <Modal title={`${EVENT_LABEL[photo.type]} 스냅샷`} onClose={() => setPhoto(null)} actions={null}>
           <Snapshot sessionId={session.id} eventId={photo.id} />
@@ -331,6 +344,7 @@ function EventCard({
   focused,
   fresh,
   clipCount,
+  serverVision,
   onClip,
   onPhoto,
   onReview,
@@ -342,6 +356,8 @@ function EventCard({
   fresh: boolean
   /** 증거 구간 사진 장수 (0 이면 없음) */
   clipCount: number
+  /** 서버 추론 회차: 사진이 이벤트를 연 순간에 승격되므로 사진 수를 모르는 채로도 구간 보기를 연다 */
+  serverVision: boolean
   onClip: () => void
   onPhoto: () => void
   onReview: (r: EventReview | null, note: string | undefined) => void
@@ -398,9 +414,9 @@ function EventCard({
               {line}
             </p>
           ))}
-          {clipCount > 0 && (
+          {(clipCount > 0 || e.type === 'SUPERVISION_PAUSED' || (serverVision && cam)) && (
             <button type="button" onClick={onClip} className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:underline">
-              <Film size={14} aria-hidden /> 증거 구간 보기 ({clipCount}장)
+              <Film size={14} aria-hidden /> {e.type === 'SUPERVISION_PAUSED' ? '이 구간 사진 보기 (AI 감독이 멈춘 동안의 웹캠 사진)' : clipCount > 0 ? `증거 구간 보기 (${clipCount}장)` : '증거 구간 보기'}
             </button>
           )}
         </div>

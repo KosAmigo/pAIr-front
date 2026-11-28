@@ -1,6 +1,7 @@
 import { Smartphone } from 'lucide-react'
 import { StatusDot } from '../../components/ui'
 import { PhoneVideo } from './PhoneVideo.tsx'
+import { ServerCheckCard } from './ServerCheckCard.tsx'
 import { useCamHub } from './useCamHub.ts'
 
 /**
@@ -11,7 +12,7 @@ const SHOW_CERT_NOTICE = import.meta.env.DEV || import.meta.env.VITE_SHOW_CERT_N
 
 /** 휴대폰 보조 캠 연결: QR 과 연결 상태 */
 export function PhonePairCard() {
-  const { phone, phoneQr, phoneAnalysis, relayOpen } = useCamHub()
+  const { phone, phoneQr, phoneAnalysis, relayOpen, serverMode } = useCamHub()
   const connected = phone === 'connected'
   const analysisText =
     phoneAnalysis.status === 'monitoring'
@@ -33,10 +34,15 @@ export function PhonePairCard() {
         </span>
       </div>
       {connected ? (
-        <>
-          <p className="mt-2 text-[13px] text-text-muted">{analysisText}</p>
-          <PhoneVideo />
-        </>
+        serverMode ? (
+          // 서버 모드: 휴대폰 영상은 보여 주지 않고 서버 판정 체크리스트만 보여 준다
+          <ServerCheckCard />
+        ) : (
+          <>
+            <p className="mt-2 text-[13px] text-text-muted">{analysisText}</p>
+            <PhoneVideo />
+          </>
+        )
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           <div className="flex items-center gap-3">
@@ -47,7 +53,7 @@ export function PhonePairCard() {
           </div>
           <div className="text-[13px] leading-5 text-text-muted">
             <p className="break-keep">휴대폰은 옆이나 뒤에 세워 두 손·키보드·시험 화면이 함께 보이게 놓습니다.</p>
-            <p className="mt-1 break-keep">같은 와이파이가 아니어도 연결됩니다. 사진은 서버가 저장하지 않고 PC 로만 넘겨 줍니다.</p>
+            <p className="mt-1 break-keep">같은 와이파이가 아니어도 연결됩니다. {serverMode ? '휴대폰 영상은 화면에 표시되지 않습니다.' : '사진은 서버가 저장하지 않고 PC 로만 넘겨 줍니다.'}</p>
           </div>
           {SHOW_CERT_NOTICE && (
             <div role="note" className="rounded-lg border border-caution/40 bg-caution/10 px-3 py-2.5 text-[13px] leading-5 text-text">

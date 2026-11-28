@@ -32,6 +32,13 @@ export const EVENT_LABEL: Record<EventType, string> = {
   SCREEN_STOPPED: '화면 공유 중단',
   SCREEN_PARTIAL: '창·탭만 공유',
   SCREEN_RESTARTED: '화면 공유 재시작',
+  HANDS_OUT: '두 손이 키보드·마우스 밖',
+  HAND_OUT_ONE: '한 손이 키보드·마우스 밖',
+  TABLET: '태블릿 감지',
+  NOTE: '메모·종이 감지',
+  SMARTWATCH: '스마트워치 감지',
+  PHONE_MOVED: '휴대폰 위치 변경',
+  SUPERVISION_PAUSED: '감독 중단 (서버 장애)',
 }
 /** 카메라(PC·휴대폰)에서 나온 이벤트인지. 브라우저·화면 공유 이벤트는 사진이 없다 */
 export const isCameraEvent = (e: Pick<ProctorEventView, 'source'>) => e.source === 'PC_CAM' || e.source === 'PHONE_CAM'

@@ -22,7 +22,7 @@ export type RetentionNotice = {
   extendHint: string | null
 }
 
-export function retentionNotice(r: RetentionLike, now: number): RetentionNotice {
+export function retentionNotice(r: RetentionLike, now: number, extendWindowDays = EXTEND_WINDOW_DAYS): RetentionNotice {
   const leftMs = Date.parse(r.expiresAt) - now
   const daysLeft = Math.max(0, Math.ceil(leftMs / DAY_MS))
   const expired = leftMs <= 0
@@ -30,11 +30,11 @@ export function retentionNotice(r: RetentionLike, now: number): RetentionNotice 
   if (expired) {
     return { text: '보관 기간이 지나 사진이 삭제되었습니다', usage, daysLeft: 0, expired, tone: 'alert', extendHint: '삭제 예정 시각이 지나 연장할 수 없습니다' }
   }
-  const soon = leftMs <= EXTEND_WINDOW_DAYS * DAY_MS
+  const soon = leftMs <= extendWindowDays * DAY_MS
   let extendHint: string | null = null
   if (!r.canExtend) {
     extendHint =
-      r.extensionsUsed >= r.maxExtensions ? `연장은 최대 ${r.maxExtensions}번까지 할 수 있습니다` : `삭제 예정 ${EXTEND_WINDOW_DAYS}일 전부터 연장할 수 있습니다`
+      r.extensionsUsed >= r.maxExtensions ? `연장은 최대 ${r.maxExtensions}번까지 할 수 있습니다` : `삭제 예정 ${extendWindowDays}일 전부터 연장할 수 있습니다`
   }
   return { text: `사진이 ${daysLeft}일 뒤 삭제됩니다`, usage, daysLeft, expired, tone: soon ? 'caution' : 'neutral', extendHint }
 }

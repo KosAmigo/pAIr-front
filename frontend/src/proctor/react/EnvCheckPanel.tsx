@@ -29,6 +29,7 @@ import { CamPreview } from './CamPreview.tsx'
 import { CheckList } from './CheckList.tsx'
 import { PhonePairCard } from './PhonePairCard.tsx'
 import { PHONE_CAM_ENABLED } from '../features.ts'
+import ServerEnvCheck from './ServerEnvCheck.tsx'
 import { useCamHub } from './useCamHub.ts'
 import { runDeskScan, waitForScanResolution } from '../check/deskScan.ts'
 import { CAN_SKIP_CHECKS, clearChecksSkipped, markChecksSkipped } from '../testSkip.ts'
@@ -77,20 +78,44 @@ function SlowPcNotice({ level }: { level: Exclude<PerfLevel, 'ok'> }) {
 
 /** 카메라 미리보기 + 휴대폰 연결 (EnvCheckPanel 옆이나, 입장 화면의 왼쪽 스포트라이트에 둔다) */
 export function EnvAside() {
-  const { perfLevel } = useCamHub()
+  const { perfLevel, serverMode } = useCamHub()
   return (
     <div className="flex flex-col gap-3">
       <div className="aspect-[4/3] overflow-hidden rounded-xl border border-line bg-panel-raised">
         <CamPreview />
       </div>
       {perfLevel && perfLevel !== 'ok' && <SlowPcNotice level={perfLevel} />}
-      {PHONE_CAM_ENABLED && <PhonePairCard />}
+      {(PHONE_CAM_ENABLED || serverMode) && <PhonePairCard />}
+    </div>
+  )
+}
+
+type EnvCheckPanelProps = {
+  allowSkip?: boolean
+  onPassed: (r: EnvCheckResult) => void
+  finishLabel?: string
+  onProgress?: (r: EnvCheckResult) => void
+  withAside?: boolean
+}
+
+/** 서버 추론 감독 회차면 서버 판정 점검 화면, 아니면 기존 PC 분석 점검 화면 */
+export default function EnvCheckPanel(props: EnvCheckPanelProps) {
+  const { serverMode } = useCamHub()
+  if (!serverMode) return <LegacyEnvCheckPanel {...props} />
+  return (
+    <div className={props.withAside === false ? 'flex flex-col' : 'grid grid-cols-[minmax(0,1fr)_320px] gap-5'}>
+      <ServerEnvCheck onPassed={props.onPassed} onProgress={props.onProgress} finishLabel={props.finishLabel} allowSkip={props.allowSkip} />
+      {props.withAside !== false && (
+        <aside>
+          <EnvAside />
+        </aside>
+      )}
     </div>
   )
 }
 
 /** withAside=false 면 점검 목록만 그린다 (미리보기·QR 은 EnvAside 로 따로 둔다) */
-export default function EnvCheckPanel({
+function LegacyEnvCheckPanel({
   onPassed,
   onProgress,
   withAside = true,

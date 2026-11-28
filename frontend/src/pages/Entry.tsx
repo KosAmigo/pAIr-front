@@ -34,8 +34,9 @@ import { camHub, channelUp } from '../proctor/camHub.ts'
 import { CHANNEL_LABEL, allUp, missingChannels } from '../proctor/core/connectionPolicy.ts'
 import { ScreenShareCard } from '../proctor/react/ScreenShareCard.tsx'
 import { saveLiveExam } from '../proctor/liveExam.ts'
+import { CAMERA_CONSENT_TITLE, cameraConsent } from '../proctor/consentText.ts'
 import { checksSkipped } from '../proctor/testSkip.ts'
-import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED } from '../proctor/features.ts'
+import { PHONE_CAM_ENABLED, SCREEN_SHARE_ENABLED, serverVisionActive } from '../proctor/features.ts'
 import { useCamHub } from '../proctor/react/useCamHub.ts'
 import { useEnvProgressUpload } from '../proctor/react/useEnvProgressUpload.ts'
 import NoticeBanner from '../proctor/react/NoticeBanner.tsx'
@@ -284,7 +285,7 @@ function InfoStep({ view, onNext }: { view: ExamView; onNext: () => void }) {
 // ── 2. 응시자 정보·동의: 왼쪽 응시자 카드 + 동의 고리 ──────────
 const CONSENTS: { title: string; body: string; icon: LucideIcon }[] = [
   { title: '[필수] 개인정보 수집 및 이용 동의', body: '이름과 이메일을 응시자 확인과 결과 전달 목적으로 수집하며, 시험 종료 후 1년간 보관합니다.', icon: Lock },
-  { title: '[필수] 카메라 감독 동의', body: '시험 중 노트북·휴대폰 카메라 영상은 이 브라우저 안에서만 분석하며 연속으로 녹화하거나 저장하지 않습니다. 이상이 감지되면 그 순간 앞 8초·뒤 4초 사이의 사진(최대 24장)만 부정행위 검토 목적으로 기업 담당자에게 제공합니다. 사진은 시험 종료 7일 뒤 삭제하며, 기업 담당자는 삭제 2일 전부터 7일씩 최대 2번 보관을 연장할 수 있어 최대 21일까지 보관될 수 있습니다. 얼굴로 신원을 식별하지 않습니다.', icon: Video },
+  { title: CAMERA_CONSENT_TITLE, body: '', icon: Video }, // 본문은 consentText.ts (cameraConsent) 에서 회차별로 채운다
   { title: '[필수] AI 대화 기록 평가 활용 동의', body: '내장 AI와의 대화 전체가 AI 활용 역량 평가 근거로 사용됩니다.', icon: Bot },
 ]
 
@@ -356,6 +357,8 @@ function ApplicantCard({ view, agreed }: { view: ExamView; agreed: number }) {
 }
 
 function ConsentStep({ view, busy, error, onNext, onBack }: { view: ExamView; busy?: boolean; error?: string | null; onNext: () => void; onBack: () => void }) {
+  const serverMode = useCamHub().serverMode
+  const consents = CONSENTS.map((c) => (c.title === CAMERA_CONSENT_TITLE ? { ...c, body: cameraConsent(serverMode).body } : c))
   const [checked, setChecked] = useState([false, false, false])
   const [open, setOpen] = useState<number | null>(null)
   const all = checked.every(Boolean)
@@ -391,7 +394,7 @@ function ConsentStep({ view, busy, error, onNext, onBack }: { view: ExamView; bu
         <span className="ml-auto text-[13px] text-text-muted">아래 필수 항목 3개에 한 번에 동의합니다</span>
       </label>
       <ul className="mt-3 flex flex-col gap-2">
-        {CONSENTS.map((c, i) => (
+        {consents.map((c, i) => (
           <li key={c.title} className={cx('rounded-xl border bg-panel transition-colors duration-150', checked[i] ? 'border-brand/50' : 'border-line')}>
             <div className="flex h-14 items-center gap-3 px-4">
               <label htmlFor={`consent-${i}`} className="flex flex-1 cursor-pointer items-center gap-3 text-[15px]">
@@ -418,7 +421,7 @@ function ConsentStep({ view, busy, error, onNext, onBack }: { view: ExamView; bu
                 <ChevronDown size={18} className={cx('transition-transform duration-[180ms]', open === i && 'rotate-180')} aria-hidden />
               </button>
             </div>
-            {open === i && <p className="fade-in px-[92px] pb-3 text-[14px] leading-5 text-text-muted">{c.body}</p>}
+            {open === i && <p className="fade-in px-[92px] pb-3 text-[14px] leading-5 whitespace-pre-line text-text-muted">{c.body}</p>}
           </li>
         ))}
       </ul>
@@ -444,7 +447,7 @@ function LiveEnvStep({ invite, onNext, onBack }: { invite: string; onNext: () =>
     setError(null)
     try {
       // 점검 결과(휴대폰 결과·검토 필요 표시 포함)를 동의와 함께 저장한다. 사진은 저장하지 않는다
-      await proctorApi.consent(invite, r)
+      await proctorApi.consent(invite, r, cameraConsent(camHub.getState().serverMode).version)
       onNext()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -668,6 +671,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
           startsAt: next.startsAt,
           endsAt: next.endsAt,
           proctoring: next.proctoring,
+          serverVision: serverVisionActive(next),
           attempts: next.attempts,
           serverOffsetMs: offsetMs,
         })
@@ -695,7 +699,7 @@ function LiveWaitingRoom({ invite, info, offsetMs, view }: { invite: string; inf
       <StageChip>
         <Dot ok={cam.camera === 'ready'} /> 카메라 {cam.camera === 'ready' ? '정상' : '확인 필요'}
       </StageChip>
-      {PHONE_CAM_ENABLED && (
+      {(PHONE_CAM_ENABLED || cam.serverMode) && (
         <StageChip>
           <Dot ok={cam.phone === 'connected'} /> 휴대폰 캠 {cam.phone === 'connected' ? '연결됨' : '미연결'}
         </StageChip>
@@ -810,8 +814,8 @@ export default function Entry() {
 
   // 실전 입장: 카메라 허브를 이 응시자로 연결해 휴대폰 QR 을 미리 받아 둔다
   useEffect(() => {
-    if (invite && info?.proctoring) camHub.connect(invite)
-  }, [invite, info?.proctoring])
+    if (invite && info?.proctoring) camHub.connect(invite, { serverVision: serverVisionActive(info) })
+  }, [invite, info])
 
   const go = (to: number) => {
     setDir(to > step ? 1 : -1)
