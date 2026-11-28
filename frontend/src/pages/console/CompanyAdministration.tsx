@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { companyApi, type CompanyMember, type Inquiry } from '../../company/companyApi'
 import { useLoad } from '../../data/consoleSessions'
 import { Button, Panel } from '../../components/ui'
 import { ErrorState } from '../../components/ErrorState'
+import { ConfirmModal } from './common'
 
 const input = 'h-10 rounded-md border border-line-strong bg-panel px-3 text-text'
 const errorText = (error: unknown) => error instanceof Error ? error.message : '요청을 처리하지 못했습니다.'
@@ -95,6 +97,54 @@ export function CompanyAccounts({ id }: { id: number }) {
         <label htmlFor="manager-email">새 매니저 이메일</label><input id="manager-email" type="email" className={input} required value={email} onChange={(e) => setEmail(e.target.value)} />
         <Button type="submit" disabled={busy}>매니저 교체</Button>
       </form>
+      <DeleteCompany id={id} name={detail.data.company.name} />
     </>}
   </Panel>
+}
+
+/** 회사 삭제: 회사 이름을 그대로 입력해야 누를 수 있다. 기록은 남고 멤버는 탈퇴 처리되어 같은 이메일로 다시 가입할 수 있다 */
+function DeleteCompany({ id, name }: { id: number; name: string }) {
+  const nav = useNavigate()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  function close() {
+    if (busy) return
+    setOpen(false); setTyped(''); setError(null)
+  }
+  async function remove() {
+    if (busy || typed.trim() !== name) return
+    setBusy(true); setError(null)
+    try {
+      await companyApi.deleteCompany(id)
+      await queryClient.invalidateQueries({ queryKey: ['admin-companies'] })
+      nav('/console/companies', { replace: true })
+    } catch (e) {
+      setError(errorText(e))
+      setBusy(false)
+    }
+  }
+  return <div className="mt-6 flex flex-col gap-2 border-t border-line pt-5">
+    <h3 className="font-semibold text-text">회사 삭제</h3>
+    <p className="text-sm text-text-muted">진행 중인 회차가 있으면 삭제할 수 없습니다. 예정 회차는 취소되고(대상자에게 안내 메일), 회원은 모두 탈퇴 처리됩니다. 끝난 회차의 결과와 감독 기록은 남습니다.</p>
+    <Button variant="danger" onClick={() => setOpen(true)}>회사 삭제</Button>
+    {open && (
+      <ConfirmModal
+        title="회사를 삭제할까요?"
+        danger
+        confirm={busy ? '삭제하는 중' : '회사 삭제'}
+        disabled={busy || typed.trim() !== name}
+        onClose={close}
+        onConfirm={() => void remove()}
+        body={<div className="flex flex-col gap-3">
+          <p className="text-text-muted">되돌릴 수 없습니다. 회원은 같은 이메일로 개인 회원이나 다른 회사 계정으로 다시 가입할 수 있습니다.</p>
+          <label htmlFor="delete-company-name" className="text-sm text-text">확인을 위해 회사 이름 <b>{name}</b> 을 입력해 주세요.</label>
+          <input id="delete-company-name" className={input} autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+          {error && <p role="alert" className="text-alert">{error}</p>}
+        </div>}
+      />
+    )}
+  </div>
 }
