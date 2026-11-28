@@ -16,6 +16,7 @@ export function ConsoleHero({
   meta,
   stats,
   actions,
+  centerStats,
   label,
 }: {
   badge?: ReactNode
@@ -23,6 +24,8 @@ export function ConsoleHero({
   meta?: ReactNode
   stats?: HeroStat[]
   actions?: ReactNode
+  /** 수치 칸 안에서 라벨과 숫자를 가운데 정렬 */
+  centerStats?: boolean
   label: string
 }) {
   return (
@@ -36,7 +39,7 @@ export function ConsoleHero({
         {stats && stats.length > 0 && (
           <dl className="flex gap-8">
             {stats.map((st) => (
-              <div key={st.label} className="flex flex-col">
+              <div key={st.label} className={cx('flex flex-col', centerStats && 'items-center text-center')}>
                 <dt className="label text-stage-muted">{st.label}</dt>
                 <dd className="flex items-baseline gap-1">
                   <CountUp
