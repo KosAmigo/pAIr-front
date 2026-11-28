@@ -4,14 +4,28 @@
 //   - 매개변수이름: 뜻(짧은 명사구)          ← 바로 아래 여러 줄
 //   input → expected                         ← 예시 (값 그대로)
 // 예전 과제는 예시 줄만 있다. 백틱이 없거나 '—' 대신 '-' 인 변형도 받는다. 읽지 못한 줄은 other 로 남겨 글로 보인다.
-// 원문 값·순서는 바꾸지 않는다.
+// 새 줄 모양(함수별 매개변수|결과 표, 한 줄 JSON):
+//   예시 공통: 모든 시각은 한국 시간(+09:00)                        ← 과제당 0~1줄, 예시 영역 맨 위 안내
+//   예시 준비: {"method":"A.f","text":"등록된 이용권: …"}            ← 함수별 0~1줄, 그 표 위에 한 번
+//   예시: {"method":"A.f","args":[["visitDate","2026-06-10"]],"expected":"[\"POOL-A\"]"}
+// JSON 을 읽지 못한 줄은 other 로 남겨 글로 보인다. 원문 값·순서는 바꾸지 않는다.
 
 export type ReqParam = { name: string; meaning: string }
 export type ReqFeature = { signature: string; summary: string; params: ReqParam[] }
 export type ReqExample = { input: string; expected: string }
-export type ParsedRequirements = { features: ReqFeature[]; examples: ReqExample[]; other: string[] }
+export type ReqTableRow = { values: string[]; expected: string }
+/** 함수 하나의 예시 표: columns 는 매개변수 이름(없으면 빈 배열), 같은 함수는 같은 칸 구성 */
+export type ReqTable = { method: string; prep: string | null; columns: string[]; rows: ReqTableRow[] }
+export type ParsedRequirements = {
+  features: ReqFeature[]
+  examples: ReqExample[]
+  other: string[]
+  common: string | null
+  tables: ReqTable[]
+}
 
 const FEATURE = /^만들\s*기능\s*[:：]\s*(.+)$/s
+const NEW_EX = /^예시(\s*(공통|준비))?\s*[:：]\s*(.*)$/s
 const PARAM = /^[-•*·]\s*`?([^`:：\s][^`:：]*?)`?\s*[:：]\s*(.+)$/
 
 /** '만들 기능:' 뒤 글 → 시그니처와 설명 한 문장 */
@@ -44,14 +58,72 @@ function splitExample(item: string): ReqExample | null {
   return input && expected ? { input, expected } : null
 }
 
+/** 시그니처에서 'Class.method' 이름 (없으면 빈 문자열) */
+export function methodOf(sig: string): string {
+  const m = /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/.exec(sig)
+  return m ? m[1] : ''
+}
+
+/** 새 모양 줄 하나를 out 에 넣는다. 처리했으면 true (JSON 이 틀리면 false → 글로 남김) */
+function addNewExample(out: ParsedRequirements, kind: string | undefined, body: string, acc: Map<string, { prep: string[]; rows: { args: [string, string][]; expected: string }[] }>): boolean {
+  const text = body.trim()
+  if (kind === '공통') {
+    if (!text) return false
+    out.common = out.common ? `${out.common} · ${text}` : text
+    return true
+  }
+  let j: unknown
+  try {
+    j = JSON.parse(text)
+  } catch {
+    return false
+  }
+  if (!j || typeof j !== 'object') return false
+  const o = j as Record<string, unknown>
+  if (typeof o.method !== 'string' || !o.method.trim()) return false
+  const method = o.method.trim()
+  const g = acc.get(method) ?? { prep: [], rows: [] }
+  if (kind === '준비') {
+    if (typeof o.text !== 'string' || !o.text.trim()) return false
+    g.prep.push(o.text.trim())
+  } else {
+    if (typeof o.expected !== 'string' && typeof o.expected !== 'number' && typeof o.expected !== 'boolean') return false
+    const args: [string, string][] = []
+    if (o.args !== undefined) {
+      if (!Array.isArray(o.args)) return false
+      for (const a of o.args) {
+        if (!Array.isArray(a) || a.length !== 2 || typeof a[0] !== 'string') return false
+        args.push([a[0], String(a[1])])
+      }
+    }
+    g.rows.push({ args, expected: String(o.expected) })
+  }
+  acc.set(method, g)
+  return true
+}
+
+function buildTables(acc: Map<string, { prep: string[]; rows: { args: [string, string][]; expected: string }[] }>): ReqTable[] {
+  return [...acc].map(([method, g]) => {
+    const columns: string[] = []
+    for (const r of g.rows) for (const [n] of r.args) if (!columns.includes(n)) columns.push(n)
+    return {
+      method,
+      prep: g.prep.length ? g.prep.join(' · ') : null,
+      columns,
+      rows: g.rows.map((r) => ({ values: columns.map((c) => r.args.find(([n]) => n === c)?.[1] ?? ''), expected: r.expected })),
+    }
+  })
+}
+
 export function parseRequirements(lines: readonly string[] | null | undefined): ParsedRequirements {
-  const out: ParsedRequirements = { features: [], examples: [], other: [] }
+  const out: ParsedRequirements = { features: [], examples: [], other: [], common: null, tables: [] }
+  const acc = new Map<string, { prep: string[]; rows: { args: [string, string][]; expected: string }[] }>()
   let cur: ReqFeature | null = null
   for (const raw of lines ?? []) {
     const item = (raw ?? '').trim()
     if (!item) continue
     // 예시: '→' 가 있는 항목은 줄바꿈이 들어 있어도 한 항목이다 (기능 줄이 아닐 때)
-    const ex = !FEATURE.test(item) ? splitExample(item) : null
+    const ex = !FEATURE.test(item) && !NEW_EX.test(item) ? splitExample(item) : null
     if (ex) {
       out.examples.push(ex)
       cur = null
@@ -70,7 +142,12 @@ export function parseRequirements(lines: readonly string[] | null | undefined): 
         cur.params.push({ name: p[1].trim(), meaning: p[2].trim() })
         continue
       }
-      const e = splitExample(line)
+      const ne = NEW_EX.exec(line)
+      if (ne && addNewExample(out, ne[2], ne[3], acc)) {
+        cur = null
+        continue
+      }
+      const e = ne ? null : splitExample(line)
       if (e) {
         out.examples.push(e)
         cur = null
@@ -80,11 +157,12 @@ export function parseRequirements(lines: readonly string[] | null | undefined): 
       out.other.push(line)
     }
   }
+  out.tables = buildTables(acc)
   return out
 }
 
 /** 하나라도 읽었으면 true. 아니면(그냥 글만) 화면은 예전처럼 번호 목록으로 보여 준다 */
-export const hasStructure = (p: ParsedRequirements): boolean => p.features.length > 0 || p.examples.length > 0
+export const hasStructure = (p: ParsedRequirements): boolean => p.features.length > 0 || p.examples.length > 0 || p.tables.length > 0 || p.common !== null
 
 export type CallPart = { kind: 'call' | 'text'; text: string }
 

@@ -12,9 +12,6 @@ import {
   usageLock,
   usageReducer,
   usageErrorMessage,
-  readChecklist,
-  writeChecklist,
-  checklistDone,
   toCandidateQuestion,
 } from '../src/data/taskBoard.ts'
 
@@ -108,21 +105,6 @@ test('usageReducer switches at once, keeps the server value, and rolls back on f
 test('usageErrorMessage explains 409 in plain words', () => {
   assert.match(usageErrorMessage({ status: 409 }), /공개한 적 있는 과제이거나 복사본/)
   assert.match(usageErrorMessage({ status: 404 }), /아직 서버에 없어요/)
-})
-
-test('checklist storage survives a broken or blocked localStorage', () => {
-  const mem = new Map()
-  const store = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) }
-  assert.deepEqual(readChecklist('T-1', store), {})
-  assert.equal(writeChecklist('T-1', { level: true, answer: true }, store), true)
-  assert.deepEqual(readChecklist('T-1', store), { level: true, answer: true })
-  assert.equal(checklistDone(readChecklist('T-1', store)), 2)
-  mem.set('pair.taskReview.T-2', '{not json')
-  assert.deepEqual(readChecklist('T-2', store), {})
-  const blocked = { getItem: () => { throw new Error('denied') }, setItem: () => { throw new Error('denied') } }
-  assert.deepEqual(readChecklist('T-1', blocked), {})
-  assert.equal(writeChecklist('T-1', { level: true }, blocked), false)
-  assert.deepEqual(readChecklist('T-1', undefined), {})
 })
 
 test('toCandidateQuestion hides answers, accepted answers and sources', () => {

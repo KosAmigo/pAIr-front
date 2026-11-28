@@ -6,6 +6,7 @@
 - Separate API calls from UI components.
 - Handle loading and error states.
 - 과제·개발·비개발·자가진단·실전 아이콘은 `components/domainIcons`에서만 가져온다.
+- 누르면 글자가 바뀌는 버튼·토글(예: 자가진단/실전 선택에 따라 '실전으로 올리기'↔'자가진단으로 올리기')은 가장 긴 글자 기준으로 폭을 고정(`w-[..px]`, `min-w`)해서 주변 UI가 밀리거나 움직이지 않게 한다. 상태가 바뀌어도 다른 요소의 위치가 그대로인지 확인한다.
 
 ## State management (자세한 내용: `pAIr-docs/설계/프런트_상태관리.md`)
 - 서버 데이터 조회는 React Query로 한다. `useEffect`에서 API를 불러 `useState`에 담지 않는다.

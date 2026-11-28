@@ -109,41 +109,6 @@ export function usageErrorMessage(e: unknown): string {
   return e instanceof Error ? e.message : '용도를 바꾸지 못했어요.'
 }
 
-// ── 검수 체크리스트 (브라우저 localStorage, 막혀 있어도 화면은 동작) ──
-
-export const REVIEW_CHECKS = [
-  { key: 'level', text: '난이도가 적절한가요?' },
-  { key: 'clear', text: '설명이 명확한가요?' },
-  { key: 'trap', text: '함정이 자연스러운가요?' },
-  { key: 'answer', text: '정답이 맞나요?' },
-] as const
-export type ReviewCheckKey = (typeof REVIEW_CHECKS)[number]['key']
-export type Checklist = Partial<Record<ReviewCheckKey, boolean>>
-
-type Store = Pick<Storage, 'getItem' | 'setItem'>
-const checklistKey = (code: string) => `pair.taskReview.${code}`
-
-export function readChecklist(code: string, store: Store | undefined = globalThis.localStorage): Checklist {
-  try {
-    const raw = store?.getItem(checklistKey(code))
-    const v = raw ? JSON.parse(raw) : {}
-    return v && typeof v === 'object' ? (v as Checklist) : {}
-  } catch {
-    return {}
-  }
-}
-
-export function writeChecklist(code: string, list: Checklist, store: Store | undefined = globalThis.localStorage): boolean {
-  try {
-    store?.setItem(checklistKey(code), JSON.stringify(list))
-    return true
-  } catch {
-    return false
-  }
-}
-
-export const checklistDone = (list: Checklist) => REVIEW_CHECKS.filter((c) => list[c.key]).length
-
 // ── 응시자로 보기 ────────────────────────────
 
 /** 관리자 문항(정답·근거 포함)을 응시자 화면 문항 모양으로. 정답, 인정 답안, 근거는 빼서 화면에 새지 않게 한다 */

@@ -1,7 +1,7 @@
 // 요구사항 표시: 문자열 목록 → 만들 기능(시그니처·설명·매개변수) + 예시 표 (data/requirements.ts)
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hasStructure, parseRequirements, splitCalls, splitSignature } from '../src/data/requirements.ts'
+import { hasStructure, methodOf, parseRequirements, splitCalls, splitSignature } from '../src/data/requirements.ts'
 
 test('새 형식: 만들 기능 + 매개변수 + 예시', () => {
   const p = parseRequirements([
@@ -60,7 +60,7 @@ test('읽을 게 없으면 hasStructure=false (화면은 번호 목록)', () => 
   const p = parseRequirements(['첫째 조건', '둘째 조건'])
   assert.equal(hasStructure(p), false)
   assert.deepEqual(p.other, ['첫째 조건', '둘째 조건'])
-  assert.deepEqual(parseRequirements(null), { features: [], examples: [], other: [] })
+  assert.deepEqual(parseRequirements(null), { features: [], examples: [], other: [], common: null, tables: [] })
 })
 
 test('splitCalls: 호출을 줄 단위로, 연결 말은 줄이고 값·순서는 그대로', () => {
@@ -81,4 +81,43 @@ test('splitCalls: 호출을 줄 단위로, 연결 말은 줄이고 값·순서�
 test('splitSignature: 메서드 이름만 떼어 낸다', () => {
   assert.deepEqual(splitSignature('UsageService.payable(int a): int'), { before: 'UsageService.', name: 'payable', after: '(int a): int' })
   assert.deepEqual(splitSignature('no parens'), { before: 'no parens', name: '', after: '' })
+})
+
+const J = (o) => JSON.stringify(o)
+
+test('새 모양: 공통·준비·함수별 표', () => {
+  const p = parseRequirements([
+    '만들 기능: `PassRegistry.availableCodes(LocalDate visitDate): List<String>` — 설명',
+    '- visitDate: 방문 예정 날짜',
+    '예시 공통: 모든 시각은 한국 시간(+09:00)',
+    '예시 준비: ' + J({ method: 'PassRegistry.availableCodes', text: '등록된 이용권: POOL-A' }),
+    '예시: ' + J({ method: 'PassRegistry.availableCodes', args: [['visitDate', '2026-06-10']], expected: '["POOL-A"]' }),
+    '예시: ' + J({ method: 'PassRegistry.availableCodes', args: [['visitDate', '2026-07-01']], expected: '[]' }),
+    '예시: ' + J({ method: 'Clock.now', expected: 'true' }),
+  ])
+  assert.equal(p.common, '모든 시각은 한국 시간(+09:00)')
+  assert.deepEqual(p.examples, [])
+  assert.deepEqual(p.other, [])
+  assert.equal(p.tables.length, 2)
+  assert.deepEqual(p.tables[0], {
+    method: 'PassRegistry.availableCodes',
+    prep: '등록된 이용권: POOL-A',
+    columns: ['visitDate'],
+    rows: [{ values: ['2026-06-10'], expected: '["POOL-A"]' }, { values: ['2026-07-01'], expected: '[]' }],
+  })
+  assert.deepEqual(p.tables[1], { method: 'Clock.now', prep: null, columns: [], rows: [{ values: [], expected: 'true' }] })
+  assert.equal(methodOf(p.features[0].signature), 'PassRegistry.availableCodes')
+  assert.equal(hasStructure(p), true)
+})
+
+test('새·옛 모양이 섞이면 둘 다 읽는다', () => {
+  const p = parseRequirements(['coupon(1000, 2) → 800', '예시: ' + J({ method: 'A.f', args: [['a', '1']], expected: '2' })])
+  assert.equal(p.examples.length, 1)
+  assert.equal(p.tables.length, 1)
+})
+
+test('잘못된 JSON 예시 줄은 글로 남긴다', () => {
+  const p = parseRequirements(['예시: {"method": "A.f", ', '예시 준비: 그냥 글', '예시: ' + J({ method: 'A.f', args: [['a']], expected: '1' })])
+  assert.equal(p.tables.length, 0)
+  assert.equal(p.other.length, 3)
 })

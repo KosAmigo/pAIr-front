@@ -51,12 +51,37 @@ test('머리: 공개한 과제는 용도가 읽기 전용 칩', async ({ page })
   await expect(status).toContainText('자가진단')
   await expect(status.getByRole('radiogroup')).toHaveCount(0)
   await expect(status.getByLabel('용도 자가진단')).toBeVisible()
+  await expect(status).toContainText('자가진단 과제') // 상태 칩·화살표 없이 배지 하나
+  await expect(status).not.toContainText('공개')
+  await expect(page.getByRole('link', { name: /과제 목록/ })).toHaveCount(0) // 뒤로가기 링크 없음
+})
+
+test('머리: 검수 전↔공개에서 오른쪽 위 줄 높이가 같고, 버튼 줄은 같은 높이', async ({ page }, info) => {
+  test.setTimeout(90_000)
+  await setup(page, 'D1')
+  await page.goto('/console/tasks/D1')
+  const group = page.getByRole('group', { name: '상태와 용도' })
+  await expect(group.getByRole('radiogroup')).toBeVisible()
+  const view = page.getByRole('link', { name: '응시자로 보기' })
+  await page.waitForTimeout(700)
+  const before = { g: await group.boundingBox(), v: await view.boundingBox() }
+  await page.setViewportSize({ width: 1280, height: 520 })
+  await page.getByRole('region', { name: '과제 요약' }).screenshot({ path: `.shots/task-review-head/${info.project.name}-before-review.png` })
+  await setup(page, 'A1')
+  await page.goto('/console/tasks/A1')
+  await expect(group.getByLabel('용도 자가진단')).toBeVisible()
+  await page.waitForTimeout(700)
+  const after = { g: await group.boundingBox(), v: await view.boundingBox() }
+  await page.getByRole('region', { name: '과제 요약' }).screenshot({ path: `.shots/task-review-head/${info.project.name}-published.png` })
+  expect(Math.abs(after.g!.height - before.g!.height)).toBeLessThan(2)
+  expect(Math.abs(after.v!.y - before.v!.y)).toBeLessThan(2)
 })
 
 test('생성 기록: 단계별 모델과 단계별 만든 횟수(배치·바로)', async ({ page }) => {
   test.setTimeout(60_000)
   await setup(page, 'D1')
   await page.goto('/console/tasks/D1?tab=report')
+  await page.getByRole('button', { name: '생성 기록 자세히' }).click()
   const models = page.getByRole('listitem').filter({ hasText: '생성 모델' })
   await expect(models).toContainText('설계도 sol')
   await expect(models).toContainText('글 sol')
