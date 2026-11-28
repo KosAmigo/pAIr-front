@@ -185,27 +185,31 @@ function ScoreBands({ bands, name }: { bands: StatsBand[]; name: string }) {
   )
 }
 
-/**
- * 자가진단 과제별 평균 점수: 채점이 많은 순. 평균 점수는 막대(0~100점 눈금)와 숫자로.
- * 과제가 늘어나면 길어지므로 처음엔 접어 두고, 접힌 상태에서는 과제 수만 보여 준다.
- */
-function TaskScoresPanel({ tasks }: { tasks: StatsTaskScore[] }) {
-  const [open, setOpen] = useState(false)
-  const toggle = tasks.length > 0 && (
+/** 패널 머리 오른쪽의 펼치기/접기 버튼. controls 는 펼쳤을 때 나오는 본문의 id */
+function FoldButton({ open, onToggle, controls }: { open: boolean; onToggle: () => void; controls: string }) {
+  return (
     <button
       type="button"
       aria-expanded={open}
-      aria-controls="task-scores"
-      onClick={() => setOpen((o) => !o)}
+      aria-controls={controls}
+      onClick={onToggle}
       className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-[13px] font-semibold text-brand hover:bg-panel-raised"
     >
       {open ? '접기' : '펼치기'}
       <ChevronDown size={16} aria-hidden className={cx('transition-transform', open && 'rotate-180')} />
     </button>
   )
+}
+
+/**
+ * 자가진단 과제별 평균 점수: 채점이 많은 순. 평균 점수는 막대(0~100점 눈금)와 숫자로.
+ * 과제가 늘어나면 길어지므로 처음엔 접어 두고, 접힌 상태에서는 과제 수만 보여 준다.
+ */
+function TaskScoresPanel({ tasks }: { tasks: StatsTaskScore[] }) {
+  const [open, setOpen] = useState(false)
   return (
     <Panel label="SELF BY TASK" title={<>자가진단 과제별 평균 점수 <span className="ml-1 text-[13px] font-normal text-text-muted">과제 {num(tasks.length)}개</span></>}
-      actions={toggle || undefined}>
+      actions={tasks.length > 0 ? <FoldButton open={open} onToggle={() => setOpen((o) => !o)} controls="task-scores" /> : undefined}>
       {tasks.length === 0 ? (
         <p className="py-6 text-center text-[14px] text-text-muted">이 기간에 채점된 자가진단이 없습니다.</p>
       ) : !open ? (
@@ -245,7 +249,9 @@ function TaskScoresPanel({ tasks }: { tasks: StatsTaskScore[] }) {
   )
 }
 
+/** AI 사용량: 머리에 총 예상 비용만 두고 용도별 표·설명·모델별은 접어 둔다. 단가 없는 모델 경고는 접혀도 보인다 */
 function AiPanel({ ai }: { ai: AdminStats['ai'] }) {
+  const [open, setOpen] = useState(false)
   const rows: [string, AiCostPart | null, ReactNode][] = [
     ['자가진단 AI 채팅', ai.selfChat, null],
     ['실전 AI 채팅', ai.liveChat, null],
@@ -257,60 +263,67 @@ function AiPanel({ ai }: { ai: AdminStats['ai'] }) {
     ...ai.scoring.models.map((m) => ({ ...m, use: '채점' })),
   ]
   return (
-    <Panel label="AI COST" title={<>AI 사용량 <span className="tnum ml-2 font-bold">{fmtUsd(ai.totalUsd)}</span></>}>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] text-[14px]">
-          <thead className="text-[13px] text-text-muted">
-            <tr>
-              <th scope="col" className="py-1 text-left font-normal">용도</th>
-              <th scope="col" className="py-1 pr-3 text-right font-normal">호출</th>
-              <th scope="col" className="py-1 pr-3 text-right font-normal">입력 토큰</th>
-              <th scope="col" className="py-1 pr-3 text-right font-normal">출력 토큰</th>
-              <th scope="col" className="py-1 text-right font-normal">예상 비용</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([label, p]) => p && (
-              <tr key={label} className="border-t border-line">
-                <th scope="row" className="py-2 pr-3 text-left font-semibold text-text">{label}</th>
-                <td className="tnum py-2 pr-3 text-right">{num(p.calls)}회</td>
-                <td className="tnum py-2 pr-3 text-right">{fmtTokens(p.inputTokens)}</td>
-                <td className="tnum py-2 pr-3 text-right">{fmtTokens(p.outputTokens)}</td>
-                <td className="tnum py-2 text-right font-semibold">{fmtUsd(p.usd)}</td>
-              </tr>
-            ))}
-            <tr className="border-t border-line">
-              <th scope="row" className="py-2 pr-3 text-left font-semibold text-text">
-                AI 과제 생성 <span className="font-normal text-text-muted">({num(ai.taskGen.jobs)}개 작업)</span>
-              </th>
-              <td className="tnum py-2 pr-3 text-right">{num(ai.taskGen.calls)}회</td>
-              <td className="tnum py-2 pr-3 text-right">{fmtTokens(ai.taskGen.inputTokens)}</td>
-              <td className="tnum py-2 pr-3 text-right">{fmtTokens(ai.taskGen.outputTokens)}</td>
-              <td className="tnum py-2 text-right font-semibold">{fmtUsd(ai.taskGen.usd)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <Panel label="AI COST" title={<>AI 사용량 <span className="tnum ml-2 font-bold">{fmtUsd(ai.totalUsd)}</span></>}
+      actions={<FoldButton open={open} onToggle={() => setOpen((o) => !o)} controls="ai-usage" />}>
       {ai.unpricedModels.length > 0 && (
-        <p role="note" className="mt-2 text-[13px] text-caution">
+        <p role="note" className="mb-2 text-[13px] text-caution">
           단가가 없어 비용 합계에서 빠진 모델: {ai.unpricedModels.join(', ')}
         </p>
       )}
-      <p className="mt-2 text-[12px] text-text-muted">채팅·채점은 설정 단가로 계산한 추정치(캐시 할인 미반영), 과제 생성은 작업에 기록된 비용입니다.</p>
-      {models.length > 0 && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-[13px] text-text-muted">모델별 보기</summary>
-          <ul className="mt-1 flex flex-col gap-0.5 text-[13px]">
-            {models.map((m) => (
-              <li key={`${m.use}-${m.model}`} className="tnum flex gap-3">
-                <span className="w-24 text-text-muted">{m.use}</span>
-                <span className="min-w-0 flex-1 truncate font-mono">{m.model}</span>
-                <span>{num(m.calls)}회</span>
-                <span className="w-20 text-right">{m.usd == null ? '단가 없음' : fmtUsd(m.usd)}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
+      {!open ? (
+        <p className="text-[13px] text-text-muted">펼치면 용도별(채팅·채점·과제 생성) 호출 수, 토큰, 예상 비용을 볼 수 있습니다.</p>
+      ) : (
+        <div id="ai-usage">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-[14px]">
+              <thead className="text-[13px] text-text-muted">
+                <tr>
+                  <th scope="col" className="py-1 text-left font-normal">용도</th>
+                  <th scope="col" className="py-1 pr-3 text-right font-normal">호출</th>
+                  <th scope="col" className="py-1 pr-3 text-right font-normal">입력 토큰</th>
+                  <th scope="col" className="py-1 pr-3 text-right font-normal">출력 토큰</th>
+                  <th scope="col" className="py-1 text-right font-normal">예상 비용</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(([label, p]) => p && (
+                  <tr key={label} className="border-t border-line">
+                    <th scope="row" className="py-2 pr-3 text-left font-semibold text-text">{label}</th>
+                    <td className="tnum py-2 pr-3 text-right">{num(p.calls)}회</td>
+                    <td className="tnum py-2 pr-3 text-right">{fmtTokens(p.inputTokens)}</td>
+                    <td className="tnum py-2 pr-3 text-right">{fmtTokens(p.outputTokens)}</td>
+                    <td className="tnum py-2 text-right font-semibold">{fmtUsd(p.usd)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t border-line">
+                  <th scope="row" className="py-2 pr-3 text-left font-semibold text-text">
+                    AI 과제 생성 <span className="font-normal text-text-muted">({num(ai.taskGen.jobs)}개 작업)</span>
+                  </th>
+                  <td className="tnum py-2 pr-3 text-right">{num(ai.taskGen.calls)}회</td>
+                  <td className="tnum py-2 pr-3 text-right">{fmtTokens(ai.taskGen.inputTokens)}</td>
+                  <td className="tnum py-2 pr-3 text-right">{fmtTokens(ai.taskGen.outputTokens)}</td>
+                  <td className="tnum py-2 text-right font-semibold">{fmtUsd(ai.taskGen.usd)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[12px] text-text-muted">채팅·채점은 설정 단가로 계산한 추정치(캐시 할인 미반영), 과제 생성은 작업에 기록된 비용입니다.</p>
+          {models.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[13px] text-text-muted">모델별 보기</summary>
+              <ul className="mt-1 flex flex-col gap-0.5 text-[13px]">
+                {models.map((m) => (
+                  <li key={`${m.use}-${m.model}`} className="tnum flex gap-3">
+                    <span className="w-24 text-text-muted">{m.use}</span>
+                    <span className="min-w-0 flex-1 truncate font-mono">{m.model}</span>
+                    <span>{num(m.calls)}회</span>
+                    <span className="w-20 text-right">{m.usd == null ? '단가 없음' : fmtUsd(m.usd)}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
       )}
     </Panel>
   )

@@ -200,7 +200,7 @@ export default function MyPage() {
               <form onSubmit={submitPassword} className="flex flex-col gap-4">
                 <PasswordField id="current-password" label="현재 비밀번호" value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" errorId={passwordError ? 'password-error' : undefined} />
                 <PasswordField id="new-password" label="새 비밀번호" value={newPassword} onChange={setNewPassword} autoComplete="new-password" describedBy="password-hint" errorId={passwordError ? 'password-error' : undefined} />
-                <p id="password-hint" className="text-[13px] text-text-muted">8~72자, UTF-8 기준 72바이트 이하</p>
+                <p id="password-hint" className="text-[13px] text-text-muted">8~72자</p>
                 <PasswordField id="confirm-password" label="새 비밀번호 확인" value={confirmation} onChange={setConfirmation} autoComplete="new-password" errorId={passwordError ? 'password-error' : undefined} />
                 {passwordError && <p id="password-error" role="alert" className="text-[14px] text-alert">{passwordError}</p>}
                 <Button type="submit" variant="primary" disabled={pending !== null} className="self-start">

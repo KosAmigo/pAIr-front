@@ -14,7 +14,7 @@ afterEach(() => {
 
 describe('마이페이지 비밀번호 검증', () => {
   it('길이, UTF-8 바이트 및 확인값의 경계를 검사한다', () => {
-    assert.ok(validateNewPassword('1234567', '1234567'))
+    assert.equal(validateNewPassword('1234567', '1234567'), '새 비밀번호는 8~72자여야 합니다.')
     assert.equal(validateNewPassword('12345678', '12345678'), null)
     assert.equal(validateNewPassword('a'.repeat(72), 'a'.repeat(72)), null)
     assert.ok(validateNewPassword('a'.repeat(73), 'a'.repeat(73)))
