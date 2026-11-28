@@ -1,6 +1,6 @@
 // DESIGN.md §7-9-3 과제 검수 (ADMIN). 2026-11-20 개편.
 // 위: 스포트라이트 머리(상태 배지, 제목, 수치) → 상태 흐름(검수 전 → 자가진단/실전) + 용도 토글(검수 전만) + 주인공 버튼.
-// 아래: 알약 탭(개요, 파일, 자료, 문항, 자동 확인 결과) + 오른쪽 검수 체크리스트(브라우저에만 저장).
+// 아래: 알약 탭(개요, 파일, 자료, 문항, 자동 확인 결과) (오른쪽 체크리스트 없음).
 // 내용 편집은 백엔드 API 가 없어 읽기 전용이다. 공개·숨기기·용도 바꾸기만 한다.
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
@@ -8,20 +8,18 @@ import { ArrowLeft, Eye, EyeOff, Loader2, Rocket } from 'lucide-react'
 import { levelLabel } from '../../components/taskKind'
 import { ErrorState } from '../../components/ErrorState'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
-import { Glass, Magnetic } from '../../components/fx'
+import { Magnetic } from '../../components/fx'
 import { Button } from '../../components/ui'
 import type { ConsoleTaskSummary } from '../../consoleApi'
 import { setPublished, useTaskDetail } from '../../data/consoleTasks'
 import { countChecks } from '../../data/taskGen'
 import { useGenReport } from '../../data/taskReview'
-import { checkBadge, isClosed, madeAt, REVIEW_CHECKS, tabOf, trackOf, TRACK_LABEL } from '../../data/taskBoard'
+import { checkBadge, madeAt, tabOf, trackOf, TRACK_LABEL } from '../../data/taskBoard'
 import { ConfirmModal } from './common'
 import { ConsoleHero, HeroSep, PillTabs } from './ConsoleHero'
 import { fmtTime, useToast } from './format'
 import { AiBadge, CheckBadge } from './task/badges'
 import { PdfViewer } from './task/PdfViewer'
-import { ReviewChecklist } from './task/ReviewChecklist'
-import { useChecklist } from './task/useChecklist'
 import { FilesTab, GenReportTab, OverviewTab, QuestionsTab } from './task/ReviewTabs'
 import { HeroStatus } from './task/HeroStatus'
 import { parseRequirements } from '../../data/requirements'
@@ -63,7 +61,6 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
   const [params, setParams] = useSearchParams()
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState<'publish' | 'hide' | null>(null)
-  const checklist = useChecklist(code)
   const track = trackOf(s)
   const tab = tabOf(s)
   const draft = tab === 'draft'
@@ -91,15 +88,6 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
   }
 
   const publishLabel = s.usage === 'LIVE' ? '실전으로 올리기' : '자가진단으로 올리기'
-  const nextText = draft
-    ? checklist.done < REVIEW_CHECKS.length
-      ? `내용을 읽고 체크리스트(${checklist.done}/${REVIEW_CHECKS.length})를 채운 뒤 올리세요.`
-      : '체크리스트를 모두 확인했어요. 이제 올려도 좋아요.'
-    : isClosed(s)
-      ? '내린 과제예요. 목록에는 남지만 새 응시는 막혀 있어요.'
-      : s.usage === 'LIVE'
-        ? '회차를 만들 때 고를 수 있어요. 자가진단에는 보이지 않아요.'
-        : '누구나 자가진단에서 풀 수 있어요.'
 
   return (
     <>
@@ -143,33 +131,20 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
             { label: 'MINUTES', value: s.minutes, unit: '분' },
             // 만들 기능·매개변수 줄까지 세면 부풀어서, 기능 수 + 예시 수(옛 형식이면 예시·글 줄)로 센다
             { label: 'REQUIREMENTS', value: ((r) => r.features.length + r.examples.length + r.other.length)(parseRequirements(d.requirements)), unit: '개' },
-            { label: 'CHECKLIST', value: checklist.done, unit: `/ ${REVIEW_CHECKS.length}`, tone: checklist.done === REVIEW_CHECKS.length ? 'signal' : undefined },
           ]}
-        />
-
-        <Glass className="stage-scope flex flex-wrap items-center gap-x-8 gap-y-5 rounded-2xl px-6 py-5">
-          <div className="ml-auto flex min-w-[260px] flex-col items-end gap-2">
-            <p className="text-right text-[14px] font-semibold break-keep text-text-muted" aria-live="polite">
-              {nextText}
-            </p>
-            <div className="flex flex-wrap justify-end gap-2">
+          actions={
+            <>
               <a
                 href={`/console/tasks/${encodeURIComponent(s.id)}/preview`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-line-strong bg-panel px-5 text-[15px] font-semibold text-text transition-colors hover:border-text-muted hover:bg-panel-raised"
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-stage-line-strong px-5 text-[15px] font-semibold text-stage-text transition-colors hover:bg-white/10"
               >
                 <Eye size={16} aria-hidden /> 응시자로 보기
               </a>
               {s.status === 'HIDDEN' ? (
                 <Magnetic>
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    disabled={busy}
-                    onClick={() => (checklist.done < REVIEW_CHECKS.length || checkFailed ? setConfirm('publish') : void change(true))}
-                    className="h-11 rounded-full px-6"
-                  >
+                  <Button variant="primary" size="lg" disabled={busy} onClick={() => (checkFailed ? setConfirm('publish') : void change(true))} className="h-11 rounded-full px-6">
                     <Rocket size={17} aria-hidden /> {publishLabel}
                   </Button>
                 </Magnetic>
@@ -178,30 +153,25 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
                   <EyeOff size={16} aria-hidden /> 숨기기
                 </Button>
               )}
-            </div>
-          </div>
-        </Glass>
+            </>
+          }
+        />
 
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="flex min-w-0 flex-col gap-4">
-            <PillTabs
-              id="task-review-tabs"
-              label="검수 탭"
-              value={cur}
-              onChange={(t) => setParams((p) => (p.set('tab', t), p), { replace: true })}
-              tabs={tabs.map((t) => ({ value: t, label: TAB_NAME[t] }))}
-            />
-            <div key={cur} className="step-in min-w-0">
-              {cur === 'overview' && <OverviewTab definition={d} />}
-              {cur === 'files' && <FilesTab code={code} definition={d} />}
-              {cur === 'materials' && <PdfViewer code={code} />}
-              {cur === 'questions' && <QuestionsTab code={code} />}
-              {cur === 'report' && <GenReportTab code={code} />}
-            </div>
+        <div className="flex min-w-0 flex-col gap-4">
+          <PillTabs
+            id="task-review-tabs"
+            label="검수 탭"
+            value={cur}
+            onChange={(t) => setParams((p) => (p.set('tab', t), p), { replace: true })}
+            tabs={tabs.map((t) => ({ value: t, label: TAB_NAME[t] }))}
+          />
+          <div key={cur} className="step-in min-w-0">
+            {cur === 'overview' && <OverviewTab definition={d} />}
+            {cur === 'files' && <FilesTab code={code} definition={d} />}
+            {cur === 'materials' && <PdfViewer code={code} />}
+            {cur === 'questions' && <QuestionsTab code={code} />}
+            {cur === 'report' && <GenReportTab code={code} />}
           </div>
-          <aside className="xl:sticky xl:top-6">
-            <ReviewChecklist state={checklist} />
-          </aside>
         </div>
       </div>
 
@@ -221,7 +191,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
       )}
       {confirm === 'publish' && (
         <ConfirmModal
-          title="아직 확인하지 않은 것이 있어요"
+          title="자동 확인에서 실패한 항목이 있어요"
           confirm={publishLabel}
           disabled={busy}
           onClose={() => setConfirm(null)}
@@ -231,9 +201,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
           }}
           body={
             <>
-              {checkFailed && <>자동 확인에서 실패한 항목이 있어요. </>}
-              {checklist.done < REVIEW_CHECKS.length && <>체크리스트를 {checklist.done}/{REVIEW_CHECKS.length}개만 확인했어요. </>}
-              그래도 {s.usage === 'LIVE' ? '실전' : '자가진단'}으로 올릴까요?
+              자동 확인 결과를 확인했나요? 그래도 {s.usage === 'LIVE' ? '실전' : '자가진단'}으로 올릴까요?
             </>
           }
         />
