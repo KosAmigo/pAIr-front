@@ -59,6 +59,11 @@ test('콘솔 메뉴의 통계는 기본 최근 30일을 보여 준다', async ({
   await expect(page.getByText('224,850원')).toBeVisible()
   await expect(page.getByLabel('자가진단 점수 구간별 채점 건수').getByText('46건')).toBeVisible()
   await expect(page.getByText('$18.42')).toBeVisible()
+  // AI 사용량도 처음엔 접혀 있고 총 비용만 보인다
+  const aiRow = page.getByRole('row', { name: /자가진단 AI 채팅/ })
+  await expect(aiRow).toHaveCount(0)
+  await page.locator('button[aria-controls="ai-usage"]').click()
+  await expect(aiRow).toContainText('$6.10')
   // 과제별 평균은 처음에 접혀 있고 과제 수만 보인다
   const byTask = page.getByRole('row', { name: /신규 저가 요금제 출시 기획안/ })
   await expect(page.getByText('과제 2개')).toBeVisible()

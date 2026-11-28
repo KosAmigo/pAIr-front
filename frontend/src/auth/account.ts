@@ -2,7 +2,7 @@ import { authApi, ensureAuthSessionKey, readAuthSession, AuthRequestError, AuthS
 
 export function validateNewPassword(password: string, confirmation: string): string | null {
   if (password.length < 8 || password.length > 72 || new TextEncoder().encode(password).length > 72) {
-    return '새 비밀번호는 8~72자이면서 UTF-8 기준 72바이트 이하여야 합니다.'
+    return '새 비밀번호는 8~72자여야 합니다.'
   }
   if (password !== confirmation) return '새 비밀번호 확인이 일치하지 않습니다.'
   return null
