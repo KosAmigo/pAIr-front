@@ -40,16 +40,16 @@ export function GenJobDetail({ jobId, row, onBack }: { jobId: string; row: JobRo
         <ArrowLeft size={16} aria-hidden /> 목록으로
       </button>
 
-      <header className="flex flex-wrap items-start gap-3">
+      <header className="flex flex-wrap items-center gap-3">
         {TrackIcon && (
-          <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-panel-raised text-text-muted" aria-hidden>
-            <TrackIcon size={22} />
+          <span
+            title={track === 'DEV' ? '개발' : '비개발'}
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-[0_8px_20px_-8px_rgb(108_71_255/0.6)] ring-1 ring-white/30"
+          >
+            <TrackIcon size={22} aria-hidden />
           </span>
         )}
-        <div className="min-w-0 flex-1">
-          <p className="label text-brand">JOB</p>
-          <h2 className="mt-0.5 text-[22px] leading-8 font-extrabold tracking-[-0.02em] break-keep text-text">{topic}</h2>
-        </div>
+        <h2 className="min-w-0 flex-1 text-[22px] leading-8 font-extrabold tracking-[-0.02em] break-keep text-text">{topic}</h2>
         {v && (
           <span key={v.label} className={cx('fade-in inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-bold', TONE[v.tone])}>
             {v.tone === 'run' && <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-current" />}
@@ -64,35 +64,36 @@ export function GenJobDetail({ jobId, row, onBack }: { jobId: string; row: JobRo
         </p>
       )}
 
-      {/* ① 폼 정보 */}
-      <dl aria-label="만들 때 정한 내용" className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-2xl border border-line bg-panel p-5 sm:grid-cols-2">
-        <Info label="주제" wide>
-          {topic}
-        </Info>
-        {trap && (
-          <Info label="함정" wide>
-            {trap}
-          </Info>
-        )}
-        <Info label="직군">{track === 'DEV' ? '개발' : track === 'BIZ' ? '비개발' : null}</Info>
-        <Info label="제한 시간">{minutes ? <><span className="tnum font-mono">{minutes}</span>분</> : null}</Info>
-        <Info label="용도">
-          {usage ? (
-            <span className="inline-flex items-center gap-1.5">
-              {usage === 'LIVE' ? <USAGE_ICON.LIVE size={14} aria-hidden /> : <USAGE_ICON.SELF size={14} aria-hidden />}
-              {usage === 'LIVE' ? '실전' : '자가진단'}
-            </span>
+      {/* ① 폼 정보: 한 줄 칩 + 함정 한 블록 (주제는 제목, 직군은 아이콘으로 이미 보인다) */}
+      <div className="flex flex-col gap-3">
+        <ul aria-label="만들 때 정한 내용" className="flex flex-wrap items-center gap-1.5">
+          {minutes ? (
+            <Chip>
+              <span className="tnum font-mono">{minutes}</span>분
+            </Chip>
           ) : null}
-        </Info>
-        <Info label="방식">{mode ? modeLabel(mode, job?.deadlineAt) : null}</Info>
-        {cost && (
-          <Info label="비용">
-            <span data-testid="detail-cost" className="tnum font-mono">
-              {cost}
-            </span>
-          </Info>
+          {usage ? (
+            <Chip>
+              {usage === 'LIVE' ? <USAGE_ICON.LIVE size={13} aria-hidden /> : <USAGE_ICON.SELF size={13} aria-hidden />}
+              {usage === 'LIVE' ? '실전' : '자가진단'}
+            </Chip>
+          ) : null}
+          {mode ? <Chip>{modeLabel(mode, job?.deadlineAt)}</Chip> : null}
+          {cost && (
+            <Chip>
+              <span data-testid="detail-cost" className="tnum font-mono">
+                {cost}
+              </span>
+            </Chip>
+          )}
+        </ul>
+        {trap && (
+          <p className="rounded-xl border border-caution/25 bg-caution/5 px-4 py-3 text-[14px] leading-6 break-keep text-text">
+            <span className="mr-2 inline-flex h-5 items-center rounded-full bg-caution/15 px-2 align-middle text-[12px] font-bold text-caution">함정</span>
+            {trap}
+          </p>
         )}
-      </dl>
+      </div>
 
       {/* ② 진행 단계 */}
       {job && (
@@ -154,13 +155,8 @@ export function GenJobDetail({ jobId, row, onBack }: { jobId: string; row: JobRo
   )
 }
 
-function Info({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
-  return (
-    <div className={cx('flex items-start gap-3 border-b border-line pb-2.5 text-[15px] last:border-b-0', wide && 'sm:col-span-2')}>
-      <dt className="w-16 shrink-0 pt-0.5 text-[13px] font-semibold text-text-muted">{label}</dt>
-      <dd className={cx('min-w-0 leading-6 break-keep', children ? 'font-semibold text-text' : 'text-text-faint')}>{children || '-'}</dd>
-    </div>
-  )
+function Chip({ children }: { children: React.ReactNode }) {
+  return <li className="inline-flex h-7 items-center gap-1.5 rounded-full bg-panel-raised px-2.5 text-[13px] font-bold text-text-muted">{children}</li>
 }
 
 const ReviewBadge = () => (

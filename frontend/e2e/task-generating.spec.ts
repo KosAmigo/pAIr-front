@@ -39,8 +39,9 @@ test.describe('만드는 중인 과제', () => {
     await expect(page.getByRole('region', { name: '작업 상세' }).getByRole('heading', { name: '진행 주제' })).toBeVisible()
 
     // 폼 정보 + 진행 단계(설계도 작성 중은 '생성 중' 단계, 세부 글은 그대로)
-    const info = detail.getByRole('group', { name: '만들 때 정한 내용' }).or(detail.locator('dl'))
-    await expect(info.first()).toContainText('함정: 진행 주제')
+    await expect(detail.getByRole('list', { name: '만들 때 정한 내용' })).toContainText('자가진단')
+    await expect(detail.getByText('함정: 진행 주제')).toBeVisible()
+    await expect(detail.getByText('JOB', { exact: true })).toHaveCount(0)
     await expect(detail.getByTestId('gen-detail')).toHaveText('설계도 작성 중')
     await expect(detail.getByRole('listitem').filter({ hasText: '생성 중' }).first()).toContainText('진행 중')
 
@@ -177,7 +178,7 @@ test.describe('만드는 중인 과제', () => {
     await expect(live).toHaveAttribute('aria-expanded', 'true')
     // 끝난 묶음은 맨 아래 '완료 1' 줄 안에 접혀 있다
     const done = page.getByTestId('gen-done-toggle')
-    await expect(done).toContainText('완료 1')
+    await expect(done).toContainText(/완료\s*1/)
     await expect(done).toHaveAttribute('aria-expanded', 'false')
     await expect(ended).toBeHidden()
     await done.click()
@@ -216,7 +217,7 @@ test.describe('만드는 중인 과제', () => {
     await page.goto('/console/tasks/generating')
     const groups = page.getByTestId('gen-group')
     await expect(groups).toHaveCount(3)
-    await expect(page.getByTestId('gen-done-toggle')).toContainText('완료 2')
+    await expect(page.getByTestId('gen-done-toggle')).toContainText(/완료\s*2/)
     await page.getByTestId('gen-done-toggle').click()
     const state = (name: RegExp) => groups.filter({ has: page.getByRole('button', { name }) })
     await expect(state(/3개 중 1개 끝남/)).toHaveAttribute('data-state', 'live')

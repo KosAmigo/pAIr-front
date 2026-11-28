@@ -4,12 +4,11 @@
 // 행은 한 줄: 상태 점 + 주제(한 줄 말줄임) + 짧은 상태 글. 자세한 글(세부 단계·마감·검사 요약)은 title·화면 읽기용으로만 둔다.
 // 새로고침 버튼은 페이지 제목 옆(GenRefreshButton)에 있다. 자동 갱신은 뒤에서 그대로 돈다.
 import { useState } from 'react'
-import { Check, ChevronRight, CircleAlert, Layers, TriangleAlert, X } from 'lucide-react'
+import { Check, ChevronRight, CircleAlert, Layers, ListChecks, TriangleAlert, X } from 'lucide-react'
 import { TRACK_ICON } from '../../../components/domainIcons'
 import { cx } from '../../../components/cx'
 import { canCancel, cancelErrorMessage, costLabel, fmtClock, fmtUsd, groupCost, groupJobs, jobView, taskGenApi, type JobGroup, type JobRow, type JobTone } from '../../../data/taskGen'
 import { DOT } from './formConsts'
-import { TRACK_TONE } from './trackTone'
 
 const OPEN_KEY = 'pair.genGroups'
 const DONE_KEY = '__done' // 맨 아래 '완료' 줄의 펼침 상태도 같은 저장소에 기억한다
@@ -26,12 +25,15 @@ const isLive = (g: JobGroup) => g.counts.QUEUED + g.counts.RUNNING > 0
 type GroupState = 'live' | 'failed' | 'done'
 const groupState = (g: Pick<JobGroup, 'counts'>): GroupState =>
   g.counts.QUEUED + g.counts.RUNNING > 0 ? 'live' : g.counts.FAILED > 0 ? 'failed' : 'done'
-/** 카드는 중립(흰 바탕 + 얇은 테두리). 도는 묶음만 테두리를 브랜드색으로 은은하게 구분한다. */
+/** 카드: 불투명 흰 바탕 + 또렷한 테두리 + 짧고 선명한 그림자에 은은한 그림자를 겹친다.
+ * 도는 묶음은 브랜드 그라데이션 테두리, 실패 섞임은 주황 테두리. 고른 작업이 든 카드는 CARD_SELECTED(ring 2px, 레이아웃이 밀리지 않음). */
+const LIFT = 'shadow-[0_1px_2px_rgb(15_23_42/0.1),0_8px_18px_-10px_rgb(15_23_42/0.18)]'
 const CARD: Record<GroupState, string> = {
-  live: 'border-brand/35 bg-white shadow-[0_6px_20px_-14px_rgb(108_71_255/0.5)]',
-  failed: 'border-line bg-panel',
-  done: 'border-line bg-panel',
+  live: 'border-transparent bg-[linear-gradient(#fff,#fff)_padding-box,linear-gradient(120deg,#8b5cf6,#6c47ff_45%,#2f5bea)_border-box] shadow-[0_1px_2px_rgb(15_23_42/0.1),0_8px_18px_-10px_rgb(108_71_255/0.4)]',
+  failed: `border-caution/60 bg-white ${LIFT} hover:border-caution`,
+  done: `border-line-strong bg-white ${LIFT} hover:border-brand/50`,
 }
+const CARD_SELECTED = 'ring-2 ring-brand ring-offset-1 ring-offset-white'
 
 export function GenJobList({
   rows,
@@ -84,7 +86,7 @@ export function GenJobList({
   const renderGroup = (g: JobGroup) => {
     const open = !g.batchId || (opened[g.key] ?? (isLive(g) || hasSel(g)))
     return (
-      <li key={g.key} data-testid="gen-group" data-state={g.batchId ? groupState(g) : 'single'} className={cx('overflow-hidden rounded-xl border', g.batchId ? CARD[groupState(g)] : 'border-line bg-panel')}>
+      <li key={g.key} data-testid="gen-group" data-state={g.batchId ? groupState(g) : 'single'} className={cx('overflow-hidden rounded-xl border transition-[border-color,box-shadow] duration-200 motion-reduce:transition-none', cx(g.batchId ? CARD[groupState(g)] : cx('border-line-strong bg-white', LIFT), hasSel(g) && CARD_SELECTED))}>
         {g.batchId && <GroupHead g={g} open={open} onToggle={() => toggle(g)} />}
         {/* 높이 전환: grid 행을 0fr → 1fr 로 (움직임 줄이기에서는 바로) */}
         <div className={cx('grid transition-[grid-template-rows] duration-[260ms] ease-out motion-reduce:transition-none', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
@@ -122,20 +124,32 @@ export function GenJobList({
       {active.length > 0 && <ul className="flex flex-col gap-2">{active.map(renderGroup)}</ul>}
 
       {finished.length > 0 && (
-        <div>
+        <div className="mt-2 flex flex-col gap-2 border-t border-line pt-4">
           <button
             type="button"
             onClick={toggleDone}
             aria-expanded={doneOpen}
             data-testid="gen-done-toggle"
-            className="flex min-h-10 w-full items-center gap-1.5 rounded-lg px-2 text-left text-[13px] font-bold text-text-muted outline-none hover:bg-panel-raised/60 hover:text-text focus-visible:ring-4 focus-visible:ring-brand/30"
+            className={cx(
+              'group/done flex h-11 w-full items-center gap-2 rounded-xl border px-3 text-left text-[14px] font-extrabold outline-none',
+              'transition-[background-color,border-color,box-shadow,color] duration-200 motion-reduce:transition-none',
+              'focus-visible:ring-4 focus-visible:ring-brand/30',
+              doneOpen
+                ? 'border-brand/30 bg-brand-dim/60 text-text shadow-[0_6px_18px_-12px_rgb(108_71_255/0.55)]'
+                : 'border-line bg-white text-text-muted shadow-sm hover:border-brand/40 hover:bg-brand-dim/40 hover:text-text hover:shadow-[0_8px_22px_-14px_rgb(108_71_255/0.6)]',
+            )}
           >
-            <ChevronRight size={14} aria-hidden className={cx('shrink-0 text-text-faint transition-transform duration-200 motion-reduce:transition-none', doneOpen && 'rotate-90')} />
-            완료 <span className="tnum font-mono">{finished.length}</span>
+            <span aria-hidden className="inline-flex size-6 shrink-0 items-center justify-center rounded-lg bg-brand-dim text-brand ring-1 ring-brand/25">
+              <ListChecks size={14} />
+            </span>
+            <span className="flex-1">완료</span>
+            <span className="tnum inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gradient px-1.5 font-mono text-[11px] leading-none font-bold text-white">{finished.length}</span>
+            <ChevronRight size={16} aria-hidden className={cx('-mr-0.5 shrink-0 text-text-faint transition-transform duration-200 group-hover/done:text-brand motion-reduce:transition-none', doneOpen && 'rotate-90 text-brand')} />
           </button>
           <div className={cx('grid transition-[grid-template-rows] duration-[260ms] ease-out motion-reduce:transition-none', doneOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-            <div className={cx('min-h-0 overflow-hidden transition-[visibility] duration-[260ms] motion-reduce:transition-none', doneOpen ? 'visible' : 'invisible')}>
-              <ul className="flex flex-col gap-2 pt-1">{finished.map(renderGroup)}</ul>
+            <div className={cx('-mx-[3px] min-h-0 overflow-hidden px-[3px] transition-[visibility] duration-[260ms] motion-reduce:transition-none', doneOpen ? 'visible' : 'invisible')}>
+              {/* 선택 ring 이 잘리지 않게 가로·세로 여백을 3px 둔다 */}
+              <ul className="flex flex-col gap-2 py-[3px]">{finished.map(renderGroup)}</ul>
             </div>
           </div>
         </div>
@@ -154,7 +168,6 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
   const state = groupState(g)
   const name = first?.track === 'BIZ' ? '비개발' : first?.track === 'DEV' ? '개발' : '자동 생성'
   const Icon = first?.track ? TRACK_ICON[first.track] : Layers
-  const tone = first?.track ? TRACK_TONE[first.track] : { tile: 'bg-panel-raised text-text-muted', ring: 'ring-line' }
   const batch = first?.mode === 'BATCH'
   const deadline = batch ? fmtClock(first?.deadlineAt) : null
   const pct = total ? ended / total : 0
@@ -185,7 +198,11 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
           title={name}
           className={cx(
             'relative inline-flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-[10px] ring-1',
-            live ? 'gen-shimmer bg-brand-gradient text-white shadow-[0_6px_16px_-6px_rgb(108_71_255/0.7)] ring-white/30' : cx(tone.tile, tone.ring),
+            live
+              ? 'gen-shimmer bg-brand-gradient text-white shadow-[0_6px_16px_-6px_rgb(108_71_255/0.7)] ring-white/30'
+              : state === 'failed'
+                ? 'bg-caution/10 text-caution ring-caution/30'
+                : 'bg-brand-dim text-brand shadow-[0_4px_12px_-6px_rgb(108_71_255/0.5)] ring-brand/30',
           )}
         >
           <Icon size={16} />
@@ -199,7 +216,12 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
             <span className="truncate">{name}</span>
           )}
           {state === 'failed' && <TriangleAlert size={14} aria-hidden className="shrink-0 text-caution" />}
-          {state === 'done' && <Check size={14} strokeWidth={3} aria-hidden className="shrink-0 text-signal" />}
+          {live && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-brand motion-safe:animate-pulse" />}
+          {state === 'done' && (
+            <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-white">
+              <Check size={10} strokeWidth={3.5} />
+            </span>
+          )}
         </span>
         <ChevronRight size={16} aria-hidden className={cx('-mr-0.5 shrink-0 text-text-faint transition-transform duration-200 group-hover/head:text-text-muted motion-reduce:transition-none', open && 'rotate-90')} />
       </span>
@@ -216,11 +238,11 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
       </span>
 
       {/* 진행 막대 하나: 끝난 만큼 채운다(transform 으로만 움직임). 색 = 상태 */}
-      <span aria-hidden className="ml-[42px] h-1 overflow-hidden rounded-full bg-line">
+      <span aria-hidden className="ml-[42px] h-1 overflow-hidden rounded-full bg-line-strong/50">
         <span
           className={cx(
             'block h-full origin-left rounded-full transition-transform duration-500 ease-out motion-reduce:transition-none',
-            state === 'live' ? 'gen-shimmer bg-brand-gradient' : state === 'failed' ? 'bg-caution' : 'bg-signal',
+            state === 'live' ? 'gen-shimmer bg-brand-gradient' : state === 'failed' ? 'bg-caution' : 'bg-brand-gradient',
           )}
           style={{ transform: `scaleX(${pct})` }}
         />
@@ -235,11 +257,12 @@ function JobItem({ job, on, busy, onSelect, onCancel }: { job: JobRow; on: boole
   const tone: JobTone = v.tone
   const cost = costLabel(job)
   return (
-    <div className={cx('flex items-center transition-colors duration-150', on ? 'bg-brand-dim/60' : 'hover:bg-panel-raised/60')}>
+    <div className={cx('relative flex items-center transition-colors duration-150', on ? 'bg-brand-dim before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-brand-gradient' : 'hover:bg-panel-raised/60')}>
       <button
         type="button"
         onClick={onSelect}
         aria-pressed={on}
+        aria-current={on ? 'true' : undefined}
         aria-label={`${title} 자세히 보기`}
         title={[v.label, v.sub].filter(Boolean).join(' · ')}
         className="flex min-h-10 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left outline-none focus-visible:ring-4 focus-visible:ring-brand/30 focus-visible:ring-inset"
