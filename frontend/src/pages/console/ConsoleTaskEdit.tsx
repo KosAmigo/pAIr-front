@@ -3,15 +3,15 @@
 // 아래: 알약 탭(개요, 파일, 자료, 문항, 자동 확인 결과) (오른쪽 체크리스트 없음).
 // 내용 편집은 백엔드 API 가 없어 읽기 전용이다. 공개·숨기기·용도 바꾸기만 한다.
 import { useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, Loader2, Rocket } from 'lucide-react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Eye, EyeOff, Loader2, Rocket, Trash2 } from 'lucide-react'
 import { levelLabel } from '../../components/taskKind'
 import { ErrorState } from '../../components/ErrorState'
 import { useConsoleCrumbs } from '../../components/consoleCrumbs'
 import { Magnetic } from '../../components/fx'
 import { Button } from '../../components/ui'
 import type { ConsoleTaskSummary } from '../../consoleApi'
-import { setPublished, useTaskDetail } from '../../data/consoleTasks'
+import { deleteTask, setPublished, useTaskDetail } from '../../data/consoleTasks'
 import { countChecks } from '../../data/taskGen'
 import { useGenReport } from '../../data/taskReview'
 import { checkBadge, madeAt, tabOf, trackOf, TRACK_LABEL } from '../../data/taskBoard'
@@ -60,7 +60,9 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
   const toast = useToast()
   const [params, setParams] = useSearchParams()
   const [busy, setBusy] = useState(false)
-  const [confirm, setConfirm] = useState<'publish' | 'hide' | null>(null)
+  const navigate = useNavigate()
+  const [confirm, setConfirm] = useState<'publish' | 'hide' | 'delete' | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const track = trackOf(s)
   const tab = tabOf(s)
   const draft = tab === 'draft'
@@ -86,6 +88,21 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
       setBusy(false)
     }
   }
+
+  const remove = async () => {
+    setBusy(true)
+    setDeleteError(null)
+    try {
+      await deleteTask(s.id)
+      navigate('/console/tasks', { replace: true })
+    } catch (e) {
+      // 409(공개 중·응시 기록·회차 포함·복사본)·403·404 메시지를 창 안에 그대로 보여 준다
+      setDeleteError(e instanceof Error ? e.message : '삭제하지 못했어요')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const canDelete = s.status === 'HIDDEN'
 
   const publishLabel = s.usage === 'LIVE' ? '실전으로 올리기' : '자가진단으로 올리기'
 
@@ -134,7 +151,28 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
           ]}
           actions={
             <div className="flex flex-col items-end gap-4">
-              <HeroStatus task={s} draft={draft} onChanged={setSummary} />
+              <div className="flex items-center gap-2">
+                  {/* 숨김(검수 전) 과제에서만 켠다. 꺼진 버튼은 이유를 툴팁으로 알려 준다 */}
+                  <span title={canDelete ? '과제 삭제' : '공개 중인 과제는 먼저 숨겨야 지울 수 있어요'} className="inline-flex">
+                    <Button
+                      variant="danger"
+                      size="lg"
+                      disabled={busy || !canDelete}
+                      aria-describedby={canDelete ? undefined : 'delete-why'}
+                      onClick={() => (setDeleteError(null), setConfirm('delete'))}
+                      aria-label="삭제"
+                      className="!h-10 w-10 justify-center rounded-full !px-0"
+                    >
+                      <Trash2 size={16} aria-hidden />
+                    </Button>
+                    {!canDelete && (
+                      <span id="delete-why" className="sr-only">
+                        공개 중인 과제는 먼저 숨겨야 지울 수 있어요
+                      </span>
+                    )}
+                  </span>
+                <HeroStatus task={s} draft={draft} onChanged={setSummary} />
+              </div>
               <div className="flex items-center justify-end gap-2">
                 <a
                   href={`/console/tasks/${encodeURIComponent(s.id)}/preview`}
@@ -178,6 +216,24 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
         </div>
       </div>
 
+      {confirm === 'delete' && (
+        <ConfirmModal
+          title="이 과제를 삭제할까요?"
+          danger
+          confirm="삭제"
+          disabled={busy}
+          error={deleteError}
+          onClose={() => (setConfirm(null), setDeleteError(null))}
+          onConfirm={() => void remove()}
+          body={
+            <>
+              <strong className="font-bold text-text">「{s.title}」</strong>
+              <br />
+              되돌릴 수 없어요. 문항·자료·PDF가 모두 지워져요.
+            </>
+          }
+        />
+      )}
       {confirm === 'hide' && (
         <ConfirmModal
           title="이 과제를 숨길까요?"

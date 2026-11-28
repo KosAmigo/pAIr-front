@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { Check, ChevronRight, CircleAlert, Layers, ListChecks, X } from 'lucide-react'
 import { TRACK_ICON } from '../../../components/domainIcons'
 import { cx } from '../../../components/cx'
-import { canCancel, cancelErrorMessage, costLabel, fmtClock, fmtUsd, groupCost, jobView, taskGenApi, toGenStep, type JobRow } from '../../../data/taskGen'
+import { canCancel, cancelErrorMessage, costLabel, fmtClock, fmtUsd, groupCost, jobViewOf, taskGenApi, toGenStep, type JobRow } from '../../../data/taskGen'
 
 const DONE_KEY = 'pair.genDoneOpen'
 const loadDoneOpen = (): boolean | null => {
@@ -149,7 +149,7 @@ const STEP_PCT = { '생성 중': 0.34, '다시 생성 중': 0.34, '확인 중': 
 
 /** 작업 카드 한 장: [직군 아이콘 타일] 주제 / 분 · 방식 · 상태 · 비용 / (진행 중이면) 얇은 진행 막대 / 취소 */
 function JobCard({ job, on, busy, onSelect, onCancel }: { job: JobRow; on: boolean; busy: boolean; onSelect: () => void; onCancel: () => void }) {
-  const v = jobView(job)
+  const v = jobViewOf(job)
   const title = job.topic?.trim() || '주제를 정하는 중'
   const cost = costLabel(job)
   const state = cardState(job)

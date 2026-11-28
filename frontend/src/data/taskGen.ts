@@ -44,6 +44,8 @@ export type TaskGenJob = {
   /** DONE 이어도 false 면 확인에 실패한 채 저장된 것 */
   passed?: boolean | null
   taskCode: string | null
+  /** 만들어진 과제가 삭제됐다 (백엔드가 줄 수도 있다). 없어도 DONE 인데 taskCode 가 null 이면 삭제로 본다 */
+  taskDeleted?: boolean
   checks: GenCheck[]
   error: string | null
   /** 아래는 작업 목록(jobs)·단건 조회가 주는 칸. 없을 수 있다 */
@@ -549,6 +551,14 @@ export function jobView(j: JobRow): JobView {
     case 'CANCELED':
       return { tone: 'cancel', label: '취소됨', sub: null, done: true }
   }
+}
+
+/** 끝났지만 만들어진 과제가 지워진 작업 (검수·미리보기 링크가 없다) */
+export const taskGone = (j: Pick<TaskGenJob, 'status' | 'taskCode' | 'taskDeleted'>): boolean => j.status === 'DONE' && (j.taskDeleted === true || !j.taskCode)
+
+/** 목록·상세에 보일 작업 상태. 삭제된 과제는 '삭제된 과제'로 */
+export function jobViewOf(j: JobRow): JobView {
+  return taskGone(j) ? { tone: 'cancel', label: '삭제된 과제', sub: null, done: true } : jobView(j)
 }
 
 /** 대기 중인 작업만 취소할 수 있다 */

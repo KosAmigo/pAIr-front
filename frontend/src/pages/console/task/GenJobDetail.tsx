@@ -1,12 +1,12 @@
 // 만드는 중인 과제 상세 (오른쪽). 한 작업의 ① 폼 정보 ② 진행 단계 ③ 만들어진 내용(단계별로 접었다 펼침) ④ 관문 검사 ⑤ 끝나면 검수·미리보기 링크.
 // 만들어진 내용은 content API(GET /task-gen/{id}/content)에서 오고, 아직 안 나온 단계는 '아직 만들지 않았어요'로 둔다.
 // 결함·숨은 테스트는 관리자만 보는 정보라 '검수용' 배지를 붙인다.
-import { ArrowLeft, ArrowRight, Check, CircleAlert, Eye, Lock } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleAlert, Eye, Lock, Trash2 } from 'lucide-react'
 import { cx } from '../../../components/cx'
 import { StageSection } from '../../../components/fx'
 import { TRACK_ICON, USAGE_ICON } from '../../../components/domainIcons'
 import { ButtonLink } from '../../../components/ui'
-import { costLabel, genDetail, jobView, reviewHref, toGenStep, type GenTrack, type JobRow, type TaskGenJob } from '../../../data/taskGen'
+import { costLabel, genDetail, jobViewOf, reviewHref, taskGone, toGenStep, type GenTrack, type JobRow, type TaskGenJob } from '../../../data/taskGen'
 import { contentSections, modeLabel, type ContentSection } from '../../../data/taskGenJobs'
 import { RequirementsView } from '../../../components/RequirementsView'
 import { CheckTable } from './CheckTable'
@@ -25,7 +25,7 @@ export function GenJobDetail({ jobId, row, onBack }: { jobId: string; row: JobRo
   const minutes = form?.minutes ?? job?.minutes ?? null
   const usage = form?.usage ?? job?.usage ?? null
   const mode = form?.mode ?? job?.mode ?? null
-  const v = job ? jobView({ ...job, jobId, checks: job.checks ?? [] } as JobRow) : null
+  const v = job ? jobViewOf({ ...job, jobId, checks: job.checks ?? [] } as JobRow) : null
   const cost = job ? costLabel(job) : null
   const sections = contentSections(content, track)
   const TrackIcon = track ? TRACK_ICON[track] : null
@@ -140,8 +140,13 @@ export function GenJobDetail({ jobId, row, onBack }: { jobId: string; row: JobRo
       {/* ④ 관문 검사 */}
       {job && (job.checks?.length ?? 0) > 0 && <CheckTable checks={job.checks} />}
 
-      {/* ⑤ 끝나면 */}
-      {job?.status === 'DONE' && job.taskCode && (
+      {/* ⑤ 끝나면: 과제가 지워졌으면 링크 대신 안내 */}
+      {job && taskGone(job) && (
+        <p data-testid="task-deleted" className="flex items-center gap-2 border-t border-line pt-5 text-[14px] font-semibold break-keep text-text-muted">
+          <Trash2 size={16} aria-hidden /> 삭제된 과제예요. 검수·미리보기를 할 수 없어요.
+        </p>
+      )}
+      {job?.status === 'DONE' && job.taskCode && !job.taskDeleted && (
         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-5">
           <ButtonLink to={`/console/tasks/${encodeURIComponent(job.taskCode)}/preview`} variant="secondary">
             <Eye size={16} aria-hidden /> 미리보기

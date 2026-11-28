@@ -130,6 +130,7 @@ export function ConfirmModal({
   confirm,
   danger,
   disabled,
+  error,
   onConfirm,
   onClose,
 }: {
@@ -138,6 +139,8 @@ export function ConfirmModal({
   confirm: string
   danger?: boolean
   disabled?: boolean
+  /** 실패한 이유. 창 안에 알림(alert)으로 보여 준다 */
+  error?: string | null
   onConfirm: () => void
   onClose: () => void
 }) {
@@ -147,7 +150,8 @@ export function ConfirmModal({
       onClose={onClose}
       actions={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          {/* 위험 동작은 기본 포커스를 취소에 둔다(Enter 로 실수로 지우지 않게) */}
+          <Button variant="ghost" autoFocus={danger} onClick={onClose}>
             취소
           </Button>
           <Button variant={danger ? 'danger' : 'primary'} disabled={disabled} onClick={onConfirm}>
@@ -157,6 +161,11 @@ export function ConfirmModal({
       }
     >
       {body}
+      {error && (
+        <p role="alert" className="mt-3 rounded-lg border border-alert/30 bg-alert/8 px-3 py-2 text-[14px] leading-6 font-semibold break-keep text-alert">
+          {error}
+        </p>
+      )}
     </Modal>
   )
 }

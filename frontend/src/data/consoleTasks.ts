@@ -47,6 +47,16 @@ export async function setPublished(id: string, open: boolean) {
   return next
 }
 
+/** 과제 삭제(검수 전 과제만). 지운 과제는 목록 캐시에서 바로 빼고, 서버 기준으로 목록·만드는 중 작업을 다시 받는다 */
+export async function deleteTask(id: string) {
+  await consoleApi.deleteTask(id)
+  queryClient.setQueryData<ConsoleTaskSummary[]>(consoleTasksQuery.queryKey, (l) => l?.filter((t) => t.id !== id))
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: consoleTasksQuery.queryKey }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.genJobs }),
+  ])
+}
+
 /** 용도 바꾸기(검수 전 과제만). 바뀐 요약으로 목록을 고친다 */
 export async function setUsage(id: string, usage: TaskUsage) {
   const next = await consoleApi.changeUsage(id, usage)

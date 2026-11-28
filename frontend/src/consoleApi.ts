@@ -389,6 +389,8 @@ export const consoleApi = {
   task: (taskId: string) => call<ConsoleTaskDetail>('GET', `/api/console/tasks/${enc(taskId)}`),
   publishTask: (taskId: string) => call<ConsoleTaskSummary>('POST', `/api/console/tasks/${enc(taskId)}/publish`),
   hideTask: (taskId: string) => call<ConsoleTaskSummary>('POST', `/api/console/tasks/${enc(taskId)}/hide`),
+  /** 과제 삭제 (관리자). 204. 404 = 없는 과제, 409 = 지울 수 없음(공개 중·응시 기록·회차 포함·복사본). 메시지는 그대로 보여 준다 */
+  deleteTask: (taskId: string) => call<null>('DELETE', `/api/console/tasks/${enc(taskId)}`),
   /** 용도 바꾸기 (검수 전 과제만. 409 = 공개한 적 있는 과제 또는 복사본) */
   changeUsage: (taskId: string, usage: TaskUsage) => call<ConsoleTaskSummary>('PATCH', `/api/console/tasks/${enc(taskId)}/usage`, { usage }),
 
