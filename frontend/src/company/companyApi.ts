@@ -68,6 +68,8 @@ async function upload<T>(url: string, form: FormData): Promise<T> {
   return data as T
 }
 
+export type CompanyDeletion = { companyId: number; withdrawnMembers: number; canceledSessions: number; revokedInvites: number }
+
 const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const enc = encodeURIComponent
 
@@ -84,6 +86,8 @@ export const companyApi = {
   companies: () => call<Company[]>('GET', '/api/admin/companies'),
   company: (id: number) => call<CompanyDetail>('GET', `/api/admin/companies/${id}`),
   replaceManager: (id: number, name: string, email: string) => call<unknown>('POST', `/api/admin/companies/${id}/manager`, { name, email }),
+  /** 회사 삭제(소프트 삭제): 진행 중 회차가 있으면 409. 예정 회차 취소, 대기 초대 무효, 멤버 탈퇴 처리 */
+  deleteCompany: (id: number) => call<CompanyDeletion>('DELETE', `/api/admin/companies/${id}`),
   reissue: (id: number) => call<unknown>('POST', `/api/admin/members/${id}/onboarding/reissue`),
   members: () => call<CompanyMembers>('GET', '/api/console/company/members'),
   invite: (email: string) => call<unknown>('POST', '/api/console/company/proctor-invites', { email }),
