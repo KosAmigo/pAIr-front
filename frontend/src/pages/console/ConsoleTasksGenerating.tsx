@@ -8,6 +8,7 @@ import { cx } from '../../components/cx'
 import { CreateTaskButton } from './task/GenActionButtons'
 import { GenJobDetail } from './task/GenJobDetail'
 import { GenJobList } from './task/GenJobList'
+import { GenRefreshButton } from './task/GenRefreshButton'
 import { useGenJobs } from './task/useGenJobs'
 
 export default function ConsoleTasksGenerating() {
@@ -29,12 +30,12 @@ export default function ConsoleTasksGenerating() {
 
   return (
     <>
-      <PageHeader label="GENERATING" title="만드는 중인 과제">
+      <PageHeader label="GENERATING" title="만드는 중인 과제" aside={<GenRefreshButton fetchedAt={jobs.fetchedAt} refreshing={jobs.refreshing} onRefresh={() => void jobs.refreshNow()} />}>
         <CreateTaskButton size="md" />
       </PageHeader>
       <div className="grid w-full items-start gap-5 px-4 pt-4 pb-12 md:px-5 lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className={cx('min-w-0', selected && 'hidden lg:block')}>
-          <GenJobList rows={jobs.rows} error={jobs.error} selected={selected} fetchedAt={jobs.fetchedAt} refreshing={jobs.refreshing} onSelect={select} onChanged={jobs.refresh} onRefresh={() => void jobs.refreshNow()} />
+          <GenJobList rows={jobs.rows} error={jobs.error} selected={selected} onSelect={select} onChanged={jobs.refresh} />
         </div>
         <div className={cx('min-w-0', !selected && 'hidden lg:block')}>
           {selected ? (

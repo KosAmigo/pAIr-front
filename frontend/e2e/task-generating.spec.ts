@@ -175,6 +175,12 @@ test.describe('만드는 중인 과제', () => {
     const live = page.getByRole('button', { name: /3개 중 1개 끝남/ })
     const ended = page.getByRole('button', { name: /1개 중 1개 끝남/ })
     await expect(live).toHaveAttribute('aria-expanded', 'true')
+    // 끝난 묶음은 맨 아래 '완료 1' 줄 안에 접혀 있다
+    const done = page.getByTestId('gen-done-toggle')
+    await expect(done).toContainText('완료 1')
+    await expect(done).toHaveAttribute('aria-expanded', 'false')
+    await expect(ended).toBeHidden()
+    await done.click()
     await expect(ended).toHaveAttribute('aria-expanded', 'false')
     await expect(page.getByRole('button', { name: '진행 주제 자세히 보기' })).toBeVisible()
     await expect(page.getByRole('button', { name: '끝난 묶음 주제 자세히 보기' })).toBeHidden() // 접힌 묶음의 행은 안 보이고 탭으로도 못 간다
@@ -186,6 +192,7 @@ test.describe('만드는 중인 과제', () => {
     await expect(page.getByRole('button', { name: '진행 주제 자세히 보기' })).toBeHidden()
     await page.reload()
     await expect(page.getByRole('button', { name: /3개 중 1개 끝남/ })).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByTestId('gen-done-toggle')).toHaveAttribute('aria-expanded', 'true')
     await expect(page.getByRole('button', { name: /1개 중 1개 끝남/ })).toHaveAttribute('aria-expanded', 'true')
 
     // 안내 문구는 없고, 새로고침 아이콘 버튼 하나가 바로 다시 불러온다
@@ -209,16 +216,22 @@ test.describe('만드는 중인 과제', () => {
     await page.goto('/console/tasks/generating')
     const groups = page.getByTestId('gen-group')
     await expect(groups).toHaveCount(3)
+    await expect(page.getByTestId('gen-done-toggle')).toContainText('완료 2')
+    await page.getByTestId('gen-done-toggle').click()
     const state = (name: RegExp) => groups.filter({ has: page.getByRole('button', { name }) })
     await expect(state(/3개 중 1개 끝남/)).toHaveAttribute('data-state', 'live')
     await expect(groups.filter({ hasText: '끝1' })).toHaveAttribute('data-state', 'done')
     await expect(state(/실패 1/)).toHaveAttribute('data-state', 'failed')
-    // 접힌 묶음에도 작업마다 막대 한 칸씩 (title = 주제 · 상태)
-    await expect(state(/3개 중 1개 끝남/).locator('[title*="진행 주제"]')).toHaveCount(1)
-    await expect(state(/실패 1/).locator('span[title]')).toHaveCount(2)
+    // 진행은 얇은 막대 하나(끝난 만큼 채움): 3개 중 1개 = 1/3, 2개 중 2개 = 전부
+    await expect(state(/3개 중 1개 끝남/).locator('[style*="scaleX(0.333"]')).toHaveCount(1)
+    await expect(state(/실패 1/).locator('[style*="scaleX(1)"]')).toHaveCount(1)
+    // '진행 목록' 글씨는 화면에 없고 화면 읽기용 제목으로만 남는다
+    await expect(page.getByRole('region', { name: '진행 목록' })).toBeAttached()
+    await expect(page.getByRole('heading', { name: '진행 목록' })).toHaveClass(/sr-only/)
     // 개수는 머리 버튼 이름에, 직군·방식은 글로
     await expect(page.getByRole('button', { name: /3개 중 1개 끝남 · 진행 1 · 대기 1 · 완료 1/ })).toBeVisible()
     await expect(state(/3개 중 1개 끝남/)).toContainText('일반')
-    await expect(state(/실패 1/)).toContainText('비개발')
+    await expect(page.getByRole('button', { name: /묶음 비개발 2개 중 2개 끝남/ })).toBeVisible() // 직군은 글자 대신 아이콘, 이름은 aria-label 에만
+    await expect(state(/실패 1/)).not.toContainText('비개발')
   })
 })

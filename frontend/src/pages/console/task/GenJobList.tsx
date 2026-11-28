@@ -1,18 +1,18 @@
 // 만드는 중인 과제 목록 (왼쪽, 좁고 촘촘하게). 묶음(batchId)마다 머리줄 하나(직군·시간·개수·끝난 수 + 작은 진행 막대)와 접었다 펼치는 행들.
-// 머리는 두 줄(이름·방식/마감·진행 링, 작업마다 한 칸인 막대)만 둔다.
+// 머리는 미니멀하게: 상태 표시 + "개발 · 60분", 회색 한 줄(절약 · 마감 · 비용), 얇은 진행 막대 하나. 상태색은 점·막대에만 쓴다.
 // 펼침: 진행 중인 묶음은 펼침, 끝난 묶음은 접힘이 기본이고 사용자가 바꾼 상태는 기억한다(localStorage). 높이는 부드럽게 바뀌고 움직임 줄이기에서는 바로 바뀐다.
 // 행은 한 줄: 상태 점 + 주제(한 줄 말줄임) + 짧은 상태 글. 자세한 글(세부 단계·마감·검사 요약)은 title·화면 읽기용으로만 둔다.
-// 머리에는 새로고침 아이콘 버튼 하나뿐(누르면 바로 다시 불러온다, 마우스를 올리면 마지막 갱신 시각). 자동 갱신은 뒤에서 그대로 돈다.
+// 새로고침 버튼은 페이지 제목 옆(GenRefreshButton)에 있다. 자동 갱신은 뒤에서 그대로 돈다.
 import { useState } from 'react'
-import { Check, ChevronRight, CircleAlert, Layers, RefreshCw, TriangleAlert, X } from 'lucide-react'
-import { cx } from '../../../components/cx'
+import { Check, ChevronRight, CircleAlert, Layers, TriangleAlert, X } from 'lucide-react'
 import { TRACK_ICON } from '../../../components/domainIcons'
-import { CountUp } from '../../../components/fx'
+import { cx } from '../../../components/cx'
 import { canCancel, cancelErrorMessage, costLabel, fmtClock, fmtUsd, groupCost, groupJobs, jobView, taskGenApi, type JobGroup, type JobRow, type JobTone } from '../../../data/taskGen'
 import { DOT } from './formConsts'
 import { TRACK_TONE } from './trackTone'
 
 const OPEN_KEY = 'pair.genGroups'
+const DONE_KEY = '__done' // 맨 아래 '완료' 줄의 펼침 상태도 같은 저장소에 기억한다
 type OpenMap = Record<string, boolean>
 const loadOpen = (): OpenMap => {
   try {
@@ -26,40 +26,38 @@ const isLive = (g: JobGroup) => g.counts.QUEUED + g.counts.RUNNING > 0
 type GroupState = 'live' | 'failed' | 'done'
 const groupState = (g: Pick<JobGroup, 'counts'>): GroupState =>
   g.counts.QUEUED + g.counts.RUNNING > 0 ? 'live' : g.counts.FAILED > 0 ? 'failed' : 'done'
+/** 카드는 중립(흰 바탕 + 얇은 테두리). 도는 묶음만 테두리를 브랜드색으로 은은하게 구분한다. */
 const CARD: Record<GroupState, string> = {
-  live: 'border-transparent bg-[linear-gradient(#fff,#fff)_padding-box,linear-gradient(120deg,#8b5cf6,#6c47ff_45%,#2f5bea)_border-box] shadow-[0_10px_30px_-14px_rgb(108_71_255/0.55)]',
-  failed: 'border-caution/40 bg-caution/5 shadow-sm',
-  done: 'border-signal/35 bg-signal/5 shadow-sm',
+  live: 'border-brand/35 bg-white shadow-[0_6px_20px_-14px_rgb(108_71_255/0.5)]',
+  failed: 'border-line bg-panel',
+  done: 'border-line bg-panel',
 }
-const clock = (ms: number | null) =>
-  ms === null ? '아직 못 불러왔어요' : `마지막 갱신 ${[new Date(ms).getHours(), new Date(ms).getMinutes(), new Date(ms).getSeconds()].map((n) => String(n).padStart(2, '0')).join(':')}`
 
 export function GenJobList({
   rows,
   error,
   selected,
-  fetchedAt,
-  refreshing,
   onSelect,
   onChanged,
-  onRefresh,
 }: {
   rows: JobRow[] | null
   error: string | null
   selected: string | null
-  fetchedAt: number | null
-  refreshing: boolean
   onSelect: (jobId: string) => void
   onChanged: () => void
-  onRefresh: () => void
 }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState<string | null>(null)
   const [opened, setOpened] = useState<OpenMap>(loadOpen)
   const groups = rows ? groupJobs(rows) : []
+  // 위: 진행 중인 묶음과 단일 작업, 맨 아래: 끝난 묶음(접힘)
+  const active = groups.filter((g) => !g.batchId || isLive(g))
+  const finished = groups.filter((g) => g.batchId && !isLive(g))
+  const hasSel = (g: JobGroup) => !!selected && g.jobs.some((j) => j.jobId === selected)
+  // 선택한 작업이 접힌 곳에 있으면(사용자가 따로 바꾸기 전까지) 펼쳐서 보이게 한다
+  const doneOpen = opened[DONE_KEY] ?? finished.some(hasSel)
 
-  const toggle = (g: JobGroup) => {
-    const next = { ...opened, [g.key]: !(opened[g.key] ?? isLive(g)) }
+  const remember = (next: OpenMap) => {
     setOpened(next)
     try {
       localStorage.setItem(OPEN_KEY, JSON.stringify(next))
@@ -67,6 +65,8 @@ export function GenJobList({
       /* 저장이 막혀도 이번 화면에서는 동작한다 */
     }
   }
+  const toggle = (g: JobGroup) => remember({ ...opened, [g.key]: !(opened[g.key] ?? (isLive(g) || hasSel(g))) })
+  const toggleDone = () => remember({ ...opened, [DONE_KEY]: !doneOpen })
 
   const cancel = async (j: JobRow) => {
     setCancelling(j.jobId)
@@ -81,22 +81,32 @@ export function GenJobList({
     }
   }
 
+  const renderGroup = (g: JobGroup) => {
+    const open = !g.batchId || (opened[g.key] ?? (isLive(g) || hasSel(g)))
+    return (
+      <li key={g.key} data-testid="gen-group" data-state={g.batchId ? groupState(g) : 'single'} className={cx('overflow-hidden rounded-xl border', g.batchId ? CARD[groupState(g)] : 'border-line bg-panel')}>
+        {g.batchId && <GroupHead g={g} open={open} onToggle={() => toggle(g)} />}
+        {/* 높이 전환: grid 행을 0fr → 1fr 로 (움직임 줄이기에서는 바로) */}
+        <div className={cx('grid transition-[grid-template-rows] duration-[260ms] ease-out motion-reduce:transition-none', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+          <div className={cx('min-h-0 overflow-hidden transition-[visibility] duration-[260ms] motion-reduce:transition-none', open ? 'visible' : 'invisible')}>
+            <ul className={cx('divide-y divide-line', g.batchId && 'border-t border-line')}>
+              {g.jobs.map((j) => (
+                <li key={j.jobId} data-testid="gen-job">
+                  <JobItem job={j} on={selected === j.jobId} busy={cancelling === j.jobId} onSelect={() => onSelect(j.jobId)} onCancel={() => void cancel(j)} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </li>
+    )
+  }
+
   return (
     <section aria-labelledby="gen-jobs-title" className="flex min-w-0 flex-col gap-2">
-      <div className="flex items-center gap-1">
-        <h2 id="gen-jobs-title" className="text-[15px] font-extrabold tracking-[-0.01em] text-text">
-          진행 목록
-        </h2>
-        <button
-          type="button"
-          onClick={onRefresh}
-          aria-label="새로고침"
-          title={clock(fetchedAt)}
-          className="ml-auto inline-flex size-10 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 outline-none hover:bg-panel-raised hover:text-text focus-visible:ring-4 focus-visible:ring-brand/30"
-        >
-          <RefreshCw size={16} aria-hidden className={refreshing ? 'motion-safe:animate-spin' : undefined} />
-        </button>
-      </div>
+      <h2 id="gen-jobs-title" className="sr-only">
+        진행 목록
+      </h2>
 
       {(notice || error) && (
         <p role="alert" className="flex items-start gap-2 rounded-lg border border-alert/30 bg-alert/8 px-3 py-2 text-[13px] leading-5 break-keep text-text">
@@ -107,50 +117,49 @@ export function GenJobList({
       {rows === null && !error && <p className="text-[13px] text-text-muted">불러오는 중…</p>}
       {rows !== null && groups.length === 0 && <p className="rounded-lg border border-dashed border-line-strong px-3 py-4 text-[13px] text-text-muted">작업이 없어요.</p>}
 
-      <ul className="flex flex-col gap-2">
-        {groups.map((g) => {
-          const open = !g.batchId || (opened[g.key] ?? isLive(g))
-          return (
-            <li key={g.key} data-testid="gen-group" data-state={g.batchId ? groupState(g) : 'single'} className={cx('overflow-hidden rounded-xl border', g.batchId ? CARD[groupState(g)] : 'border-line bg-panel shadow-sm')}>
-              {g.batchId && <GroupHead g={g} open={open} onToggle={() => toggle(g)} />}
-              {/* 높이 전환: grid 행을 0fr → 1fr 로 (움직임 줄이기에서는 바로) */}
-              <div className={cx('grid transition-[grid-template-rows] duration-[260ms] ease-out motion-reduce:transition-none', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-                <div className={cx('min-h-0 overflow-hidden transition-[visibility] duration-[260ms] motion-reduce:transition-none', open ? 'visible' : 'invisible')}>
-                  <ul className={cx('divide-y divide-line', g.batchId && 'border-t border-line')}>
-                    {g.jobs.map((j) => (
-                      <li key={j.jobId} data-testid="gen-job">
-                        <JobItem job={j} on={selected === j.jobId} busy={cancelling === j.jobId} onSelect={() => onSelect(j.jobId)} onCancel={() => void cancel(j)} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
+      {rows !== null && groups.length > 0 && active.length === 0 && <p className="px-1 py-1 text-[13px] font-bold text-text-muted">진행 중인 작업이 없어요.</p>}
+
+      {active.length > 0 && <ul className="flex flex-col gap-2">{active.map(renderGroup)}</ul>}
+
+      {finished.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={toggleDone}
+            aria-expanded={doneOpen}
+            data-testid="gen-done-toggle"
+            className="flex min-h-10 w-full items-center gap-1.5 rounded-lg px-2 text-left text-[13px] font-bold text-text-muted outline-none hover:bg-panel-raised/60 hover:text-text focus-visible:ring-4 focus-visible:ring-brand/30"
+          >
+            <ChevronRight size={14} aria-hidden className={cx('shrink-0 text-text-faint transition-transform duration-200 motion-reduce:transition-none', doneOpen && 'rotate-90')} />
+            완료 <span className="tnum font-mono">{finished.length}</span>
+          </button>
+          <div className={cx('grid transition-[grid-template-rows] duration-[260ms] ease-out motion-reduce:transition-none', doneOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+            <div className={cx('min-h-0 overflow-hidden transition-[visibility] duration-[260ms] motion-reduce:transition-none', doneOpen ? 'visible' : 'invisible')}>
+              <ul className="flex flex-col gap-2 pt-1">{finished.map(renderGroup)}</ul>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
 
-/** 묶음 머리줄(두 줄): 직군 타일 + 이름·분 + 방식/마감 한 줄 + 진행 링(n/m) + 펼침 화살표, 그 아래 작업마다 한 칸인 진행 막대.
- * 개수(진행·대기·완료·실패)는 화면 읽기용 이름과 칸의 색·title 로만 보인다. */
+/** 묶음 머리줄(미니멀): 상태 표시(점·체크·경고) + "개발 · 60분" + 펼침 화살표, 회색 한 줄(절약 · 마감 · 비용), 얇은 진행 막대 하나.
+ * 개수(진행·대기·완료·실패)는 화면 읽기용 이름으로만 전한다. */
 function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle: () => void }) {
   const first = g.jobs[0]
   const total = g.jobs.length
   const c = g.counts
   const ended = c.DONE + c.FAILED + c.CANCELED
   const state = groupState(g)
-  const Icon = first?.track ? TRACK_ICON[first.track] : Layers
-  const tone = first?.track ? TRACK_TONE[first.track] : { tile: 'bg-panel-raised text-text-muted', text: '', ring: '' }
   const name = first?.track === 'BIZ' ? '비개발' : first?.track === 'DEV' ? '개발' : '자동 생성'
+  const Icon = first?.track ? TRACK_ICON[first.track] : Layers
+  const tone = first?.track ? TRACK_TONE[first.track] : { tile: 'bg-panel-raised text-text-muted', ring: 'ring-line' }
   const batch = first?.mode === 'BATCH'
   const deadline = batch ? fmtClock(first?.deadlineAt) : null
   const pct = total ? ended / total : 0
   const sum = groupCost(g.jobs)
   const live = state === 'live'
-  const R = 15
-  const C = 2 * Math.PI * R
   const counts = (
     [
       ['진행', c.RUNNING],
@@ -167,78 +176,54 @@ function GroupHead({ g, open, onToggle }: { g: JobGroup; open: boolean; onToggle
       onClick={onToggle}
       aria-expanded={open}
       aria-label={[`자동 생성 묶음 ${name} ${total}개 중 ${ended}개 끝남`, ...counts].join(' · ')}
-      className="group/head flex w-full flex-col gap-2.5 px-3 pt-3 pb-3 text-left outline-none hover:bg-white/50 focus-visible:ring-4 focus-visible:ring-brand/30 focus-visible:ring-inset"
+      className="group/head flex w-full flex-col gap-1.5 px-3 py-2.5 text-left outline-none hover:bg-panel-raised/50 focus-visible:ring-4 focus-visible:ring-brand/30 focus-visible:ring-inset"
     >
       <span className="flex items-center gap-2.5">
+        {/* 직군 아이콘 타일(글자 대신). 도는 묶음은 그라데이션 + 은은한 빛, 나머지는 직군 톤 */}
         <span
           aria-hidden
+          title={name}
           className={cx(
-            'relative inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] ring-1',
-            state === 'live' ? 'bg-brand-gradient text-white shadow-[0_6px_16px_-6px_rgb(108_71_255/0.7)] ring-white/30' : cx(tone.tile, tone.ring),
+            'relative inline-flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-[10px] ring-1',
+            live ? 'gen-shimmer bg-brand-gradient text-white shadow-[0_6px_16px_-6px_rgb(108_71_255/0.7)] ring-white/30' : cx(tone.tile, tone.ring),
           )}
         >
-          <Icon size={17} />
+          <Icon size={16} />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="flex items-center gap-1.5 text-[15px] leading-5 font-extrabold tracking-[-0.01em] text-text">
-            <span className="truncate">{name}</span>
-            {first?.minutes ? (
-              <span className="shrink-0 text-[13px] font-bold text-text-muted">
-                <span className="tnum font-mono">{first.minutes}</span>분
-              </span>
-            ) : null}
-            {state === 'failed' && <TriangleAlert size={14} aria-hidden className="shrink-0 text-caution" />}
-          </span>
-          <span className={cx('tnum truncate text-[12px] leading-4 font-bold', batch ? 'text-info' : 'text-text-muted')}>
-            {batch ? (deadline ? `절약 · 마감 ${deadline}` : '절약') : '일반'}
-            {sum !== null && (
-              <span data-testid="group-cost" className="font-mono font-semibold text-text-muted">
-                {' · '}
-                {live ? '지금까지 ' : '합계 '}
-                {fmtUsd(sum)}
-              </span>
-            )}
-          </span>
-        </span>
-        {/* 진행 링: 끝난 수 / 전체 */}
-        <span aria-hidden className="relative inline-flex size-10 shrink-0 items-center justify-center">
-          <svg viewBox="0 0 36 36" className="absolute inset-0 -rotate-90">
-            <circle cx="18" cy="18" r={R} fill="none" strokeWidth="3.5" className="stroke-line" />
-            <circle
-              cx="18"
-              cy="18"
-              r={R}
-              fill="none"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeDasharray={C}
-              strokeDashoffset={C * (1 - pct)}
-              className={cx('transition-[stroke-dashoffset] duration-500 motion-reduce:transition-none', state === 'live' ? 'stroke-brand' : state === 'failed' ? 'stroke-caution' : 'stroke-signal')}
-            />
-          </svg>
-          {state === 'done' ? (
-            <Check size={16} strokeWidth={3} className="text-signal" />
-          ) : (
-            <span className="tnum font-mono text-[11px] leading-none font-bold text-text">
-              <CountUp value={ended} />/{total}
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[15px] leading-5 font-extrabold tracking-[-0.01em] text-text">
+          {first?.minutes ? (
+            <span className="shrink-0">
+              <span className="tnum font-mono">{first.minutes}</span>분
             </span>
+          ) : (
+            <span className="truncate">{name}</span>
           )}
+          {state === 'failed' && <TriangleAlert size={14} aria-hidden className="shrink-0 text-caution" />}
+          {state === 'done' && <Check size={14} strokeWidth={3} aria-hidden className="shrink-0 text-signal" />}
         </span>
         <ChevronRight size={16} aria-hidden className={cx('-mr-0.5 shrink-0 text-text-faint transition-transform duration-200 group-hover/head:text-text-muted motion-reduce:transition-none', open && 'rotate-90')} />
       </span>
 
-      {/* 작업마다 한 칸: 색 = 상태, 도는 칸은 빛이 지나간다. 접어도 한눈에 */}
-      <span aria-hidden className="flex h-2 gap-[3px]">
-        {g.jobs.map((j) => {
-          const v = jobView(j)
-          return (
-            <span
-              key={j.jobId}
-              title={`${j.topic?.trim() || '주제를 정하는 중'} · ${v.label}`}
-              className={cx('h-full min-w-0 flex-1 rounded-full transition-colors duration-300', v.tone === 'run' ? 'bg-brand-gradient gen-shimmer' : DOT[v.tone], v.tone === 'wait' && 'opacity-40')}
-            />
-          )
-        })}
+      <span className="tnum truncate pl-[42px] text-[12px] leading-4 font-bold text-text-muted">
+        {batch ? (deadline ? `절약 · 마감 ${deadline}` : '절약') : '일반'}
+        {sum !== null && (
+          <span data-testid="group-cost" className="font-mono font-semibold">
+            {' · '}
+            {live ? '지금까지 ' : '합계 '}
+            {fmtUsd(sum)}
+          </span>
+        )}
+      </span>
+
+      {/* 진행 막대 하나: 끝난 만큼 채운다(transform 으로만 움직임). 색 = 상태 */}
+      <span aria-hidden className="ml-[42px] h-1 overflow-hidden rounded-full bg-line">
+        <span
+          className={cx(
+            'block h-full origin-left rounded-full transition-transform duration-500 ease-out motion-reduce:transition-none',
+            state === 'live' ? 'gen-shimmer bg-brand-gradient' : state === 'failed' ? 'bg-caution' : 'bg-signal',
+          )}
+          style={{ transform: `scaleX(${pct})` }}
+        />
       </span>
     </button>
   )
