@@ -116,3 +116,25 @@ test('toCandidateQuestion hides answers, accepted answers and sources', () => {
   assert.deepEqual(q, { id: 7, seq: 2, type: 'SINGLE', content: '어느 것?', points: 5, choices: [{ id: 1, seq: 1, content: 'A' }, { id: 2, seq: 2, content: 'B' }], answer: null })
   assert.equal(JSON.stringify(q).includes('correct'), false)
 })
+
+test('matchesQuery: 정규식 특수문자는 글자 그대로, 낱말 순서·위치 무관, 초성, 한글 이름, 직군·상태 이름', () => {
+  const a = t({ id: 'incident-log-7', title: '쿠폰 할인 계산 (v2)', summary: '중복 적용 함정', category: 'incident', status: 'OPEN', track: 'DEV' })
+  for (const q of ['[', '*', '?', String.fromCharCode(92), '.', '+', '|', '$', '^']) assert.equal(matchesQuery(a, q), false, q)
+  assert.equal(matchesQuery(a, '(v2)'), true)
+  assert.equal(matchesQuery(a, '계산 쿠폰'), true) // 낱말 순서 무관
+  assert.equal(matchesQuery(a, '쿠폰 환불'), false)
+  assert.equal(matchesQuery(a, 'ㅋㅍ'), true) // 초성
+  assert.equal(matchesQuery(a, 'ㅎㅇ'), true) // 할인
+  assert.equal(matchesQuery(a, 'ㅋㅋ'), false)
+  assert.equal(matchesQuery(a, 'incident-log'), true) // 코드, 하이픈
+  assert.equal(matchesQuery(a, 'incidentlog'), true)
+  assert.equal(matchesQuery(a, '장애'), false) // 이름 함수 없으면 못 찾음
+  assert.equal(matchesQuery(a, '장애분석', () => '장애 분석'), true) // 주제의 한글 이름
+  assert.equal(matchesQuery(a, '개발'), true) // 직군 이름
+  assert.equal(matchesQuery(a, '비개발'), false)
+  assert.equal(matchesQuery(a, '자가진단'), true) // 상태 이름
+  assert.equal(matchesQuery(a, '검수전'), false)
+  assert.equal(matchesQuery(a, '　쿠폰　'), true) // 전각 공백
+  assert.equal(matchesQuery(a, '쿠폰'.normalize('NFD')), true) // 풀어쓴 한글(맥)
+  assert.equal(matchesQuery(a, '   '), true) // 공백만 = 거르지 않음
+})

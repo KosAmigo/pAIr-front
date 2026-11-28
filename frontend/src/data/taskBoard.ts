@@ -43,21 +43,58 @@ export const TRACK_LABEL: Record<Track, string> = { DEV: '개발', BIZ: '비개�
 /** 만든 날(없으면 수정·공개 시각). 정렬과 카드 표시에 쓴다 */
 export const madeAt = (t: Pick<ConsoleTaskSummary, 'createdAt' | 'updatedAt' | 'publishedAt'>) => t.createdAt ?? t.updatedAt ?? t.publishedAt ?? null
 
-/** 검색용 글자 정리: 공백을 모두 없애고 소문자로 */
-export const normalizeSearch = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, '').toLowerCase()
+/**
+ * 검색용 글자 정리: NFKC(맥에서 붙여 넣은 풀어쓴 한글·전각 글자를 같은 글자로)로 맞추고,
+ * 공백(눈에 안 보이는 글자 포함)과 하이픈·밑줄(코드 A-22 = A22)을 모두 없애고 소문자로
+ */
+const CHOSEONG = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ'
+export const normalizeSearch = (s: string | null | undefined) =>
+  (s ?? '')
+    .normalize('NFKC')
+    // NFKC 는 자음 글자(ㅋ)를 첫소리 낱자(U+110F)로 바꾸므로 다시 자음 글자로 돌린다
+    .replace(/[\u1100-\u1112]/g, (c) => CHOSEONG[c.charCodeAt(0) - 0x1100])
+    .replace(/[\s_\-\u200b-\u200d\ufeff]+/g, '')
+    .toLowerCase()
 
-/** 제목·한 줄 소개·주제(category)·코드에 검색어가 들어 있는지. 부분 일치, 공백·대소문자 무시 */
-export function matchesQuery(t: Pick<ConsoleTaskSummary, 'title' | 'id' | 'summary' | 'category'>, q: string): boolean {
+/** 한글 글자마다 초성만 남긴다 ("쿠폰" → "ㅋㅍ"). 한글이 아닌 글자는 그대로 */
+const toChoseong = (s: string) =>
+  Array.from(s, (ch) => {
+    const c = ch.charCodeAt(0) - 0xac00
+    return c >= 0 && c <= 11171 ? CHOSEONG[Math.floor(c / 588)] : ch
+  }).join('')
+const isJamoOnly = (s: string) => s !== '' && /^[ㄱ-ㅎ]+$/.test(s)
+
+/** 상태 이름: 화면에 보이는 말로도 찾을 수 있게 */
+const searchWords = (t: Pick<ConsoleTaskSummary, 'status' | 'usage' | 'type' | 'track'>) => [
+  TRACK_LABEL[trackOf(t)],
+  TAB_LABEL[tabOf(t)],
+  isClosed(t) ? '내림 닫힘' : '',
+]
+
+type SearchRow = Pick<ConsoleTaskSummary, 'title' | 'id' | 'summary' | 'category'> & Partial<Pick<ConsoleTaskSummary, 'status' | 'usage' | 'type' | 'track'>>
+
+/**
+ * 검색어가 제목·한 줄 소개·주제(category 와 그 한글 이름)·코드·직군·상태 이름 중 어디에 들어 있는지.
+ * 부분 일치, 공백·대소문자 무시. 띄어 쓴 말은 "각 낱말이 어딘가에 들어 있으면" 맞다(순서·위치 무관).
+ * 'ㅋㅍ' 처럼 자음만 쓰면 제목 등의 초성으로 찾는다.
+ */
+export function matchesQuery(t: SearchRow, q: string, categoryName?: (key: string) => string): boolean {
   const n = normalizeSearch(q)
-  return !n || [t.title, t.summary, t.category, t.id].some((v) => normalizeSearch(v).includes(n))
+  if (!n) return true
+  const extra = t.status ? searchWords({ status: t.status, usage: t.usage ?? 'SELF', type: t.type ?? 'dev', track: t.track }) : []
+  const fields = [t.title, t.summary, t.category, t.category && categoryName ? categoryName(t.category) : '', t.id, ...extra].map(normalizeSearch).filter(Boolean)
+  const hit = (needle: string) => fields.some((f) => f.includes(needle) || (isJamoOnly(needle) && toChoseong(f).includes(needle)))
+  if (hit(n)) return true
+  const words = q.normalize('NFKC').split(/\s+/).filter(Boolean)
+  return words.length > 1 && words.every((w) => hit(normalizeSearch(w)))
 }
 
 /** 탭, 직군, 검색어로 거르고 최근 만든 것부터 */
-export function filterTasks<T extends ConsoleTaskSummary>(list: T[], f: { tab: TaskTab; track: TrackFilter; q: string }): T[] {
+export function filterTasks<T extends ConsoleTaskSummary>(list: T[], f: { tab: TaskTab; track: TrackFilter; q: string }, categoryName?: (key: string) => string): T[] {
   return list
     .filter((t) => tabOf(t) === f.tab)
     .filter((t) => f.track === 'ALL' || trackOf(t) === f.track)
-    .filter((t) => matchesQuery(t, f.q))
+    .filter((t) => matchesQuery(t, f.q, categoryName))
     .sort((a, b) => (madeAt(b) ?? '').localeCompare(madeAt(a) ?? ''))
 }
 
