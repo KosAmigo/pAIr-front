@@ -263,6 +263,45 @@ export type SessionAiCost = {
   unpricedModels: string[]
 }
 
+/** 관리자 통계 (GET /api/admin/stats). 기간은 한국 시간 날짜(YYYY-MM-DD), to 포함. members 의 users·companyMembers·companies 는 지금 값 */
+export type StatsBand = { range: string; count: number }
+/** 과제 하나의 채점 수와 평균 점수 (taskId 는 과제 코드) */
+export type StatsTaskScore = { taskId: string; title: string; scored: number; averageScore: number | null }
+export type AdminStats = {
+  from: string
+  to: string
+  members: { users: number; companyMembers: number; companies: number; newUsers: number; withdrawn: number }
+  selfDiagnosis: { started: number; submitted: number; scored: number; averageScore: number | null; bands: StatsBand[]; tasks: StatsTaskScore[] }
+  live: { sessions: number; participants: number; started: number; submitted: number; scored: number; averageScore: number | null; bands: StatsBand[] }
+  ai: {
+    totalUsd: number
+    selfChat: AiCostPart
+    liveChat: AiCostPart
+    scoring: AiCostPart
+    taskGen: { jobs: number; calls: number; inputTokens: number; outputTokens: number; cachedTokens: number; usd: number }
+    unpricedModels: string[]
+  }
+  credits: { paidCount: number; paidKrw: number; refundedCount: number; refundedKrw: number }
+}
+
+/** 관리자 회원 목록 (GET /api/admin/members). 자가진단 수치는 전체 기간, creditBalance 는 일반 회원만 */
+export type AdminMemberRole = 'ALL' | 'USER' | 'COMPANY' | 'ADMIN'
+export type AdminMember = {
+  id: number
+  name: string
+  email: string
+  role: 'USER' | 'MANAGER' | 'PROCTOR' | 'ADMIN'
+  status: 'ACTIVE' | 'PENDING'
+  companyName: string | null
+  joinedAt: string
+  selfAttempts: number
+  selfSubmitted: number
+  averageScore: number | null
+  creditBalance: number | null
+  lastAttemptAt: string | null
+}
+export type AdminMemberPage = { members: AdminMember[]; page: number; size: number; totalElements: number; totalPages: number }
+
 const S = '/api/console/sessions'
 
 export const consoleApi = {
@@ -316,6 +355,12 @@ export const consoleApi = {
   // 결과
   results: (id: number) => call<SessionResult>('GET', `${S}/${id}/results`),
   aiCost: (id: number) => call<SessionAiCost>('GET', `${S}/${id}/ai-cost`),
+  /** 관리자 회원 목록 (관리자 전용). page 는 0부터 */
+  adminMembers: (role: AdminMemberRole, q: string, page: number, size = 20) =>
+    call<AdminMemberPage>('GET', `/api/admin/members?role=${role}&q=${encodeURIComponent(q)}&page=${page}&size=${size}`),
+  /** 관리자 통계 (관리자 전용) */
+  adminStats: (from: string, to: string) =>
+    call<AdminStats>('GET', `/api/admin/stats?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   /** 종료된 회차에서 채점으로 넘어가지 못한 응시를 다시 넘긴다 (pending: 멈춘 응시 수, failed: 이번에도 못 넘긴 수) */
   rescueSession: (id: number) => call<{ pending: number; failed: number }>('POST', `${S}/${id}/rescue`),
   resultsCsvUrl: (id: number) => blobUrl(`${S}/${id}/results.csv`),

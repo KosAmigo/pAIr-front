@@ -32,6 +32,10 @@ export const queryKeys = {
   genJobs: ['gen-jobs', 'active'] as const,
   /** 생성 작업 새로고침 버튼이 도는 상태(여러 화면이 같이 본다) */
   genJobsRefreshing: ['gen-jobs', 'refreshing'] as const,
+  /** 관리자 회원 목록 (역할·검색어·페이지별) */
+  adminMembers: (role: string, q: string, page: number) => ['admin-members', role, q, page] as const,
+  /** 관리자 통계 (기간별) */
+  adminStats: (from: string, to: string) => ['admin-stats', from, to] as const,
   /** 이미지(blob). 로그인 헤더가 필요해 Blob 으로 받는다 */
   blob: (...parts: (string | number)[]) => ['blob', ...parts] as const,
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { CrumbContext } from './consoleCrumbs'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Building2, CalendarClock, FlaskConical, PanelLeftClose, PanelLeftOpen, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { BarChart3, Building2, CalendarClock, Users, FlaskConical, PanelLeftClose, PanelLeftOpen, ShieldCheck, type LucideIcon } from 'lucide-react'
 import { TaskIcon } from './domainIcons'
 import { motion } from 'motion/react'
 import { springs } from '../lib/motion'
@@ -19,11 +19,13 @@ const MENU: MenuItem[] = [
   { to: '/console/tasks', label: '과제', icon: TaskIcon, roles: ['ADMIN'] },
   { to: '/console/sessions', label: '회차', icon: CalendarClock, roles: ['ADMIN', 'MANAGER', 'PROCTOR'] },
   { to: '/console/companies', label: '회사', icon: Building2, roles: ['ADMIN'] },
+  { to: '/console/users', label: '회원', icon: Users, roles: ['ADMIN'] },
+  { to: '/console/stats', label: '통계', icon: BarChart3, roles: ['ADMIN'] },
   { to: '/console/members', label: '회사 회원', icon: Building2, roles: ['MANAGER'] },
 ]
 
 /** 경로 → 브레드크럼 첫 칸 이름 */
-const SECTION: Record<string, string> = { grader: '채점 툴', tasks: '과제', sessions: '회차', companies: '회사', members: '회사 회원' }
+const SECTION: Record<string, string> = { grader: '채점 툴', tasks: '과제', sessions: '회차', companies: '회사', members: '회사 회원', users: '회원', stats: '통계' }
 
 const NAV_KEY = 'pair.consoleNavCollapsed'
 const readCollapsed = () => {

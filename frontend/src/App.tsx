@@ -24,6 +24,8 @@ import MyPage from './pages/MyPage'
 import Credits from './pages/Credits'
 import { ConsoleShell } from './components/ConsoleShell'
 import ConsoleCompanies, { ConsoleCompanyDetail } from './pages/console/ConsoleCompanies'
+import ConsoleStats from './pages/console/ConsoleStats'
+import ConsoleUsers from './pages/console/ConsoleUsers'
 import ConsoleTasks from './pages/console/ConsoleTasks'
 import ConsoleTaskNew from './pages/console/ConsoleTaskNew'
 import ConsoleTasksGenerating from './pages/console/ConsoleTasksGenerating'
@@ -158,6 +160,8 @@ export default function App() {
                 <Route path="tasks/:taskId" element={<ConsoleTaskEdit />} />
                 <Route path="companies" element={<ConsoleCompanies />} />
                 <Route path="companies/:companyId" element={<ConsoleCompanyDetail />} />
+                <Route path="users" element={<ConsoleUsers />} />
+                <Route path="stats" element={<ConsoleStats />} />
               </Route>
             </Route>
           </Route>
