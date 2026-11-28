@@ -563,35 +563,5 @@ export function cancelErrorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-export type JobGroup = { key: string; batchId: string | null; jobs: JobRow[]; counts: Record<JobState, number> }
-
-/** 묶음(batchId)별로 묶는다. 묶음 없는 작업(직접 만들기)은 하나씩. 새로 만든 묶음이 위로 온다 */
-export function groupJobs(rows: JobRow[]): JobGroup[] {
-  const at = (j: JobRow) => (j.createdAt ? Date.parse(j.createdAt) || 0 : 0)
-  const map = new Map<string, JobRow[]>()
-  for (const j of rows) {
-    const key = j.batchId ? `b:${j.batchId}` : `j:${j.jobId}`
-    map.set(key, [...(map.get(key) ?? []), j])
-  }
-  const groups = [...map.entries()].map(([key, jobs]) => {
-    const sorted = [...jobs].sort((a, b) => at(a) - at(b))
-    const counts: Record<JobState, number> = { QUEUED: 0, RUNNING: 0, DONE: 0, FAILED: 0, CANCELED: 0 }
-    for (const j of sorted) counts[j.status]++
-    return { key, batchId: sorted[0]?.batchId ?? null, jobs: sorted, counts }
-  })
-  return groups.sort((a, b) => Math.max(...b.jobs.map(at)) - Math.max(...a.jobs.map(at)))
-}
-
-/** 묶음 머리글: "5개 중 2개 끝남 · 진행 1 · 대기 2" */
-export function groupSummary(g: Pick<JobGroup, 'jobs' | 'counts'>): string {
-  const c = g.counts
-  const ended = c.DONE + c.FAILED + c.CANCELED
-  const parts = [`${g.jobs.length}개 중 ${ended}개 끝남`]
-  if (c.RUNNING) parts.push(`진행 ${c.RUNNING}`)
-  if (c.QUEUED) parts.push(`대기 ${c.QUEUED}`)
-  if (c.FAILED) parts.push(`실패 ${c.FAILED}`)
-  return parts.join(' · ')
-}
-
 /** 검수하러 갈 과제 콘솔 상세 주소 */
 export const reviewHref = (taskCode: string): string => `/console/tasks/${encodeURIComponent(taskCode)}`

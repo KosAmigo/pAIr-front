@@ -9,8 +9,6 @@ import {
   cancelErrorMessage,
   clampCount,
   fmtClock,
-  groupJobs,
-  groupSummary,
   jobView,
   pollJob,
   previewRequest,
@@ -75,21 +73,6 @@ test('canCancel 은 대기 중만, 409 는 쉬운 말', () => {
   const e = new ApiError('x')
   e.status = 409
   assert.match(cancelErrorMessage(e), /이미 시작했거나/)
-})
-
-test('groupJobs: 묶음별로 묶고 새 묶음이 위, 직접 만들기는 하나씩', () => {
-  const rows = [
-    row({ jobId: 'a2', batchId: 'b1', status: 'QUEUED', createdAt: clock(9, 0) }),
-    row({ jobId: 'm1', batchId: null, status: 'RUNNING', createdAt: clock(9, 30) }),
-    row({ jobId: 'a1', batchId: 'b1', status: 'DONE', createdAt: clock(8, 59) }),
-    row({ jobId: 'c1', batchId: 'b2', status: 'FAILED', createdAt: clock(7, 0) }),
-  ]
-  const g = groupJobs(rows)
-  assert.deepEqual(g.map((x) => x.key), ['j:m1', 'b:b1', 'b:b2'])
-  assert.deepEqual(g[1].jobs.map((j) => j.jobId), ['a1', 'a2']) // 묶음 안은 만든 순서
-  assert.equal(groupSummary(g[1]), '2개 중 1개 끝남 · 대기 1')
-  assert.equal(groupSummary(g[2]), '1개 중 1개 끝남 · 실패 1')
-  assert.deepEqual(groupJobs([]), [])
 })
 
 test('clampCount: 1~10 정수로 맞추고 숫자가 아니면 10', () => {
@@ -173,19 +156,6 @@ test('상태 표시 글: 대기 n번째 / 세부 단계 / 배치 대기 / 완료
   assert.equal(modeLabel(null), '일반')
   assert.equal(modeLabel('BATCH', clock(15, 5)), '절약 · 마감 15:05')
   assert.equal(modeLabel('BATCH'), '절약')
-})
-
-test('groupJobs: 묶음별로 묶고 직접 만들기 작업은 하나씩 (새 페이지 목록)', () => {
-  const rows = [
-    row({ jobId: 'a1', batchId: 'b1', createdAt: clock(9, 1) }),
-    row({ jobId: 'm1', batchId: null, createdAt: clock(9, 5) }),
-    row({ jobId: 'a2', batchId: 'b1', status: 'QUEUED', createdAt: clock(9, 2) }),
-  ]
-  const g = groupJobs(rows)
-  assert.equal(g.length, 2)
-  assert.deepEqual(g[0].jobs.map((j) => j.jobId), ['m1']) // 최근 것이 위
-  assert.deepEqual(g[1].jobs.map((j) => j.jobId), ['a1', 'a2'])
-  assert.equal(g[1].counts.QUEUED, 1)
 })
 
 test('newlyDone: 이전에 DONE 이 아니었다가 DONE 이 된 작업만, 첫 조회는 없음', () => {
