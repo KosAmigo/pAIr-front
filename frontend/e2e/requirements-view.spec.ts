@@ -76,3 +76,51 @@ test('미리보기(응시 화면 모양)와 만드는 중인 과제 상세도 �
   await expect(page.getByTestId('req-feature')).toContainText('UsageService.payable')
   await expect(page.getByTestId('req-example')).toHaveCount(1)
 })
+
+const J = (o: unknown) => JSON.stringify(o)
+const TABLE = [
+  '만들 기능: `PassRegistry.availableCodes(LocalDate visitDate): List<String>` — 방문 날짜에 쓸 수 있는 이용권 코드를 돌려줘요',
+  '- visitDate: 방문 예정 날짜',
+  '만들 기능: `PassRegistry.canEnter(String code, LocalDate visitDate, int headCount): boolean` — 입장 가능 여부를 돌려줘요',
+  '- code: 이용권 코드',
+  '- visitDate: 방문 예정 날짜',
+  '- headCount: 입장 인원',
+  '예시 공통: 모든 시각은 한국 시간(+09:00)',
+  '예시 준비: ' + J({ method: 'PassRegistry.availableCodes', text: '등록된 이용권: POOL-A 2026-06-30 만료, GYM-B 2026-06-01 만료' }),
+  '예시: ' + J({ method: 'PassRegistry.availableCodes', args: [['visitDate', '2026-06-10']], expected: '["POOL-A", "GYM-B"]' }),
+  '예시: ' + J({ method: 'PassRegistry.availableCodes', args: [['visitDate', '2026-06-20']], expected: '["POOL-A"]' }),
+  '예시: ' + J({ method: 'PassRegistry.canEnter', args: [['code', '"POOL-A"'], ['visitDate', '2026-06-10'], ['headCount', '2']], expected: 'true' }),
+  '예시: ' + J({ method: 'PassRegistry.canEnter', args: [['code', '"GYM-B"'], ['visitDate', '2026-06-20'], ['headCount', '1']], expected: 'false' }),
+  '예시: ' + J({ method: 'Clock.today', expected: '2026-06-10' }),
+]
+
+test('@shot 새 모양: 함수별 매개변수|결과 표, 준비 상자, 공통 안내', async ({ page }, info) => {
+  test.setTimeout(60_000)
+  await setup(page, 'D1', TABLE)
+  await page.goto('/console/tasks/D1')
+  const req = page.getByTestId('requirements')
+  await expect(req.getByTestId('req-common')).toContainText('한국 시간')
+  await expect(req.getByTestId('req-feature')).toHaveCount(2)
+  await expect(req.getByTestId('req-prep')).toHaveCount(1) // 함수별 한 번
+  const tables = req.getByTestId('req-table')
+  await expect(tables).toHaveCount(3) // 카드 둘 아래 + 카드 없는 함수 하나
+  await expect(tables.nth(0).getByRole('columnheader')).toHaveText(['visitDate', '결과'])
+  await expect(tables.nth(1).getByRole('columnheader')).toHaveText(['code', 'visitDate', 'headCount', '결과'])
+  await expect(tables.nth(2).getByRole('columnheader')).toHaveText(['결과']) // 매개변수 없음
+  await expect(tables.nth(2)).toContainText('Clock.today')
+  await expect(tables.nth(0).getByTestId('req-example')).toHaveCount(2)
+  // 표는 자기 함수 카드 바로 아래
+  await expect(req.getByTestId('req-feature').first().locator('xpath=following-sibling::*[1]')).toHaveAttribute('data-testid', 'req-table')
+  await req.scrollIntoViewIfNeeded()
+  await req.screenshot({ path: `.shots/requirements-table/${info.project.name}-overview.png` })
+})
+
+test('옛 모양과 새 모양이 섞여도 둘 다 보인다', async ({ page }) => {
+  test.setTimeout(60_000)
+  await setup(page, 'D1', [...OLD, '예시: ' + J({ method: 'A.f', args: [['a', '1']], expected: '2' }), '예시: {깨진 JSON'])
+  await page.goto('/console/tasks/D1')
+  const req = page.getByTestId('requirements')
+  await expect(req.getByTestId('req-table')).toHaveCount(1)
+  await expect(req.getByTestId('req-example')).toHaveCount(3)
+  await expect(req).toContainText('예시: {깨진 JSON') // 읽지 못한 줄은 글로
+})

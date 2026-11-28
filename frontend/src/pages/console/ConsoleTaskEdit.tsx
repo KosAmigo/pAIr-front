@@ -133,7 +133,7 @@ function Review({ code, detail, setSummary }: { code: string; detail: NonNullabl
           stats={[
             { label: 'MINUTES', value: s.minutes, unit: '분' },
             // 만들 기능·매개변수 줄까지 세면 부풀어서, 기능 수 + 예시 수(옛 형식이면 예시·글 줄)로 센다
-            { label: 'REQUIREMENTS', value: ((r) => r.features.length + r.examples.length + r.other.length)(parseRequirements(d.requirements)), unit: '개' },
+            { label: 'REQUIREMENTS', value: ((r) => r.features.length + r.examples.length + r.tables.reduce((n, t) => n + t.rows.length, 0) + r.other.length)(parseRequirements(d.requirements)), unit: '개' },
           ]}
           actions={
             <div className="flex flex-col items-end gap-4">

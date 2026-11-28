@@ -3,7 +3,7 @@
 // 읽을 수 있는 줄이 하나도 없으면(그냥 글만) 예전처럼 번호 목록으로 보여 준다. 좁은 곳(응시 화면 옆 패널)은 컨테이너 폭을 보고 표가 카드로 바뀐다.
 import { useMemo } from 'react'
 import { cx } from './cx'
-import { hasStructure, parseRequirements, splitCalls, splitSignature } from '../data/requirements'
+import { hasStructure, methodOf, parseRequirements, splitCalls, splitSignature, type ReqTable } from '../data/requirements'
 
 const code = 'font-mono text-[13px] leading-5'
 
@@ -42,6 +42,58 @@ function Input({ text }: { text: string }) {
   )
 }
 
+/** 함수 하나의 예시: 준비 상자(있으면 한 번) + 매개변수 | 결과 표 */
+function ExampleTable({ t, showTitle }: { t: ReqTable; showTitle: boolean }) {
+  return (
+    <div data-testid="req-table" className="flex flex-col gap-1.5">
+      {showTitle && <code className={cx(code, 'font-semibold text-text')}>{t.method}</code>}
+      {t.prep && (
+        <p data-testid="req-prep" className="rounded-lg bg-panel px-3 py-2 text-[13px] leading-5 break-keep text-text-muted">
+          <b className="mr-1.5 font-bold text-text">준비</b>
+          {t.prep}
+        </p>
+      )}
+      {t.rows.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border border-line">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="bg-panel-raised/70 text-[12px] font-bold text-text-muted">
+                {t.columns.map((c) => (
+                  <th key={c} scope="col" className="px-3.5 py-2 font-mono font-semibold whitespace-nowrap">
+                    {c}
+                  </th>
+                ))}
+                <th scope="col" className="px-3.5 py-2 font-bold whitespace-nowrap">
+                  결과
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {t.rows.map((r, i) => (
+                <tr key={i} data-testid="req-example" className="align-top">
+                  {r.values.map((v, j) => (
+                    <td key={j} className="px-3.5 py-2.5">
+                      <code className={cx(code, 'break-words whitespace-pre-wrap text-text')}>{v}</code>
+                    </td>
+                  ))}
+                  <td className="px-3.5 py-2.5">
+                    <code className={cx(code, 'break-words whitespace-pre-wrap font-bold text-brand')}>{r.expected}</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const sameMethod = (feature: string, method: string) => {
+  const a = methodOf(feature)
+  return a === method || (!method.includes('.') && a.split('.').pop() === method) || (!a.includes('.') && method.split('.').pop() === a)
+}
+
 export function RequirementsView({ lines, className }: { lines: readonly string[] | null | undefined; className?: string }) {
   const p = useMemo(() => parseRequirements(lines), [lines])
   if (!hasStructure(p)) {
@@ -57,13 +109,30 @@ export function RequirementsView({ lines, className }: { lines: readonly string[
       </ol>
     )
   }
+  // 표는 같은 함수의 '만들 기능' 카드 아래에 붙이고, 카드가 없는 함수는 맨 아래에 이름을 달아 둔다
+  const used = new Set<ReqTable>()
+  const tableFor = (sig: string) => {
+    const t = p.tables.find((x) => !used.has(x) && sameMethod(sig, x.method))
+    if (t) used.add(t)
+    return t
+  }
+  const attached = p.features.map((f) => tableFor(f.signature))
+  const loose = p.tables.filter((t) => !used.has(t))
+  const common = p.common && (
+    <p data-testid="req-common" className="rounded-lg bg-panel px-3 py-2 text-[13px] leading-5 break-keep text-text-muted">
+      <b className="mr-1.5 font-bold text-text">예시 공통</b>
+      {p.common}
+    </p>
+  )
   return (
     <div className={cx('@container flex flex-col gap-4', className)} data-testid="requirements">
       {p.features.length > 0 && (
         <section aria-label="만들 기능" className="flex flex-col gap-2.5">
           <h4 className="text-[13px] font-bold text-text-muted">만들 기능</h4>
+          {common}
           {p.features.map((f, i) => (
-            <article key={i} data-testid="req-feature" className="rounded-xl border border-line bg-panel-raised/50 p-3.5">
+            <div key={i} className="flex flex-col gap-2.5">
+            <article data-testid="req-feature" className="rounded-xl border border-line bg-panel-raised/50 p-3.5">
               <Signature sig={f.signature} />
               {f.summary && <p className="mt-1.5 text-[14px] leading-6 break-keep text-text">{f.summary}</p>}
               {f.params.length > 0 && (
@@ -79,6 +148,18 @@ export function RequirementsView({ lines, className }: { lines: readonly string[
                 </dl>
               )}
             </article>
+            {attached[i] && <ExampleTable t={attached[i]} showTitle={false} />}
+            </div>
+          ))}
+        </section>
+      )}
+
+      {(loose.length > 0 || (p.features.length === 0 && p.common)) && (
+        <section aria-label="예시" className="flex flex-col gap-3">
+          <h4 className="text-[13px] font-bold text-text-muted">예시</h4>
+          {p.features.length === 0 && common}
+          {loose.map((t) => (
+            <ExampleTable key={t.method} t={t} showTitle />
           ))}
         </section>
       )}
