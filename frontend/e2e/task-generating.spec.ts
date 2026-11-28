@@ -125,6 +125,8 @@ test.describe('만드는 중인 과제', () => {
     api.seedJobs([JOBS[2]])
     await page.clock.runFor(3100)
     await expect.poll(() => calls).toBe(4)
+    // 다음 간격은 4번째 응답을 화면이 받은 뒤에 잰다. 응답이 반영(완료 줄이 나타남)되기 전에 시계를 돌리면 30초 타이머가 그 뒤에 걸려 어긋난다
+    await expect(page.getByTestId('gen-done-toggle')).toBeVisible()
     await page.clock.runFor(10_000)
     await page.waitForTimeout(200)
     expect(calls).toBe(4)

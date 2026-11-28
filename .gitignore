@@ -56,3 +56,6 @@ screenshots/ai-task-gen/
 frontend/.shots/
 frontend/test-results/
 frontend/playwright-report/
+
+# e2e 미리보기 빌드 (E2E_PREVIEW=1)
+.e2e-dist/
